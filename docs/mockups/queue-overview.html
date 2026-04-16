@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Mockup — Queue Overview (FMN-38)</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --border: #e2e5ea;
+    --border-strong: #c5cbd3;
+    --text: #222a35;
+    --text-muted: #6b7380;
+    --accent: #d9541e;
+    --accent-soft: #fde9dd;
+    --danger: #b3261e;
+    --danger-soft: #fde8e7;
+    --warn: #8b6f00;
+    --warn-soft: #fff4d1;
+    --ok: #1e7a3c;
+    --ok-soft: #dcf4e1;
+    --muted-soft: #eef2f7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 13px;
+    color: var(--text);
+    background: var(--bg);
+    padding: 24px;
+  }
+  .mockup-frame {
+    max-width: 820px;
+    margin: 0 auto;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06);
+  }
+
+  .title-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 20px; border-bottom: 1px solid var(--border);
+  }
+  .title-bar h1 {
+    font-size: 14px; margin: 0; font-weight: 600;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .title-bar h1 .icon {
+    width: 18px; height: 18px; background: var(--accent); border-radius: 3px;
+    display: inline-grid; place-items: center; color: white; font-size: 11px; font-weight: bold;
+  }
+  .title-bar .subtitle { color: var(--text-muted); font-weight: 400; font-size: 12px; }
+
+  .step-header {
+    padding: 16px 20px; background: #fafbfc; border-bottom: 1px solid var(--border);
+  }
+  .step-breadcrumbs {
+    display: flex; gap: 8px; align-items: center;
+    font-size: 11px; color: var(--text-muted); margin-bottom: 8px;
+  }
+  .step-breadcrumbs .step {
+    padding: 2px 8px; border-radius: 100px;
+    background: white; border: 1px solid var(--border);
+  }
+  .step-breadcrumbs .step.active {
+    background: var(--accent); color: white; border-color: var(--accent); font-weight: 500;
+  }
+  .step-breadcrumbs .step.done {
+    background: var(--ok-soft); color: var(--ok); border-color: #b8dfc2;
+  }
+  .step-breadcrumbs .arrow { color: var(--border-strong); }
+  .step-header h2 { margin: 0; font-size: 16px; }
+  .step-header p { margin: 4px 0 0; font-size: 12px; color: var(--text-muted); max-width: 640px; }
+
+  .overview-strip {
+    display: flex; gap: 10px; padding: 14px 20px; border-bottom: 1px solid var(--border);
+    background: white; flex-wrap: wrap;
+  }
+  .metric {
+    flex: 1; min-width: 140px;
+    padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px;
+    background: #fafbfc;
+  }
+  .metric .label { font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .metric .value { font-size: 18px; font-weight: 600; margin-top: 2px; }
+  .metric .value.accent { color: var(--accent); }
+  .metric .value.danger { color: var(--danger); }
+  .metric .value.muted { color: var(--text-muted); }
+
+  .body-section { padding: 16px 20px; }
+  .body-section h3 {
+    margin: 0 0 10px; font-size: 12px; font-weight: 600;
+    color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em;
+  }
+
+  .group-card {
+    border: 1px solid var(--border); border-radius: 6px; margin-bottom: 10px; overflow: hidden;
+  }
+  .group-card.skipped { opacity: 0.75; background: var(--muted-soft); }
+  .group-head {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px; background: white; cursor: pointer;
+  }
+  .group-card.skipped .group-head { background: transparent; }
+  .group-head .group-badge {
+    min-width: 54px; text-align: center;
+    padding: 4px 8px; border-radius: 4px;
+    background: var(--accent-soft); color: var(--accent);
+    font-size: 11px; font-weight: 600;
+  }
+  .group-card.skipped .group-badge { background: var(--muted-soft); color: var(--text-muted); }
+  .group-head .group-title { flex: 1; }
+  .group-head .group-title .name { font-size: 13px; font-weight: 600; }
+  .group-head .group-title .meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .group-head .action-summary {
+    padding: 3px 10px; border-radius: 100px;
+    font-size: 11px; font-weight: 500;
+    background: var(--accent-soft); color: var(--accent); white-space: nowrap;
+  }
+  .group-card.skipped .action-summary {
+    background: var(--muted-soft); color: var(--text-muted);
+  }
+  .group-head .chev {
+    color: var(--text-muted); font-size: 11px;
+    width: 14px; text-align: center;
+  }
+
+  .group-body {
+    border-top: 1px solid var(--border); padding: 12px 14px;
+    background: #fafbfc; font-size: 12px;
+  }
+  .group-body .kv { display: grid; grid-template-columns: 120px 1fr; gap: 6px 14px; margin-bottom: 10px; }
+  .group-body .kv .k { color: var(--text-muted); }
+  .group-body .kv .v { color: var(--text); }
+  .group-body .kv .v code {
+    font-family: "SF Mono", Menlo, monospace; font-size: 11px;
+    background: white; padding: 1px 5px; border-radius: 3px; border: 1px solid var(--border);
+  }
+  .group-body .removed-badge {
+    display: inline-block; padding: 2px 8px;
+    background: var(--accent); color: white;
+    font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
+    border-radius: 3px; margin-right: 6px;
+  }
+  .group-body .device-sample {
+    padding: 8px 10px; background: white;
+    border: 1px solid var(--border); border-radius: 4px;
+    font-family: "SF Mono", Menlo, monospace; font-size: 11px;
+    line-height: 1.6; max-height: 60px; overflow-y: auto;
+  }
+  .group-body .edit-link {
+    color: var(--accent); text-decoration: none; font-weight: 500; font-size: 12px;
+    margin-left: 10px; cursor: pointer;
+  }
+  .group-body .edit-link:hover { text-decoration: underline; }
+
+  .gate-section {
+    margin: 0; padding: 16px 20px;
+    border-top: 1px solid var(--border);
+    background: var(--danger-soft);
+  }
+  .gate-title {
+    font-size: 14px; font-weight: 600; color: var(--danger);
+    display: flex; align-items: center; gap: 8px; margin: 0 0 6px;
+  }
+  .gate-title .bang {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--danger); color: white;
+    display: grid; place-items: center; font-size: 12px; font-weight: bold;
+  }
+  .gate-body { font-size: 12px; color: var(--text); margin-bottom: 12px; }
+
+  .dryrun-box {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; background: white;
+    border: 1px solid var(--warn); border-radius: 5px;
+    margin-bottom: 8px; font-size: 12px; color: var(--warn);
+  }
+  .dryrun-box input { transform: scale(1.1); }
+  .dryrun-box strong { color: var(--warn); }
+  .verbose-box {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; background: white;
+    border: 1px solid var(--border-strong); border-radius: 5px;
+    margin-bottom: 12px; font-size: 12px; color: var(--text);
+  }
+  .verbose-box input { transform: scale(1.1); }
+  .verbose-box strong { color: var(--text); }
+
+  .confirm-row {
+    font-size: 12px; color: var(--text); margin-bottom: 6px;
+  }
+  .confirm-row code {
+    font-family: "SF Mono", Menlo, monospace; font-size: 11px;
+    background: white; padding: 1px 5px; border-radius: 3px; border: 1px solid var(--border);
+    font-weight: 600; color: var(--danger);
+  }
+  input.confirm-input {
+    width: 100%; padding: 7px 10px;
+    border: 1px solid var(--border-strong); border-radius: 5px;
+    font-family: "SF Mono", Menlo, monospace; font-size: 12px;
+  }
+  input.confirm-input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+  .action-bar {
+    padding: 14px 20px; border-top: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    background: #fafbfc; flex-wrap: wrap; gap: 8px;
+  }
+  .action-bar .left { font-size: 12px; color: var(--text-muted); display: flex; gap: 14px; align-items: center; }
+  .action-bar .download-link { color: var(--accent); text-decoration: none; font-weight: 500; cursor: pointer; }
+  .action-bar .download-link:hover { text-decoration: underline; }
+  .action-bar .right { display: flex; gap: 8px; }
+  .btn {
+    font-size: 13px; font-weight: 500; padding: 7px 16px;
+    border-radius: 5px; cursor: pointer; border: 1px solid transparent;
+  }
+  .btn-secondary { background: white; color: var(--text); border-color: var(--border-strong); }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-danger { background: var(--danger); color: white; }
+  .btn-primary[disabled], .btn-danger[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+  .legend {
+    max-width: 820px; margin: 16px auto 0;
+    font-size: 11px; color: var(--text-muted); line-height: 1.5;
+  }
+  .legend code {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    background: var(--border); padding: 1px 5px; border-radius: 3px; font-size: 10.5px;
+  }
+</style>
+</head>
+<body>
+
+<div class="mockup-frame">
+  <div class="title-bar">
+    <h1>
+      <span class="icon">F</span>
+      FortiMonitor WAN Cleanup
+      <span class="subtitle">— Queue Overview</span>
+    </h1>
+  </div>
+
+  <div class="step-header">
+    <div class="step-breadcrumbs">
+      <span class="step done">1. Load devices ✓</span>
+      <span class="arrow">›</span>
+      <span class="step done">2. Review groups ✓</span>
+      <span class="arrow">›</span>
+      <span class="step active">3. Audit queue</span>
+      <span class="arrow">›</span>
+      <span class="step">4. Execute</span>
+    </div>
+    <h2>Audit the queue before executing</h2>
+    <p>Every staged change across all reviewed groups is listed below. Destructive actions are irreversible — FortiMonitor deletes agent resources and metric history for each deselected port. Review carefully. Dry-run is on by default; you must turn it off and type a confirmation phrase to write changes.</p>
+  </div>
+
+  <div class="overview-strip">
+    <div class="metric">
+      <div class="label">Devices in batch</div>
+      <div class="value">87</div>
+    </div>
+    <div class="metric">
+      <div class="label">Unique groups</div>
+      <div class="value">5</div>
+    </div>
+    <div class="metric">
+      <div class="label">Devices affected</div>
+      <div class="value accent">79</div>
+    </div>
+    <div class="metric">
+      <div class="label">Ports to remove</div>
+      <div class="value danger">79</div>
+    </div>
+    <div class="metric">
+      <div class="label">Groups skipped</div>
+      <div class="value muted">1</div>
+    </div>
+  </div>
+
+  <div class="body-section">
+    <h3>Pending changes by group</h3>
+
+    <div class="group-card">
+      <div class="group-head">
+        <div class="group-badge">Group 1</div>
+        <div class="group-title">
+          <div class="name">Standard branch template — generic WAN</div>
+          <div class="meta">41 devices · fingerprint <code style="font-family: 'SF Mono', Menlo, monospace; font-size: 11px;">3b2e…a881</code> · 16 ports per device</div>
+        </div>
+        <div class="action-summary">Remove wan2 × 41</div>
+        <div class="chev">▾</div>
+      </div>
+      <div class="group-body">
+        <div class="kv">
+          <div class="k">Ports marked:</div>
+          <div class="v"><span class="removed-badge">REMOVE</span><code>wan2</code> <span style="color: var(--text-muted);">(admin up, oper down)</span></div>
+          <div class="k">Ports kept:</div>
+          <div class="v">15 — <code>DATA</code>, <code>GUEST</code>, <code>MGMT</code>, <code>VoIP</code>, <code>a</code>, <code>b</code>, <code>fortilink</code>, <code>modem</code>, <code>port1</code>–<code>port6</code>, <code>(Comcast Business)</code></div>
+          <div class="k">Devices:</div>
+          <div class="v">
+            <div class="device-sample">FGT-Branch-002 · FGT-Branch-004 · FGT-Branch-005 · FGT-Branch-006 · FGT-Branch-008 · FGT-Branch-009 · FGT-Branch-010 · FGT-Branch-011 · FGT-Branch-013 · FGT-Branch-015 · FGT-Branch-016 · FGT-Branch-017 · FGT-Branch-019 · FGT-Branch-020 · FGT-Branch-022 · FGT-Branch-023 · FGT-Branch-024 · FGT-Branch-026 · FGT-Branch-027 · FGT-Branch-028 · FGT-Branch-030 · FGT-Branch-032 · FGT-Branch-033 · … +18 more</div>
+          </div>
+        </div>
+        <a class="edit-link">← Edit this group</a>
+      </div>
+    </div>
+
+    <div class="group-card">
+      <div class="group-head">
+        <div class="group-badge">Group 2</div>
+        <div class="group-title">
+          <div class="name">Branch template — ISP label + wan2</div>
+          <div class="meta">23 devices · fingerprint <code style="font-family: 'SF Mono', Menlo, monospace; font-size: 11px;">7f3a…c9d1</code> · 16 ports per device</div>
+        </div>
+        <div class="action-summary">Remove wan2 × 23</div>
+        <div class="chev">▸</div>
+      </div>
+    </div>
+
+    <div class="group-card">
+      <div class="group-head">
+        <div class="group-badge">Group 3</div>
+        <div class="group-title">
+          <div class="name">Dual-WAN template (x1/x2 naming)</div>
+          <div class="meta">12 devices · fingerprint <code style="font-family: 'SF Mono', Menlo, monospace; font-size: 11px;">b104…e527</code> · 16 ports per device</div>
+        </div>
+        <div class="action-summary">Remove x2 × 12</div>
+        <div class="chev">▸</div>
+      </div>
+    </div>
+
+    <div class="group-card">
+      <div class="group-head">
+        <div class="group-badge">Group 4</div>
+        <div class="group-title">
+          <div class="name">Branch template with SECURITY VLAN</div>
+          <div class="meta">3 devices · fingerprint <code style="font-family: 'SF Mono', Menlo, monospace; font-size: 11px;">2c48…f019</code> · 17 ports per device</div>
+        </div>
+        <div class="action-summary">Remove wan2 × 3</div>
+        <div class="chev">▸</div>
+      </div>
+    </div>
+
+    <div class="group-card skipped">
+      <div class="group-head">
+        <div class="group-badge">Group 5</div>
+        <div class="group-title">
+          <div class="name">Minor variant — no WAN to remove</div>
+          <div class="meta">8 devices · fingerprint <code style="font-family: 'SF Mono', Menlo, monospace; font-size: 11px;">5a67…9b23</code> · operator chose "Skip this group"</div>
+        </div>
+        <div class="action-summary">No changes</div>
+        <div class="chev">▸</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="gate-section">
+    <h3 class="gate-title">
+      <span class="bang">!</span>
+      Destructive confirmation required
+    </h3>
+    <div class="gate-body">
+      Executing this queue will deselect <strong>79 port entries across 79 devices</strong>. FortiMonitor will delete each port's agent resources and all associated metric history. This operation cannot be undone.
+    </div>
+
+    <div class="dryrun-box">
+      <input type="checkbox" id="dryrun" checked />
+      <label for="dryrun"><strong>Dry run</strong> — simulate every save without modifying FortiMonitor</label>
+    </div>
+
+    <div class="verbose-box">
+      <input type="checkbox" id="verbose" />
+      <label for="verbose"><strong>Verbose mode</strong> — open a separate tab and visibly navigate to each device while it's processed. Slower and serial (one at a time), but you can watch each change happen. Off by default — execution runs silently in the background otherwise.</label>
+    </div>
+
+    <div class="confirm-row">
+      To execute for real, first turn off dry run, then type <code>EXECUTE 79 PORTS</code> below:
+    </div>
+    <input class="confirm-input" type="text" placeholder="Type the confirmation phrase..." disabled />
+  </div>
+
+  <div class="action-bar">
+    <div class="left">
+      <a class="download-link">↓ Download plan (JSON)</a>
+      <a class="download-link">↓ Download plan (CSV)</a>
+    </div>
+    <div class="right">
+      <button class="btn btn-secondary">← Back to review</button>
+      <button class="btn btn-primary">Run dry run →</button>
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <strong>Mockup notes (not rendered in final plugin):</strong><br>
+  · Step 3 of 4. Previous step is <code>interface-report.html</code>; next is the execution progress screen.<br>
+  · Five mock groups shown: 4 have pending removals (79 devices), 1 was skipped by the operator (8 devices). Total batch: 87 devices.<br>
+  · Group cards are collapsible. Group 1 is shown expanded as the reference pattern. Expanded view shows ports marked for removal, ports kept, and a device sample with "+N more" overflow.<br>
+  · "Edit this group" returns the operator to the interface-report for that specific group; their prior selection is preserved so they can modify rather than start over.<br>
+  · <strong>Destructive gate</strong>: dry-run is ON by default. Primary button reads "Run dry run →" until dry-run is off. When dry-run is off, operator must type the exact phrase <code>EXECUTE N PORTS</code> (N matches the live count) into the confirmation input before the primary button (then "Execute and remove N ports") enables. This is a soft guard against bulk accidents.<br>
+  · <strong>Plan export</strong>: JSON and CSV downloads are offered before execution since the action is irreversible. The export is the durable record of what was done.<br>
+  · Queue state is kept in <code>chrome.storage.local</code> so it survives tab navigation. Executing the queue replays the same Port Selection save that the FortiMonitor WebGUI dialog performs when the operator clicks Save — once per device, using the existing logged-in session. No separate credentials, no external system.<br>
+  · <strong>Execution modes:</strong> default is silent background execution (no visible tab navigation, concurrency up to 3). <strong>Verbose mode</strong> opts into visibly navigating a dedicated tab through each device serially so the operator can watch each change — useful for spot-checking early in a batch, too slow for routine runs at fleet scale.
+</div>
+
+</body>
+</html>
