@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Mockup — Interface Report (FMN-38)</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --border: #e2e5ea;
+    --border-strong: #c5cbd3;
+    --text: #222a35;
+    --text-muted: #6b7380;
+    --accent: #d9541e;
+    --accent-soft: #fde9dd;
+    --danger: #b3261e;
+    --danger-soft: #fde8e7;
+    --warn: #8b6f00;
+    --warn-soft: #fff4d1;
+    --ok: #1e7a3c;
+    --ok-soft: #dcf4e1;
+    --down: #b3261e;
+    --down-soft: #fde8e7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 13px;
+    color: var(--text);
+    background: var(--bg);
+    padding: 24px;
+  }
+  .mockup-frame {
+    max-width: 720px;
+    margin: 0 auto;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06);
+  }
+  .title-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .title-bar h1 {
+    font-size: 14px;
+    margin: 0;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .title-bar h1 .icon {
+    width: 18px;
+    height: 18px;
+    background: var(--accent);
+    border-radius: 3px;
+    display: inline-grid;
+    place-items: center;
+    color: white;
+    font-size: 11px;
+    font-weight: bold;
+  }
+  .title-bar .subtitle { color: var(--text-muted); font-weight: 400; font-size: 12px; }
+  .close { color: var(--text-muted); font-size: 18px; cursor: pointer; line-height: 1; }
+
+  .device-header {
+    padding: 16px 20px;
+    background: #fafbfc;
+    border-bottom: 1px solid var(--border);
+  }
+  .device-name {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0;
+  }
+  .device-meta {
+    color: var(--text-muted);
+    font-size: 12px;
+    margin-top: 2px;
+  }
+  .summary-row {
+    display: flex;
+    gap: 14px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  .stat-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 100px;
+    font-size: 12px;
+    background: white;
+    border: 1px solid var(--border);
+  }
+  .stat-pill .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+  }
+  .stat-pill.up .dot { background: var(--ok); }
+  .stat-pill.down .dot { background: var(--down); }
+  .stat-pill.selected {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .destructive-banner {
+    margin: 0;
+    padding: 10px 20px;
+    background: var(--danger-soft);
+    color: var(--danger);
+    font-size: 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .destructive-banner .bang {
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--danger);
+    color: white;
+    display: grid;
+    place-items: center;
+    font-size: 11px;
+    font-weight: bold;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .toolbar {
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .quick-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .quick-btn {
+    font-size: 12px;
+    padding: 4px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: 5px;
+    background: white;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .quick-btn:hover { background: #f0f2f5; }
+  .search {
+    font-size: 12px;
+    padding: 5px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: 5px;
+    width: 180px;
+    font-family: inherit;
+  }
+
+  .table-wrap { max-height: 620px; overflow-y: auto; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  th, td {
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-muted);
+    font-weight: 600;
+    background: white;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+  th.col-check, td.col-check { width: 36px; padding-left: 20px; }
+  th.col-status, td.col-status { width: 90px; }
+  td.col-name { font-weight: 500; }
+  td.col-name .special-tag {
+    display: inline-block;
+    font-size: 10px;
+    padding: 1px 6px;
+    margin-left: 6px;
+    background: var(--warn-soft);
+    color: var(--warn);
+    border-radius: 4px;
+    font-weight: 500;
+  }
+  .status-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 3px;
+    text-transform: lowercase;
+  }
+  .status-badge.up { color: var(--ok); background: var(--ok-soft); }
+  .status-badge.down { color: var(--down); background: var(--down-soft); }
+  .status-badge.unknown { color: var(--text-muted); background: #edeff2; }
+
+  tr.row-checked td {
+    background: var(--accent-soft);
+  }
+  tr.row-checked td.col-check { box-shadow: inset 4px 0 0 var(--accent); }
+  tr.row-checked td.col-name { color: var(--accent); font-weight: 600; }
+  tr.row-checked td.col-name::after {
+    content: "REMOVE";
+    display: inline-block;
+    margin-left: 8px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    padding: 2px 6px;
+    background: var(--accent);
+    color: white;
+    border-radius: 3px;
+    vertical-align: middle;
+  }
+  tr.fortilink-warn td { background: var(--warn-soft); }
+
+  .instruction-row {
+    padding: 10px 20px;
+    background: #f0f4f8;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text);
+  }
+  .instruction-row strong { color: var(--accent); }
+  .instruction-row code {
+    font-family: "SF Mono", Menlo, monospace;
+    font-size: 11px;
+    background: white;
+    padding: 1px 5px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+  }
+
+  .action-bar {
+    padding: 14px 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: #fafbfc;
+  }
+  .action-bar .left { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-muted); }
+  .action-bar .dryrun-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--warn-soft);
+    color: var(--warn);
+    border-radius: 4px;
+    font-weight: 500;
+    font-size: 12px;
+  }
+  .action-bar .right { display: flex; gap: 8px; }
+  .btn {
+    font-size: 13px;
+    font-weight: 500;
+    padding: 7px 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .btn-secondary { background: white; color: var(--text); border-color: var(--border-strong); }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+  .legend {
+    max-width: 720px;
+    margin: 16px auto 0;
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+  .legend code {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    background: var(--border);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 10.5px;
+  }
+</style>
+</head>
+<body>
+
+<div class="mockup-frame">
+  <div class="title-bar">
+    <h1>
+      <span class="icon">F</span>
+      FortiMonitor WAN Cleanup
+      <span class="subtitle">— Mark WAN Interfaces for Removal</span>
+    </h1>
+    <span class="close">✕</span>
+  </div>
+
+  <div class="device-header">
+    <div class="device-name">Group 2 of 5 <span style="color: var(--text-muted); font-weight: 400;">— 23 devices share this interface state</span></div>
+    <div class="device-meta">Batch progress: 31 of 87 devices reviewed · 16 ports per device · fingerprint <code style="font-family: 'SF Mono', Menlo, monospace; font-size: 11px;">7f3a…c9d1</code></div>
+
+    <div class="summary-row">
+      <span class="stat-pill up"><span class="dot"></span>6 operationally up</span>
+      <span class="stat-pill down"><span class="dot"></span>10 operationally down</span>
+      <span class="stat-pill selected">1 marked for removal (×23 devices)</span>
+      <span class="stat-pill" style="background:#eef2f7;border-color:#c5cbd3;">Queue: 46 devices</span>
+    </div>
+
+    <details style="margin-top:10px;font-size:12px;color:var(--text-muted);">
+      <summary style="cursor:pointer;">Devices in this group (23)</summary>
+      <div style="margin-top:6px; padding:8px 10px; background:white; border:1px solid var(--border); border-radius:4px; font-family: 'SF Mono', Menlo, monospace; font-size: 11px; line-height: 1.6; max-height: 80px; overflow-y: auto;">
+        FGT-Branch-001 · FGT-Branch-003 · FGT-Branch-007 · FGT-Branch-012 · FGT-Branch-014 · FGT-Branch-018 · FGT-Branch-021 · FGT-Branch-025 · FGT-Branch-029 · FGT-Branch-031 · FGT-Branch-034 · FGT-Branch-038 · FGT-Branch-041 · FGT-Branch-044 · FGT-Branch-047 · FGT-Branch-051 · FGT-Branch-055 · FGT-Branch-058 · FGT-Branch-062 · FGT-Branch-067 · FGT-Branch-071 · FGT-Branch-074 · FGT-Branch-079
+      </div>
+    </details>
+  </div>
+
+  <div class="destructive-banner">
+    <span class="bang">!</span>
+    <div>
+      <strong>One decision applies to all 23 devices in this group.</strong> Scope is WAN interfaces only — identify the WAN row(s) this template uses and mark any that are operationally down. Your selection will be queued for every device in the group. Removing a port deletes its agent resources and metric history — irreversible. Nothing writes to FortiMonitor until you execute the queue.
+    </div>
+  </div>
+
+  <div class="instruction-row">
+    <strong>What to do:</strong> check any WAN interface(s) you want to remove from monitoring — typically the ones showing <code>oper_status = down</code>. WAN naming varies per site: it may be <code>wan2</code>, <code>x1</code>/<code>x2</code>, <code>(Comcast Business)</code>, or similar. Leave non-WAN interfaces alone even if they're down — the plugin will not touch anything you don't check.
+  </div>
+
+  <div class="toolbar">
+    <div class="quick-actions">
+      <button class="quick-btn">Clear selection</button>
+    </div>
+    <input class="search" type="text" placeholder="Filter by name..." />
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th class="col-check"><input type="checkbox" /></th>
+          <th class="col-name">Port Name</th>
+          <th>Description</th>
+          <th class="col-status">Admin</th>
+          <th class="col-status">Operational</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="col-check"><input type="checkbox" /></td>
+          <td class="col-name">DATA</td>
+          <td></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+        </tr>
+        <tr>
+          <td class="col-check"><input type="checkbox" /></td>
+          <td class="col-name">GUEST</td>
+          <td></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+        </tr>
+        <tr>
+          <td class="col-check"><input type="checkbox" /></td>
+          <td class="col-name">MGMT</td>
+          <td></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+        </tr>
+        <tr>
+          <td class="col-check"><input type="checkbox" /></td>
+          <td class="col-name">VoIP</td>
+          <td></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+        </tr>
+        <tr>
+          <td class="col-check"><input type="checkbox" /></td>
+          <td class="col-name">a</td>
+          <td></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+        </tr>
+        <tr>
+          <td class="col-check"><input type="checkbox" /></td>
+          <td class="col-name">b</td>
+          <td></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+          <td class="col-status"><span class="status-badge down">down</span></td>
+        </tr>
+        <tr class="fortilink-warn">
+          <td class="col-check"><input type="checkbox" /></td>
+          <td class="col-name">fortilink <span class="special-tag">fabric link — keep</span></td>
+          <td></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+          <td class="col-status"><span class="status-badge down">down</span></td>
+        </tr>
+        <tr>
+          <td class="col-check"><input type="checkbox" /></td>
+          <td class="col-name">modem</td>
+          <td></td>
+          <td class="col-status"><span class="status-badge down">down</span></td>
+          <td class="col-status"><span class="status-badge down">down</span></td>
+        </tr>
+        <tr>
+          <td class="col-check"><input type="checkbox" /></td>
+          <td class="col-name">port1</td>
+          <td></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+          <td class="col-status"><span class="status-badge down">down</span></td>
+        </tr>
+        <tr>
+          <td class="col-check"><input type="checkbox" /></td>
+          <td class="col-name">port2</td>
+          <td></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+          <td class="col-status"><span class="status-badge down">down</span></td>
+        </tr>
+        <tr>
+          <td class="col-check"><input type="checkbox" /></td>
+          <td class="col-name">port3</td>
+          <td></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+          <td class="col-status"><span class="status-badge down">down</span></td>
+        </tr>
+        <tr>
+          <td class="col-check"><input type="checkbox" /></td>
+          <td class="col-name">port4</td>
+          <td></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+          <td class="col-status"><span class="status-badge down">down</span></td>
+        </tr>
+        <tr>
+          <td class="col-check"><input type="checkbox" /></td>
+          <td class="col-name">port5</td>
+          <td></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+          <td class="col-status"><span class="status-badge down">down</span></td>
+        </tr>
+        <tr>
+          <td class="col-check"><input type="checkbox" /></td>
+          <td class="col-name">port6</td>
+          <td></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+          <td class="col-status"><span class="status-badge down">down</span></td>
+        </tr>
+        <tr>
+          <td class="col-check"><input type="checkbox" /></td>
+          <td class="col-name">(Comcast Business)</td>
+          <td></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+        </tr>
+        <tr class="row-checked">
+          <td class="col-check"><input type="checkbox" checked /></td>
+          <td class="col-name">wan2</td>
+          <td></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+          <td class="col-status"><span class="status-badge down">down</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="action-bar">
+    <div class="left">
+      <span>Marked for removal: <strong style="color: var(--accent); font-family: 'SF Mono', Menlo, monospace;">wan2</strong> — applies to all 23 devices in this group</span>
+    </div>
+    <div class="right">
+      <button class="btn btn-secondary">Skip this group</button>
+      <button class="btn btn-primary">Queue for 23 devices →</button>
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <strong>Mockup notes (not rendered in final plugin):</strong><br>
+  · <strong>Scale model:</strong> plugin reads a CSV of devices, automates navigation through FortiMonitor, fetches <code>getDevicePorts</code> per device, groups devices by fingerprint (exact match on the set of <code>{port_name, admin_status, oper_status}</code> tuples), presents ONE prompt per unique group. 87 devices might collapse to 5 groups → 5 decisions.<br>
+  · Scope: WAN interfaces only. Operator identifies WAN rows manually (naming is inconsistent across sites: <code>wanN</code>, <code>(ISP Name)</code>, <code>xN</code>, etc).<br>
+  · No pre-selection. Operator checks WAN row(s) that are <code>oper_status=down</code>. Decision applies to every device in the current group.<br>
+  · <code>fortilink</code> row is visually flagged as "fabric link — keep" — the only protected name in v1 scope.<br>
+  · "Queue for N devices" stages the decision against every device in this group in <code>chrome.storage.local</code>. Nothing writes to FortiMonitor until queue execution.<br>
+  · Next mockup in sequence: queue-overview screen — batch audit, destructive confirmation, per-device execution progress.<br>
+  · Data source: <code>GET /onboarding/getDevicePorts?server_id={id}</code> — session-authenticated internal UI endpoint. No v2 public API, no API key.
+</div>
+
+</body>
+</html>

@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Mockup — Batch Start (FMN-38)</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --border: #e2e5ea;
+    --border-strong: #c5cbd3;
+    --text: #222a35;
+    --text-muted: #6b7380;
+    --accent: #d9541e;
+    --accent-soft: #fde9dd;
+    --danger: #b3261e;
+    --warn: #8b6f00;
+    --warn-soft: #fff4d1;
+    --ok: #1e7a3c;
+    --ok-soft: #dcf4e1;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 13px;
+    color: var(--text);
+    background: var(--bg);
+    padding: 24px;
+  }
+  .mockup-frame {
+    max-width: 720px;
+    margin: 0 auto;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06);
+  }
+
+  .title-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .title-bar h1 {
+    font-size: 14px;
+    margin: 0;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .title-bar h1 .icon {
+    width: 18px; height: 18px;
+    background: var(--accent);
+    border-radius: 3px;
+    display: inline-grid;
+    place-items: center;
+    color: white;
+    font-size: 11px;
+    font-weight: bold;
+  }
+  .title-bar .subtitle { color: var(--text-muted); font-weight: 400; font-size: 12px; }
+
+  .step-header {
+    padding: 16px 20px;
+    background: #fafbfc;
+    border-bottom: 1px solid var(--border);
+  }
+  .step-breadcrumbs {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+  .step-breadcrumbs .step {
+    padding: 2px 8px;
+    border-radius: 100px;
+    background: white;
+    border: 1px solid var(--border);
+  }
+  .step-breadcrumbs .step.active {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+    font-weight: 500;
+  }
+  .step-breadcrumbs .arrow { color: var(--border-strong); }
+  .step-header h2 { margin: 0; font-size: 16px; }
+  .step-header p { margin: 4px 0 0; font-size: 12px; color: var(--text-muted); max-width: 540px; }
+
+  .body-section { padding: 20px; }
+
+  .drop-zone {
+    border: 2px dashed var(--border-strong);
+    border-radius: 8px;
+    padding: 32px 20px;
+    text-align: center;
+    background: #fafbfc;
+    cursor: pointer;
+  }
+  .drop-zone:hover { background: white; border-color: var(--accent); }
+  .drop-zone .dz-icon {
+    width: 40px; height: 40px;
+    margin: 0 auto 10px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 20px;
+    font-weight: 700;
+  }
+  .drop-zone .dz-primary { font-size: 13px; font-weight: 500; }
+  .drop-zone .dz-secondary { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .drop-zone .dz-link { color: var(--accent); text-decoration: underline; cursor: pointer; }
+
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 20px 0;
+    color: var(--text-muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .divider::before, .divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  textarea.paste-area {
+    width: 100%;
+    min-height: 120px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    resize: vertical;
+    color: var(--text);
+  }
+
+  .format-hint {
+    margin-top: 16px;
+    background: var(--ok-soft);
+    border: 1px solid #b8dfc2;
+    border-radius: 6px;
+    padding: 12px 14px;
+    font-size: 12px;
+    color: #184d29;
+  }
+  .format-hint strong { color: var(--ok); }
+  .format-hint pre {
+    margin: 8px 0 0;
+    background: white;
+    border: 1px solid #b8dfc2;
+    border-radius: 4px;
+    padding: 8px 10px;
+    font-family: "SF Mono", Menlo, monospace;
+    font-size: 11px;
+    color: var(--text);
+    white-space: pre-wrap;
+    line-height: 1.5;
+  }
+
+  .parse-result {
+    margin-top: 20px;
+    background: var(--accent-soft);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 14px 16px;
+  }
+  .parse-result .headline {
+    font-weight: 600;
+    color: var(--accent);
+    font-size: 13px;
+  }
+  .parse-result .sub {
+    font-size: 12px;
+    color: var(--text);
+    margin-top: 4px;
+  }
+  .sample-ids {
+    margin-top: 10px;
+    background: white;
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 8px 10px;
+    font-family: "SF Mono", Menlo, monospace;
+    font-size: 11px;
+    max-height: 80px;
+    overflow-y: auto;
+    line-height: 1.6;
+  }
+  .sample-ids .sid { color: var(--text); }
+  .warn-list {
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--warn);
+    background: var(--warn-soft);
+    border: 1px solid #e8d580;
+    border-radius: 4px;
+    padding: 8px 10px;
+  }
+
+  .action-bar {
+    padding: 14px 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #fafbfc;
+  }
+  .action-bar .left { font-size: 12px; color: var(--text-muted); }
+  .action-bar .right { display: flex; gap: 8px; }
+  .btn {
+    font-size: 13px;
+    font-weight: 500;
+    padding: 7px 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .btn-secondary { background: white; color: var(--text); border-color: var(--border-strong); }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+  .legend {
+    max-width: 720px;
+    margin: 16px auto 0;
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+  .legend code {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    background: var(--border);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 10.5px;
+  }
+</style>
+</head>
+<body>
+
+<div class="mockup-frame">
+  <div class="title-bar">
+    <h1>
+      <span class="icon">F</span>
+      FortiMonitor WAN Cleanup
+      <span class="subtitle">— Start Batch</span>
+    </h1>
+  </div>
+
+  <div class="step-header">
+    <div class="step-breadcrumbs">
+      <span class="step active">1. Load devices</span>
+      <span class="arrow">›</span>
+      <span class="step">2. Review groups</span>
+      <span class="arrow">›</span>
+      <span class="step">3. Audit queue</span>
+      <span class="arrow">›</span>
+      <span class="step">4. Execute</span>
+    </div>
+    <h2>Load devices from CSV</h2>
+    <p>Provide the list of FortiMonitor server IDs you want to review. The plugin will navigate to each device in FortiMonitor, read the port scope, group devices by identical interface state, and surface one review prompt per unique group.</p>
+  </div>
+
+  <div class="body-section">
+    <label class="drop-zone">
+      <div class="dz-icon">↑</div>
+      <div class="dz-primary">Drop CSV here, or <span class="dz-link">click to browse</span></div>
+      <div class="dz-secondary">Accepts <code>.csv</code> or plain text · one server ID per line</div>
+      <input type="file" accept=".csv,.txt" hidden />
+    </label>
+
+    <div class="divider">or paste below</div>
+
+    <textarea class="paste-area" placeholder="42024060&#10;42024061&#10;42024075&#10;...">42024060
+42024061
+42024075
+42024142
+42024143
+42024156
+42024201
+42024207
+42024302
+42024311
+42024377
+42024388</textarea>
+
+    <div class="format-hint">
+      <strong>Format:</strong> plain list of server IDs (one per line) <em>or</em> a CSV with a <code>server_id</code> column.
+<pre># plain list
+42024060
+42024061
+42024075
+
+# or CSV
+server_id,device_name
+42024060,FGT-Branch-001
+42024061,FGT-Branch-002</pre>
+    </div>
+
+    <div class="parse-result">
+      <div class="headline">87 devices ready to review</div>
+      <div class="sub">12 IDs shown above · CSV accepted · all IDs appear well-formed</div>
+      <div class="sample-ids">
+        <span class="sid">42024060, 42024061, 42024075, 42024142, 42024143, 42024156, 42024201, 42024207, 42024302, 42024311, 42024377, 42024388, 42024411, 42024419, 42024425, 42024447, 42024461, 42024478, 42024489, 42024502, 42024516, 42024530, 42024541, 42024555, 42024569, ...</span>
+      </div>
+      <div class="warn-list">
+        <strong>2 warnings:</strong> server ID <code>99999999</code> on line 47 was not found in your FortiCloud session — it will be skipped. Duplicate ID <code>42024489</code> on line 61 was deduplicated.
+      </div>
+    </div>
+  </div>
+
+  <div class="action-bar">
+    <div class="left">Logged in as FortiCloud session · session cookie valid</div>
+    <div class="right">
+      <button class="btn btn-secondary">Cancel</button>
+      <button class="btn btn-primary">Start review →</button>
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <strong>Mockup notes (not rendered in final plugin):</strong><br>
+  · This is Step 1 of 4. Next step is the group-level prompt (<code>interface-report.html</code>).<br>
+  · CSV input accepts either a plain list of server IDs (one per line) or a CSV with a <code>server_id</code> column. Additional columns are ignored.<br>
+  · Before "Start review" is enabled, plugin validates each ID exists in the current FortiCloud session by hitting <code>GET /onboarding/getDevicePorts</code> once per ID (with concurrency cap, e.g., 3). IDs that 404 are flagged as warnings and excluded, not a hard fail.<br>
+  · After "Start review", plugin opens a tab, navigates sequentially to each device, fetches port state, computes a fingerprint (sorted hash of <code>{port_name, admin_status, oper_status}</code> tuples), groups devices, then presents the interface-report prompt once per group.<br>
+  · Session validity is shown passively — no OAuth or API-key entry. Session is whatever the user already has in FortiCloud.<br>
+  · No v2 public API, no API key, no credentials beyond the browser session.
+</div>
+
+</body>
+</html>

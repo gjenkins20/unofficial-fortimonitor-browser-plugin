@@ -1,0 +1,35 @@
+# Mockups
+
+Static HTML mockups for the FortiMonitor Port Scope Cleanup browser plugin (FMN-35 / FMN-38).
+
+## Reference scenario
+
+Based on a real production FortiGate screenshot provided 2026-04-16, showing 16 interfaces with a mix of:
+
+- Named aliases: `DATA`, `GUEST`, `MGMT`, `VoIP`, `(Comcast Business)`, `wan2`
+- Interface codes: `port1`–`port6`
+- Letters: `a`, `b`
+- Special types: `fortilink` (fabric link), `modem`
+
+The reference device shows populated `admin_status` and `oper_status` values (`"up"` / `"down"`), unlike the VM test devices (FGVM01TM24006844/45/46) which return `"Unknown"`.
+
+## Design assumptions locked in
+
+1. **Data source:** `GET /onboarding/getDevicePorts?server_id={id}` (session-cookie auth, session-authenticated internal UI endpoint — not the public v2 API).
+2. **Status values:** lowercase `"up"` / `"down"` on production devices; `"Unknown"` on devices without interface telemetry. Compare case-insensitively.
+3. **Selection UX model:** user-driven — the plugin reports all interfaces with status, the user picks which to deselect. No reliable programmatic way to identify "WAN" interfaces across custom naming schemes.
+4. **Pre-selection:** none by default. Optional "Quick select" convenience actions (e.g., "select all oper=down") that the user can trigger explicitly. `fortilink` should never be pre-selected even under bulk rules — it's the fabric link.
+5. **Dry-run is default.** User explicitly opts out to write.
+6. **Destructive warning is prominent.** Deselecting a port deletes its agent_resources and metric history (per FMN-34).
+
+## Files
+
+| File | Purpose |
+|---|---|
+| `interface-report.html` | Main UI — device's interface list with status and user-driven selection |
+
+Additional mockups (popup entry, progress, results) pending.
+
+## Scope boundary (reaffirmed)
+
+This plugin is frontend-only. No v2 public API calls, no API-key auth, no credentials beyond the FortiCloud browser session. See the project memory file `no_fortimonitor_api.md` for the guardrail rationale.

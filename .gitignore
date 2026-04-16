@@ -1,0 +1,24 @@
+# macOS
+.DS_Store
+
+# Editor / IDE
+.vscode/
+.idea/
+
+# Node / build output (for future extension scaffold)
+node_modules/
+dist/
+build/
+*.log
+npm-debug.log*
+
+# Environment / secrets (defense in depth — nothing secret currently expected)
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+credentials.json
+
+# Local Claude state that should stay per-workstation
+.claude/settings.local.json
