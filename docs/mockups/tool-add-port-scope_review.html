@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Mockup — Add to Port Scope · Review (FMN-40)</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --border: #e2e5ea;
+    --border-strong: #c5cbd3;
+    --text: #222a35;
+    --text-muted: #6b7380;
+    --accent: #d9541e;
+    --accent-soft: #fde9dd;
+    --danger: #b3261e;
+    --danger-soft: #fde8e7;
+    --warn: #8b6f00;
+    --warn-soft: #fff4d1;
+    --ok: #1e7a3c;
+    --ok-soft: #dcf4e1;
+    --down: #b3261e;
+    --down-soft: #fde8e7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 13px;
+    color: var(--text);
+    background: var(--bg);
+    padding: 24px;
+  }
+  .mockup-frame {
+    max-width: 720px;
+    margin: 0 auto;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06);
+  }
+  .title-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .title-bar h1 {
+    font-size: 14px;
+    margin: 0;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .title-bar h1 .icon {
+    width: 18px;
+    height: 18px;
+    background: var(--accent);
+    border-radius: 3px;
+    display: inline-grid;
+    place-items: center;
+    color: white;
+    font-size: 11px;
+    font-weight: bold;
+  }
+  .title-bar .subtitle { color: var(--text-muted); font-weight: 400; font-size: 12px; }
+  .close { color: var(--text-muted); font-size: 18px; cursor: pointer; line-height: 1; }
+
+  .device-header {
+    padding: 16px 20px;
+    background: #fafbfc;
+    border-bottom: 1px solid var(--border);
+  }
+  .device-name {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0;
+  }
+  .device-meta {
+    color: var(--text-muted);
+    font-size: 12px;
+    margin-top: 2px;
+  }
+  .summary-row {
+    display: flex;
+    gap: 14px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  .stat-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 100px;
+    font-size: 12px;
+    background: white;
+    border: 1px solid var(--border);
+  }
+  .stat-pill .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+  }
+  .stat-pill.up .dot { background: var(--ok); }
+  .stat-pill.down .dot { background: var(--down); }
+  .stat-pill.selected {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .info-banner {
+    margin: 0;
+    padding: 10px 20px;
+    background: var(--ok-soft);
+    color: var(--ok);
+    font-size: 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .info-banner .info-i {
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--ok);
+    color: white;
+    display: grid;
+    place-items: center;
+    font-size: 11px;
+    font-weight: bold;
+    font-style: italic;
+    font-family: serif;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .toolbar {
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .quick-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .quick-btn {
+    font-size: 12px;
+    padding: 4px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: 5px;
+    background: white;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .quick-btn:hover { background: #f0f2f5; }
+  .search {
+    font-size: 12px;
+    padding: 5px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: 5px;
+    width: 180px;
+    font-family: inherit;
+  }
+
+  .table-wrap { max-height: 620px; overflow-y: auto; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  th, td {
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-muted);
+    font-weight: 600;
+    background: white;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+  th.col-check, td.col-check { width: 36px; padding-left: 20px; }
+  th.col-status, td.col-status { width: 90px; }
+  td.col-name { font-weight: 500; }
+  td.col-name .special-tag {
+    display: inline-block;
+    font-size: 10px;
+    padding: 1px 6px;
+    margin-left: 6px;
+    background: var(--warn-soft);
+    color: var(--warn);
+    border-radius: 4px;
+    font-weight: 500;
+  }
+  .status-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 3px;
+    text-transform: lowercase;
+  }
+  .status-badge.up { color: var(--ok); background: var(--ok-soft); }
+  .status-badge.down { color: var(--down); background: var(--down-soft); }
+  .status-badge.unknown { color: var(--text-muted); background: #edeff2; }
+
+  tr.row-checked td {
+    background: var(--ok-soft);
+  }
+  tr.row-checked td.col-check { box-shadow: inset 4px 0 0 var(--ok); }
+  tr.row-checked td.col-name { color: var(--ok); font-weight: 600; }
+  tr.row-checked td.col-name::after {
+    content: "ADD";
+    display: inline-block;
+    margin-left: 8px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    padding: 2px 6px;
+    background: var(--ok);
+    color: white;
+    border-radius: 3px;
+    vertical-align: middle;
+  }
+  tr.fortilink-warn td { background: var(--warn-soft); }
+  tr.in-scope-muted td {
+    color: var(--text-muted);
+    background: #fafbfc;
+  }
+  tr.in-scope-muted td.col-name { font-weight: 400; }
+  tr.in-scope-muted input[type="checkbox"] { opacity: 0.4; pointer-events: none; }
+  .scope-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 3px;
+  }
+  .scope-badge.in { color: var(--text-muted); background: #edeff2; }
+  .scope-badge.out { color: var(--ok); background: var(--ok-soft); font-weight: 600; }
+
+  .instruction-row {
+    padding: 10px 20px;
+    background: #f0f4f8;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text);
+  }
+  .instruction-row strong { color: var(--ok); }
+  .instruction-row code {
+    font-family: "SF Mono", Menlo, monospace;
+    font-size: 11px;
+    background: white;
+    padding: 1px 5px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+  }
+
+  .action-bar {
+    padding: 14px 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: #fafbfc;
+  }
+  .action-bar .left { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-muted); }
+  .action-bar .dryrun-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--warn-soft);
+    color: var(--warn);
+    border-radius: 4px;
+    font-weight: 500;
+    font-size: 12px;
+  }
+  .action-bar .right { display: flex; gap: 8px; }
+  .btn {
+    font-size: 13px;
+    font-weight: 500;
+    padding: 7px 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .btn-secondary { background: white; color: var(--text); border-color: var(--border-strong); }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+  .legend {
+    max-width: 720px;
+    margin: 16px auto 0;
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+  .legend code {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    background: var(--border);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 10.5px;
+  }
+</style>
+</head>
+<body>
+
+<div class="mockup-frame">
+  <div class="title-bar">
+    <h1>
+      <span class="icon">F</span>
+      Add to Port Scope
+      <span class="subtitle">— Select interfaces to add</span>
+    </h1>
+    <span class="close">✕</span>
+  </div>
+
+  <div class="device-header">
+    <div class="device-name">Group 2 of 5 <span style="color: var(--text-muted); font-weight: 400;">— 23 devices share this interface state</span></div>
+    <div class="device-meta">Batch progress: 31 of 87 devices reviewed · 16 ports per device · fingerprint <code style="font-family: 'SF Mono', Menlo, monospace; font-size: 11px;">7f3a…c9d1</code></div>
+
+    <div class="summary-row">
+      <span class="stat-pill" style="background: var(--ok-soft); border-color: var(--ok); color: var(--ok); font-weight: 600;">2 out of scope</span>
+      <span class="stat-pill" style="background:#eef2f7;border-color:#c5cbd3;">14 in scope (hidden)</span>
+      <span class="stat-pill selected" style="background: var(--ok-soft); border-color: var(--ok); color: var(--ok);">2 marked to add (×23 devices)</span>
+      <span class="stat-pill" style="background:#eef2f7;border-color:#c5cbd3;">Queue: 46 devices</span>
+    </div>
+
+    <details style="margin-top:10px;font-size:12px;color:var(--text-muted);">
+      <summary style="cursor:pointer;">Devices in this group (23)</summary>
+      <div style="margin-top:6px; padding:8px 10px; background:white; border:1px solid var(--border); border-radius:4px; font-family: 'SF Mono', Menlo, monospace; font-size: 11px; line-height: 1.6; max-height: 80px; overflow-y: auto;">
+        FGT-Branch-001 · FGT-Branch-003 · FGT-Branch-007 · FGT-Branch-012 · FGT-Branch-014 · FGT-Branch-018 · FGT-Branch-021 · FGT-Branch-025 · FGT-Branch-029 · FGT-Branch-031 · FGT-Branch-034 · FGT-Branch-038 · FGT-Branch-041 · FGT-Branch-044 · FGT-Branch-047 · FGT-Branch-051 · FGT-Branch-055 · FGT-Branch-058 · FGT-Branch-062 · FGT-Branch-067 · FGT-Branch-071 · FGT-Branch-074 · FGT-Branch-079
+      </div>
+    </details>
+  </div>
+
+  <div class="info-banner">
+    <span class="info-i">i</span>
+    <div>
+      <strong>One decision applies to all 23 devices in this group.</strong> Check each interface you want to start monitoring. Adding a port provisions new agent resources and begins collecting metrics — non-destructive, reversible by re-running the Remove tool. Nothing writes to FortiMonitor until you execute the queue in step 4. (You're in step 2.)
+    </div>
+  </div>
+
+  <div class="instruction-row">
+    <strong>What to do:</strong> check any interface(s) currently <code>out of scope</code> that you want to add to monitoring. In-scope ports are hidden by default — toggle <em>Show in-scope</em> below if you need to see the full list. <code>fortilink</code> (fabric link) is highlighted if present; verify before adding.
+  </div>
+
+  <div class="toolbar">
+    <div class="quick-actions">
+      <button class="quick-btn">Select all out-of-scope</button>
+      <button class="quick-btn">Clear selection</button>
+      <label style="font-size:12px;color:var(--text-muted);display:inline-flex;align-items:center;gap:5px;margin-left:4px;">
+        <input type="checkbox" /> Show in-scope
+      </label>
+    </div>
+    <input class="search" type="text" placeholder="Filter by name..." />
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th class="col-check"><input type="checkbox" /></th>
+          <th class="col-name">Port Name</th>
+          <th>Description</th>
+          <th class="col-status">In Scope</th>
+          <th class="col-status">Admin</th>
+          <th class="col-status">Operational</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="row-checked">
+          <td class="col-check"><input type="checkbox" checked /></td>
+          <td class="col-name">wan2</td>
+          <td>ISP failover</td>
+          <td class="col-status"><span class="scope-badge out">No</span></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+        </tr>
+        <tr class="row-checked">
+          <td class="col-check"><input type="checkbox" checked /></td>
+          <td class="col-name">port6</td>
+          <td></td>
+          <td class="col-status"><span class="scope-badge out">No</span></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+        </tr>
+        <!-- Hidden by default (in-scope toggle OFF). Shown here as a reference
+             so reviewer can see the in-scope visual treatment. -->
+        <tr class="in-scope-muted">
+          <td class="col-check"><input type="checkbox" /></td>
+          <td class="col-name">DATA</td>
+          <td></td>
+          <td class="col-status"><span class="scope-badge in">Yes</span></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+        </tr>
+        <tr class="in-scope-muted">
+          <td class="col-check"><input type="checkbox" /></td>
+          <td class="col-name">GUEST</td>
+          <td></td>
+          <td class="col-status"><span class="scope-badge in">Yes</span></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+        </tr>
+        <tr class="in-scope-muted">
+          <td class="col-check"><input type="checkbox" /></td>
+          <td class="col-name">MGMT</td>
+          <td></td>
+          <td class="col-status"><span class="scope-badge in">Yes</span></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+        </tr>
+        <tr class="in-scope-muted fortilink-warn">
+          <td class="col-check"><input type="checkbox" /></td>
+          <td class="col-name">fortilink <span class="special-tag">fabric link</span></td>
+          <td></td>
+          <td class="col-status"><span class="scope-badge in">Yes</span></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+          <td class="col-status"><span class="status-badge up">up</span></td>
+        </tr>
+        <tr class="in-scope-muted" style="opacity:0.5;">
+          <td colspan="6" style="text-align:center; font-size:11px; color:var(--text-muted); font-style:italic; padding:6px;">+11 more in-scope ports (hidden)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="action-bar">
+    <div class="left">
+      <span>Marked to add: <strong style="color: var(--ok); font-family: 'SF Mono', Menlo, monospace;">wan2, port6</strong> — applies to all 23 devices in this group</span>
+    </div>
+    <div class="right">
+      <button class="btn btn-secondary">Skip this group</button>
+      <button class="btn btn-primary">Queue for 23 devices →</button>
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <strong>Mockup notes (not rendered in final plugin):</strong><br>
+  · <strong>Scale model (same as Remove tool):</strong> plugin reads a CSV of devices, silently reads each device's port scope, groups devices by fingerprint, presents ONE prompt per unique group.<br>
+  · <strong>Inverted focus:</strong> where Remove surfaces in-scope ports so operator can trim them, Add surfaces <em>out-of-scope</em> ports so operator can provision them. The "In Scope" column is the main new element; <code>isActive=false</code> ports are the interesting rows.<br>
+  · Default filter hides in-scope ports (typically the majority). "Show in-scope" toggle reveals them with a muted, read-only visual treatment (checkbox disabled).<br>
+  · <strong>Non-destructive.</strong> Adding a port provisions fresh agent resources and begins metric collection. No data loss risk; no typed-confirmation gate needed downstream. The destructive-banner from the Remove tool is replaced with a green informational banner.<br>
+  · Accent color for the ADD row-highlight is green (<code>--ok</code>) to visually distinguish the additive action from the destructive orange used by Remove.<br>
+  · <code>fortilink</code> still carries a fabric-link tag if operator somehow gets it out-of-scope — same "verify before acting" pattern as Remove.<br>
+  · "Queue for N devices" stages the decision in <code>chrome.storage.local</code>. Nothing writes to FortiMonitor until queue execution (step 4).<br>
+  · Same underlying API as Remove (<code>save_port_selection</code>) — the mechanism only differs in which port indices appear in <code>selectedPorts[]</code>.
+</div>
+
+</body>
+</html>
