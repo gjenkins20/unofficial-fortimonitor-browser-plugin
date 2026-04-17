@@ -112,11 +112,20 @@ export function render({ container, store, navigate, events }) {
 
   container.appendChild(frame);
 
-  // Elapsed-timer tick
-  const tickInterval = setInterval(() => {
-    const elapsedMs = Date.now() - state.startedAt;
-    statsElapsed.textContent = `Elapsed ${fmtDuration(elapsedMs)}`;
-  }, 1000);
+  function renderElapsed() {
+    const endMs = state.finished ? (state.finishedAt ?? Date.now()) : Date.now();
+    const elapsedMs = endMs - state.startedAt;
+    let done = 0;
+    for (const e of entries) {
+      const p = store.executeProgress.get(e.id) ?? { status: 'pending' };
+      if (p.status === 'ok' || p.status === 'fail') done++;
+    }
+    const pct = entries.length > 0 ? Math.round((done / entries.length) * 100) : 0;
+    const suffix = state.finished ? ' — complete' : '';
+    statsElapsed.textContent = `Elapsed ${fmtDuration(elapsedMs)} · ${pct}%${suffix}`;
+  }
+
+  const tickInterval = setInterval(renderElapsed, 1000);
 
   // Wire filter pills
   function setFilter(f) {
@@ -172,10 +181,12 @@ export function render({ container, store, navigate, events }) {
 
     if (doneCount === entries.length && !state.finished) {
       state.finished = true;
+      state.finishedAt = Date.now();
       viewResultsBtn.disabled = false;
       stopBtn.disabled = true;
       finishExecution();
     }
+    renderElapsed();
   }
 
   function finishExecution() {

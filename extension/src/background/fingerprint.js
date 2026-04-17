@@ -8,8 +8,11 @@
 // Uses SubtleCrypto (available in both service workers and Node's
 // webcrypto) so this module runs unchanged under test and in production.
 
-const subtle = globalThis.crypto?.subtle
-  ?? (await import('node:crypto')).webcrypto.subtle;
+async function getSubtle() {
+  if (globalThis.crypto?.subtle) return globalThis.crypto.subtle;
+  const nodeCrypto = await import('node:crypto');
+  return nodeCrypto.webcrypto.subtle;
+}
 
 function toHex(buffer) {
   const bytes = new Uint8Array(buffer);
@@ -50,6 +53,7 @@ export function canonicalizePorts(ports) {
 export async function fingerprintDevice({ ports }) {
   const canonical = canonicalizePorts(ports);
   const data = new TextEncoder().encode(canonical);
+  const subtle = await getSubtle();
   const digest = await subtle.digest('SHA-256', data);
   return toHex(digest);
 }
