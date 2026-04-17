@@ -20,6 +20,7 @@
       <div class="title-text">
         <h1>Unofficial FortiMonitor Toolkit</h1>
       </div>
+      <button id="settings-toggle" class="header-btn" title="Settings" aria-label="Settings">⚙</button>
     </div>
   </header>
 
@@ -29,56 +30,103 @@
     <a id="session-link" href="#" class="link"></a>
   </div>
 
-  <div class="search-row">
-    <input id="search" type="text" placeholder="Search tools…" autofocus>
+  <div id="main-view">
+    <div class="search-row">
+      <input id="search" type="text" placeholder="Search tools…" autofocus>
+    </div>
+
+    <div class="tool-list" id="tool-list">
+      <div class="tool-group-label" data-group="port-scope">Port scope</div>
+
+      <button class="tool-card"
+              data-group="port-scope"
+              data-tool="remove"
+              data-url="src/ui/app.html"
+              data-session-required="true">
+        <div class="tool-icon destructive">−</div>
+        <div class="tool-meta">
+          <div class="tool-name">
+            Remove from Port Scope (Fabric)
+            <span class="badge destructive">Removes</span>
+          </div>
+          <div class="tool-desc" data-default-desc="Batch-remove operationally-down WAN interfaces from monitored port scope.">
+            Batch-remove operationally-down WAN interfaces from monitored port scope.
+          </div>
+        </div>
+        <div class="chevron">›</div>
+      </button>
+
+      <button class="tool-card"
+              data-group="port-scope"
+              data-tool="add"
+              data-url="src/ui/app.html?tool=add"
+              data-session-required="true">
+        <div class="tool-icon additive">+</div>
+        <div class="tool-meta">
+          <div class="tool-name">
+            Add to Port Scope (Fabric)
+            <span class="badge safe">Adds</span>
+          </div>
+          <div class="tool-desc" data-default-desc="Select currently-unmonitored ports and add them to port scope.">
+            Select currently-unmonitored ports and add them to port scope.
+          </div>
+        </div>
+        <div class="chevron">›</div>
+      </button>
+
+      <div class="tool-group-label" data-group="fabric-connection">Fabric connection</div>
+
+      <button class="tool-card"
+              data-group="fabric-connection"
+              data-tool="add-fabric-connection"
+              data-url="src/ui/fabric-connection/app.html"
+              data-api-key-required="true"
+              title="Requires a FortiMonitor v2 API key — configure in popup → Settings (⚙).">
+        <div class="tool-icon api">FC</div>
+        <div class="tool-meta">
+          <div class="tool-name">
+            Add Fabric Connection (API)
+            <span class="badge beta">Beta</span>
+          </div>
+          <div class="tool-desc" data-default-desc="Bulk-create OnSight CSF tunnel connections for FortiGate devices via the FortiMonitor v2 API.">
+            Bulk-create OnSight CSF tunnel connections for FortiGate devices via the FortiMonitor v2 API.
+          </div>
+        </div>
+        <div class="chevron">›</div>
+      </button>
+    </div>
+
+    <div id="no-matches" class="empty-search" hidden>
+      No tools match — try a different keyword.
+    </div>
   </div>
 
-  <div class="tool-list" id="tool-list">
-    <div class="tool-group-label" data-group="port-scope">Port scope</div>
+  <div id="settings-view" class="settings-view" hidden>
+    <div class="settings-header">
+      <button id="settings-back" class="link-btn" aria-label="Back">‹ Back</button>
+      <span class="settings-title">Settings</span>
+    </div>
 
-    <button class="tool-card"
-            data-group="port-scope"
-            data-tool="remove"
-            data-url="src/ui/app.html"
-            data-session-required="true">
-      <div class="tool-icon destructive">−</div>
-      <div class="tool-meta">
-        <div class="tool-name">
-          Remove from Port Scope (Fabric)
-          <span class="badge destructive">Removes</span>
-        </div>
-        <div class="tool-desc" data-default-desc="Batch-remove operationally-down WAN interfaces from monitored port scope.">
-          Batch-remove operationally-down WAN interfaces from monitored port scope.
-        </div>
+    <div class="settings-section">
+      <label class="settings-label" for="api-key-input">FortiMonitor v2 API Key (RW)</label>
+      <p class="settings-help">
+        Required for the Add Fabric Connection tool. Get a Read/Write key from your FortiMonitor account settings. Stored locally in your browser via <code>chrome.storage.local</code>; never transmitted except to <code>api2.panopta.com</code>.
+      </p>
+      <input id="api-key-input" type="password" placeholder="Paste API key" autocomplete="off" spellcheck="false">
+      <div class="settings-actions">
+        <button id="api-key-save" class="btn primary">Save</button>
+        <button id="api-key-clear" class="btn">Clear</button>
+        <button id="api-key-test" class="btn">Test connection</button>
       </div>
-      <div class="chevron">›</div>
-    </button>
-
-    <button class="tool-card"
-            data-group="port-scope"
-            data-tool="add"
-            data-url="src/ui/app.html?tool=add"
-            data-session-required="true">
-      <div class="tool-icon additive">+</div>
-      <div class="tool-meta">
-        <div class="tool-name">
-          Add to Port Scope (Fabric)
-          <span class="badge safe">Adds</span>
-        </div>
-        <div class="tool-desc" data-default-desc="Select currently-unmonitored ports and add them to port scope.">
-          Select currently-unmonitored ports and add them to port scope.
-        </div>
-      </div>
-      <div class="chevron">›</div>
-    </button>
-  </div>
-
-  <div id="no-matches" class="empty-search" hidden>
-    No tools match — try a different keyword.
+      <div id="api-key-status" class="settings-status" hidden></div>
+      <p class="settings-note">
+        Test verifies the key has at least read access. RW capability is verified only on actual writes.
+      </p>
+    </div>
   </div>
 
   <footer class="popup-footer">
-    <span id="version">v0.2.0</span>
+    <span id="version">v0.3.0</span>
     <a id="author-link" href="https://www.linkedin.com/in/gregorijenkins" target="_blank" rel="noopener">Built by Gregori Jenkins</a>
   </footer>
 </div>
