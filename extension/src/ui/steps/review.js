@@ -119,11 +119,6 @@ function renderGroup(container, { store, navigate, groups, index, setIndex }) {
   );
 
   frame.appendChild(h('div', { class: 'device-header' },
-    h('div', { class: 'device-name' },
-      `Group ${index + 1} of ${groups.length} `,
-      h('span', { style: { color: 'var(--text-muted)', fontWeight: '400' } },
-        `— ${deviceCount} device${deviceCount === 1 ? '' : 's'} share this interface state`)
-    ),
     h('div', { class: 'device-meta' },
       `${ports.length} port${ports.length === 1 ? '' : 's'} per device · fingerprint `,
       h('code', { class: 'fingerprint' }, fingerprintShort)
@@ -142,7 +137,7 @@ function renderGroup(container, { store, navigate, groups, index, setIndex }) {
     h('span', { class: 'bang' }, '!'),
     h('div', {},
       h('strong', {}, `One decision applies to all ${deviceCount} device${deviceCount === 1 ? '' : 's'} in this group.`),
-      ' Scope is WAN interfaces only — identify the WAN row(s) this template uses and mark any that are operationally down. Your selection will be queued for every device in the group. Removing a port deletes its agent resources and metric history — irreversible. Nothing writes to FortiMonitor until you execute the queue.'
+      ' Scope is WAN interfaces only — identify the WAN row(s) this template uses and mark any that are operationally down. Your selection will be queued for every device in the group. Removing a port deletes its agent resources and metric history — irreversible. Nothing writes to FortiMonitor until you execute the queue in step 4. (You\'re in step 2.)'
     )
   ));
 
