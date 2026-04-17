@@ -177,8 +177,6 @@ html, body {
   font-weight: 600;
   flex-shrink: 0;
 }
-.tool-icon.destructive { background: #fde9dd; color: var(--accent); }
-.tool-icon.additive { background: var(--ok-soft); color: var(--ok); }
 .tool-icon.api { background: var(--info-soft); color: var(--info); font-size: 11px; }
 
 .tool-meta {
@@ -207,8 +205,6 @@ html, body {
   letter-spacing: 0.03em;
   font-weight: 600;
 }
-.badge.destructive { background: #fde9dd; color: var(--accent); }
-.badge.safe { background: var(--ok-soft); color: var(--ok); }
 .badge.beta { background: var(--warn-soft); color: var(--warn); }
 
 .chevron {
