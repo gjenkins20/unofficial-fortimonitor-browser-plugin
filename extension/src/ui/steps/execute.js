@@ -328,6 +328,9 @@ function buildRow(entry, prog, plan) {
     }
   }
 
+  // Sync initial visual state in case the caller provides a non-pending prog
+  // (preview harness, resuming an in-progress run).
+  update(prog);
   return { el, update };
 }
 
