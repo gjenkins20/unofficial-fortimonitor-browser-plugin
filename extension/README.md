@@ -28,8 +28,8 @@ Uses Node's built-in `node:test` runner — no `npm install` required.
 This is a phased scaffold. Current phase completion:
 
 - [x] **Phase 1** — manifest, service-worker stub, empty app page, README, manifest tests
-- [ ] **Phase 2** — core libraries (`fortimonitor-client`, `fingerprint`, `queue`) + unit tests
-- [ ] **Phase 3** — service worker batch orchestration, retry, message router
+- [x] **Phase 2** — core libraries (`fortimonitor-client`, `fingerprint`, `queue`) + unit tests
+- [x] **Phase 3** — orchestration (`concurrency`, `retry`, `scanner`, `executor`, `message-handlers`) + wired service worker
 - [ ] **Phase 4** — UI port (the five operator screens from `docs/mockups/`)
 - [ ] **Phase 5** — end-to-end testing against a live FortiGate device
 
