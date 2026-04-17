@@ -33,6 +33,7 @@ The reference device shows populated `admin_status` and `oper_status` values (`"
 | `execution-progress.html` | 4 | Live per-device status, retry failed, concurrency-capped |
 | `results.html` | — | Post-execution report, downloadable CSV/JSON, retry-all-failures |
 | `preview-app.html` | — | Loads the real Phase 4 step modules with chrome APIs stubbed — routable via `?step=start|review|queue|execute-dryrun|execute-live|results-partial|results-success`. Must be served over HTTP (`python3 -m http.server` at repo root) because Chrome blocks ES module imports across `file://`. |
+| `launcher-popup.html` | — | FMN-40 launcher mockup. Chrome toolbar popup (360px) showing the tool list, session-status strip, and search filter. Shows three variants: default / session-missing / search-active. |
 
 ## Scope boundary (reaffirmed)
 
