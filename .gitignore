@@ -20,5 +20,6 @@ npm-debug.log*
 *.key
 credentials.json
 
-# Local Claude state that should stay per-workstation
-.claude/settings.local.json
+# Local Claude state and AI agent instructions — not for public distribution
+.claude/
+CLAUDE.md
