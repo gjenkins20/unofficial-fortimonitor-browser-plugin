@@ -1,6 +1,6 @@
 {
   "name": "unofficial-fortimonitor-toolkit",
-  "version": "0.4.0",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
   "description": "Chrome MV3 extension — session-authenticated tools for FortiCloud (batch port scope add/remove, and more). Frontend-only; no runtime dependencies.",
