@@ -3,13 +3,13 @@
 // results. Group-by-fingerprint produces the N-groups-from-M-devices
 // collapse that drives the scale model.
 
-import { mapConcurrent } from './concurrency.js';
-import { fingerprintDevice } from './fingerprint.js';
+import { mapConcurrent } from '../lib/concurrency.js';
+import { fingerprintDevice } from '../lib/fingerprint.js';
 
 /**
  * @param {Array<string|number>} serverIds
  * @param {object} options
- * @param {import('./fortimonitor-client.js').FortimonitorClient} options.client
+ * @param {import('../lib/fortimonitor-client.js').FortimonitorClient} options.client
  * @param {number} [options.concurrency=3]
  * @param {(done:number, total:number, lastResult:object) => void} [options.onProgress]
  * @param {AbortSignal} [options.signal]

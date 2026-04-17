@@ -3,7 +3,7 @@
 // group; "Queue for N devices" advances to the next group (or to the
 // queue overview when all groups are reviewed).
 
-import { h, titleBar, breadcrumbs } from '../dom.js';
+import { h, titleBar, breadcrumbs } from '../../lib/dom.js';
 import { buildQueueEntries } from '../plan.js';
 
 const FORTILINK = 'fortilink';

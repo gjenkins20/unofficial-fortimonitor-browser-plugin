@@ -7,7 +7,7 @@ import * as review from './steps/review.js';
 import * as queue from './steps/queue.js';
 import * as execute from './steps/execute.js';
 import * as results from './steps/results.js';
-import { onEvent } from './messaging.js';
+import { onEvent } from '../lib/messaging.js';
 
 // -------- Session state store --------
 // Held in memory for the lifetime of the tab. The durable queue lives in

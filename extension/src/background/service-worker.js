@@ -5,8 +5,8 @@
 // file wires those modules to chrome.runtime messages, chrome.action
 // clicks, and chrome.runtime lifecycle events.
 
-import { createProductionClient } from './fortimonitor-client.js';
-import { Queue } from './queue.js';
+import { createProductionClient } from '../lib/fortimonitor-client.js';
+import { Queue } from '../lib/queue.js';
 import { createHandlers, dispatch } from './message-handlers.js';
 
 const client = createProductionClient();

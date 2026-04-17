@@ -3,9 +3,9 @@
 // Verbose mode forces serial execution (concurrency=1) without changing
 // the rest of the pipeline.
 
-import { FortimonitorError } from './fortimonitor-client.js';
-import { mapConcurrent } from './concurrency.js';
-import { withRetry, backoffDelayMs } from './retry.js';
+import { FortimonitorError } from '../lib/fortimonitor-client.js';
+import { mapConcurrent } from '../lib/concurrency.js';
+import { withRetry, backoffDelayMs } from '../lib/retry.js';
 
 // HTTP statuses where a retry stands a chance of succeeding.
 const RETRYABLE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
@@ -37,7 +37,7 @@ export function isRetryable(err) {
  *
  * @param {Array<object>} entries
  * @param {object} options
- * @param {import('./fortimonitor-client.js').FortimonitorClient} options.client
+ * @param {import('../lib/fortimonitor-client.js').FortimonitorClient} options.client
  * @param {number} [options.concurrency=3]
  * @param {boolean} [options.verbose=false]
  * @param {number} [options.maxAttempts=3]

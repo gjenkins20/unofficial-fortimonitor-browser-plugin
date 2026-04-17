@@ -2,9 +2,9 @@
 // (optionally with device names via CSV), we validate by silently
 // reading each device's port scope, then hand off to the review step.
 
-import { h, titleBar, breadcrumbs } from '../dom.js';
+import { h, titleBar, breadcrumbs } from '../../lib/dom.js';
 import { parseServerList } from '../parse-csv.js';
-import { call } from '../messaging.js';
+import { call } from '../../lib/messaging.js';
 
 export function render({ container, store, navigate }) {
   const frame = h('div', { class: 'mockup-frame' });

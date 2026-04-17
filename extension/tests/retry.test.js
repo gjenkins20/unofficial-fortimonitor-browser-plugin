@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { backoffDelayMs, withRetry } from '../src/background/retry.js';
+import { backoffDelayMs, withRetry } from '../src/lib/retry.js';
 
 // No-op sleep for fast tests.
 const noSleep = async () => {};
