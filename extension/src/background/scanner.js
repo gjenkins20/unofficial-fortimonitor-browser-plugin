@@ -41,7 +41,7 @@ export async function scanDevices(serverIds, { client, concurrency = 3, onProgre
             serverId: serverIds[i],
             fingerprint: null,
             portsData: null,
-            error: res.reason
+            error: serializeError(res.reason)
           };
         }
         done++;
@@ -61,12 +61,31 @@ export async function scanDevices(serverIds, { client, concurrency = 3, onProgre
           serverId: serverIds[i],
           fingerprint: null,
           portsData: null,
-          error: settled[i].reason
+          error: serializeError(settled[i].reason)
         };
       }
     }
   }
   return results;
+}
+
+// Errors cross the service-worker → popup message boundary, which strips
+// Error instances to {} and loses .message. Flatten to a POJO so the UI
+// can actually display the failure reason. Diagnostic fields
+// (responseUrl / contentType / bodyPreview) are carried through for
+// developer-mode rendering; the UI gates their visibility, not this.
+function serializeError(err) {
+  if (err == null) return null;
+  if (typeof err !== 'object') return { message: String(err) };
+  return {
+    name: err.name ?? 'Error',
+    message: err.message ?? String(err),
+    status: err.status ?? null,
+    phase: err.phase ?? null,
+    responseUrl: err.responseUrl ?? null,
+    contentType: err.contentType ?? null,
+    bodyPreview: err.bodyPreview ?? null
+  };
 }
 
 /**

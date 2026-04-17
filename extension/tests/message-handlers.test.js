@@ -137,3 +137,45 @@ test('dispatch throws on unknown message type', async () => {
   const handlers = createHandlers({ client: fakeClient(), queue: freshQueue() });
   await assert.rejects(dispatch(handlers, { type: 'nope' }), /Unknown message type/);
 });
+
+test('session:probe delegates to client.probeSession', async () => {
+  const probeOut = { hasXsrfCookie: true, xsrfCookiePrefix: 'abc12…', probe: { status: 200, contentType: 'application/json' } };
+  const client = {
+    ...fakeClient(),
+    probeSession: async () => probeOut
+  };
+  const handlers = createHandlers({ client, queue: freshQueue() });
+  const out = await handlers['session:probe']({});
+  assert.deepEqual(out, probeOut);
+});
+
+test('session:probe throws a clear error when the client lacks probeSession', async () => {
+  const handlers = createHandlers({ client: fakeClient(), queue: freshQueue() });
+  await assert.rejects(handlers['session:probe']({}), /probeSession/);
+});
+
+test('scan-devices per-device errors are serialized (POJO, not Error instance)', async () => {
+  const handlers = createHandlers({
+    client: {
+      async getDevicePorts(id) {
+        if (id === 'bad') throw new FortimonitorError('login redirect', {
+          status: 200, phase: 'auth', contentType: 'text/html',
+          bodyPreview: '<!DOCTYPE html>...', responseUrl: 'https://x/login'
+        });
+        return { ports: [{ name: 'wan', admin_status: 'up', oper_status: 'up' }] };
+      }
+    },
+    queue: freshQueue()
+  });
+  const { errored } = await handlers['scan-devices']({ serverIds: ['bad'] });
+  assert.equal(errored.length, 1);
+  const e = errored[0].error;
+  // POJO, not Error — chrome.runtime.sendMessage strips Error prototypes.
+  assert.equal(Object.getPrototypeOf(e), Object.prototype);
+  assert.equal(e.message, 'login redirect');
+  assert.equal(e.phase, 'auth');
+  assert.equal(e.status, 200);
+  assert.equal(e.contentType, 'text/html');
+  assert.equal(e.bodyPreview, '<!DOCTYPE html>...');
+  assert.equal(e.responseUrl, 'https://x/login');
+});

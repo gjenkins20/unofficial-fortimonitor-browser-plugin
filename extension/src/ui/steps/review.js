@@ -6,6 +6,8 @@
 
 import { h, titleBar, breadcrumbs } from '../../lib/dom.js';
 import { buildQueueEntries } from '../plan.js';
+import { isDevModeEnabled } from '../../lib/settings.js';
+import { call } from '../../lib/messaging.js';
 
 const FORTILINK = 'fortilink';
 
@@ -59,17 +61,30 @@ function renderEmpty(container, navigate, store) {
     h('p', {}, 'No devices could be read in your active session. Return to Load devices and try again.')
   ));
   const errored = store.scanResult?.errored ?? [];
+  const errorListHost = h('div', { class: 'warn-list' });
   if (errored.length) {
     const body = h('div', { class: 'body-section' },
       h('h3', {}, `${errored.length} device(s) failed to read`),
-      h('div', { class: 'warn-list' },
-        h('ul', {},
-          ...errored.map((e) => h('li', {}, `${e.serverId}: ${e.error?.message ?? String(e.error)}`))
-        )
-      )
+      errorListHost
     );
     frame.appendChild(body);
   }
+
+  // Developer-mode diagnostics live in their own section below the error
+  // list. Gated behind isDevModeEnabled so normal operators don't see raw
+  // URLs or body previews.
+  const devSection = h('div', { class: 'body-section dev-diagnostics', hidden: true },
+    h('h3', {}, 'Developer diagnostics'),
+    h('p', { class: 'dev-help' }, 'Shown because Developer mode is enabled in Settings. Use Check session to probe FortiCloud directly.')
+  );
+  const probeBtn = h('button', { class: 'btn btn-secondary' }, 'Check session');
+  const probeResult = h('div', { class: 'dev-probe', hidden: true });
+  devSection.append(
+    h('div', { style: { margin: '8px 0' } }, probeBtn),
+    probeResult
+  );
+  frame.appendChild(devSection);
+
   frame.appendChild(h('div', { class: 'action-bar' },
     h('div', { class: 'left' }, ''),
     h('div', { class: 'right' }, h('button', {
@@ -77,6 +92,97 @@ function renderEmpty(container, navigate, store) {
     }, '← Back to start'))
   ));
   container.appendChild(frame);
+
+  // Async: render error list (with or without diagnostic expansion) and
+  // reveal the dev section once we know the flag.
+  (async () => {
+    const dev = await isDevModeEnabled();
+    errorListHost.replaceChildren(
+      h('ul', {},
+        ...errored.map((e) => renderErrorItem(e, dev))
+      )
+    );
+    if (dev) devSection.hidden = false;
+  })();
+
+  probeBtn.addEventListener('click', async () => {
+    probeBtn.disabled = true;
+    probeBtn.textContent = 'Probing…';
+    probeResult.hidden = false;
+    probeResult.replaceChildren('Calling /onboarding/getDevicePorts?server_id=0 …');
+    try {
+      const result = await call('session:probe');
+      probeResult.replaceChildren(renderProbe(result));
+    } catch (err) {
+      probeResult.replaceChildren(
+        h('div', { class: 'probe-error' }, `Probe failed: ${err?.message ?? String(err)}`)
+      );
+    } finally {
+      probeBtn.disabled = false;
+      probeBtn.textContent = 'Check session';
+    }
+  });
+}
+
+function renderErrorItem(e, devMode) {
+  const primary = `${e.serverId}: ${e.error?.message ?? String(e.error)}`;
+  if (!devMode) return h('li', {}, primary);
+  const { status, phase, responseUrl, contentType, bodyPreview } = e.error ?? {};
+  const detail = h('div', { class: 'dev-error-detail' });
+  const fields = [];
+  if (phase) fields.push(['phase', phase]);
+  if (status != null) fields.push(['status', String(status)]);
+  if (contentType) fields.push(['content-type', contentType]);
+  if (responseUrl) fields.push(['final url', responseUrl]);
+  if (fields.length) {
+    detail.appendChild(h('dl', { class: 'dev-kv' },
+      ...fields.flatMap(([k, v]) => [h('dt', {}, k), h('dd', {}, v)])
+    ));
+  }
+  if (bodyPreview) {
+    detail.appendChild(h('pre', { class: 'dev-body-preview' }, bodyPreview));
+  }
+  return h('li', {}, primary, detail);
+}
+
+function renderProbe(result) {
+  const wrap = h('div', { class: 'probe-result' });
+  const kv = [
+    ['tenant origin', result.origin ?? '(unresolved)'],
+    ['XSRF cookie present', result.hasXsrfCookie ? 'yes' : 'no'],
+    ['XSRF cookie prefix', result.xsrfCookiePrefix ?? '(none)']
+  ];
+  if (result.probe) {
+    if (result.probe.error) {
+      kv.push(['probe error', result.probe.error]);
+    } else {
+      kv.push(['HTTP status', String(result.probe.status)]);
+      kv.push(['content-type', result.probe.contentType || '(empty)']);
+      kv.push(['final url', result.probe.responseUrl ?? '(unknown)']);
+    }
+  }
+  wrap.appendChild(h('dl', { class: 'dev-kv' },
+    ...kv.flatMap(([k, v]) => [h('dt', {}, k), h('dd', {}, v)])
+  ));
+  const interpretation = interpretProbe(result);
+  if (interpretation) {
+    wrap.appendChild(h('div', { class: 'probe-interpretation' }, interpretation));
+  }
+  return wrap;
+}
+
+function interpretProbe(result) {
+  if (!result.hasXsrfCookie) {
+    return 'No XSRF-TOKEN cookie visible to the extension. You are not logged in to fortimonitor.forticloud.com in this Chrome profile, or the extension is installed in a different profile than the one where you logged in.';
+  }
+  const ct = (result.probe?.contentType ?? '').toLowerCase();
+  if (ct && !ct.includes('json')) {
+    return 'XSRF cookie is present but FortiCloud returned a non-JSON response — likely a login-page redirect. Session may be expired, or the extension is running in a profile whose cookies do not match the tenant being queried.';
+  }
+  if (result.probe?.ok) {
+    return 'Session looks healthy. The earlier failures are likely tenant-scoped — the server IDs you entered may not belong to this tenant.';
+  }
+  return null;
 }
 
 function renderGroup(container, { store, navigate, groups, index, setIndex }) {

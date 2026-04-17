@@ -48,6 +48,30 @@ test('manifest declares the FortiMonitor host permission', async () => {
   );
 });
 
+test('manifest declares a host_permission covering regional FortiMonitor tenants', async () => {
+  const m = await readManifest();
+  // Chrome match patterns forbid mid-host wildcards, so the pattern that
+  // covers my.us01.fortimonitor.com, my.eu01.fortimonitor.com, etc., is
+  // the broader `*.fortimonitor.com/*`. Verify that shape.
+  assert.ok(
+    m.host_permissions.some((h) => h === 'https://*.fortimonitor.com/*'),
+    'host_permissions must include https://*.fortimonitor.com/* so the extension can see the session cookie on regional tenants (my.us01.fortimonitor.com, etc.). A narrower mid-wildcard pattern like my.*.fortimonitor.com is rejected by Chrome as malformed.'
+  );
+});
+
+test('host_permissions entries are valid Chrome match patterns (no mid-host wildcards)', async () => {
+  const m = await readManifest();
+  for (const pattern of m.host_permissions) {
+    const m2 = pattern.match(/^https?:\/\/([^/]+)/);
+    assert.ok(m2, `host_permission must start with a scheme: ${pattern}`);
+    const host = m2[1];
+    // Chrome allows `*` for entire host, `*.` prefix, or a literal host.
+    // Anything else (mid-wildcard, trailing dot wildcard, etc.) is invalid.
+    const valid = host === '*' || /^\*\.[^*]+$/.test(host) || /^[^*]+$/.test(host);
+    assert.ok(valid, `invalid match pattern host (Chrome forbids mid-host wildcards): ${pattern}`);
+  }
+});
+
 test('manifest declares cookies and storage permissions', async () => {
   const m = await readManifest();
   assert.ok(Array.isArray(m.permissions));

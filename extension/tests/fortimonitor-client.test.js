@@ -5,9 +5,21 @@ import {
   FortimonitorError,
   buildSavePortSelectionUrl,
   parseDevicePortsResponse,
+  redactSensitive,
   FM_ORIGIN
 } from '../src/lib/fortimonitor-client.js';
 import { createFetchMock, createCookieMock, jsonResponse, errorResponse } from './fixtures/chrome-mocks.js';
+
+function htmlResponse(body = '<!DOCTYPE html><html>login</html>', { status = 200, url = null } = {}) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    url,
+    headers: new Map([['content-type', 'text/html; charset=utf-8']]),
+    async json() { throw new SyntaxError(`Unexpected token '<', "${body.slice(0, 15)}"... is not valid JSON`); },
+    async text() { return body; }
+  };
+}
 
 // ----- buildSavePortSelectionUrl ---------------------------------
 
@@ -165,4 +177,153 @@ test('savePortSelection rejects when server returns success:false', async () => 
 test('FortimonitorClient requires fetch and getCookie', () => {
   assert.throws(() => new FortimonitorClient({}), TypeError);
   assert.throws(() => new FortimonitorClient({ fetch: () => {} }), TypeError);
+});
+
+// ----- non-JSON (login-page) detection ---------------------------
+
+test('getDevicePorts surfaces phase=auth when FortiCloud redirects to an HTML login', async () => {
+  const fetchMock = createFetchMock(async () => htmlResponse(
+    '<!DOCTYPE html><html><body>login form</body></html>',
+    { url: 'https://fortimonitor.forticloud.com/login' }
+  ));
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'tok' });
+  await assert.rejects(client.getDevicePorts(42978481), (err) => {
+    return err instanceof FortimonitorError
+      && err.phase === 'auth'
+      && err.status === 200
+      && /non-JSON/i.test(err.message)
+      && err.contentType?.includes('text/html')
+      && typeof err.bodyPreview === 'string'
+      && err.bodyPreview.includes('login form');
+  });
+});
+
+test('getDevicePorts attaches responseUrl (redacted) on HTTP failure', async () => {
+  const fetchMock = createFetchMock(async () => ({
+    ok: false,
+    status: 502,
+    url: 'https://fortimonitor.forticloud.com/onboarding/getDevicePorts?server_id=1&sig=abcdefghijklmnopqrstuvwxyz0123456789',
+    headers: new Map([['content-type', 'text/html']]),
+    async json() { return null; },
+    async text() { return ''; }
+  }));
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'tok' });
+  await assert.rejects(client.getDevicePorts(1), (err) => {
+    return err.status === 502
+      && err.phase === 'read'
+      && err.responseUrl?.includes('<redacted-query>')
+      && err.contentType === 'text/html';
+  });
+});
+
+// ----- redactSensitive -------------------------------------------
+
+test('redactSensitive strips query strings and long base64-ish runs', () => {
+  const out = redactSensitive('https://x/y?token=ABC&sig=abcdefghijklmnopqrstuvwxyz0123456789');
+  assert.ok(out.includes('<redacted-query>'), `expected <redacted-query> in: ${out}`);
+  const out2 = redactSensitive('prefix abcdefghijklmnopqrstuvwxyz0123456789xx suffix');
+  assert.ok(out2.includes('<redacted-token>'), `expected <redacted-token> in: ${out2}`);
+});
+
+test('redactSensitive leaves short text untouched', () => {
+  assert.equal(redactSensitive('hello world'), 'hello world');
+  assert.equal(redactSensitive(null), null);
+  assert.equal(redactSensitive(undefined), undefined);
+});
+
+// ----- probeSession ----------------------------------------------
+
+test('probeSession reports XSRF cookie presence and HTTP status', async () => {
+  const fetchMock = createFetchMock(async () => jsonResponse({ data: { ports: [] } }, {
+    headers: { 'content-type': 'application/json' }
+  }));
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'xsrf-123456789' });
+  const out = await client.probeSession();
+  assert.equal(out.hasXsrfCookie, true);
+  assert.ok(out.xsrfCookiePrefix?.startsWith('xsrf-1'));
+  assert.equal(out.probe.status, 200);
+  assert.ok(out.probe.contentType.includes('json'));
+});
+
+test('probeSession reports hasXsrfCookie=false when cookie is missing', async () => {
+  const fetchMock = createFetchMock(async () => htmlResponse());
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => null });
+  const out = await client.probeSession();
+  assert.equal(out.hasXsrfCookie, false);
+  assert.equal(out.xsrfCookiePrefix, null);
+  assert.equal(out.probe.status, 200);
+  assert.ok(out.probe.contentType.includes('text/html'));
+});
+
+test('probeSession does not throw when fetch rejects', async () => {
+  const client = new FortimonitorClient({
+    fetch: async () => { throw new Error('network down'); },
+    getCookie: async () => 'tok'
+  });
+  const out = await client.probeSession();
+  assert.equal(out.hasXsrfCookie, true);
+  assert.match(out.probe.error, /network down/);
+});
+
+// ----- injectable origin (regional tenant support) ---------------
+
+test('getDevicePorts uses the injected origin, not the federation URL', async () => {
+  const fetchMock = createFetchMock(async () => jsonResponse({ data: { ports: [] } }));
+  const client = new FortimonitorClient({
+    fetch: fetchMock,
+    getCookie: async () => 'tok',
+    origin: 'https://my.us01.fortimonitor.com'
+  });
+  await client.getDevicePorts(42024060);
+  assert.equal(fetchMock.calls[0].url, 'https://my.us01.fortimonitor.com/onboarding/getDevicePorts?server_id=42024060');
+});
+
+test('origin accepts an async resolver and caches the result', async () => {
+  const fetchMock = createFetchMock(async () => jsonResponse({ data: { ports: [] } }));
+  let calls = 0;
+  const resolver = async () => {
+    calls++;
+    return 'https://my.us01.fortimonitor.com';
+  };
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'tok', origin: resolver });
+  await client.getDevicePorts(1);
+  await client.getDevicePorts(2);
+  await client.probeSession();
+  assert.equal(calls, 1, 'resolver should only be called once per client');
+});
+
+test('savePortSelection targets the injected origin', async () => {
+  let captured;
+  const fetchMock = createFetchMock(async (url) => { captured = url; return jsonResponse({ success: true }); });
+  const client = new FortimonitorClient({
+    fetch: fetchMock,
+    getCookie: async () => 'xsrf',
+    origin: 'https://my.eu01.fortimonitor.com'
+  });
+  await client.savePortSelection({ serverId: 1, totalPortCount: 3 });
+  assert.ok(captured.startsWith('https://my.eu01.fortimonitor.com/config/save_port_selection?'),
+    `expected regional origin, got: ${captured}`);
+});
+
+test('probeSession reports the resolved tenant origin in its output', async () => {
+  const fetchMock = createFetchMock(async () => jsonResponse({ data: { ports: [] } }));
+  const client = new FortimonitorClient({
+    fetch: fetchMock,
+    getCookie: async () => 'xsrf',
+    origin: 'https://my.us02.fortimonitor.com'
+  });
+  const out = await client.probeSession();
+  assert.equal(out.origin, 'https://my.us02.fortimonitor.com');
+});
+
+test('getCookie is called with the resolved origin so cookie lookup follows the tenant', async () => {
+  const seen = [];
+  const fetchMock = createFetchMock(async () => jsonResponse({ success: true }));
+  const client = new FortimonitorClient({
+    fetch: fetchMock,
+    getCookie: async (name, urlOverride) => { seen.push({ name, urlOverride }); return 'xsrf'; },
+    origin: 'https://my.us01.fortimonitor.com'
+  });
+  await client.savePortSelection({ serverId: 1, totalPortCount: 3 });
+  assert.equal(seen[0].urlOverride, 'https://my.us01.fortimonitor.com');
 });

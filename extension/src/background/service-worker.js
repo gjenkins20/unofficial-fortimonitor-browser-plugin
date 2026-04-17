@@ -13,8 +13,13 @@ import { createProductionClient } from '../lib/fortimonitor-client.js';
 import { Queue } from '../lib/queue.js';
 import { createHandlers, dispatch } from './message-handlers.js';
 import { createFabricHandlers } from './fabric-connection-handlers.js';
+import { resolveFortimonitorOrigin } from '../lib/origin-resolver.js';
 
-const client = createProductionClient();
+const resolveOrigin = () => resolveFortimonitorOrigin({
+  queryTabs: (q) => chrome.tabs.query(q),
+  storage: chrome.storage.local
+});
+const client = createProductionClient({ origin: resolveOrigin });
 const queue = new Queue(); // uses chrome.storage.local by default
 
 // Broadcast runtime events to any listening extension page.

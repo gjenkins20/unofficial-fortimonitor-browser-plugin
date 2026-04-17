@@ -33,6 +33,13 @@ export function createHandlers({ client, queue, events = {} }) {
       return groupByFingerprint(results);
     },
 
+    'session:probe': async () => {
+      if (typeof client.probeSession !== 'function') {
+        throw new Error('client does not expose probeSession');
+      }
+      return client.probeSession();
+    },
+
     'queue:list': async () => {
       return queue.list();
     },
