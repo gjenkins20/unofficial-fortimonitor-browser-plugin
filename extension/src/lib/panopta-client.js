@@ -18,13 +18,36 @@
 export const PANOPTA_BASE = 'https://api2.panopta.com/v2';
 
 export class PanoptaError extends Error {
-  constructor(message, { status = null, phase = null, responseBody = null } = {}) {
+  constructor(message, {
+    status = null,
+    phase = null,
+    responseBody = null,
+    responseUrl = null,
+    contentType = null
+  } = {}) {
     super(message);
     this.name = 'PanoptaError';
     this.status = status;
     this.phase = phase;
     this.responseBody = responseBody;
+    this.responseUrl = responseUrl;
+    this.contentType = contentType;
   }
+}
+
+/**
+ * Redact long opaque tokens and query strings from diagnostic text
+ * before it is surfaced in errors. API keys frequently appear in URLs
+ * or response echoes — strip them before they reach log surfaces.
+ *
+ * Exported for tests.
+ */
+export function redactSensitive(text) {
+  if (text == null) return text;
+  const s = String(text);
+  return s
+    .replace(/\?[^\s"'<>]+/g, '?<redacted-query>')
+    .replace(/[A-Za-z0-9_\-+/=]{32,}/g, '<redacted-token>');
 }
 
 /**
@@ -89,6 +112,26 @@ export function parseListResponse(json, baseUrl = PANOPTA_BASE) {
   }));
 }
 
+/**
+ * Normalize a /v2/server list response. Differs from parseListResponse
+ * because the server endpoint wraps results in `server_list` rather than
+ * `objects`. Confirmed live 2026-04-17.
+ */
+export function parseServerListResponse(json, baseUrl = PANOPTA_BASE) {
+  if (!json || typeof json !== 'object' || !Array.isArray(json.server_list)) {
+    throw new PanoptaError('Malformed /server list response: missing server_list array', {
+      phase: 'read',
+      responseBody: json
+    });
+  }
+  const root = baseUrl.replace(/\/v2$/, '');
+  return json.server_list.map((o) => ({
+    id: o.id,
+    name: o.name ?? `#${o.id}`,
+    resourceUrl: o.resource_uri ? `${root}${o.resource_uri}` : null
+  }));
+}
+
 export class PanoptaClient {
   /**
    * @param {object} deps
@@ -140,7 +183,9 @@ export class PanoptaClient {
       throw new PanoptaError(message, {
         status: res.status,
         phase: res.status === 401 ? 'auth' : 'write',
-        responseBody: parsed
+        responseBody: typeof parsed === 'string' ? redactSensitive(parsed.slice(0, 200)) : parsed,
+        responseUrl: redactSensitive(res.url ?? url),
+        contentType: ct
       });
     }
     return { res, body: parsed };
@@ -170,6 +215,28 @@ export class PanoptaClient {
   async listOnsightGroups({ limit = 100 } = {}) {
     const { body } = await this._request('GET', `/onsight_group?limit=${limit}`);
     return parseListResponse(body, this.baseUrl);
+  }
+
+  /**
+   * Look up servers whose name exactly matches `name`.
+   *
+   * The v2 `/server?name=` filter is a substring/contains match (verified
+   * live 2026-04-17 — partial prefix returned 3 hits). We pass the term
+   * through unchanged for server-side prefiltering, then enforce exact
+   * equality client-side. Case-sensitive — callers wanting CI must lower
+   * both sides themselves.
+   *
+   * Returns an array (0, 1, or N matches). Caller decides how to handle
+   * not-found and ambiguous outcomes.
+   */
+  async lookupServersByName(name, { limit = 50 } = {}) {
+    if (!name || typeof name !== 'string') {
+      throw new TypeError('lookupServersByName: name is required');
+    }
+    const path = `/server?name=${encodeURIComponent(name)}&limit=${limit}`;
+    const { body } = await this._request('GET', path);
+    const all = parseServerListResponse(body, this.baseUrl);
+    return all.filter((s) => s.name === name);
   }
 
   /**

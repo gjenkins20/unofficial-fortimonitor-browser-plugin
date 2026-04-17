@@ -907,3 +907,67 @@ tr.hidden-scope { display: none; }
 .execute-state {
   font-weight: 500;
 }
+
+/* Developer-mode diagnostics (gated by settings toggle) */
+.dev-diagnostics {
+  border-top: 1px dashed var(--border);
+  margin-top: 12px;
+}
+.dev-diagnostics .dev-help {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 4px 0 8px;
+}
+.dev-error-detail {
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 11px;
+}
+.dev-kv {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2px 10px;
+  margin: 0;
+  font-family: SF Mono, Menlo, monospace;
+}
+.dev-kv dt {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.dev-kv dd {
+  margin: 0;
+  word-break: break-all;
+}
+.dev-body-preview {
+  margin: 6px 0 0;
+  padding: 6px 8px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: SF Mono, Menlo, monospace;
+  font-size: 10.5px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 120px;
+  overflow: auto;
+}
+.probe-result {
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.probe-interpretation {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.probe-error {
+  color: var(--danger);
+  font-size: 12px;
+}

@@ -12,17 +12,47 @@
 // Node without any Chrome APIs. See createProductionClient() at the bottom
 // for the production factory that wires chrome.cookies + global fetch.
 
+// Default origin kept for tests and back-compat. In production the
+// service worker resolves the tenant origin at runtime and injects it
+// into the client — see origin-resolver.js.
 export const FM_ORIGIN = 'https://fortimonitor.forticloud.com';
 const XSRF_COOKIE_NAME = 'XSRF-TOKEN';
 
 export class FortimonitorError extends Error {
-  constructor(message, { status = null, phase = null, responseBody = null } = {}) {
+  constructor(message, {
+    status = null,
+    phase = null,
+    responseBody = null,
+    responseUrl = null,
+    contentType = null,
+    bodyPreview = null
+  } = {}) {
     super(message);
     this.name = 'FortimonitorError';
     this.status = status;
     this.phase = phase;
     this.responseBody = responseBody;
+    this.responseUrl = responseUrl;
+    this.contentType = contentType;
+    this.bodyPreview = bodyPreview;
   }
+}
+
+/**
+ * Remove long opaque tokens and query strings from a string before we
+ * attach it to an error. Long base64-ish runs (32+ chars) and entire
+ * query strings are the two shapes most likely to contain session
+ * secrets — redacting both keeps diagnostics useful without leaking
+ * cookies or XSRF values into log surfaces.
+ *
+ * Exported for tests.
+ */
+export function redactSensitive(text) {
+  if (text == null) return text;
+  const s = String(text);
+  return s
+    .replace(/\?[^\s"'<>]+/g, '?<redacted-query>')
+    .replace(/[A-Za-z0-9_\-+/=]{32,}/g, '<redacted-token>');
 }
 
 /**
@@ -37,7 +67,8 @@ export function buildSavePortSelectionUrl({
   selectedIndices = [],
   totalPortCount,
   searchTerm = '',
-  filters = []
+  filters = [],
+  origin = FM_ORIGIN
 }) {
   if (serverId === undefined || serverId === null) {
     throw new TypeError('buildSavePortSelectionUrl: serverId is required');
@@ -58,7 +89,7 @@ export function buildSavePortSelectionUrl({
   for (const idx of selectedIndices) {
     params.append('selectedPorts[]', String(idx));
   }
-  return `${FM_ORIGIN}/config/save_port_selection?${params.toString()}`;
+  return `${origin}/config/save_port_selection?${params.toString()}`;
 }
 
 /**
@@ -97,8 +128,11 @@ export class FortimonitorClient {
    * @param {object} deps
    * @param {typeof fetch} deps.fetch
    * @param {(name: string) => Promise<string|null>} deps.getCookie
+   * @param {string|(() => Promise<string>)} [deps.origin] tenant base URL;
+   *   accepts a string or an async resolver so the service worker can
+   *   discover the regional subdomain lazily from open tabs.
    */
-  constructor({ fetch, getCookie } = {}) {
+  constructor({ fetch, getCookie, origin = FM_ORIGIN } = {}) {
     if (typeof fetch !== 'function') {
       throw new TypeError('FortimonitorClient requires a fetch function');
     }
@@ -107,23 +141,62 @@ export class FortimonitorClient {
     }
     this.fetch = fetch;
     this.getCookie = getCookie;
+    this._origin = origin;
+  }
+
+  /**
+   * Resolve the tenant origin for this call. Accepts a string or a
+   * resolver function; caches resolver output so we only hit tab-query
+   * once per service-worker lifetime.
+   */
+  async origin() {
+    if (typeof this._origin === 'function') {
+      if (!this._originCache) this._originCache = Promise.resolve(this._origin());
+      return this._originCache;
+    }
+    return this._origin;
   }
 
   async getDevicePorts(serverId) {
     if (serverId === undefined || serverId === null) {
       throw new TypeError('getDevicePorts: serverId is required');
     }
-    const url = `${FM_ORIGIN}/onboarding/getDevicePorts?server_id=${encodeURIComponent(serverId)}`;
+    const origin = await this.origin();
+    const url = `${origin}/onboarding/getDevicePorts?server_id=${encodeURIComponent(serverId)}`;
     const res = await this.fetch(url, {
       method: 'GET',
       credentials: 'include',
       headers: { 'Accept': 'application/json' }
     });
+    const responseUrl = redactSensitive(res.url ?? url);
+    const contentType = res.headers?.get?.('content-type') ?? '';
     if (!res.ok) {
       throw new FortimonitorError(`getDevicePorts failed: HTTP ${res.status}`, {
         status: res.status,
-        phase: 'read'
+        phase: 'read',
+        responseUrl,
+        contentType
       });
+    }
+    // FortiCloud redirects unauthenticated requests to a login HTML page
+    // with HTTP 200, so res.ok doesn't catch it. Sniff content-type and
+    // surface a clean auth error instead of a JSON parse failure.
+    if (contentType && !contentType.toLowerCase().includes('json')) {
+      let bodyPreview = null;
+      try {
+        const text = await res.text();
+        bodyPreview = redactSensitive(text.slice(0, 200));
+      } catch { /* best effort */ }
+      throw new FortimonitorError(
+        'FortiCloud returned a non-JSON response (likely a login page). Your browser session is not being recognized by the extension — confirm you are logged into fortimonitor.forticloud.com in this Chrome profile and that the server ID belongs to that tenant.',
+        {
+          status: res.status,
+          phase: 'auth',
+          responseUrl,
+          contentType,
+          bodyPreview
+        }
+      );
     }
     const json = await res.json();
     return parseDevicePortsResponse(json);
@@ -137,7 +210,8 @@ export class FortimonitorClient {
     searchTerm = '',
     filters = []
   }) {
-    const xsrf = await this.getCookie(XSRF_COOKIE_NAME);
+    const origin = await this.origin();
+    const xsrf = await this.getCookie(XSRF_COOKIE_NAME, origin);
     if (!xsrf) {
       throw new FortimonitorError(
         `No ${XSRF_COOKIE_NAME} cookie — user is not logged in to FortiCloud.`,
@@ -145,7 +219,7 @@ export class FortimonitorClient {
       );
     }
     const url = buildSavePortSelectionUrl({
-      serverId, portSelectionType, selectedIndices, totalPortCount, searchTerm, filters
+      serverId, portSelectionType, selectedIndices, totalPortCount, searchTerm, filters, origin
     });
     const res = await this.fetch(url, {
       method: 'POST',
@@ -160,7 +234,9 @@ export class FortimonitorClient {
     if (!res.ok) {
       throw new FortimonitorError(`save_port_selection failed: HTTP ${res.status}`, {
         status: res.status,
-        phase: 'write'
+        phase: 'write',
+        responseUrl: redactSensitive(res.url ?? url),
+        contentType: res.headers?.get?.('content-type') ?? ''
       });
     }
     const json = await res.json();
@@ -172,19 +248,59 @@ export class FortimonitorClient {
     }
     return json;
   }
+
+  /**
+   * Cheap diagnostic probe used by the developer-mode "Check session"
+   * button. Does not throw — returns a shape the UI can render directly.
+   * Redacts URLs and long tokens so the result is safe to show next to
+   * operator-facing error text.
+   */
+  async probeSession() {
+    const origin = await this.origin();
+    const xsrf = await this.getCookie(XSRF_COOKIE_NAME, origin).catch(() => null);
+    const url = `${origin}/onboarding/getDevicePorts?server_id=0`;
+    let probe;
+    try {
+      const res = await this.fetch(url, {
+        method: 'GET',
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' }
+      });
+      probe = {
+        ok: res.ok,
+        status: res.status,
+        responseUrl: redactSensitive(res.url ?? url),
+        contentType: res.headers?.get?.('content-type') ?? ''
+      };
+    } catch (err) {
+      probe = { ok: false, error: err?.message ?? String(err) };
+    }
+    return {
+      origin,
+      hasXsrfCookie: Boolean(xsrf),
+      xsrfCookiePrefix: xsrf ? `${String(xsrf).slice(0, 6)}…` : null,
+      probe
+    };
+  }
 }
 
 /**
- * Production factory. Wires chrome.cookies and global fetch.
- * Must only be called inside the extension runtime.
+ * Production factory. Wires chrome.cookies and global fetch. The origin
+ * resolver is injected so the service worker can pick the tenant URL
+ * (regional my.*.fortimonitor.com vs. the federation URL) once and
+ * cache it for the life of the worker.
+ *
+ * @param {object} [deps]
+ * @param {string|(() => Promise<string>)} [deps.origin] override for tests
  */
-export function createProductionClient() {
+export function createProductionClient({ origin = FM_ORIGIN } = {}) {
   return new FortimonitorClient({
     fetch: globalThis.fetch.bind(globalThis),
-    getCookie: async (name) => {
+    getCookie: async (name, urlOverride) => {
       // eslint-disable-next-line no-undef
-      const c = await chrome.cookies.get({ url: FM_ORIGIN, name });
+      const c = await chrome.cookies.get({ url: urlOverride ?? FM_ORIGIN, name });
       return c?.value ?? null;
-    }
+    },
+    origin
   });
 }

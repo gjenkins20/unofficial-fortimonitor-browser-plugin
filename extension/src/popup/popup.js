@@ -1,11 +1,18 @@
 // Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-const FORTICLOUD_URL = 'https://fortimonitor.forticloud.com/';
+import { isDevModeEnabled, setDevModeEnabled } from '../lib/settings.js';
+import { resolveFortimonitorOrigin, FEDERATION_ORIGIN } from '../lib/origin-resolver.js';
+
+const FORTICLOUD_URL = `${FEDERATION_ORIGIN}/`;
 const XSRF_COOKIE = 'XSRF-TOKEN';
 const API_KEY_STORAGE_KEY = 'panopta.apiKey';
 
 async function sessionActive() {
   try {
-    const cookie = await chrome.cookies.get({ url: FORTICLOUD_URL, name: XSRF_COOKIE });
+    const origin = await resolveFortimonitorOrigin({
+      queryTabs: (q) => chrome.tabs.query(q),
+      storage: chrome.storage.local
+    });
+    const cookie = await chrome.cookies.get({ url: `${origin}/`, name: XSRF_COOKIE });
     return Boolean(cookie && cookie.value);
   } catch {
     return false;
@@ -127,6 +134,11 @@ function clearStatus() {
   el.textContent = '';
 }
 
+async function loadDevModeIntoToggle() {
+  const toggle = document.getElementById('dev-mode-toggle');
+  toggle.checked = await isDevModeEnabled();
+}
+
 async function loadApiKeyIntoInput() {
   const data = await chrome.storage.local.get(API_KEY_STORAGE_KEY);
   const key = data?.[API_KEY_STORAGE_KEY];
@@ -208,12 +220,17 @@ function init() {
   document.getElementById('settings-toggle').addEventListener('click', async () => {
     clearStatus();
     await loadApiKeyIntoInput();
+    await loadDevModeIntoToggle();
     showSettings();
   });
   document.getElementById('settings-back').addEventListener('click', hideSettings);
   document.getElementById('api-key-save').addEventListener('click', saveApiKey);
   document.getElementById('api-key-clear').addEventListener('click', clearApiKey);
   document.getElementById('api-key-test').addEventListener('click', testConnection);
+
+  document.getElementById('dev-mode-toggle').addEventListener('change', async (e) => {
+    await setDevModeEnabled(e.target.checked);
+  });
 
   const authorLink = document.getElementById('author-link');
   if (authorLink) {

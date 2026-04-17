@@ -309,6 +309,20 @@ html, body {
   margin-top: 10px;
   flex-wrap: wrap;
 }
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  cursor: pointer;
+  user-select: none;
+}
+.toggle-row input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
 .btn {
   padding: 6px 12px;
   font-size: 11.5px;
