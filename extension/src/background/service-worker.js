@@ -12,6 +12,7 @@ const BUILT_BY = 'Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>';
 import { createProductionClient } from '../lib/fortimonitor-client.js';
 import { Queue } from '../lib/queue.js';
 import { createHandlers, dispatch } from './message-handlers.js';
+import { createFabricHandlers } from './fabric-connection-handlers.js';
 
 const client = createProductionClient();
 const queue = new Queue(); // uses chrome.storage.local by default
@@ -23,7 +24,10 @@ function emit(name, payload) {
   });
 }
 
-const handlers = createHandlers({ client, queue, events: { emit } });
+const handlers = {
+  ...createHandlers({ client, queue, events: { emit } }),
+  ...createFabricHandlers({ events: { emit } })
+};
 
 chrome.runtime.onInstalled.addListener(() => {
   const m = chrome.runtime.getManifest();
