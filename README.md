@@ -16,6 +16,7 @@ Some FortiMonitor batch operations live only in the FortiCloud UI (per-port scop
 | **Add to Port Scope (Fabric)** | FortiCloud session | Shipped (v0.2) | Inverse of Remove — batch-add currently-unmonitored interfaces to port scope. Non-destructive. |
 | **Add Fabric Connection (API)** | FortiMonitor v2 API key | Beta (v0.3) | Bulk-create OnSight CSF tunnel connections for FortiGate devices via `POST /v2/fabric_connection`. Resource pickers (OnSight, server group, optional appliance group) populate from the API. Requires an RW API key — paste once in popup → ⚙ Settings. **Marked Beta pending live-environment verification.** |
 | **Manage Server Attributes (Bulk)** | FortiMonitor v2 API key | Beta (v0.5) | Bulk-set or remove attribute key/value pairs across many servers via `POST`/`DELETE /v2/server/{id}/server_attribute`. Paste a list of server names or IDs, pick an attribute type, preview per-row plan (add / replace / skip / error), then execute. Uses the same RW API key as Add Fabric Connection. **Marked Beta pending live-environment verification.** |
+| **Manage Server Templates (Bulk)** | FortiMonitor v2 API key | Beta (v0.6) | Bulk-attach or detach monitoring templates across many servers via `POST`/`DELETE /v2/server/{id}/template`. Attach mode is non-destructive. Detach mode offers two strategies: `dissociate` (keep metrics the template seeded) and `delete` (wipe metrics and attributes the template seeded — **destructive, no undo**). Destructive detach and large batches (>10 servers) require a typed-confirmation phrase. Uses the same RW API key as Add Fabric Connection. **Marked Beta pending live-environment verification.** |
 
 Click the extension's toolbar icon to open the launcher and pick a tool. Each tool opens its own full-tab UI with a Load → Review → Execute → Results flow (port-scope tools add a Queue step in the middle).
 
@@ -45,6 +46,7 @@ extension/
                       ui/app.html    (port-scope tools)
                       ui/fabric-connection/app.html (Add Fabric Connection)
                       ui/attribute-management/app.html (Manage Server Attributes)
+                      ui/template-management/app.html (Manage Server Templates)
   tests/            — Node test runner unit tests (165 tests)
 
 docs/
