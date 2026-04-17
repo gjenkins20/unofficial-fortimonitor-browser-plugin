@@ -1,15 +1,16 @@
 # Unofficial FortiMonitor Toolkit
 
-Chrome Manifest V3 extension — a suite of session-authenticated tools for FortiCloud. Rides your existing FortiCloud browser session; no API keys, no separate credentials.
+Chrome Manifest V3 extension — a suite of operator tools for FortiMonitor. Most tools ride your existing FortiCloud browser session; tools whose capability lives in the v2 public API (e.g., Add Fabric Connection) use a user-supplied RW API key.
 
-Clicking the toolbar icon opens a launcher popup; pick a tool from the list and it opens in a full browser tab.
+Clicking the toolbar icon opens a launcher popup; pick a tool from the list and it opens in a full browser tab. Settings (⚙ in the popup header) holds the v2 API key for tools that need one.
 
 ## Tools
 
-| Tool | Status | Notes |
-|---|---|---|
-| Remove from Port Scope (Fabric) | ✅ Shipped (v0.1) | Batch-remove operationally-down WAN interfaces from monitored port scope on Fabric-connected FortiGate instances. Destructive — destroys agent resources and metric history per port removed. |
-| Add to Port Scope (Fabric) | 🚧 In development (FMN-40) | Inverse of Remove. Batch-add currently-unmonitored interfaces to port scope on Fabric-connected FortiGate instances. Non-destructive. |
+| Tool | Auth | Status | Notes |
+|---|---|---|---|
+| Remove from Port Scope (Fabric) | FortiCloud session | ✅ Shipped (v0.1) | Batch-remove operationally-down WAN interfaces from monitored port scope on Fabric-connected FortiGate instances. Destructive — destroys agent resources and metric history per port removed. |
+| Add to Port Scope (Fabric) | FortiCloud session | ✅ Shipped (v0.2) | Inverse of Remove. Batch-add currently-unmonitored interfaces to port scope on Fabric-connected FortiGate instances. Non-destructive. |
+| Add Fabric Connection (API) | FortiMonitor v2 API key | ✅ Shipped (v0.3) | Bulk-create OnSight CSF tunnel connections for FortiGate devices via `POST /v2/fabric_connection`. Requires a Read/Write API key (paste once in popup → ⚙ Settings). |
 
 ## Install (developer mode)
 
@@ -31,11 +32,11 @@ Uses Node's built-in `node:test` runner — no `npm install` required.
 
 ## Scope guardrails
 
-- Frontend-only. No FortiMonitor v2 public API, no API keys.
-- Each tool declares its own action scope (e.g., Remove targets WAN interfaces; Add targets out-of-scope ports).
+- Per-tool auth choice is intentional. Tools whose capability lives only in the FortiCloud UI (port-scope) ride the browser session. Tools whose capability is exposed cleanly in the v2 API (fabric_connection) use a user-supplied API key.
+- Each tool declares its own action scope (e.g., Remove targets WAN interfaces; Add Fabric Connection targets new device onboarding).
 - Dry-run is the default for every batch.
-- Destructive tools require a typed confirmation phrase before writes.
-- `fortilink` is visually flagged as the fabric link across every tool.
+- Destructive and write-capable tools require a typed confirmation phrase before live writes.
+- `fortilink` is visually flagged as the fabric link across every port-scope tool.
 
 ## Architecture
 
