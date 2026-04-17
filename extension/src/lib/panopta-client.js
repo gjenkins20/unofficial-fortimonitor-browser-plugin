@@ -249,6 +249,146 @@ export class PanoptaClient {
     const { res } = await this._request('GET', '/onsight?limit=1');
     return { ok: true, status: res.status };
   }
+
+  // ---- Server attribute management (FMN-48) -----------------------------
+  //
+  // Two-resource model (see docs/api-discovery/attributes.md):
+  //   * server_attribute_type — the "key" (customer-global, has name/textkey)
+  //   * server_attribute      — the "value" attached to one server
+  //
+  // Endpoints:
+  //   GET    /server_attribute_type
+  //   GET    /server/{id}/server_attribute
+  //   POST   /server/{id}/server_attribute       body: { server_attribute_type: <url>, value }
+  //   DELETE /server/{id}/server_attribute/{aid}
+  //
+  // v1 scope: manipulate values only; do NOT create/edit/delete types.
+
+  /**
+   * List all attribute types the customer owns (for the UI dropdown).
+   * Pages through until total_count is exhausted — the test account has
+   * 183 types so one round trip at limit=200 is sufficient in practice,
+   * but we page to be safe.
+   *
+   * @returns {Promise<Array<{id:number, name:string, textkey:string, resourceUrl:string}>>}
+   */
+  async listAttributeTypes({ pageSize = 200, maxPages = 10 } = {}) {
+    const out = [];
+    let offset = 0;
+    for (let page = 0; page < maxPages; page++) {
+      const { body } = await this._request('GET', `/server_attribute_type?limit=${pageSize}&offset=${offset}`);
+      if (!body || !Array.isArray(body.server_attribute_type_list)) {
+        throw new PanoptaError('Malformed server_attribute_type list response', {
+          phase: 'read',
+          responseBody: body
+        });
+      }
+      for (const t of body.server_attribute_type_list) {
+        const id = typeof t.url === 'string'
+          ? Number(t.url.split('/').filter(Boolean).pop())
+          : null;
+        out.push({
+          id,
+          name: t.name,
+          textkey: t.textkey,
+          resourceUrl: t.url
+        });
+      }
+      const total = body.meta?.total_count ?? out.length;
+      offset += body.server_attribute_type_list.length;
+      if (offset >= total || body.server_attribute_type_list.length === 0) break;
+    }
+    return out;
+  }
+
+  /**
+   * List all attributes currently attached to a server.
+   *
+   * @returns {Promise<Array<{id:number, name:string, textkey:string, value:string, typeUrl:string, resourceUrl:string}>>}
+   */
+  async listServerAttributes(serverId, { pageSize = 200, maxPages = 5 } = {}) {
+    if (!serverId) throw new TypeError('listServerAttributes: serverId is required');
+    const out = [];
+    let offset = 0;
+    for (let page = 0; page < maxPages; page++) {
+      const { body } = await this._request(
+        'GET',
+        `/server/${encodeURIComponent(serverId)}/server_attribute?limit=${pageSize}&offset=${offset}`
+      );
+      if (!body || !Array.isArray(body.server_attribute_list)) {
+        throw new PanoptaError('Malformed server_attribute list response', {
+          phase: 'read',
+          responseBody: body
+        });
+      }
+      for (const a of body.server_attribute_list) {
+        const id = typeof a.url === 'string'
+          ? Number(a.url.split('/').filter(Boolean).pop())
+          : null;
+        out.push({
+          id,
+          name: a.name,
+          textkey: a.textkey,
+          value: a.value,
+          typeUrl: a.server_attribute_type,
+          resourceUrl: a.url
+        });
+      }
+      const total = body.meta?.total_count ?? out.length;
+      offset += body.server_attribute_list.length;
+      if (offset >= total || body.server_attribute_list.length === 0) break;
+    }
+    return out;
+  }
+
+  /**
+   * Attach an attribute value to a server.
+   *
+   * @param {string|number} serverId
+   * @param {object} params
+   * @param {string} params.typeUrl  Full URL of an existing server_attribute_type
+   * @param {string} params.value
+   * @returns {Promise<{status:number, location:string|null, resourceId:string|number|null, body:any}>}
+   */
+  async createServerAttribute(serverId, { typeUrl, value } = {}) {
+    if (!serverId) throw new TypeError('createServerAttribute: serverId is required');
+    if (!typeUrl) throw new TypeError('createServerAttribute: typeUrl is required');
+    if (value === undefined || value === null) {
+      throw new TypeError('createServerAttribute: value is required');
+    }
+    const payload = { server_attribute_type: typeUrl, value: String(value) };
+    const { res, body } = await this._request(
+      'POST',
+      `/server/${encodeURIComponent(serverId)}/server_attribute`,
+      { body: payload }
+    );
+    return {
+      status: res.status,
+      location: res.headers?.get?.('location') ?? null,
+      resourceId: res.headers?.get?.('id') ?? (body?.id ?? null),
+      body
+    };
+  }
+
+  /**
+   * Remove an attribute from a server. Accepts either a full resource URL
+   * (preferred — comes straight from listServerAttributes) or a
+   * {serverId, attributeId} pair.
+   *
+   * @returns {Promise<{status:number}>}
+   */
+  async deleteServerAttribute(refOrIds) {
+    let path;
+    if (typeof refOrIds === 'string') {
+      path = refOrIds; // full URL → _request short-circuits on http(s)
+    } else if (refOrIds && refOrIds.serverId && refOrIds.attributeId) {
+      path = `/server/${encodeURIComponent(refOrIds.serverId)}/server_attribute/${encodeURIComponent(refOrIds.attributeId)}`;
+    } else {
+      throw new TypeError('deleteServerAttribute: pass a resourceUrl or { serverId, attributeId }');
+    }
+    const { res } = await this._request('DELETE', path);
+    return { status: res.status };
+  }
 }
 
 /**
