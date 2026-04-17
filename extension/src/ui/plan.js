@@ -68,6 +68,64 @@ export function buildQueueEntries({ groups, decisions, nameById = {}, batchId })
 }
 
 /**
+ * Inverse of buildQueueEntries. Operator marks ports to ADD to scope.
+ * Keeps every port currently in scope (isActive) plus any the operator
+ * marked; emits one queue entry per device with the combined
+ * selectedIndices ready for save_port_selection.
+ *
+ * @param {object} params
+ * @param {Array} params.groups
+ * @param {Map<string, {skipped: boolean, addPortNames: string[]}>} params.decisions
+ * @param {Record<string, string>} [params.nameById]
+ * @param {string} params.batchId
+ * @returns {Array<object>}
+ */
+export function buildAddQueueEntries({ groups, decisions, nameById = {}, batchId }) {
+  if (!Array.isArray(groups)) throw new TypeError('buildAddQueueEntries: groups must be an array');
+  if (!(decisions instanceof Map)) throw new TypeError('buildAddQueueEntries: decisions must be a Map');
+  if (!batchId) throw new TypeError('buildAddQueueEntries: batchId is required');
+
+  const entries = [];
+  for (const group of groups) {
+    const decision = decisions.get(group.fingerprint);
+    if (!decision || decision.skipped) continue;
+    const addSet = new Set(decision.addPortNames || []);
+    if (addSet.size === 0) continue;
+
+    const ports = group.portsData?.ports ?? [];
+    const keptIndices = ports
+      .filter((p) => p.isActive || addSet.has(p.name))
+      .map((p) => String(p.index));
+    const searchTerm = group.portsData?.portFilters?.searchTerm ?? '';
+    const filters = group.portsData?.portFilters?.filters ?? [];
+    const totalPortCount = ports.length;
+
+    for (const device of group.devices) {
+      const serverId = device.serverId;
+      const deviceName = nameById[String(serverId)] ?? String(serverId);
+      entries.push({
+        id: `${batchId}:${serverId}`,
+        batchId,
+        groupId: group.fingerprint,
+        serverId,
+        deviceName,
+        addedPortNames: [...addSet],
+        intendedAction: {
+          portSelectionType: 'manual',
+          selectedIndices: keptIndices,
+          totalPortCount,
+          searchTerm,
+          filters
+        },
+        status: 'pending',
+        attempts: []
+      });
+    }
+  }
+  return entries;
+}
+
+/**
  * Summarize a queue-entry list for the queue-overview screen.
  */
 export function summarizePlan(entries) {
@@ -88,6 +146,31 @@ export function summarizePlan(entries) {
     totalDevices: entries.length,
     totalGroups: byGroup.size,
     totalPortsToRemove,
+    groups: [...byGroup.values()]
+  };
+}
+
+/**
+ * Summarize an Add-mode queue for the queue-overview screen.
+ */
+export function summarizeAddPlan(entries) {
+  const byGroup = new Map();
+  let totalPortsToAdd = 0;
+  for (const e of entries) {
+    if (!byGroup.has(e.groupId)) {
+      byGroup.set(e.groupId, {
+        groupId: e.groupId,
+        addedPortNames: e.addedPortNames,
+        devices: []
+      });
+    }
+    byGroup.get(e.groupId).devices.push({ serverId: e.serverId, deviceName: e.deviceName });
+    totalPortsToAdd += (e.addedPortNames?.length ?? 0);
+  }
+  return {
+    totalDevices: entries.length,
+    totalGroups: byGroup.size,
+    totalPortsToAdd,
     groups: [...byGroup.values()]
   };
 }

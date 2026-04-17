@@ -16,6 +16,14 @@ export function render({ container, store, navigate, events }) {
     return;
   }
   const entries = plan.entries;
+  const toolMode = store.toolMode === 'add' ? 'add' : 'remove';
+  const verbs = toolMode === 'add' ? ADD_VERBS : REMOVE_VERBS;
+  const totalPortsChanged = toolMode === 'add'
+    ? (plan.totalPortsToAdd ?? 0)
+    : (plan.totalPortsToRemove ?? 0);
+  const toolName = toolMode === 'add'
+    ? 'Add to Port Scope (Fabric)'
+    : 'Remove from Port Scope (Fabric)';
 
   // Per-entry progress store: Map<entryId, { status, durationMs?, error?, startedAt? }>
   if (!store.executeProgress || !(store.executeProgress instanceof Map)) {
@@ -37,13 +45,13 @@ export function render({ container, store, navigate, events }) {
   };
 
   const frame = h('div', { class: 'mockup-frame' });
-  frame.appendChild(titleBar(plan.dryRun ? 'Dry-run Batch' : 'Executing Batch', { runningDot: true }));
+  frame.appendChild(titleBar(plan.dryRun ? 'Dry-run Batch' : 'Executing Batch', { runningDot: true, toolName }));
 
   frame.appendChild(h('div', { class: 'step-header' },
     breadcrumbs('execute'),
     h('h2', {}, plan.dryRun
-      ? `Simulating ${plan.totalPortsToRemove} port removals…`
-      : `Executing ${plan.totalPortsToRemove} port removals…`),
+      ? `Simulating ${totalPortsChanged} port ${verbs.actionPlural}…`
+      : `Executing ${totalPortsChanged} port ${verbs.actionPlural}…`),
     h('p', {}, plan.dryRun
       ? 'Dry run mode — no requests are sent to FortiMonitor. This screen shows exactly what the live run would dispatch.'
       : `The plugin is working through the queue. Up to ${plan.verbose ? 1 : 3} device${plan.verbose ? '' : 's'} are processed in parallel to respect FortiMonitor session limits.`)
@@ -52,7 +60,7 @@ export function render({ container, store, navigate, events }) {
   if (plan.dryRun) {
     frame.appendChild(h('div', { class: 'dryrun-banner' },
       h('strong', {}, 'DRY RUN'),
-      ' — no changes sent to FortiMonitor. Rows labeled "Would remove" instead of "Removed".'
+      ` — no changes sent to FortiMonitor. Rows labeled "Would ${verbs.verb}" instead of "${verbs.pastTense}".`
     ));
   }
 
@@ -66,12 +74,15 @@ export function render({ container, store, navigate, events }) {
     h('div', { class: 'progress-stats' }, statsTotal, statsElapsed)
   ));
 
+  const portsMetricLabel = plan.dryRun
+    ? `Ports would ${verbs.verb}`
+    : `Ports ${verbs.pastTenseLower}`;
   const m = {
     ok: metric('Succeeded', '0', 'ok'),
     fail: metric('Failed', '0', 'fail'),
     running: metric('Running', '0', 'running'),
     pending: metric('Pending', String(entries.length), 'muted'),
-    removed: metric('Ports' + (plan.dryRun ? ' would remove' : ' removed'), '0', 'accent')
+    removed: metric(portsMetricLabel, '0', toolMode === 'add' ? 'ok' : 'accent')
   };
   frame.appendChild(h('div', { class: 'overview-strip' },
     m.ok.el, m.fail.el, m.running.el, m.pending.el, m.removed.el
@@ -94,7 +105,7 @@ export function render({ container, store, navigate, events }) {
   // Render rows
   const rowByEntry = new Map();
   for (const e of entries) {
-    const row = buildRow(e, store.executeProgress.get(e.id) ?? { status: 'pending' }, plan);
+    const row = buildRow(e, store.executeProgress.get(e.id) ?? { status: 'pending' }, plan, verbs);
     deviceList.appendChild(row.el);
     rowByEntry.set(e.id, row);
   }
@@ -149,10 +160,10 @@ export function render({ container, store, navigate, events }) {
 
   function refreshCounts() {
     let ok = 0, fail = 0, running = 0, pending = 0;
-    let removedPorts = 0;
+    let changedPorts = 0;
     for (const e of entries) {
       const p = store.executeProgress.get(e.id) ?? { status: 'pending' };
-      if (p.status === 'ok') { ok++; removedPorts += (e.removedPortNames?.length ?? 0); }
+      if (p.status === 'ok') { ok++; changedPorts += entryPortNames(e).length; }
       else if (p.status === 'fail') fail++;
       else if (p.status === 'running') running++;
       else pending++;
@@ -161,7 +172,7 @@ export function render({ container, store, navigate, events }) {
     m.fail.setValue(fail);
     m.running.setValue(running);
     m.pending.setValue(pending);
-    m.removed.setValue(removedPorts);
+    m.removed.setValue(changedPorts);
 
     pillAll.setCount(entries.length);
     pillRunning.setCount(running);
@@ -300,15 +311,15 @@ export function render({ container, store, navigate, events }) {
   };
 }
 
-function buildRow(entry, prog, plan) {
+function buildRow(entry, prog, plan, verbs = REMOVE_VERBS) {
   const statusInd = h('span', { class: 'status-ind' });
   const nameEl = h('span', { class: 'dev-name' },
     entry.deviceName ?? String(entry.serverId),
     h('span', { class: 'sid' }, String(entry.serverId))
   );
-  const portNames = (entry.removedPortNames ?? []).join(', ');
-  const actionEl = h('span', { class: 'dev-action removing' },
-    (plan.dryRun ? 'Would remove ' : 'Will remove '),
+  const portNames = entryPortNames(entry).join(', ');
+  const actionEl = h('span', { class: `dev-action removing ${verbs.rowClass}` },
+    (plan.dryRun ? `Would ${verbs.verb} ` : `Will ${verbs.verb} `),
     h('code', {}, portNames || '(none)')
   );
   const statusText = h('span', { class: 'dev-status-text' }, 'Queued');
@@ -322,7 +333,7 @@ function buildRow(entry, prog, plan) {
     el.classList.add(p.status ?? 'pending');
     if (p.status === 'ok') {
       actionEl.replaceChildren(
-        plan.dryRun ? 'Would remove ' : 'Removed ',
+        plan.dryRun ? `Would ${verbs.verb} ` : `${verbs.pastTense} `,
         h('code', {}, portNames)
       );
       const dur = typeof p.durationMs === 'number' && p.durationMs > 0 ? ` — ${(p.durationMs / 1000).toFixed(1)}s` : '';
@@ -343,6 +354,26 @@ function buildRow(entry, prog, plan) {
   // (preview harness, resuming an in-progress run).
   update(prog);
   return { el, update };
+}
+
+const REMOVE_VERBS = Object.freeze({
+  verb: 'remove',
+  pastTense: 'Removed',
+  pastTenseLower: 'removed',
+  actionPlural: 'removals',
+  rowClass: ''
+});
+
+const ADD_VERBS = Object.freeze({
+  verb: 'add',
+  pastTense: 'Added',
+  pastTenseLower: 'added',
+  actionPlural: 'additions',
+  rowClass: 'add'
+});
+
+function entryPortNames(entry) {
+  return entry?.addedPortNames ?? entry?.removedPortNames ?? [];
 }
 
 function summarizeError(msg) {

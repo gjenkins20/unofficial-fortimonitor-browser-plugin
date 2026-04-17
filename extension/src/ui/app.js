@@ -4,26 +4,36 @@
 
 import * as start from './steps/start.js';
 import * as review from './steps/review.js';
+import * as reviewAdd from './steps/review-add.js';
 import * as queue from './steps/queue.js';
+import * as queueAdd from './steps/queue-add.js';
 import * as execute from './steps/execute.js';
 import * as results from './steps/results.js';
 import { onEvent } from '../lib/messaging.js';
+
+// Tool selection. Launcher passes ?tool=add to request the Add tool; no
+// param / ?tool=remove means the original Remove-from-Port-Scope tool.
+const toolMode = new URL(window.location.href).searchParams.get('tool') === 'add'
+  ? 'add'
+  : 'remove';
+document.documentElement.dataset.toolMode = toolMode;
 
 // -------- Session state store --------
 // Held in memory for the lifetime of the tab. The durable queue lives in
 // chrome.storage.local via the service worker's Queue; this object just
 // carries transient wizard state between steps.
 const store = {
+  toolMode,                // 'remove' | 'add' — set once at tab open
   batchId: null,
   serverIds: [],
   nameById: {},
   inputWarnings: [],
   scanResult: null,        // { groups: [...], errored: [...] }
   reviewIndex: 0,
-  decisions: new Map(),    // fingerprint -> { skipped, removePortNames }
+  decisions: new Map(),    // fingerprint -> { skipped, removePortNames | addPortNames }
   queueEntries: [],        // planned entries (not yet persisted)
   executeConfig: { dryRun: true, verbose: false },
-  executePlan: null,       // { totalDevices, totalPortsToRemove, entries, startedAt }
+  executePlan: null,       // { totalDevices, totalPortsToRemove|totalPortsToAdd, entries, startedAt }
   executeProgress: new Map(), // entryId -> { status, attempts, durationMs, error }
   runResult: null          // { results, startedAt, finishedAt, dryRun }
 };
@@ -53,10 +63,13 @@ const events = {
 };
 
 // -------- Router --------
+// Review and Queue diverge enough between Remove and Add to warrant
+// separate modules. Start/Execute/Results are single modules that
+// consult store.toolMode to tweak labels and colors.
 const routes = {
   '/start': start,
-  '/review': review,
-  '/queue': queue,
+  '/review': toolMode === 'add' ? reviewAdd : review,
+  '/queue': toolMode === 'add' ? queueAdd : queue,
   '/execute': execute,
   '/results': results
 };
