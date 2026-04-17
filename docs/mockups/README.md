@@ -34,6 +34,11 @@ The reference device shows populated `admin_status` and `oper_status` values (`"
 | `results.html` | — | Post-execution report, downloadable CSV/JSON, retry-all-failures |
 | `preview-app.html` | — | Loads the real Phase 4 step modules with chrome APIs stubbed — routable via `?step=start|review|queue|execute-dryrun|execute-live|results-partial|results-success`. Must be served over HTTP (`python3 -m http.server` at repo root) because Chrome blocks ES module imports across `file://`. |
 | `launcher-popup.html` | — | FMN-40 launcher mockup. Chrome toolbar popup (360px) showing the tool list, session-status strip, and search filter. Shows three variants: default / session-missing / search-active. |
+| `tool-add-port-scope_load.html` | 1 | FMN-40 Add tool — CSV upload. Structurally identical to the Remove tool's Step 1; only the title-bar name changes. |
+| `tool-add-port-scope_review.html` | 2 | FMN-40 Add tool — group review. New "In Scope" column; default filter hides in-scope ports; green accent; "ADD" row tag; informational banner replaces destructive banner. |
+| `tool-add-port-scope_queue.html` | 3 | FMN-40 Add tool — queue audit. Green "Ready to execute" panel replaces the destructive-confirmation gate; no typed-confirmation input (non-destructive); dry-run still defaults ON. |
+| `tool-add-port-scope_execute.html` | 4 | FMN-40 Add tool — execution progress. "Will add" / "Added" action labels; "Ports added" metric in green; everything else matches Remove tool's execute screen. |
+| `tool-add-port-scope_results.html` | — | FMN-40 Add tool — results/report. "Ports added" metric; non-irreversible audit copy; "Retry all failures" is a secondary (not danger-red) button. |
 
 ## Scope boundary (reaffirmed)
 
