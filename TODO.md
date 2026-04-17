@@ -12,10 +12,8 @@ Unofficial FortiMonitor Browser Plugin — task tracking.
   - Requires Claude session with FortiMonitor MCP connected
   - If H1 fails → lab FortiGate-VM deployment becomes necessary
 
-- [ ] **Design UX mockups for port scope cleanup extension** <!-- PLANE:FMN-38 -->
-  - Blocked by FMN-37
-  - Static + interactive HTML mockups in `docs/mockups/`
-  - No code until mockups are approved (per global CLAUDE.md)
+- [x] **Design UX mockups for port scope cleanup extension** <!-- PLANE:FMN-38 -->
+  - All five step mockups approved plus clickable flow-prototype.html
 
 - [ ] **Implement MV3 extension for port scope cleanup** <!-- PLANE:FMN-39 -->
   - Blocked by FMN-37 and FMN-38
@@ -29,6 +27,8 @@ Unofficial FortiMonitor Browser Plugin — task tracking.
 ## Completed
 
 - [x] **Capture FortiCloud UI API contract for port scope modification** <!-- PLANE:FMN-36 -->
+- [x] **Determine data source for port operational status** <!-- PLANE:FMN-37 -->
+- [x] **Design UX mockups for port scope cleanup extension** <!-- PLANE:FMN-38 -->
 
 ---
 

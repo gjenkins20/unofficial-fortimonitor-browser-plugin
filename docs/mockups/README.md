@@ -24,11 +24,14 @@ The reference device shows populated `admin_status` and `oper_status` values (`"
 
 ## Files
 
-| File | Purpose |
-|---|---|
-| `interface-report.html` | Main UI — device's interface list with status and user-driven selection |
-
-Additional mockups (popup entry, progress, results) pending.
+| File | Step | Purpose |
+|---|---|---|
+| `flow-prototype.html` | — | Clickable walk-through that loads each step in an iframe. Open this first. |
+| `batch-start.html` | 1 | CSV upload + validation; kicks off the batch |
+| `interface-report.html` | 2 | Per-group review; operator marks WAN rows; one prompt per fingerprint |
+| `queue-overview.html` | 3 | Audit all staged changes; dry-run + typed confirmation gate; verbose-mode toggle |
+| `execution-progress.html` | 4 | Live per-device status, retry failed, concurrency-capped |
+| `results.html` | — | Post-execution report, downloadable CSV/JSON, retry-all-failures |
 
 ## Scope boundary (reaffirmed)
 

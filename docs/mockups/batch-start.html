@@ -336,10 +336,10 @@ server_id,device_name
   <strong>Mockup notes (not rendered in final plugin):</strong><br>
   · This is Step 1 of 4. Next step is the group-level prompt (<code>interface-report.html</code>).<br>
   · CSV input accepts either a plain list of server IDs (one per line) or a CSV with a <code>server_id</code> column. Additional columns are ignored.<br>
-  · Before "Start review" is enabled, plugin validates each ID exists in the current FortiCloud session by hitting <code>GET /onboarding/getDevicePorts</code> once per ID (with concurrency cap, e.g., 3). IDs that 404 are flagged as warnings and excluded, not a hard fail.<br>
-  · After "Start review", plugin opens a tab, navigates sequentially to each device, fetches port state, computes a fingerprint (sorted hash of <code>{port_name, admin_status, oper_status}</code> tuples), groups devices, then presents the interface-report prompt once per group.<br>
-  · Session validity is shown passively — no OAuth or API-key entry. Session is whatever the user already has in FortiCloud.<br>
-  · No v2 public API, no API key, no credentials beyond the browser session.
+  · Before "Start review" is enabled, the plugin validates each ID against the current FortiCloud session by silently reading its port scope in the background (concurrency cap 3). IDs with no matching device are flagged as warnings and skipped, not a hard fail.<br>
+  · After "Start review", the plugin silently reads each device's port scope using the existing session, computes a fingerprint (sorted hash of <code>{port_name, admin_status, oper_status}</code> tuples), groups devices by identical fingerprint, then presents the interface-report prompt once per group. No visible tab navigation in the default mode — reads happen in the background.<br>
+  · Session validity is shown passively — no OAuth or credential entry. Session is whatever the user already has in FortiCloud.<br>
+  · All reads and writes use the existing FortiCloud session — the same one the WebGUI uses. Nothing runs outside the browser.
 </div>
 
 </body>
