@@ -1,3 +1,4 @@
+// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Convert operator decisions (one per fingerprint group) into the list of
 // queue entries the executor will consume.
 //

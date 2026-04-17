@@ -1,3 +1,4 @@
+// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Device scanner: given a list of server IDs, read each device's port
 // scope with bounded concurrency, fingerprint it, and return per-device
 // results. Group-by-fingerprint produces the N-groups-from-M-devices

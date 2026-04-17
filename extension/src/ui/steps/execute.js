@@ -1,3 +1,4 @@
+// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Step 4 — Executing Batch. Two execution paths:
 //   Dry run: simulate locally, do not touch the service worker queue.
 //   Live:    call execute-queue, listen for execute:entry-start/-done events.

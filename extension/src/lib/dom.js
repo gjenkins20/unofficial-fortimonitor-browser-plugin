@@ -1,3 +1,4 @@
+// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Minimal DOM helpers. No framework — vanilla JS keeps the MV3 bundle at
 // zero runtime dependencies (matches the testing story in the service
 // worker modules).

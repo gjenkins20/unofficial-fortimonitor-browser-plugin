@@ -1,3 +1,4 @@
+// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // FortiMonitor session-riding client.
 //
 // Wraps the two internal FortiCloud WebGUI operations the plugin needs:

@@ -4,6 +4,8 @@
   "short_name": "FM Toolkit",
   "description": "Session-authenticated tools for FortiCloud — batch operations on port scope and more. Rides your existing FortiCloud session; frontend-only, no API keys.",
   "version": "0.2.0",
+  "author": "Gregori Jenkins",
+  "homepage_url": "https://www.linkedin.com/in/gregorijenkins",
   "action": {
     "default_title": "Unofficial FortiMonitor Toolkit",
     "default_popup": "src/popup/popup.html"
