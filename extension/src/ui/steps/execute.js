@@ -6,8 +6,8 @@
 // pending → running → ok/fail, with running/progress/pending counts in
 // the metric strip. The filter pills limit the device-list view.
 
-import { h, titleBar, breadcrumbs } from '../dom.js';
-import { call } from '../messaging.js';
+import { h, titleBar, breadcrumbs } from '../../lib/dom.js';
+import { call } from '../../lib/messaging.js';
 
 export function render({ container, store, navigate, events }) {
   const plan = store.executePlan;

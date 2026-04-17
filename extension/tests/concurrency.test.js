@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mapConcurrent } from '../src/background/concurrency.js';
+import { mapConcurrent } from '../src/lib/concurrency.js';
 
 test('mapConcurrent returns fulfilled/rejected per item', async () => {
   const results = await mapConcurrent([1, 2, 3], async (n) => {

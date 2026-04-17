@@ -1,8 +1,8 @@
 // Step 5 — Batch complete. Final verdict, downloadable audit report,
 // failure details with retry, success and skipped summaries.
 
-import { h, titleBar, breadcrumbs, downloadBlob } from '../dom.js';
-import { call } from '../messaging.js';
+import { h, titleBar, breadcrumbs, downloadBlob } from '../../lib/dom.js';
+import { call } from '../../lib/messaging.js';
 
 export function render({ container, store, navigate }) {
   const run = store.runResult;

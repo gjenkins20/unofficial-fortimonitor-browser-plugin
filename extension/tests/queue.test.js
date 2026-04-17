@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Queue, __test__ } from '../src/background/queue.js';
+import { Queue, __test__ } from '../src/lib/queue.js';
 import { createStorageMock } from './fixtures/chrome-mocks.js';
 
 function freshQueue(initial = {}) {

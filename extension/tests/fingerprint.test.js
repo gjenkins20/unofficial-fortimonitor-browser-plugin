@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fingerprintDevice, canonicalizePorts } from '../src/background/fingerprint.js';
+import { fingerprintDevice, canonicalizePorts } from '../src/lib/fingerprint.js';
 
 const BASE_PORTS = [
   { name: 'wan2', admin_status: 'up', oper_status: 'down' },

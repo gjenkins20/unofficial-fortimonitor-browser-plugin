@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHandlers, dispatch } from '../src/background/message-handlers.js';
-import { Queue } from '../src/background/queue.js';
+import { Queue } from '../src/lib/queue.js';
 import { createStorageMock } from './fixtures/chrome-mocks.js';
-import { FortimonitorError } from '../src/background/fortimonitor-client.js';
+import { FortimonitorError } from '../src/lib/fortimonitor-client.js';
 
 function freshQueue() {
   return new Queue({ storage: createStorageMock() });

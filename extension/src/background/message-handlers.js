@@ -11,8 +11,8 @@ import { executeQueue } from './executor.js';
 
 /**
  * @param {object} deps
- * @param {import('./fortimonitor-client.js').FortimonitorClient} deps.client
- * @param {import('./queue.js').Queue} deps.queue
+ * @param {import('../lib/fortimonitor-client.js').FortimonitorClient} deps.client
+ * @param {import('../lib/queue.js').Queue} deps.queue
  * @param {{ emit?: (event: string, payload: any) => void }} [deps.events]
  */
 export function createHandlers({ client, queue, events = {} }) {

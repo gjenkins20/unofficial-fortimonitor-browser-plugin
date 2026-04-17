@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { executeQueue, isRetryable } from '../src/background/executor.js';
-import { FortimonitorError } from '../src/background/fortimonitor-client.js';
+import { FortimonitorError } from '../src/lib/fortimonitor-client.js';
 
 const noSleep = async () => {};
 

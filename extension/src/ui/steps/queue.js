@@ -2,9 +2,9 @@
 // all reviewed groups, exports the plan for audit, toggles dry-run / verbose,
 // types the confirmation phrase, and kicks execution.
 
-import { h, titleBar, breadcrumbs, downloadBlob } from '../dom.js';
+import { h, titleBar, breadcrumbs, downloadBlob } from '../../lib/dom.js';
 import { summarizePlan } from '../plan.js';
-import { call } from '../messaging.js';
+import { call } from '../../lib/messaging.js';
 
 export function render({ container, store, navigate }) {
   const entries = store.queueEntries ?? [];

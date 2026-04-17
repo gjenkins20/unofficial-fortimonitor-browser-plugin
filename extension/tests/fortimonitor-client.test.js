@@ -6,7 +6,7 @@ import {
   buildSavePortSelectionUrl,
   parseDevicePortsResponse,
   FM_ORIGIN
-} from '../src/background/fortimonitor-client.js';
+} from '../src/lib/fortimonitor-client.js';
 import { createFetchMock, createCookieMock, jsonResponse, errorResponse } from './fixtures/chrome-mocks.js';
 
 // ----- buildSavePortSelectionUrl ---------------------------------
