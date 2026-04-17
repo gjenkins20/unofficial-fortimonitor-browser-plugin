@@ -1,0 +1,10 @@
+{
+  "name": "fortimonitor-wan-cleanup-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Chrome MV3 extension — batch WAN interface cleanup in FortiMonitor port scope. Frontend-only; no runtime dependencies.",
+  "scripts": {
+    "test": "node --test --test-reporter=spec 'tests/**/*.test.js'"
+  }
+}
