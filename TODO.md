@@ -13,6 +13,15 @@ Unofficial FortiMonitor Browser Plugin — task tracking.
   - Prerequisite refactor: extract shared infra into `extension/src/lib/`
   - Mockup-first: `docs/mockups/launcher-popup.html` + `tool-add-port-scope_*.html` before any code
 
+## Backlog
+
+- [ ] **Add author attribution + push repo to GitHub (private first)** <!-- PLANE:FMN-41 -->
+  - Blocked on FMN-40
+  - Add "About the Developer" section to README(s) per global CLAUDE.md standard
+  - Set `package.json` author field
+  - Run Pre-Push Security Checklist
+  - Create private GitHub repo via `gh repo create --private`; do not make public without explicit approval
+
 ## Completed
 
 - [x] **Capture FortiCloud UI API contract for port scope modification** <!-- PLANE:FMN-36 -->
