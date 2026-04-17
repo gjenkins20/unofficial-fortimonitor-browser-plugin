@@ -1,5 +1,6 @@
-/* Shared styles for the FortiMonitor WAN Cleanup UI. Distilled from the
-   FMN-38 mockups so every step renders with consistent chrome. */
+/* Shared styles for Unofficial FortiMonitor Toolkit tool UIs (Remove and
+   Add from Port Scope). Distilled from the FMN-38 / FMN-40 mockups so
+   every step renders with consistent chrome. */
 
 :root {
   --bg: #f5f6f8;
