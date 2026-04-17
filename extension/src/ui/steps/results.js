@@ -11,6 +11,12 @@ export function render({ container, store, navigate }) {
     return;
   }
 
+  const toolMode = store.toolMode === 'add' ? 'add' : 'remove';
+  const verbs = toolMode === 'add' ? ADD_VERBS : REMOVE_VERBS;
+  const toolName = toolMode === 'add'
+    ? 'Add to Port Scope (Fabric)'
+    : 'Remove from Port Scope (Fabric)';
+
   const ok = run.results.filter((r) => r.status === 'succeeded');
   const failed = run.results.filter((r) => r.status === 'failed');
   const cancelled = run.results.filter((r) => r.status === 'cancelled');
@@ -18,7 +24,7 @@ export function render({ container, store, navigate }) {
   const allDevices = groups.reduce((n, g) => n + g.devices.length, 0);
   const queuedDevices = run.totalDevices;
   const skippedDevices = Math.max(0, allDevices - queuedDevices);
-  const portsRemoved = ok.reduce((n, r) => n + (r.entry.removedPortNames?.length ?? 0), 0);
+  const portsChanged = ok.reduce((n, r) => n + entryPortNames(r.entry).length, 0);
   const durationMs = dateDelta(run.finishedAt, run.startedAt);
   const avgMs = ok.length ? Math.round(ok.reduce((n, r) => n + (r.durationMs ?? 0), 0) / ok.length) : 0;
 
@@ -29,14 +35,14 @@ export function render({ container, store, navigate }) {
     : `Success — all ${ok.length} devices completed`;
   let verdictSub = run.dryRun
     ? 'No changes were sent to FortiMonitor. Re-run with dry-run off to apply.'
-    : `${portsRemoved} ports removed across FortiMonitor.`;
+    : `${portsChanged} ports ${verbs.pastTenseLower} across FortiMonitor.`;
   if (failed.length && ok.length) {
     verdict = 'partial';
     verdictIcon = '!';
     verdictHeadline = run.dryRun
       ? `Dry run partial — ${ok.length} simulated, ${failed.length} would have failed`
       : `Partial success — ${ok.length} of ${run.results.length} devices completed`;
-    verdictSub = `${failed.length} device${failed.length === 1 ? '' : 's'} failed after retry attempts. ${portsRemoved} ports removed.`;
+    verdictSub = `${failed.length} device${failed.length === 1 ? '' : 's'} failed after retry attempts. ${portsChanged} ports ${verbs.pastTenseLower}.`;
   } else if (failed.length && !ok.length) {
     verdict = 'fail';
     verdictIcon = '✕';
@@ -47,7 +53,7 @@ export function render({ container, store, navigate }) {
   }
 
   const frame = h('div', { class: 'mockup-frame' });
-  frame.appendChild(titleBar(run.dryRun ? 'Dry-run Complete' : 'Batch Complete'));
+  frame.appendChild(titleBar(run.dryRun ? 'Dry-run Complete' : 'Batch Complete', { toolName }));
   frame.appendChild(h('div', { class: 'step-header' },
     breadcrumbs('execute'),
     h('h2', {}, run.dryRun ? 'Dry-run complete' : 'Batch complete'),
@@ -69,7 +75,12 @@ export function render({ container, store, navigate }) {
     metric('In batch', allDevices, '', `queued ${queuedDevices} · skipped ${skippedDevices}`),
     metric('Succeeded', ok.length, 'ok', queuedDevices ? `${pct(ok.length, queuedDevices)}% of queued` : ''),
     metric('Failed', failed.length, 'fail', failed.length ? 'see below' : ''),
-    metric(run.dryRun ? 'Ports would remove' : 'Ports removed', portsRemoved, 'accent', ''),
+    metric(
+      run.dryRun ? `Ports would ${verbs.verb}` : `Ports ${verbs.pastTenseLower}`,
+      portsChanged,
+      toolMode === 'add' ? 'ok' : 'accent',
+      ''
+    ),
     metric('Duration', fmtDuration(durationMs), 'muted', ok.length ? `avg ${(avgMs / 1000).toFixed(1)}s / device` : '')
   ));
 
@@ -81,7 +92,9 @@ export function render({ container, store, navigate }) {
       h('strong', {}, 'Download the batch report'),
       run.dryRun
         ? ' — the dry-run plan is the basis for the live run; keep a copy for reference.'
-        : ' — the executed changes are irreversible; keep a copy for audit.'
+        : (toolMode === 'add'
+            ? ' — keep a copy for audit. Added ports can be reversed by re-running the Remove tool.'
+            : ' — the executed changes are irreversible; keep a copy for audit.')
     ),
     dlCsv, dlJson
   ));
@@ -91,17 +104,22 @@ export function render({ container, store, navigate }) {
   if (failed.length) {
     body.appendChild(h('h3', {}, `Failures (${failed.length})`));
     for (const r of failed) {
-      body.appendChild(buildFailCard(r, store));
+      body.appendChild(buildFailCard(r, store, verbs));
     }
   }
   if (ok.length) {
     body.appendChild(h('h3', { style: { marginTop: failed.length ? '20px' : '0' } }, 'Succeeded'));
+    const successCopy = toolMode === 'add'
+      ? (run.dryRun
+          ? 'would have had the selected interface added to port scope. No changes were sent.'
+          : 'had the selected interface added to port scope. FortiMonitor has provisioned fresh agent resources and begun metric collection for those interfaces.')
+      : (run.dryRun
+          ? 'would have had their WAN interface removed from port scope. No changes were sent.'
+          : 'had their WAN interface removed from port scope. FortiMonitor has deleted the corresponding agent resources and metric history.');
     body.appendChild(h('div', { class: 'success-summary' },
       h('span', { class: 'ok-icon' }),
       h('div', {}, h('strong', {}, `${ok.length} device${ok.length === 1 ? '' : 's'} `),
-        run.dryRun
-          ? 'would have had their WAN interface removed from port scope. No changes were sent.'
-          : 'had their WAN interface removed from port scope. FortiMonitor has deleted the corresponding agent resources and metric history.')
+        successCopy)
     ));
   }
   if (skippedDevices) {
@@ -115,7 +133,9 @@ export function render({ container, store, navigate }) {
   frame.appendChild(body);
 
   // Action bar
-  const retryAllBtn = h('button', { class: 'btn btn-danger' }, 'Retry all failures');
+  const retryAllBtn = h('button', {
+    class: `btn ${toolMode === 'add' ? 'btn-secondary' : 'btn-danger'}`
+  }, 'Retry all failures');
   retryAllBtn.disabled = failed.length === 0 || run.dryRun;
   const newBatchBtn = h('button', { class: 'btn btn-secondary' }, 'Start new batch');
   const closeBtn = h('button', { class: 'btn btn-primary' }, 'Close');
@@ -131,7 +151,7 @@ export function render({ container, store, navigate }) {
   dlCsv.addEventListener('click', () => downloadBlob(
     `${store.batchId || 'run'}.csv`,
     'text/csv',
-    toCsv(run)
+    toCsv(run, toolMode)
   ));
   dlJson.addEventListener('click', () => downloadBlob(
     `${store.batchId || 'run'}.json`,
@@ -140,10 +160,13 @@ export function render({ container, store, navigate }) {
   ));
   retryAllBtn.addEventListener('click', () => {
     const failedEntries = failed.map((r) => ({ ...r.entry, status: 'pending', attempts: [] }));
+    const totalChanged = failedEntries.reduce((n, e) => n + entryPortNames(e).length, 0);
     store.executePlan = {
       entries: failedEntries,
       totalDevices: failedEntries.length,
-      totalPortsToRemove: failedEntries.reduce((n, e) => n + (e.removedPortNames?.length ?? 0), 0),
+      ...(toolMode === 'add'
+        ? { totalPortsToAdd: totalChanged }
+        : { totalPortsToRemove: totalChanged }),
       dryRun: false,
       verbose: store.executeConfig.verbose === true,
       startedAt: new Date().toISOString()
@@ -190,11 +213,12 @@ function metric(label, value, color, sub) {
   );
 }
 
-function buildFailCard(r, store) {
+function buildFailCard(r, store, verbs = REMOVE_VERBS) {
   const name = r.entry.deviceName ?? String(r.entry.serverId);
-  const portNames = (r.entry.removedPortNames ?? []).join(', ');
+  const portNames = entryPortNames(r.entry).join(', ');
   const errMsg = r.reason?.message ?? 'Unknown error';
   const retryBtn = h('button', { class: 'btn btn-secondary' }, 'Retry');
+  const capitalizedVerb = verbs.verb.charAt(0).toUpperCase() + verbs.verb.slice(1);
   const card = h('div', { class: 'fail-card' },
     h('div', { class: 'fail-head' },
       h('span', { class: 'fail-icon' }),
@@ -202,7 +226,7 @@ function buildFailCard(r, store) {
         name, ' ',
         h('span', { class: 'sid' }, String(r.entry.serverId))
       ),
-      h('span', { class: 'dev-action' }, 'Remove ', h('code', {}, portNames)),
+      h('span', { class: 'dev-action' }, `${capitalizedVerb} `, h('code', {}, portNames)),
       retryBtn
     ),
     h('div', { class: 'fail-body' },
@@ -261,15 +285,16 @@ function explainFailure(msg) {
   return 'Investigate the error below before retrying.';
 }
 
-function toCsv(run) {
-  const rows = [['server_id', 'device_name', 'group_fingerprint', 'status', 'remove_ports', 'attempts', 'duration_ms', 'error']];
+function toCsv(run, toolMode) {
+  const portsColumn = toolMode === 'add' ? 'add_ports' : 'remove_ports';
+  const rows = [['server_id', 'device_name', 'group_fingerprint', 'status', portsColumn, 'attempts', 'duration_ms', 'error']];
   for (const r of run.results) {
     rows.push([
       String(r.entry.serverId),
       String(r.entry.deviceName ?? ''),
       String(r.entry.groupId ?? ''),
       r.status,
-      (r.entry.removedPortNames || []).join('|'),
+      entryPortNames(r.entry).join('|'),
       String(r.attempts ?? 1),
       String(r.durationMs ?? 0),
       r.reason?.message ?? ''
@@ -310,4 +335,20 @@ function dateDelta(a, b) {
     const tb = new Date(b).getTime();
     return Math.max(0, ta - tb);
   } catch { return 0; }
+}
+
+const REMOVE_VERBS = Object.freeze({
+  verb: 'remove',
+  pastTense: 'Removed',
+  pastTenseLower: 'removed'
+});
+
+const ADD_VERBS = Object.freeze({
+  verb: 'add',
+  pastTense: 'Added',
+  pastTenseLower: 'added'
+});
+
+function entryPortNames(entry) {
+  return entry?.addedPortNames ?? entry?.removedPortNames ?? [];
 }

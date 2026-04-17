@@ -647,6 +647,115 @@ input.confirm-input[disabled] { background: var(--muted-soft); color: var(--text
 }
 .skipped-summary .dash-icon::after { content: "—"; }
 
+/* ================= Add-tool styles ================= */
+
+/* Info banner — non-destructive variant of the red destructive banner */
+.info-banner {
+  margin: 0;
+  padding: 10px 20px;
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.info-banner .info-i {
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: var(--ok);
+  color: white;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: bold;
+  font-style: italic;
+  font-family: serif;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* Add-mode row-checked highlight (overrides the orange destructive default) */
+[data-tool-mode="add"] tr.row-checked td { background: var(--ok-soft); }
+[data-tool-mode="add"] tr.row-checked td.col-check { box-shadow: inset 4px 0 0 var(--ok); }
+[data-tool-mode="add"] tr.row-checked td.col-name { color: var(--ok); font-weight: 600; }
+[data-tool-mode="add"] tr.row-checked td.col-name::after {
+  content: "ADD";
+  background: var(--ok);
+}
+[data-tool-mode="add"] .instruction-row strong { color: var(--ok); }
+[data-tool-mode="add"] .gate-section { background: var(--ok-soft); }
+
+/* In-scope rows (muted, disabled checkbox) — hidden by default via .hidden-scope */
+tr.in-scope-muted td {
+  color: var(--text-muted);
+  background: #fafbfc;
+}
+tr.in-scope-muted td.col-name { font-weight: 400; }
+tr.in-scope-muted input[type="checkbox"] { opacity: 0.4; pointer-events: none; }
+tr.hidden-scope { display: none; }
+
+/* "In Scope" column badge */
+.scope-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 3px;
+}
+.scope-badge.in { color: var(--text-muted); background: #edeff2; }
+.scope-badge.out { color: var(--ok); background: var(--ok-soft); font-weight: 600; }
+
+/* Summary-row pills for the Add review header */
+.stat-pill.out-of-scope {
+  background: var(--ok-soft);
+  border-color: var(--ok);
+  color: var(--ok);
+  font-weight: 600;
+}
+.stat-pill.out-of-scope .dot { background: var(--ok); }
+.stat-pill.in-scope {
+  background: #eef2f7;
+  border-color: var(--border-strong);
+}
+.stat-pill.selected.add {
+  background: var(--ok-soft);
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+/* Primary button green variant for the Add flow */
+.btn.btn-add,
+.btn.btn-primary.btn-add {
+  background: var(--ok);
+  border-color: var(--ok);
+  color: white;
+}
+.btn.btn-add:hover,
+.btn.btn-primary.btn-add:hover {
+  filter: brightness(0.95);
+}
+
+/* Action summary pill in queue overview — green variant */
+.action-summary.add {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+/* REMOVE-badge green variant for the queue group body */
+.removed-badge.add-badge {
+  background: var(--ok);
+}
+
+/* Execute-row "Add" variant of the port name chip */
+.dev-action.removing.add code {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.gate-title.add { color: var(--ok); }
+
 /* Utility / shared */
 .dryrun-badge {
   display: inline-flex; align-items: center; gap: 6px;

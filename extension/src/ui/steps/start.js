@@ -8,8 +8,11 @@ import { call } from '../../lib/messaging.js';
 
 export function render({ container, store, navigate }) {
   const frame = h('div', { class: 'mockup-frame' });
+  const toolName = store.toolMode === 'add'
+    ? 'Add to Port Scope (Fabric)'
+    : 'Remove from Port Scope (Fabric)';
 
-  frame.appendChild(titleBar('Start Batch'));
+  frame.appendChild(titleBar('Start Batch', { toolName }));
   frame.appendChild(h('div', { class: 'step-header' },
     breadcrumbs('start'),
     h('h2', {}, 'Load devices from CSV'),
