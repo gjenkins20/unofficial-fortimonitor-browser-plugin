@@ -132,3 +132,52 @@ To restore: re-enter Port Selection in FortiMonitor, re-check the port, save. Fo
 - DevTools Network HAR of the batch (optional, for audit)
 
 Attach to FMN-39 as a Phase 5 comment.
+
+---
+
+## Add Fabric Connection (API) — separate live test (FMN-45)
+
+The Add Fabric Connection tool uses the FortiMonitor v2 public API instead of the FortiCloud session. Its live-test loop is independent of the port-scope tools above.
+
+### 1. Set the API key
+
+1. Open the launcher popup
+2. Click ⚙ in the header → **Settings**
+3. Paste an RW API key obtained from your FortiMonitor account
+4. Click **Save** then **Test connection** — expect "Connection OK (HTTP 200)"
+
+### 2. Open the tool
+
+- Click **Add Fabric Connection (API)** in the launcher
+- The Load step should populate the OnSight + server group dropdowns from your account within ~1s
+- If targets fail to load, the inline error tells you whether the issue is auth (re-check the key) or network
+
+### 3. Dry-run first
+
+Paste 2–3 test FortiGates (CSV: `serial,ip,port`), pick OnSight + server group, click Continue → Review.
+
+In Review:
+- Inspect the example payload — confirm `upstream_sn` / `upstream_host` / `upstream_port` match your input
+- Leave mode on **Dry-run**
+- Click Execute. Results should show all rows as **succeeded** with `preview built` detail
+
+### 4. Live run
+
+Repeat the flow, this time:
+- Switch mode to **Live**
+- Type `CREATE` in the confirmation field to enable Execute
+- Watch the per-device progress list — each row transitions pending → running → succeeded/failed
+- On completion, the Results step shows resource IDs from the API's `id` response header
+
+### 5. Verify in FortiMonitor
+
+Open the FortiCloud UI and confirm the new fabric connections appear. Note the API guide caveat: the "Error Creating Persistent Fabric Connection" UI message can take ~5 min to clear when the Control Panel is busy. The 201 response from the API is the source of truth.
+
+### Artifacts for FMN-45 sign-off
+
+- Screenshot of Settings showing the masked API key + successful test
+- Screenshot of Results step (live mode)
+- Exported CSV/JSON results from the Results step
+- Confirmation that connections appear in the FortiCloud UI
+
+Attach to FMN-45.
