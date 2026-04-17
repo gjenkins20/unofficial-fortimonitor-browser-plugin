@@ -1052,3 +1052,176 @@ tr.hidden-scope { display: none; }
 [data-tool-mode="attribute-management"] .plan-pill.remove  { color: var(--danger); background: var(--danger-soft); }
 [data-tool-mode="attribute-management"] .plan-pill.skip    { color: var(--text-muted); background: #edeff2; }
 [data-tool-mode="attribute-management"] .plan-pill.error   { color: var(--danger); background: var(--danger-soft); }
+
+/* ---- Manage Server Templates (Bulk) -------------------------------- */
+/* Reuses most of the attribute-management look & feel; adds a strategy
+   radio (dissociate vs delete) and a typed-confirmation block for the
+   destructive detach path. */
+[data-tool-mode="template-management"] .radio-row {
+  display: flex;
+  gap: 18px;
+  margin-bottom: 12px;
+}
+[data-tool-mode="template-management"] .radio-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+[data-tool-mode="template-management"] .option-row {
+  margin-bottom: 12px;
+}
+[data-tool-mode="template-management"] .targets-grid.single-col {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+[data-tool-mode="template-management"] .strategy-group {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: #fafbfc;
+}
+[data-tool-mode="template-management"] .strategy-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 0;
+  cursor: pointer;
+}
+[data-tool-mode="template-management"] .strategy-option input[type="radio"] { margin-top: 3px; }
+[data-tool-mode="template-management"] .strategy-meta {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+}
+[data-tool-mode="template-management"] .strategy-head { font-weight: 500; }
+[data-tool-mode="template-management"] .strategy-sub { font-size: 11px; margin-top: 2px; }
+[data-tool-mode="template-management"] .strategy-option.destructive .strategy-head { color: var(--danger); }
+
+[data-tool-mode="template-management"] .summary-bar {
+  padding: 10px 16px;
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 5px;
+  margin-bottom: 12px;
+}
+[data-tool-mode="template-management"] .summary-bar.error {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+[data-tool-mode="template-management"] .confirm-block {
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: var(--warn-soft);
+  border: 1px solid var(--warn);
+  border-radius: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+[data-tool-mode="template-management"] .confirm-block.danger {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+}
+[data-tool-mode="template-management"] .confirm-block .warn-head {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--warn);
+}
+[data-tool-mode="template-management"] .confirm-block.danger .warn-head { color: var(--danger); }
+[data-tool-mode="template-management"] .confirm-block .warn-body {
+  font-size: 12px;
+  line-height: 1.5;
+}
+[data-tool-mode="template-management"] .confirm-block .typed-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+[data-tool-mode="template-management"] .confirm-block .confirm-code {
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 11.5px;
+  background: white;
+  border: 1px solid var(--warn);
+  color: var(--warn);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+[data-tool-mode="template-management"] .confirm-block .confirm-code.danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+[data-tool-mode="template-management"] .confirm-block .confirm-input {
+  font-size: 13px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  font-family: "SF Mono", Menlo, monospace;
+  background: white;
+  min-width: 240px;
+}
+[data-tool-mode="template-management"] .confirm-block.danger .confirm-input {
+  border-color: var(--danger);
+}
+
+[data-tool-mode="template-management"] .table-wrap {
+  max-height: 420px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+[data-tool-mode="template-management"] table.preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+[data-tool-mode="template-management"] table.preview-table th,
+[data-tool-mode="template-management"] table.preview-table td {
+  padding: 7px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+[data-tool-mode="template-management"] table.preview-table th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  font-weight: 600;
+  background: #fafbfc;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+[data-tool-mode="template-management"] table.preview-table .col-n { width: 36px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+[data-tool-mode="template-management"] table.preview-table .col-server { font-weight: 500; }
+[data-tool-mode="template-management"] table.preview-table .col-before {
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 11.5px;
+}
+[data-tool-mode="template-management"] table.preview-table .col-plan { width: 130px; }
+[data-tool-mode="template-management"] table.preview-table .col-error { color: var(--danger); }
+[data-tool-mode="template-management"] table.preview-table tr.skip-row td { color: var(--text-muted); }
+[data-tool-mode="template-management"] table.preview-table tr.error-row td { background: var(--danger-soft); }
+
+[data-tool-mode="template-management"] .plan-pill {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 3px;
+  letter-spacing: 0.02em;
+}
+[data-tool-mode="template-management"] .plan-pill.add     { color: var(--ok); background: var(--ok-soft); }
+[data-tool-mode="template-management"] .plan-pill.replace { color: var(--warn); background: var(--warn-soft); }
+[data-tool-mode="template-management"] .plan-pill.remove  { color: var(--danger); background: var(--danger-soft); }
+[data-tool-mode="template-management"] .plan-pill.skip    { color: var(--text-muted); background: #edeff2; }
+[data-tool-mode="template-management"] .plan-pill.error   { color: var(--danger); background: var(--danger-soft); }
