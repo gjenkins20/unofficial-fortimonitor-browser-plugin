@@ -1,3 +1,4 @@
+// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Queue executor: iterate over approved queue entries, invoke
 // client.savePortSelection for each, honor retry + concurrency rules.
 // Verbose mode forces serial execution (concurrency=1) without changing

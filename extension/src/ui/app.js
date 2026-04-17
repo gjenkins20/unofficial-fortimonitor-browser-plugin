@@ -1,3 +1,4 @@
+// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Top-level UI controller. Owns the hash-based router, the shared state
 // store, and the event subscription to the service worker. Each step is
 // a module that exports render({ container, store, navigate, events }).

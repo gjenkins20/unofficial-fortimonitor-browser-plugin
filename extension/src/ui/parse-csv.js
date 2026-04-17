@@ -1,3 +1,4 @@
+// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Parse the operator's CSV/paste input from the batch-start screen.
 //
 // Accepts two shapes:

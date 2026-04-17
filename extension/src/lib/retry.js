@@ -1,3 +1,4 @@
+// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Retry policy for per-device save operations.
 //
 // Exponential backoff with jitter, capped. Callers inject a predicate so

@@ -1,3 +1,4 @@
+// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Step 2 — Review groups. Present one prompt per unique fingerprint
 // group. Operator checks WAN port row(s) to remove for everyone in the
 // group; "Queue for N devices" advances to the next group (or to the

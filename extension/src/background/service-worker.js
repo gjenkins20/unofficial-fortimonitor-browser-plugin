@@ -1,10 +1,13 @@
 // Unofficial FortiMonitor Toolkit — service worker.
+// Built by Gregori Jenkins — https://www.linkedin.com/in/gregorijenkins
 //
 // Thin Chrome-API wrapper. All orchestration lives in modules that are
 // testable in Node (scanner, executor, message-handlers, queue). This
 // file wires those modules to chrome.runtime messages and the runtime
 // lifecycle. The toolbar action uses a default_popup (see manifest), so
 // chrome.action.onClicked never fires.
+
+const BUILT_BY = 'Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>';
 
 import { createProductionClient } from '../lib/fortimonitor-client.js';
 import { Queue } from '../lib/queue.js';
@@ -23,7 +26,9 @@ function emit(name, payload) {
 const handlers = createHandlers({ client, queue, events: { emit } });
 
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('[fm-toolkit] installed — version', chrome.runtime.getManifest().version);
+  const m = chrome.runtime.getManifest();
+  console.log(`[fm-toolkit] installed — ${m.name} v${m.version}`);
+  console.log(`[fm-toolkit] built by ${BUILT_BY}`);
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {

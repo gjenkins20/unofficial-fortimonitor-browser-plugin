@@ -1,3 +1,4 @@
+// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 const FORTICLOUD_URL = 'https://fortimonitor.forticloud.com/';
 const XSRF_COOKIE = 'XSRF-TOKEN';
 
@@ -95,9 +96,14 @@ function init() {
     filterTools(e.target.value);
   });
 
-  document.getElementById('help-link').addEventListener('click', (e) => {
-    e.preventDefault();
-  });
+  const authorLink = document.getElementById('author-link');
+  if (authorLink) {
+    authorLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      chrome.tabs.create({ url: authorLink.href });
+      window.close();
+    });
+  }
 }
 
 init();

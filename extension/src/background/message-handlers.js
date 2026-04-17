@@ -1,3 +1,4 @@
+// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Message router handlers. Pure functions over injected client + queue;
 // testable in Node without touching chrome.runtime.onMessage.
 //

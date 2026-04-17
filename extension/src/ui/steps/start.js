@@ -1,3 +1,4 @@
+// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Step 1 — Load devices. Operator pastes/uploads a list of server IDs
 // (optionally with device names via CSV), we validate by silently
 // reading each device's port scope, then hand off to the review step.

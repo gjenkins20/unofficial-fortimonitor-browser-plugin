@@ -1,3 +1,4 @@
+// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Step 2 (Add tool) — Review groups. Inverse of review.js: operator
 // marks ports to ADD to port scope (ports that are currently out of
 // scope — isActive=false). Non-destructive; no typed-confirmation gate
