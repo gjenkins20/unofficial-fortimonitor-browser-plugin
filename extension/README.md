@@ -12,6 +12,7 @@ Clicking the toolbar icon opens a launcher popup; pick a tool from the list and 
 | Add to Port Scope (Fabric) | FortiCloud session | ✅ Shipped (v0.2) | Inverse of Remove. Batch-add currently-unmonitored interfaces to port scope on Fabric-connected FortiGate instances. Non-destructive. |
 | Add Fabric Connection (API) | FortiMonitor v2 API key | 🧪 Beta (v0.3) | Bulk-create OnSight CSF tunnel connections for FortiGate devices via `POST /v2/fabric_connection`. Requires a Read/Write API key (paste once in popup → ⚙ Settings). **Beta until verified in a live FortiMonitor environment.** |
 | Manage Server Attributes (Bulk) | FortiMonitor v2 API key | 🧪 Beta (v0.5) | Bulk-set or remove attribute key/value pairs across many servers via `POST`/`DELETE /v2/server/{id}/server_attribute`. Paste a list of server names or IDs, pick an attribute type, preview per-row plan (add / replace / skip / error), then execute. Uses the same RW API key as Add Fabric Connection. **Beta until verified in a live FortiMonitor environment.** |
+| Manage Server Templates (Bulk) | FortiMonitor v2 API key | 🧪 Beta (v0.6) | Bulk-attach or detach monitoring templates across many servers via `POST`/`DELETE /v2/server/{id}/template`. Detach supports `dissociate` (safe) and `delete` (destructive — wipes metric history); destructive detach and large batches require a typed confirmation. Uses the same RW API key as Add Fabric Connection. **Beta until verified in a live FortiMonitor environment.** |
 
 ## Install (developer mode)
 

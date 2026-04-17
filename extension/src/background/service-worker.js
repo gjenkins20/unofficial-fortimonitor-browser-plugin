@@ -14,6 +14,7 @@ import { Queue } from '../lib/queue.js';
 import { createHandlers, dispatch } from './message-handlers.js';
 import { createFabricHandlers } from './fabric-connection-handlers.js';
 import { createAttributeHandlers } from './attribute-handlers.js';
+import { createTemplateHandlers } from './template-handlers.js';
 import { resolveFortimonitorOrigin } from '../lib/origin-resolver.js';
 
 const resolveOrigin = () => resolveFortimonitorOrigin({
@@ -33,7 +34,8 @@ function emit(name, payload) {
 const handlers = {
   ...createHandlers({ client, queue, events: { emit } }),
   ...createFabricHandlers({ events: { emit } }),
-  ...createAttributeHandlers({ events: { emit } })
+  ...createAttributeHandlers({ events: { emit } }),
+  ...createTemplateHandlers({ events: { emit } })
 };
 
 chrome.runtime.onInstalled.addListener(() => {
