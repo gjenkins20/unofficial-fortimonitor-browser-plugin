@@ -209,6 +209,7 @@ html, body {
 }
 .badge.destructive { background: #fde9dd; color: var(--accent); }
 .badge.safe { background: var(--ok-soft); color: var(--ok); }
+.badge.beta { background: var(--warn-soft); color: var(--warn); }
 
 .chevron {
   color: var(--border-strong);
