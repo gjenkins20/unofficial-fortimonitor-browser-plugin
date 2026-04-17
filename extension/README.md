@@ -10,7 +10,7 @@ Clicking the toolbar icon opens a launcher popup; pick a tool from the list and 
 |---|---|---|---|
 | Remove from Port Scope (Fabric) | FortiCloud session | ✅ Shipped (v0.1) | Batch-remove operationally-down WAN interfaces from monitored port scope on Fabric-connected FortiGate instances. Destructive — destroys agent resources and metric history per port removed. |
 | Add to Port Scope (Fabric) | FortiCloud session | ✅ Shipped (v0.2) | Inverse of Remove. Batch-add currently-unmonitored interfaces to port scope on Fabric-connected FortiGate instances. Non-destructive. |
-| Add Fabric Connection (API) | FortiMonitor v2 API key | ✅ Shipped (v0.3) | Bulk-create OnSight CSF tunnel connections for FortiGate devices via `POST /v2/fabric_connection`. Requires a Read/Write API key (paste once in popup → ⚙ Settings). |
+| Add Fabric Connection (API) | FortiMonitor v2 API key | 🧪 Beta (v0.3) | Bulk-create OnSight CSF tunnel connections for FortiGate devices via `POST /v2/fabric_connection`. Requires a Read/Write API key (paste once in popup → ⚙ Settings). **Beta until verified in a live FortiMonitor environment.** |
 
 ## Install (developer mode)
 
