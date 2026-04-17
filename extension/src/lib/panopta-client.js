@@ -389,6 +389,156 @@ export class PanoptaClient {
     const { res } = await this._request('DELETE', path);
     return { status: res.status };
   }
+
+  // ---- Server template management (FMN-49) ------------------------------
+  //
+  // See docs/api-discovery/templates.md. Templates are their own resource
+  // (/server_template) and the attach/detach relationship lives on the
+  // server side as a mapping resource:
+  //   GET    /server_template                          (catalog)
+  //   GET    /server/{id}/template                     (list attached)
+  //   POST   /server/{id}/template                     body: { continuous, server_template(url) }
+  //   DELETE /server/{id}/template/{server_template_id}  optional body: { strategy }
+  //
+  // The DELETE's strategy query parameter is the most sensitive part of
+  // this tool: "dissociate" (default) unlinks only; "delete" also wipes
+  // metrics and attributes the template seeded — destructive, no undo.
+
+  /**
+   * List all monitoring templates the customer owns (for the template
+   * picker in the start step). Pages through until total_count is
+   * exhausted.
+   *
+   * @returns {Promise<Array<{id:number, name:string, templateType:string, serverGroupUrl:string, resourceUrl:string, appliedServerUrls:string[]}>>}
+   */
+  async listTemplates({ pageSize = 100, maxPages = 20 } = {}) {
+    const out = [];
+    let offset = 0;
+    for (let page = 0; page < maxPages; page++) {
+      const { body } = await this._request('GET', `/server_template?limit=${pageSize}&offset=${offset}`);
+      if (!body || !Array.isArray(body.server_template_list)) {
+        throw new PanoptaError('Malformed server_template list response', {
+          phase: 'read',
+          responseBody: body
+        });
+      }
+      for (const t of body.server_template_list) {
+        const id = typeof t.url === 'string'
+          ? Number(t.url.split('/').filter(Boolean).pop())
+          : null;
+        out.push({
+          id,
+          name: t.name ?? `#${id}`,
+          templateType: t.template_type ?? null,
+          serverGroupUrl: t.server_group ?? null,
+          resourceUrl: t.url,
+          appliedServerUrls: Array.isArray(t.applied_servers) ? t.applied_servers : []
+        });
+      }
+      const total = body.meta?.total_count ?? out.length;
+      offset += body.server_template_list.length;
+      if (offset >= total || body.server_template_list.length === 0) break;
+    }
+    return out;
+  }
+
+  /**
+   * List the templates currently attached to a server. Used by the
+   * preview step to decide attach-vs-skip / detach-vs-skip per row.
+   *
+   * Note: the mapping resource shape is NOT the full template — it's
+   * `{continuous, server_template: <url>}`. Caller extracts templateId
+   * from the URL.
+   *
+   * @returns {Promise<Array<{continuous:boolean, templateUrl:string, templateId:number|null}>>}
+   */
+  async listServerTemplateMappings(serverId, { pageSize = 100, maxPages = 5 } = {}) {
+    if (!serverId) throw new TypeError('listServerTemplateMappings: serverId is required');
+    const out = [];
+    let offset = 0;
+    for (let page = 0; page < maxPages; page++) {
+      const { body } = await this._request(
+        'GET',
+        `/server/${encodeURIComponent(serverId)}/template?limit=${pageSize}&offset=${offset}`
+      );
+      if (!body || !Array.isArray(body.server_template_list)) {
+        throw new PanoptaError('Malformed server template mapping list response', {
+          phase: 'read',
+          responseBody: body
+        });
+      }
+      for (const m of body.server_template_list) {
+        const templateUrl = m.server_template ?? null;
+        const templateId = typeof templateUrl === 'string'
+          ? Number(templateUrl.split('/').filter(Boolean).pop())
+          : null;
+        out.push({
+          continuous: Boolean(m.continuous),
+          templateUrl,
+          templateId
+        });
+      }
+      const total = body.meta?.total_count ?? out.length;
+      offset += body.server_template_list.length;
+      if (offset >= total || body.server_template_list.length === 0) break;
+    }
+    return out;
+  }
+
+  /**
+   * Attach a template to a server. `continuous=true` (default) matches
+   * the FortiCloud UI's default: the template keeps adding new metrics
+   * to the server as data collection discovers them.
+   *
+   * The API does NOT deduplicate — a repeat POST creates a second
+   * mapping row. Callers are expected to pre-flight via
+   * listServerTemplateMappings and skip already-attached rows.
+   *
+   * @returns {Promise<{status:number, location:string|null, resourceId:string|number|null}>}
+   */
+  async attachTemplate(serverId, { templateUrl, continuous = true } = {}) {
+    if (!serverId) throw new TypeError('attachTemplate: serverId is required');
+    if (!templateUrl) throw new TypeError('attachTemplate: templateUrl is required');
+    const payload = { continuous: Boolean(continuous), server_template: templateUrl };
+    const { res, body } = await this._request(
+      'POST',
+      `/server/${encodeURIComponent(serverId)}/template`,
+      { body: payload }
+    );
+    return {
+      status: res.status,
+      location: res.headers?.get?.('location') ?? null,
+      resourceId: res.headers?.get?.('id') ?? (body?.id ?? null)
+    };
+  }
+
+  /**
+   * Detach a template from a server.
+   *
+   * @param {string|number} serverId
+   * @param {string|number} templateId  Template id (not the mapping id)
+   * @param {object} [opts]
+   * @param {'dissociate'|'delete'} [opts.strategy='dissociate']
+   *   'dissociate' — remove association only; metrics/attributes the
+   *     template seeded stay on the server.
+   *   'delete' — remove association AND wipe metrics/attributes the
+   *     template added. DESTRUCTIVE, no undo. UI must gate this behind a
+   *     typed confirmation (see FMN-49 plan).
+   * @returns {Promise<{status:number}>}
+   */
+  async detachTemplate(serverId, templateId, { strategy = 'dissociate' } = {}) {
+    if (!serverId) throw new TypeError('detachTemplate: serverId is required');
+    if (!templateId) throw new TypeError('detachTemplate: templateId is required');
+    if (strategy !== 'dissociate' && strategy !== 'delete') {
+      throw new TypeError(`detachTemplate: strategy must be 'dissociate' or 'delete', got '${strategy}'`);
+    }
+    const path = `/server/${encodeURIComponent(serverId)}/template/${encodeURIComponent(templateId)}`;
+    // Always send the body — even though dissociate is the server-side
+    // default, we want the wire behavior to be deterministic and
+    // inspectable, not dependent on an implicit default.
+    const { res } = await this._request('DELETE', path, { body: { strategy } });
+    return { status: res.status };
+  }
 }
 
 /**
