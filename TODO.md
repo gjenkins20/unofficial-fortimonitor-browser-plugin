@@ -6,30 +6,21 @@ Unofficial FortiMonitor Browser Plugin — task tracking.
 
 ## High Priority
 
-- [ ] **Determine data source for port operational status** <!-- PLANE:FMN-37 -->
-  - Blocks FMN-38 and FMN-39
-  - Test H1 first (agent_resource live link status on existing test VMs)
-  - Requires Claude session with FortiMonitor MCP connected
-  - If H1 fails → lab FortiGate-VM deployment becomes necessary
-
-- [x] **Design UX mockups for port scope cleanup extension** <!-- PLANE:FMN-38 -->
-  - All five step mockups approved plus clickable flow-prototype.html
-
-- [ ] **Implement MV3 extension for port scope cleanup** <!-- PLANE:FMN-39 -->
-  - Blocked by FMN-37 and FMN-38
-  - Scaffolds from `docs/api-discovery/port-scope-snippet.js`
-  - Dry-run default, destructive-action warning, batch processing
-  - Start as private repo per global guidelines
-
-- [ ] **Build Chrome extension for automated WAN interface port scope cleanup** <!-- PLANE:FMN-35 -->
-  - Parent/epic ticket; tracked via FMN-37/38/39 above
+- [ ] **Multi-tool launcher + suite rebrand + Add to Port Scope tool** <!-- PLANE:FMN-40 -->
+  - Rebrand to "Unofficial FortiMonitor Toolkit" / short_name "FM Toolkit"
+  - Native Chrome popup launcher (`action.default_popup`), card-style tool list
+  - New tool: Add to Port Scope (inverse of the existing Remove tool)
+  - Prerequisite refactor: extract shared infra into `extension/src/lib/`
+  - Mockup-first: `docs/mockups/launcher-popup.html` + `tool-add-port-scope_*.html` before any code
 
 ## Completed
 
 - [x] **Capture FortiCloud UI API contract for port scope modification** <!-- PLANE:FMN-36 -->
 - [x] **Determine data source for port operational status** <!-- PLANE:FMN-37 -->
 - [x] **Design UX mockups for port scope cleanup extension** <!-- PLANE:FMN-38 -->
+- [x] **Implement MV3 extension for port scope cleanup** <!-- PLANE:FMN-39 -->
+- [x] **Build Chrome extension for automated WAN interface port scope cleanup** <!-- PLANE:FMN-35 -->
 
 ---
 
-*Last updated: 2026-04-16*
+*Last updated: 2026-04-17*
