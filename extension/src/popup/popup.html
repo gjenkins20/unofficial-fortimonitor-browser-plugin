@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Unofficial FortiMonitor Toolkit</title>
+<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+<div class="popup">
+  <header class="popup-header">
+    <div class="title-row">
+      <span class="icon">FM</span>
+      <div class="title-text">
+        <h1>Unofficial FortiMonitor Toolkit</h1>
+      </div>
+    </div>
+  </header>
+
+  <div id="session-strip" class="session-strip" hidden>
+    <span class="dot"></span>
+    <span id="session-text"></span>
+    <a id="session-link" href="#" class="link"></a>
+  </div>
+
+  <div class="search-row">
+    <input id="search" type="text" placeholder="Search tools…" autofocus>
+  </div>
+
+  <div class="tool-list" id="tool-list">
+    <div class="tool-group-label" data-group="port-scope">Port scope</div>
+
+    <button class="tool-card"
+            data-group="port-scope"
+            data-tool="remove"
+            data-url="src/ui/app.html"
+            data-session-required="true">
+      <div class="tool-icon destructive">−</div>
+      <div class="tool-meta">
+        <div class="tool-name">
+          Remove from Port Scope
+          <span class="badge destructive">Removes</span>
+        </div>
+        <div class="tool-desc" data-default-desc="Batch-remove operationally-down WAN interfaces from monitored port scope.">
+          Batch-remove operationally-down WAN interfaces from monitored port scope.
+        </div>
+      </div>
+      <div class="chevron">›</div>
+    </button>
+  </div>
+
+  <div id="no-matches" class="empty-search" hidden>
+    No tools match — try a different keyword.
+  </div>
+
+  <footer class="popup-footer">
+    <span id="version">v0.2.0</span>
+    <a href="#" id="help-link">Help &amp; feedback ↗</a>
+  </footer>
+</div>
+<script src="popup.js" type="module"></script>
+</body>
+</html>

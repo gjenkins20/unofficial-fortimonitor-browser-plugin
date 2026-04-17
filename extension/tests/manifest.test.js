@@ -56,14 +56,14 @@ test('manifest declares cookies and storage permissions', async () => {
   }
 });
 
-test('manifest does NOT request tabs or activeTab (Phase 1 scope)', async () => {
+test('manifest does NOT request broad browser-surveillance permissions', async () => {
   const m = await readManifest();
   const forbidden = ['tabs', 'activeTab', 'webRequest', 'webRequestBlocking'];
   for (const f of forbidden) {
     assert.equal(
       m.permissions.includes(f),
       false,
-      `phase-1 manifest should not include permission: ${f}`
+      `manifest should not include permission: ${f}`
     );
   }
 });
@@ -80,12 +80,19 @@ test('service worker is declared as ES module', async () => {
   assert.equal(m.background.type, 'module');
 });
 
-test('action is configured (toolbar icon)', async () => {
+test('action is configured with a default popup (launcher)', async () => {
   const m = await readManifest();
   assert.ok(m.action, 'manifest.action missing');
   assert.equal(typeof m.action.default_title, 'string');
+  assert.equal(typeof m.action.default_popup, 'string', 'expected action.default_popup to point at the launcher');
 });
 
-test('app.html exists (opened when toolbar icon is clicked)', async () => {
+test('launcher popup file exists at the path the manifest points to', async () => {
+  const m = await readManifest();
+  assert.equal(await fileExists(m.action.default_popup), true,
+    `popup file not found: ${m.action.default_popup}`);
+});
+
+test('app.html exists (opened from the launcher for the Remove tool)', async () => {
   assert.equal(await fileExists('src/ui/app.html'), true);
 });

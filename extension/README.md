@@ -1,8 +1,15 @@
-# FortiMonitor WAN Cleanup Extension
+# Unofficial FortiMonitor Toolkit
 
-Chrome Manifest V3 extension that batch-removes operationally-down WAN interfaces from FortiMonitor port scope. Uses your existing FortiCloud browser session — no API keys, no separate credentials.
+Chrome Manifest V3 extension — a suite of session-authenticated tools for FortiCloud. Rides your existing FortiCloud browser session; no API keys, no separate credentials.
 
-Scope is deliberately narrow: identify which interfaces on each device are WAN (the operator decides), confirm the cleanup in an audit gate, execute against many devices in the background.
+Clicking the toolbar icon opens a launcher popup; pick a tool from the list and it opens in a full browser tab.
+
+## Tools
+
+| Tool | Status | Notes |
+|---|---|---|
+| Remove from Port Scope | ✅ Shipped (v0.1) | Batch-remove operationally-down WAN interfaces from monitored port scope. Destructive — destroys agent resources and metric history per port removed. |
+| Add to Port Scope | 🚧 In development (FMN-40) | Inverse of Remove. Batch-add currently-unmonitored interfaces to port scope. Non-destructive. |
 
 ## Install (developer mode)
 
@@ -11,8 +18,7 @@ Scope is deliberately narrow: identify which interfaces on each device are WAN (
 3. Click **Load unpacked**
 4. Select the `extension/` directory inside this repo
 5. Log in to FortiCloud in any tab — the extension rides whatever session you already have
-
-The toolbar icon opens the cleanup app in a new tab.
+6. Click the toolbar icon to open the launcher
 
 ## Run tests
 
@@ -23,24 +29,29 @@ npm test
 
 Uses Node's built-in `node:test` runner — no `npm install` required.
 
-## Status
-
-This is a phased scaffold. Current phase completion:
-
-- [x] **Phase 1** — manifest, service-worker stub, empty app page, README, manifest tests
-- [x] **Phase 2** — core libraries (`fortimonitor-client`, `fingerprint`, `queue`) + unit tests
-- [x] **Phase 3** — orchestration (`concurrency`, `retry`, `scanner`, `executor`, `message-handlers`) + wired service worker
-- [ ] **Phase 4** — UI port (the five operator screens from `docs/mockups/`)
-- [ ] **Phase 5** — end-to-end testing against a live FortiGate device
-
-See `docs/mockups/flow-prototype.html` for the operator walk-through, `docs/api-discovery/port-scope.md` for the API contract this plugin targets, and Plane FMN-39 for the implementation ticket.
-
 ## Scope guardrails
 
 - Frontend-only. No FortiMonitor v2 public API, no API keys.
-- WAN interfaces only. Non-WAN ports are never touched.
-- Dry-run is the default for every batch. Real writes require a typed confirmation phrase.
-- `fortilink` is protected by name.
+- Each tool declares its own action scope (e.g., Remove targets WAN interfaces; Add targets out-of-scope ports).
+- Dry-run is the default for every batch.
+- Destructive tools require a typed confirmation phrase before writes.
+- `fortilink` is visually flagged as the fabric link across every tool.
+
+## Architecture
+
+```
+extension/
+  manifest.json
+  src/
+    popup/          — toolbar popup launcher (Phase B)
+    background/     — service worker, tool-specific orchestration
+    lib/            — shared infrastructure (client, queue, retry,
+                      concurrency, fingerprint, dom helpers, messaging)
+    ui/             — tool UI shell + per-step modules
+  tests/            — Node test runner unit tests
+```
+
+Tickets: FMN-35 (original WAN-cleanup epic, closed), FMN-39 (Remove tool implementation, closed), FMN-40 (launcher + rebrand + Add tool, in progress).
 
 ## About the Developer
 

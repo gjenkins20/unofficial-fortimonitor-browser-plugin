@@ -1,9 +1,10 @@
-// FortiMonitor WAN Cleanup — service worker.
+// Unofficial FortiMonitor Toolkit — service worker.
 //
 // Thin Chrome-API wrapper. All orchestration lives in modules that are
 // testable in Node (scanner, executor, message-handlers, queue). This
-// file wires those modules to chrome.runtime messages, chrome.action
-// clicks, and chrome.runtime lifecycle events.
+// file wires those modules to chrome.runtime messages and the runtime
+// lifecycle. The toolbar action uses a default_popup (see manifest), so
+// chrome.action.onClicked never fires.
 
 import { createProductionClient } from '../lib/fortimonitor-client.js';
 import { Queue } from '../lib/queue.js';
@@ -22,11 +23,7 @@ function emit(name, payload) {
 const handlers = createHandlers({ client, queue, events: { emit } });
 
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('[fm-wan-cleanup] installed — version', chrome.runtime.getManifest().version);
-});
-
-chrome.action.onClicked.addListener(() => {
-  chrome.tabs.create({ url: chrome.runtime.getURL('src/ui/app.html') });
+  console.log('[fm-toolkit] installed — version', chrome.runtime.getManifest().version);
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
