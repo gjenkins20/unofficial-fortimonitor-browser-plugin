@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Mockup — Manage Server Attributes (Bulk) · Preview (FMN-48)</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --border: #e2e5ea;
+    --border-strong: #c5cbd3;
+    --text: #222a35;
+    --text-muted: #6b7380;
+    --accent: #d9541e;
+    --accent-soft: #fde9dd;
+    --danger: #b3261e;
+    --danger-soft: #fde8e7;
+    --warn: #8b6f00;
+    --warn-soft: #fff4d1;
+    --ok: #1e7a3c;
+    --ok-soft: #dcf4e1;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 13px;
+    color: var(--text);
+    background: var(--bg);
+    padding: 24px;
+  }
+  .mockup-frame {
+    max-width: 720px;
+    margin: 0 auto;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06);
+  }
+  .title-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .title-bar h1 {
+    font-size: 14px;
+    margin: 0;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .title-bar h1 .icon {
+    width: 18px;
+    height: 18px;
+    background: var(--accent);
+    border-radius: 3px;
+    display: inline-grid;
+    place-items: center;
+    color: white;
+    font-size: 11px;
+    font-weight: bold;
+  }
+  .title-bar h1 .beta {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    padding: 2px 6px;
+    background: var(--warn-soft);
+    color: var(--warn);
+    border-radius: 3px;
+  }
+  .title-bar .subtitle { color: var(--text-muted); font-weight: 400; font-size: 12px; }
+  .close { color: var(--text-muted); font-size: 18px; cursor: pointer; line-height: 1; }
+
+  .steps {
+    display: flex;
+    padding: 0 20px;
+    background: #fafbfc;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .step {
+    padding: 10px 0;
+    margin-right: 24px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .step .num {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: #edeff2;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 600;
+    display: grid; place-items: center;
+  }
+  .step.done { color: var(--ok); }
+  .step.done .num { background: var(--ok); color: white; }
+  .step.active { color: var(--text); font-weight: 600; }
+  .step.active .num { background: var(--accent); color: white; }
+
+  .section-head {
+    padding: 10px 20px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-muted);
+    font-weight: 600;
+    border-bottom: 1px solid var(--border);
+    background: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .section-head .count {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  .op-row {
+    padding: 14px 20px;
+    background: #fafbfc;
+    border-bottom: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: auto 1fr 1fr;
+    gap: 10px;
+    align-items: stretch;
+  }
+  .op-seg {
+    display: inline-flex;
+    border: 1px solid var(--border-strong);
+    border-radius: 5px;
+    overflow: hidden;
+  }
+  .op-seg button {
+    padding: 7px 14px;
+    font-size: 13px;
+    background: white;
+    border: 0;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .op-seg button.active {
+    background: var(--accent);
+    color: white;
+  }
+  .op-row select,
+  .op-row input[type="text"] {
+    font-size: 13px;
+    padding: 7px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: 5px;
+    font-family: inherit;
+    background: white;
+  }
+
+  .input-block {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .input-block label {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .input-block textarea {
+    width: 100%;
+    min-height: 60px;
+    font-size: 12px;
+    font-family: "SF Mono", Menlo, monospace;
+    padding: 8px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: 5px;
+    resize: vertical;
+  }
+  .input-block .hint { margin-top: 6px; font-size: 11px; color: var(--text-muted); }
+
+  .summary-bar {
+    padding: 10px 20px;
+    background: var(--ok-soft);
+    color: var(--ok);
+    font-size: 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+  }
+
+  .table-wrap { max-height: 420px; overflow-y: auto; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  th, td {
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-muted);
+    font-weight: 600;
+    background: white;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+  th.col-n, td.col-n { width: 36px; padding-left: 20px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  td.col-server { font-weight: 500; }
+  td.col-before, td.col-after { font-family: "SF Mono", Menlo, monospace; font-size: 11.5px; }
+  td.col-plan { width: 150px; }
+
+  .plan-pill {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 3px;
+    letter-spacing: 0.02em;
+  }
+  .plan-pill.add    { color: var(--ok); background: var(--ok-soft); }
+  .plan-pill.replace{ color: var(--warn); background: var(--warn-soft); }
+  .plan-pill.remove { color: var(--danger); background: var(--danger-soft); }
+  .plan-pill.skip   { color: var(--text-muted); background: #edeff2; }
+  .plan-pill.error  { color: var(--danger); background: var(--danger-soft); }
+
+  tr.skip-row td { color: var(--text-muted); }
+  tr.error-row td { background: var(--danger-soft); }
+
+  .action-bar {
+    padding: 14px 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: #fafbfc;
+  }
+  .action-bar .left { font-size: 12px; color: var(--text-muted); }
+  .action-bar .right { display: flex; gap: 8px; }
+  .btn {
+    font-size: 13px;
+    font-weight: 500;
+    padding: 7px 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .btn-secondary { background: white; color: var(--text); border-color: var(--border-strong); }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+  .legend {
+    max-width: 720px;
+    margin: 16px auto 0;
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.6;
+  }
+  .legend code {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    background: var(--border);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 10.5px;
+  }
+</style>
+</head>
+<body>
+
+<div class="mockup-frame">
+  <div class="title-bar">
+    <h1>
+      <span class="icon">A</span>
+      Manage Server Attributes (Bulk)
+      <span class="beta">BETA</span>
+      <span class="subtitle">— v2 API</span>
+    </h1>
+    <span class="close">✕</span>
+  </div>
+
+  <!-- Step indicator: mirrors FMN-45's multi-step flow -->
+  <div class="steps">
+    <div class="step done"><span class="num">✓</span>Input</div>
+    <div class="step active"><span class="num">2</span>Preview</div>
+    <div class="step"><span class="num">3</span>Execute</div>
+    <div class="step"><span class="num">4</span>Results</div>
+  </div>
+
+  <!-- Operation row (collapsed recap of step 1 choices, still editable) -->
+  <div class="op-row">
+    <div class="op-seg">
+      <button class="active">Add / Set</button>
+      <button>Remove</button>
+    </div>
+    <select>
+      <option selected>Environment  —  server_attribute_type/14629</option>
+      <option>Site</option>
+      <option>Owner</option>
+      <option>... (181 more)</option>
+    </select>
+    <input type="text" placeholder="Value" value="prod" />
+  </div>
+
+  <!-- Server list recap -->
+  <div class="input-block">
+    <label>Target servers (8)</label>
+    <textarea readonly>FGVM01TM24006844
+FGVM01TM24006845
+FGVM01TM24006846
+FGT-Branch-001
+FGT-Branch-003
+FGT-Branch-007
+42024075
+server-does-not-exist</textarea>
+    <div class="hint">One per line. Names or numeric IDs. Names are resolved via <code style="font-family:'SF Mono',Menlo,monospace;font-size:11px;">GET /v2/server?name=</code>; unresolved or ambiguous names surface as errors below.</div>
+  </div>
+
+  <div class="summary-bar">
+    Plan: <strong>set Environment = "prod"</strong> on 8 targets — 4 will add · 2 will replace · 1 already set (skip) · 1 unresolved (error)
+  </div>
+
+  <div class="section-head">
+    Preview
+    <span class="count">8 rows · scroll to see all</span>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th class="col-n">#</th>
+          <th>Server</th>
+          <th>Current value</th>
+          <th>New value</th>
+          <th class="col-plan">Plan</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="col-n">1</td>
+          <td class="col-server">FGVM01TM24006844 <span style="color:var(--text-muted);font-weight:400;">#42024060</span></td>
+          <td class="col-before" style="color:var(--text-muted);">—</td>
+          <td class="col-after">prod</td>
+          <td class="col-plan"><span class="plan-pill add">ADD</span></td>
+        </tr>
+        <tr>
+          <td class="col-n">2</td>
+          <td class="col-server">FGVM01TM24006845 <span style="color:var(--text-muted);font-weight:400;">#42024061</span></td>
+          <td class="col-before" style="color:var(--text-muted);">—</td>
+          <td class="col-after">prod</td>
+          <td class="col-plan"><span class="plan-pill add">ADD</span></td>
+        </tr>
+        <tr>
+          <td class="col-n">3</td>
+          <td class="col-server">FGVM01TM24006846 <span style="color:var(--text-muted);font-weight:400;">#42024075</span></td>
+          <td class="col-before">staging</td>
+          <td class="col-after">prod</td>
+          <td class="col-plan"><span class="plan-pill replace">REPLACE</span></td>
+        </tr>
+        <tr class="skip-row">
+          <td class="col-n">4</td>
+          <td class="col-server">FGT-Branch-001 <span style="color:var(--text-muted);font-weight:400;">#40001122</span></td>
+          <td class="col-before">prod</td>
+          <td class="col-after">prod</td>
+          <td class="col-plan"><span class="plan-pill skip">ALREADY SET</span></td>
+        </tr>
+        <tr>
+          <td class="col-n">5</td>
+          <td class="col-server">FGT-Branch-003 <span style="color:var(--text-muted);font-weight:400;">#40001345</span></td>
+          <td class="col-before" style="color:var(--text-muted);">—</td>
+          <td class="col-after">prod</td>
+          <td class="col-plan"><span class="plan-pill add">ADD</span></td>
+        </tr>
+        <tr>
+          <td class="col-n">6</td>
+          <td class="col-server">FGT-Branch-007 <span style="color:var(--text-muted);font-weight:400;">#40001489</span></td>
+          <td class="col-before">dev</td>
+          <td class="col-after">prod</td>
+          <td class="col-plan"><span class="plan-pill replace">REPLACE</span></td>
+        </tr>
+        <tr>
+          <td class="col-n">7</td>
+          <td class="col-server">(id) <span style="color:var(--text-muted);font-weight:400;">#42024075</span></td>
+          <td class="col-before" style="color:var(--text-muted);">—</td>
+          <td class="col-after">prod</td>
+          <td class="col-plan"><span class="plan-pill add">ADD</span></td>
+        </tr>
+        <tr class="error-row">
+          <td class="col-n">8</td>
+          <td class="col-server">server-does-not-exist</td>
+          <td class="col-before" colspan="2" style="color:var(--danger);">Name not found — no matching server</td>
+          <td class="col-plan"><span class="plan-pill error">ERROR</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="action-bar">
+    <div class="left">
+      Will execute on <strong style="color:var(--text);">6 of 8 servers</strong> (skipping 1 already-set, 1 error). No dry-run — preview IS the dry-run.
+    </div>
+    <div class="right">
+      <button class="btn btn-secondary">← Back</button>
+      <button class="btn btn-primary">Execute →</button>
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <strong>Mockup notes (not rendered in the plugin):</strong><br>
+  · <strong>Bulk by design.</strong> Mirrors FMN-45: paste-a-list input, one shared operation, per-row preview, explicit Execute. Single-server is just N=1.<br>
+  · <strong>Two operations in one tool:</strong> Add/Set (with a value) or Remove (type only, value field hidden). Segmented control at the top.<br>
+  · <strong>REPLACE semantic:</strong> when a server already has a different value for the chosen type, the tool deletes the old value then POSTs the new one. This depends on the live-probe open question in <code>docs/api-discovery/attributes.md</code> — if POST-with-existing-type actually replaces on the server, the DELETE becomes unnecessary; if it stacks, REPLACE is correct; if it errors, REPLACE is required. Pick the safe path and verify on the first real run.<br>
+  · <strong>ALREADY SET skip:</strong> rows where the current value equals the new value are shown but skipped, so the operator can see the full intended state without churn.<br>
+  · <strong>Unresolved names surface in the preview, not silently.</strong> Same name→id resolver as FMN-50 will handle this — reuse, don't reinvent.<br>
+  · <strong>System attributes (<code>server.origin</code>, <code>server.os</code>):</strong> not pickable in the type dropdown for Remove — FortiMonitor repopulates them from the agent, so operating on them is pointless.<br>
+  · <strong>No queue, no typed confirmation:</strong> low blast radius (attribute metadata, not port scope or monitoring config). Preview + Execute is sufficient.<br>
+  · <strong>Error handling post-Execute:</strong> step 4 (Results) shows per-server success/fail with status code and body. Partial failures don't abort the batch.
+</div>
+
+</body>
+</html>

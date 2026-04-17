@@ -94,6 +94,27 @@
         </div>
         <div class="chevron">›</div>
       </button>
+
+      <div class="tool-group-label" data-group="attributes">Server attributes</div>
+
+      <button class="tool-card"
+              data-group="attributes"
+              data-tool="manage-attributes"
+              data-url="src/ui/attribute-management/app.html"
+              data-api-key-required="true"
+              title="Requires a FortiMonitor v2 API key — configure in popup → Settings (⚙).">
+        <div class="tool-icon api">AT</div>
+        <div class="tool-meta">
+          <div class="tool-name">
+            Manage Server Attributes (Bulk)
+            <span class="badge beta">Beta</span>
+          </div>
+          <div class="tool-desc" data-default-desc="Bulk-set or remove attribute key/value pairs across many servers via the FortiMonitor v2 API.">
+            Bulk-set or remove attribute key/value pairs across many servers via the FortiMonitor v2 API.
+          </div>
+        </div>
+        <div class="chevron">›</div>
+      </button>
     </div>
 
     <div id="no-matches" class="empty-search" hidden>
@@ -137,7 +158,7 @@
   </div>
 
   <footer class="popup-footer">
-    <span id="version">v0.4.0</span>
+    <span id="version">v0.5.0</span>
     <a id="author-link" href="https://www.linkedin.com/in/gregorijenkins" target="_blank" rel="noopener">Built by Gregori Jenkins</a>
   </footer>
 </div>
