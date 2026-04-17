@@ -48,7 +48,7 @@ export function breadcrumbs(active) {
   );
 }
 
-export function titleBar(subtitle, { runningDot = false, toolName = 'Remove from Port Scope' } = {}) {
+export function titleBar(subtitle, { runningDot = false, toolName = 'Remove from Port Scope (Fabric)' } = {}) {
   return h('div', { class: 'title-bar' },
     h('h1', {},
       h('span', { class: 'icon' }, 'F'),

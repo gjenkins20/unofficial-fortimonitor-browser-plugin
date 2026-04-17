@@ -8,8 +8,8 @@ Clicking the toolbar icon opens a launcher popup; pick a tool from the list and 
 
 | Tool | Status | Notes |
 |---|---|---|
-| Remove from Port Scope | ✅ Shipped (v0.1) | Batch-remove operationally-down WAN interfaces from monitored port scope. Destructive — destroys agent resources and metric history per port removed. |
-| Add to Port Scope | 🚧 In development (FMN-40) | Inverse of Remove. Batch-add currently-unmonitored interfaces to port scope. Non-destructive. |
+| Remove from Port Scope (Fabric) | ✅ Shipped (v0.1) | Batch-remove operationally-down WAN interfaces from monitored port scope on Fabric-connected FortiGate instances. Destructive — destroys agent resources and metric history per port removed. |
+| Add to Port Scope (Fabric) | 🚧 In development (FMN-40) | Inverse of Remove. Batch-add currently-unmonitored interfaces to port scope on Fabric-connected FortiGate instances. Non-destructive. |
 
 ## Install (developer mode)
 
