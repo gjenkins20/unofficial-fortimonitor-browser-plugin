@@ -44,10 +44,17 @@ function applyToolGuards({ sessionOk, apiKeyOk }) {
     const desc = card.querySelector('.tool-desc');
     if (needsSession && !sessionOk) {
       desc.textContent = 'Sign in to FortiCloud to enable.';
+      card.title = 'Sign in to FortiCloud (https://fortimonitor.forticloud.com/) to enable this tool.';
     } else if (needsApiKey && !apiKeyOk) {
       desc.textContent = 'Set a FortiMonitor v2 API key in Settings (⚙) to enable.';
+      card.title = 'No API key configured. Click ⚙ in the popup header to paste your FortiMonitor v2 RW API key.';
+    } else if (needsApiKey) {
+      // Enabled but still benefits from a reminder of what auth surface it uses.
+      desc.textContent = desc.dataset.defaultDesc ?? desc.textContent;
+      card.title = 'Requires a FortiMonitor v2 API key — manage in popup → Settings (⚙).';
     } else {
       desc.textContent = desc.dataset.defaultDesc ?? desc.textContent;
+      card.title = '';
     }
   }
 }
