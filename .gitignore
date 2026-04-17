@@ -16,10 +16,35 @@ npm-debug.log*
 .env
 .env.local
 .env.*.local
+!.env.example
 *.pem
 *.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.der
 credentials.json
+auth.json
+cookies.txt
+
+# HAR / network capture files (may contain session tokens)
+*.har
+*.pcap
+captures/
 
 # Local Claude state and AI agent instructions — not for public distribution
 .claude/
 CLAUDE.md
+.mcp.json
+
+# Internal development files
+TODO.md
+agents/
+marketing/
+docs/project_plan.md
+docs/task_tracker.md
+docs/qa_review.md
+
+# OS
+Thumbs.db
