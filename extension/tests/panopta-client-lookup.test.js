@@ -44,6 +44,31 @@ test('parseServerListResponse handles empty list', () => {
   assert.deepEqual(parseServerListResponse({ server_list: [] }), []);
 });
 
+test('parseServerListResponse extracts id from url when top-level id is absent', () => {
+  // Real /v2/server shape (verified against a captured live response):
+  // items carry `url` with the id embedded in the path, and no top-level
+  // `id` or `resource_uri`. Regression for FMN-50 post-merge bug where
+  // UI rendered "undefined" as the server id.
+  const items = parseServerListResponse({
+    server_list: [
+      { name: 'FGVM01TM24006844', url: 'https://api2.panopta.com/v2/server/40234446' },
+      { name: 'edge-router', url: 'https://api2.panopta.com/v2/server/40234449/' }
+    ]
+  });
+  assert.equal(items.length, 2);
+  assert.equal(items[0].id, 40234446);
+  assert.equal(items[0].name, 'FGVM01TM24006844');
+  assert.equal(items[0].resourceUrl, 'https://api2.panopta.com/v2/server/40234446');
+  assert.equal(items[1].id, 40234449);
+});
+
+test('parseServerListResponse: id is null when neither id nor url is present', () => {
+  const items = parseServerListResponse({ server_list: [{ name: 'orphan' }] });
+  assert.equal(items[0].id, null);
+  assert.equal(items[0].name, 'orphan');
+  assert.equal(items[0].resourceUrl, null);
+});
+
 // ----- lookupServersByName ----------------------------
 
 test('lookupServersByName: server-side substring is filtered to exact match', async () => {
