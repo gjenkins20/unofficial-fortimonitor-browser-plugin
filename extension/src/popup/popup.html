@@ -133,7 +133,7 @@
         <div class="chevron">›</div>
       </button>
 
-      <div class="tool-group-label" data-group="ask-claude">AI assistant</div>
+      <div class="tool-group-label" data-group="ask-claude" data-experimental="ask-claude" hidden>AI assistant</div>
 
       <button class="tool-card"
               data-group="ask-claude"
@@ -141,6 +141,8 @@
               data-url="src/ui/ask-claude/app.html"
               data-api-key-required="true"
               data-claude-key-required="true"
+              data-experimental="ask-claude"
+              hidden
               title="Requires FortiMonitor v2 API key + Anthropic (Claude) API key — both configured in Settings (⚙).">
         <div class="tool-icon api">AC</div>
         <div class="tool-meta">
@@ -205,7 +207,7 @@
       </p>
     </div>
 
-    <div class="settings-section">
+    <div class="settings-section" data-experimental="ask-claude" hidden>
       <label class="settings-label" for="claude-key-input">Anthropic (Claude) API Key</label>
       <p class="settings-help">
         Required for the <strong>Ask Claude</strong> tool (Beta). Create a key at
@@ -220,6 +222,17 @@
         <button id="claude-key-test" class="btn">Test key</button>
       </div>
       <div id="claude-key-status" class="settings-status" hidden></div>
+    </div>
+
+    <div class="settings-section">
+      <label class="settings-label" for="ask-claude-toggle">Experimental tools</label>
+      <p class="settings-help">
+        Off by default. When on, the launcher and this settings panel expose the <strong>Ask Claude</strong> prototype — an in-plugin Claude chat that queries your FortiMonitor environment via a curated set of v2 API tools. Requires an Anthropic API key in addition to your FortiMonitor RW key. See <code>docs/mcp-chat-prototype.md</code>.
+      </p>
+      <label class="toggle-row">
+        <input id="ask-claude-toggle" type="checkbox">
+        <span>Show Ask Claude (prototype)</span>
+      </label>
     </div>
 
     <div class="settings-section">
