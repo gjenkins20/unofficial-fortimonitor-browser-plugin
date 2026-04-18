@@ -5,6 +5,7 @@ import { resolveFortimonitorOrigin, FEDERATION_ORIGIN } from '../lib/origin-reso
 const FORTICLOUD_URL = `${FEDERATION_ORIGIN}/`;
 const XSRF_COOKIE = 'XSRF-TOKEN';
 const API_KEY_STORAGE_KEY = 'panopta.apiKey';
+const CLAUDE_KEY_STORAGE_KEY = 'claude.apiKey';
 
 async function sessionActive() {
   try {
@@ -28,6 +29,15 @@ async function apiKeyConfigured() {
   }
 }
 
+async function claudeKeyConfigured() {
+  try {
+    const data = await chrome.storage.local.get(CLAUDE_KEY_STORAGE_KEY);
+    return Boolean(data?.[CLAUDE_KEY_STORAGE_KEY]);
+  } catch {
+    return false;
+  }
+}
+
 function setSessionState(ok) {
   const strip = document.getElementById('session-strip');
   const text = document.getElementById('session-text');
@@ -42,11 +52,15 @@ function setSessionState(ok) {
   link.textContent = ok ? 'Open console ↗' : 'Open login ↗';
 }
 
-function applyToolGuards({ sessionOk, apiKeyOk }) {
+function applyToolGuards({ sessionOk, apiKeyOk, claudeKeyOk }) {
   for (const card of document.querySelectorAll('.tool-card')) {
     const needsSession = card.dataset.sessionRequired === 'true';
     const needsApiKey = card.dataset.apiKeyRequired === 'true';
-    const blocked = (needsSession && !sessionOk) || (needsApiKey && !apiKeyOk);
+    const needsClaudeKey = card.dataset.claudeKeyRequired === 'true';
+    const blocked =
+      (needsSession && !sessionOk) ||
+      (needsApiKey && !apiKeyOk) ||
+      (needsClaudeKey && !claudeKeyOk);
     card.classList.toggle('disabled', blocked);
     const desc = card.querySelector('.tool-desc');
     if (needsSession && !sessionOk) {
@@ -55,10 +69,15 @@ function applyToolGuards({ sessionOk, apiKeyOk }) {
     } else if (needsApiKey && !apiKeyOk) {
       desc.textContent = 'Set a FortiMonitor v2 API key in Settings (⚙) to enable.';
       card.title = 'No API key configured. Click ⚙ in the popup header to paste your FortiMonitor v2 RW API key.';
-    } else if (needsApiKey) {
+    } else if (needsClaudeKey && !claudeKeyOk) {
+      desc.textContent = 'Set an Anthropic (Claude) API key in Settings (⚙) to enable.';
+      card.title = 'No Claude API key configured. Click ⚙ in the popup header to paste your Anthropic key.';
+    } else if (needsApiKey || needsClaudeKey) {
       // Enabled but still benefits from a reminder of what auth surface it uses.
       desc.textContent = desc.dataset.defaultDesc ?? desc.textContent;
-      card.title = 'Requires a FortiMonitor v2 API key — manage in popup → Settings (⚙).';
+      card.title = needsClaudeKey
+        ? 'Requires FortiMonitor v2 API key + Anthropic API key — manage in popup → Settings (⚙).'
+        : 'Requires a FortiMonitor v2 API key — manage in popup → Settings (⚙).';
     } else {
       desc.textContent = desc.dataset.defaultDesc ?? desc.textContent;
       card.title = '';
@@ -171,6 +190,68 @@ async function clearApiKey() {
   await loadApiKeyIntoInput();
 }
 
+function setClaudeStatus(kind, message) {
+  const el = document.getElementById('claude-key-status');
+  el.hidden = false;
+  el.className = `settings-status ${kind}`;
+  el.textContent = message;
+}
+
+function clearClaudeStatus() {
+  const el = document.getElementById('claude-key-status');
+  el.hidden = true;
+  el.textContent = '';
+}
+
+async function loadClaudeKeyIntoInput() {
+  const data = await chrome.storage.local.get(CLAUDE_KEY_STORAGE_KEY);
+  const key = data?.[CLAUDE_KEY_STORAGE_KEY];
+  const input = document.getElementById('claude-key-input');
+  if (key) {
+    input.value = '';
+    input.placeholder = `••••••••${key.slice(-4)} (saved — paste a new key to replace)`;
+  } else {
+    input.value = '';
+    input.placeholder = 'Paste Claude API key';
+  }
+}
+
+async function saveClaudeKey() {
+  const input = document.getElementById('claude-key-input');
+  const key = input.value.trim();
+  if (!key) {
+    setClaudeStatus('warn', 'Paste a key before saving.');
+    return;
+  }
+  await chrome.storage.local.set({ [CLAUDE_KEY_STORAGE_KEY]: key });
+  setClaudeStatus('ok', 'Claude API key saved.');
+  await loadClaudeKeyIntoInput();
+}
+
+async function clearClaudeKey() {
+  await chrome.storage.local.remove(CLAUDE_KEY_STORAGE_KEY);
+  setClaudeStatus('ok', 'Claude API key cleared.');
+  await loadClaudeKeyIntoInput();
+}
+
+async function testClaudeKey() {
+  setClaudeStatus('ok', 'Testing…');
+  try {
+    const result = await chrome.runtime.sendMessage({ type: 'chat:test-claude-key', payload: {} });
+    if (!result) {
+      setClaudeStatus('error', 'No response from service worker.');
+      return;
+    }
+    if (!result.ok) {
+      setClaudeStatus('error', `Failed: ${result.error || 'unknown error'}`);
+      return;
+    }
+    setClaudeStatus('ok', `Key works (HTTP ${result.result?.status ?? 200}).`);
+  } catch (err) {
+    setClaudeStatus('error', `Failed: ${err?.message ?? err}`);
+  }
+}
+
 async function testConnection() {
   setStatus('ok', 'Testing…');
   try {
@@ -192,9 +273,13 @@ async function testConnection() {
 // -------- Init --------
 
 async function refreshGuards() {
-  const [sessionOk, apiKeyOk] = await Promise.all([sessionActive(), apiKeyConfigured()]);
+  const [sessionOk, apiKeyOk, claudeKeyOk] = await Promise.all([
+    sessionActive(),
+    apiKeyConfigured(),
+    claudeKeyConfigured()
+  ]);
   setSessionState(sessionOk);
-  applyToolGuards({ sessionOk, apiKeyOk });
+  applyToolGuards({ sessionOk, apiKeyOk, claudeKeyOk });
 }
 
 function init() {
@@ -219,7 +304,9 @@ function init() {
 
   document.getElementById('settings-toggle').addEventListener('click', async () => {
     clearStatus();
+    clearClaudeStatus();
     await loadApiKeyIntoInput();
+    await loadClaudeKeyIntoInput();
     await loadDevModeIntoToggle();
     showSettings();
   });
@@ -227,6 +314,9 @@ function init() {
   document.getElementById('api-key-save').addEventListener('click', saveApiKey);
   document.getElementById('api-key-clear').addEventListener('click', clearApiKey);
   document.getElementById('api-key-test').addEventListener('click', testConnection);
+  document.getElementById('claude-key-save').addEventListener('click', saveClaudeKey);
+  document.getElementById('claude-key-clear').addEventListener('click', clearClaudeKey);
+  document.getElementById('claude-key-test').addEventListener('click', testClaudeKey);
 
   document.getElementById('dev-mode-toggle').addEventListener('change', async (e) => {
     await setDevModeEnabled(e.target.checked);

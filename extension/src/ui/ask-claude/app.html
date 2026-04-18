@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<!--
+  Unofficial FortiMonitor Toolkit — Ask Claude (prototype)
+  Built by Gregori Jenkins · https://www.linkedin.com/in/gregorijenkins
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Ask Claude · Unofficial FortiMonitor Toolkit</title>
+<meta name="description" content="In-plugin Claude chat with FortiMonitor tool use.">
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="tool-shell">
+  <header class="tool-header">
+    <a href="../../popup/popup.html" class="back-link">‹ Back</a>
+    <h1>Ask Claude <span class="badge beta">Beta · Prototype</span></h1>
+    <p class="tool-subtitle">
+      Natural-language Q&amp;A against your FortiMonitor environment, powered by Claude with
+      a curated set of v2 API tools.
+    </p>
+  </header>
+
+  <section id="setup-warning" class="alert warn" hidden>
+    <strong>Setup needed.</strong>
+    <span id="setup-warning-text"></span>
+    <a href="../../popup/popup.html" class="link">Open popup to configure ↗</a>
+  </section>
+
+  <section class="cost-warning alert info">
+    <strong>Cost warning.</strong> This tool calls the Anthropic API directly with <em>your</em> key.
+    There is no rate limit or budget cap on our side — cost exposure is on your account.
+    Keep conversations short and close this tab when you're done.
+  </section>
+
+  <section id="chat-pane" class="chat-pane">
+    <div id="messages" class="messages" aria-live="polite"></div>
+  </section>
+
+  <section class="composer">
+    <textarea id="composer-input"
+              rows="3"
+              placeholder="Ask about your environment — e.g., What outages are active? Tell me about server FGVM01TM24006844. How many fabric connections do we have?"></textarea>
+    <div class="composer-row">
+      <button id="send-btn" class="btn primary">Send</button>
+      <button id="abort-btn" class="btn" hidden>Stop</button>
+      <button id="reset-btn" class="btn">Clear chat</button>
+      <span id="status-text" class="muted"></span>
+    </div>
+  </section>
+
+  <footer class="tool-footer">
+    <span>Prototype — FMN-53. Tools: servers, outages, agent resources, fabric, templates, groups.</span>
+    <a href="https://www.linkedin.com/in/gregorijenkins" target="_blank" rel="noopener">Built by Gregori Jenkins</a>
+  </footer>
+</div>
+<script src="app.js" type="module"></script>
+</body>
+</html>

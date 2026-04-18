@@ -133,6 +133,28 @@
         <div class="chevron">›</div>
       </button>
 
+      <div class="tool-group-label" data-group="ask-claude">AI assistant</div>
+
+      <button class="tool-card"
+              data-group="ask-claude"
+              data-tool="ask-claude"
+              data-url="src/ui/ask-claude/app.html"
+              data-api-key-required="true"
+              data-claude-key-required="true"
+              title="Requires FortiMonitor v2 API key + Anthropic (Claude) API key — both configured in Settings (⚙).">
+        <div class="tool-icon api">AC</div>
+        <div class="tool-meta">
+          <div class="tool-name">
+            Ask Claude
+            <span class="badge beta">Beta · Prototype</span>
+          </div>
+          <div class="tool-desc" data-default-desc="Natural-language Q&amp;A against your FortiMonitor environment, powered by Claude with tool use. Uses your Anthropic API key.">
+            Natural-language Q&amp;A against your FortiMonitor environment, powered by Claude with tool use. Uses your Anthropic API key.
+          </div>
+        </div>
+        <div class="chevron">›</div>
+      </button>
+
       <div class="tool-group-label" data-group="templates">Server templates</div>
 
       <button class="tool-card"
@@ -184,6 +206,23 @@
     </div>
 
     <div class="settings-section">
+      <label class="settings-label" for="claude-key-input">Anthropic (Claude) API Key</label>
+      <p class="settings-help">
+        Required for the <strong>Ask Claude</strong> tool (Beta). Create a key at
+        <code>console.anthropic.com</code>. Stored locally in your browser via
+        <code>chrome.storage.local</code>; sent only to <code>api.anthropic.com</code>.
+        <strong>Cost warning:</strong> calls go directly to Anthropic with your key — no rate limit or budget cap is enforced by this extension.
+      </p>
+      <input id="claude-key-input" type="password" placeholder="Paste Claude API key" autocomplete="off" spellcheck="false">
+      <div class="settings-actions">
+        <button id="claude-key-save" class="btn primary">Save</button>
+        <button id="claude-key-clear" class="btn">Clear</button>
+        <button id="claude-key-test" class="btn">Test key</button>
+      </div>
+      <div id="claude-key-status" class="settings-status" hidden></div>
+    </div>
+
+    <div class="settings-section">
       <label class="settings-label" for="dev-mode-toggle">Developer mode</label>
       <p class="settings-help">
         Off by default. When on, scan-failure and API-error screens include diagnostic fields — HTTP status, final URL after redirects, content-type, and a short redacted response-body preview — plus a <strong>Check session</strong> button that probes FortiCloud and reports XSRF-cookie presence. Intended for troubleshooting installs where your browser session is not being recognized.
@@ -196,7 +235,7 @@
   </div>
 
   <footer class="popup-footer">
-    <span id="version">v0.6.0</span>
+    <span id="version">v0.7.0</span>
     <a id="author-link" href="https://www.linkedin.com/in/gregorijenkins" target="_blank" rel="noopener">Built by Gregori Jenkins</a>
   </footer>
 </div>
