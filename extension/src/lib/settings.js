@@ -4,6 +4,7 @@
 // chrome.storage.local so all extension pages see the same value.
 
 export const DEV_MODE_KEY = 'fm:devMode';
+export const ASK_CLAUDE_ENABLED_KEY = 'fm:askClaudeEnabled';
 
 /**
  * Read the developer-mode flag. Returns false on any storage error so
@@ -29,6 +30,32 @@ export async function isDevModeEnabled(storage = defaultStorage()) {
  */
 export async function setDevModeEnabled(enabled, storage = defaultStorage()) {
   await storage.set({ [DEV_MODE_KEY]: Boolean(enabled) });
+}
+
+/**
+ * Read the Ask-Claude-enabled flag. Returns false on any storage error so
+ * the prototype stays hidden by default — users only see it after
+ * explicitly opting in via the Settings toggle.
+ *
+ * @param {{ get: (key: string) => Promise<Record<string, any>> }} [storage]
+ */
+export async function isAskClaudeEnabled(storage = defaultStorage()) {
+  try {
+    const data = await storage.get(ASK_CLAUDE_ENABLED_KEY);
+    return Boolean(data?.[ASK_CLAUDE_ENABLED_KEY]);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Persist the Ask-Claude-enabled flag.
+ *
+ * @param {boolean} enabled
+ * @param {{ set: (obj: Record<string, any>) => Promise<void> }} [storage]
+ */
+export async function setAskClaudeEnabled(enabled, storage = defaultStorage()) {
+  await storage.set({ [ASK_CLAUDE_ENABLED_KEY]: Boolean(enabled) });
 }
 
 function defaultStorage() {

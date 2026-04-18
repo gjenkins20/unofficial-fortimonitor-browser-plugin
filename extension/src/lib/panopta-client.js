@@ -532,6 +532,68 @@ export class PanoptaClient {
     };
   }
 
+  // ---- Chat prototype read-only helpers (FMN-53) ------------------------
+  //
+  // Narrow slice of the v2 API surfaced to the in-plugin Claude chat.
+  // See docs/mcp-chat-prototype.md. All methods here are GET-only except
+  // acknowledgeOutage, which is gated behind a UI confirm in the chat.
+
+  async listServers({ limit = 50, offset = 0, name = null } = {}) {
+    const params = [`limit=${limit}`, `offset=${offset}`];
+    if (name) params.push(`name=${encodeURIComponent(name)}`);
+    const { body } = await this._request('GET', `/server?${params.join('&')}`);
+    return body;
+  }
+
+  async getServer(serverId) {
+    if (!serverId) throw new TypeError('getServer: serverId is required');
+    const { body } = await this._request('GET', `/server/${encodeURIComponent(serverId)}`);
+    return body;
+  }
+
+  async listOutages({ limit = 50, offset = 0, serverId = null, active = false } = {}) {
+    const params = [`limit=${limit}`, `offset=${offset}`];
+    if (serverId) params.push(`server_id=${encodeURIComponent(serverId)}`);
+    const path = active ? '/outage/active' : '/outage';
+    const { body } = await this._request('GET', `${path}?${params.join('&')}`);
+    return body;
+  }
+
+  async getOutage(outageId) {
+    if (!outageId) throw new TypeError('getOutage: outageId is required');
+    const { body } = await this._request('GET', `/outage/${encodeURIComponent(outageId)}`);
+    return body;
+  }
+
+  async listAgentResourcesForServer(serverId, { limit = 50, offset = 0 } = {}) {
+    if (!serverId) throw new TypeError('listAgentResourcesForServer: serverId is required');
+    const params = [`limit=${limit}`, `offset=${offset}`];
+    const { body } = await this._request(
+      'GET',
+      `/server/${encodeURIComponent(serverId)}/agent_resource?${params.join('&')}`
+    );
+    return body;
+  }
+
+  async listFabricConnections({ limit = 50, offset = 0 } = {}) {
+    const { body } = await this._request(
+      'GET',
+      `/fabric_connection?limit=${limit}&offset=${offset}`
+    );
+    return body;
+  }
+
+  async acknowledgeOutage(outageId, { message = null } = {}) {
+    if (!outageId) throw new TypeError('acknowledgeOutage: outageId is required');
+    const payload = message ? { message } : {};
+    const { res, body } = await this._request(
+      'POST',
+      `/outage/${encodeURIComponent(outageId)}/acknowledge`,
+      { body: payload }
+    );
+    return { status: res.status, body };
+  }
+
   /**
    * Detach a template from a server.
    *
