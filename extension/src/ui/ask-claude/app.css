@@ -1,0 +1,99 @@
+/* Unofficial FortiMonitor Toolkit — Ask Claude (FMN-53) */
+/* Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins> */
+
+.tool-shell {
+  max-width: 760px;
+  margin: 0 auto;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.tool-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  background: #fafbfc;
+}
+.tool-header .back-link {
+  display: inline-block;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-decoration: none;
+  margin-bottom: 8px;
+}
+.tool-header .back-link:hover { color: var(--text); }
+.tool-header h1 { margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+.tool-header .tool-subtitle {
+  margin: 6px 0 0; font-size: 12px; color: var(--text-muted);
+}
+
+.badge {
+  display: inline-block; padding: 1px 6px; border-radius: 4px;
+  font-size: 10px; font-weight: 600;
+  background: var(--warn-soft); color: var(--warn);
+  border: 1px solid #e6d594;
+}
+.badge.beta { background: var(--warn-soft); color: var(--warn); border-color: #e6d594; }
+
+.alert {
+  margin: 12px 20px; padding: 10px 12px; border-radius: 6px;
+  font-size: 12px; line-height: 1.45;
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline;
+}
+.alert.warn { background: var(--warn-soft); color: var(--warn); border: 1px solid #e6d594; }
+.alert.info { background: var(--running-soft); color: var(--running); border: 1px solid #b9cde6; }
+.alert .link { color: inherit; text-decoration: underline; }
+
+.chat-pane { padding: 8px 20px 0; min-height: 260px; }
+.messages {
+  display: flex; flex-direction: column; gap: 10px;
+  min-height: 120px; max-height: 520px; overflow-y: auto;
+  padding-bottom: 8px;
+}
+.msg {
+  padding: 10px 12px; border-radius: 8px;
+  max-width: 100%; white-space: pre-wrap; word-wrap: break-word;
+  font-size: 13px; line-height: 1.5;
+}
+.msg.user { background: var(--muted-soft); align-self: flex-end; border: 1px solid var(--border); max-width: 90%; }
+.msg.assistant { background: var(--card); border: 1px solid var(--border); }
+.msg.tool {
+  background: #f7f4ee; border: 1px solid #e6dccb; color: #5a4a30;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px; padding: 8px 10px;
+}
+.msg.tool .tool-name { font-weight: 600; color: #3d3420; }
+.msg.tool details summary { cursor: pointer; color: #7a6640; }
+.msg.tool pre { margin: 6px 0 0; white-space: pre-wrap; }
+.msg.error { background: var(--danger-soft); border: 1px solid #e8b9b6; color: var(--danger); }
+
+.composer {
+  border-top: 1px solid var(--border);
+  padding: 12px 20px; background: #fafbfc;
+}
+.composer textarea {
+  width: 100%; resize: vertical; min-height: 60px;
+  border: 1px solid var(--border-strong); border-radius: 6px;
+  padding: 8px 10px; font: inherit;
+}
+.composer-row {
+  margin-top: 8px; display: flex; align-items: center; gap: 8px;
+}
+.composer-row .muted { color: var(--text-muted); font-size: 12px; margin-left: auto; }
+
+.btn {
+  padding: 6px 14px; border: 1px solid var(--border-strong); border-radius: 6px;
+  background: white; cursor: pointer; font: inherit; color: var(--text);
+}
+.btn:hover { border-color: var(--text); }
+.btn.primary { background: var(--accent); color: white; border-color: var(--accent); }
+.btn.primary:hover { background: #bf4915; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.tool-footer {
+  padding: 10px 20px; border-top: 1px solid var(--border);
+  display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted);
+}
+.tool-footer a { color: var(--text-muted); text-decoration: none; }
+.tool-footer a:hover { color: var(--accent); }
