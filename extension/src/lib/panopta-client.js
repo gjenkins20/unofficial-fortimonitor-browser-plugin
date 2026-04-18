@@ -114,9 +114,16 @@ export function parseListResponse(json, baseUrl = PANOPTA_BASE) {
 
 /**
  * Normalize a /v2/server list response. Differs from parseListResponse
- * because the server endpoint wraps results in `server_list` rather than
- * `objects`. Confirmed live 2026-04-17.
+ * in two ways:
+ *   1. Wrapper is `server_list`, not `objects`.
+ *   2. Items do not expose `id` or `resource_uri` directly — the numeric
+ *      server id is only reachable by parsing the trailing segment of
+ *      the `url` field (e.g. ".../v2/server/40234446"). We still honor
+ *      `o.id` / `o.resource_uri` defensively in case a future API build
+ *      adds them.
  */
+const SERVER_URL_ID_RE = /\/server\/(\d+)\/?$/;
+
 export function parseServerListResponse(json, baseUrl = PANOPTA_BASE) {
   if (!json || typeof json !== 'object' || !Array.isArray(json.server_list)) {
     throw new PanoptaError('Malformed /server list response: missing server_list array', {
@@ -125,11 +132,24 @@ export function parseServerListResponse(json, baseUrl = PANOPTA_BASE) {
     });
   }
   const root = baseUrl.replace(/\/v2$/, '');
-  return json.server_list.map((o) => ({
-    id: o.id,
-    name: o.name ?? `#${o.id}`,
-    resourceUrl: o.resource_uri ? `${root}${o.resource_uri}` : null
-  }));
+  return json.server_list.map((o) => {
+    let id = o.id ?? null;
+    if (id == null && typeof o.url === 'string') {
+      const m = o.url.match(SERVER_URL_ID_RE);
+      if (m) id = Number(m[1]);
+    }
+    let resourceUrl = null;
+    if (typeof o.url === 'string') {
+      resourceUrl = o.url;
+    } else if (typeof o.resource_uri === 'string') {
+      resourceUrl = `${root}${o.resource_uri}`;
+    }
+    return {
+      id,
+      name: o.name ?? (id != null ? `#${id}` : '(unnamed)'),
+      resourceUrl
+    };
+  });
 }
 
 export class PanoptaClient {
