@@ -1,5 +1,5 @@
 // Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-import { isDevModeEnabled, setDevModeEnabled } from '../lib/settings.js';
+import { isDevModeEnabled, setDevModeEnabled, isAskClaudeEnabled, setAskClaudeEnabled } from '../lib/settings.js';
 import { resolveFortimonitorOrigin, FEDERATION_ORIGIN } from '../lib/origin-resolver.js';
 
 const FORTICLOUD_URL = `${FEDERATION_ORIGIN}/`;
@@ -158,6 +158,18 @@ async function loadDevModeIntoToggle() {
   toggle.checked = await isDevModeEnabled();
 }
 
+async function loadAskClaudeIntoToggle() {
+  const toggle = document.getElementById('ask-claude-toggle');
+  toggle.checked = await isAskClaudeEnabled();
+}
+
+async function applyExperimentalVisibility() {
+  const askClaudeOn = await isAskClaudeEnabled();
+  for (const el of document.querySelectorAll('[data-experimental="ask-claude"]')) {
+    el.hidden = !askClaudeOn;
+  }
+}
+
 async function loadApiKeyIntoInput() {
   const data = await chrome.storage.local.get(API_KEY_STORAGE_KEY);
   const key = data?.[API_KEY_STORAGE_KEY];
@@ -283,6 +295,7 @@ async function refreshGuards() {
 }
 
 function init() {
+  applyExperimentalVisibility();
   refreshGuards();
 
   document.getElementById('session-link').addEventListener('click', (e) => {
@@ -308,6 +321,7 @@ function init() {
     await loadApiKeyIntoInput();
     await loadClaudeKeyIntoInput();
     await loadDevModeIntoToggle();
+    await loadAskClaudeIntoToggle();
     showSettings();
   });
   document.getElementById('settings-back').addEventListener('click', hideSettings);
@@ -320,6 +334,12 @@ function init() {
 
   document.getElementById('dev-mode-toggle').addEventListener('change', async (e) => {
     await setDevModeEnabled(e.target.checked);
+  });
+
+  document.getElementById('ask-claude-toggle').addEventListener('change', async (e) => {
+    await setAskClaudeEnabled(e.target.checked);
+    await applyExperimentalVisibility();
+    await refreshGuards();
   });
 
   const authorLink = document.getElementById('author-link');

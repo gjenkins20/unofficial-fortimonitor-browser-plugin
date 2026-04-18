@@ -32,6 +32,16 @@ deterministic tools already cover the ground they need.
 definitions, SSE streaming, ~10-12 read-only FortiMonitor tools plus a
 single gated write (`acknowledge_outage`).
 
+## Visibility
+
+**Hidden by default.** The Ask Claude launcher card and the Anthropic API
+key settings section are both gated behind a new setting
+(`fm:askClaudeEnabled`, default `false`). Users opt in via the
+**Experimental tools** toggle in popup → ⚙ Settings before the card
+appears. This lets the prototype ship on `main` without exposing an
+untested feature to normal users; e2e test can happen at the operator's
+pace.
+
 **Out:** knowledge layer (RAG over Panopta docs), the other ~230 MCP tools,
 bulk write workflows, multi-session history, Chrome Web Store distribution,
 any cost guardrails beyond a warning.
