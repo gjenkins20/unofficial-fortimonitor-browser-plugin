@@ -52,10 +52,9 @@ export function render({ container, store, navigate }) {
       h('div', {}, 'No groups have staged removals. Return to review to mark at least one port.')
     ));
   }
-  let groupNumber = 0;
-  for (const g of groups) {
+  for (const [idx, g] of groups.entries()) {
     const dec = store.decisions.get(g.fingerprint);
-    groupNumber++;
+    const groupNumber = idx + 1;
     const fpShort = g.fingerprint ? `${g.fingerprint.slice(0, 4)}…${g.fingerprint.slice(-4)}` : '—';
     const isSkipped = !dec || dec.skipped || !dec.removePortNames?.length;
     const removed = dec?.removePortNames ?? [];
