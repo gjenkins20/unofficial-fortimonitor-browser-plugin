@@ -5,10 +5,9 @@
 //   Section 1 — Group Summary (1 row per group, sorted by descending device_count)
 //   Section 2 — Per-Group Detail (per group: port table + full device table)
 //
-// Used by the Remove and Add review steps via the "Download audit (CSV)"
-// button. All data is preserved — no truncation of device lists or port
-// fields; the operator can load this into Excel, split by section, and
-// reshape freely.
+// Columns `proposed_action` (programmatic, derived from port admin_status) and
+// `operator_decision` (what the operator chose in the Review UI) are distinct:
+// the proposal reflects interface state; the decision reflects user intent.
 
 const GENERATOR = Object.freeze({
   tool: 'Unofficial FortiMonitor Toolkit',
@@ -43,24 +42,27 @@ export function buildAuditCsv({ groups, decisions, nameById = {}, toolMode, batc
   lines.push(`# Author: ${GENERATOR.author} — ${GENERATOR.url}`);
   if (batchId) lines.push(`# Batch: ${batchId}`);
   lines.push(`# ${totalGroups} group${totalGroups === 1 ? '' : 's'}, sorted by descending device_count`);
+  lines.push('# proposed_action derived from admin_status (programmatic); operator_decision reflects Review UI choices');
   lines.push('#');
 
   // --- Section 1: Group Summary ---
   lines.push('# Section 1: Group Summary');
   lines.push('');
-  lines.push(csvRow(['group_number', 'group_fingerprint', 'device_count', 'port_count_per_device', 'proposed_action', 'ports_marked']));
+  lines.push(csvRow(['group_number', 'group_fingerprint', 'device_count', 'port_count_per_device', 'proposed_action', 'operator_decision', 'ports_marked']));
   for (const { group, originalIndex } of indexed) {
     const decision = decisions?.get(group.fingerprint);
     const ports = group.portsData?.ports ?? [];
     const deviceCount = group.devices.length;
     const markedPorts = decisionMarkedPorts(decision, toolMode);
-    const action = decisionActionSummary(decision, markedPorts, verb);
+    const proposal = groupProposalSummary(ports, toolMode);
+    const operator = operatorDecisionSummary(decision, markedPorts, verb);
     lines.push(csvRow([
       String(originalIndex),
       group.fingerprint ?? '',
       String(deviceCount),
       String(ports.length),
-      action,
+      proposal,
+      operator,
       markedPorts.join('|')
     ]));
   }
@@ -75,27 +77,30 @@ export function buildAuditCsv({ groups, decisions, nameById = {}, toolMode, batc
     const ports = group.portsData?.ports ?? [];
     const deviceCount = group.devices.length;
     const markedPorts = decisionMarkedPorts(decision, toolMode);
-    const action = decisionActionSummary(decision, markedPorts, verb);
+    const proposal = groupProposalSummary(ports, toolMode);
+    const operator = operatorDecisionSummary(decision, markedPorts, verb);
     const selected = new Set(markedPorts);
 
-    lines.push(`# Group ${originalIndex} of ${totalGroups} — fingerprint=${group.fingerprint ?? ''} — ${deviceCount} device${deviceCount === 1 ? '' : 's'} — action: ${action}`);
+    lines.push(`# Group ${originalIndex} of ${totalGroups} — fingerprint=${group.fingerprint ?? ''} — ${deviceCount} device${deviceCount === 1 ? '' : 's'} — proposed: ${proposal} — operator: ${operator}`);
     lines.push('');
 
     // Ports table
     lines.push(`# Ports (${ports.length})`);
-    lines.push(csvRow(['port_name', 'admin_status', 'oper_status', 'is_active', 'proposed_action']));
+    lines.push(csvRow(['port_name', 'admin_status', 'oper_status', 'is_active', 'proposed_action', 'operator_decision']));
     for (const port of ports) {
-      let portAction;
-      if (!decision) portAction = 'undecided';
-      else if (decision.skipped) portAction = 'skipped';
-      else if (selected.has(port.name)) portAction = verb;
-      else portAction = 'keep';
+      const portProposed = portProposal(port, toolMode);
+      let portOperator;
+      if (!decision) portOperator = 'undecided';
+      else if (decision.skipped) portOperator = 'skipped';
+      else if (selected.has(port.name)) portOperator = verb;
+      else portOperator = 'keep';
       lines.push(csvRow([
         port.name ?? '',
         port.admin_status ?? '',
         port.oper_status ?? '',
         port.isActive ? 'yes' : 'no',
-        portAction
+        portProposed,
+        portOperator
       ]));
     }
 
@@ -127,11 +132,45 @@ function decisionMarkedPorts(decision, toolMode) {
     : (decision.removePortNames ?? []);
 }
 
-function decisionActionSummary(decision, markedPorts, verb) {
+function operatorDecisionSummary(decision, markedPorts, verb) {
   if (!decision) return 'undecided';
   if (decision.skipped) return 'skipped';
   if (markedPorts.length === 0) return 'undecided';
   return `${verb}: ${markedPorts.join(', ')}`;
+}
+
+// Programmatic proposal for a single port, derived from admin_status only.
+// Rationale: admin_status is operator-controlled and stable; oper_status is
+// a transient link-state signal and is not a reliable basis for a proposal.
+function portProposal(port, toolMode) {
+  const admin = String(port?.admin_status ?? '').toLowerCase();
+  if (toolMode === 'add') {
+    if (admin === 'up') return 'add';
+    if (admin === 'down') return 'skip';
+    return 'unknown';
+  }
+  // remove mode
+  if (admin === 'down') return 'remove';
+  if (admin === 'up') return 'keep';
+  return 'unknown';
+}
+
+function groupProposalSummary(ports, toolMode) {
+  const verb = toolMode === 'add' ? 'add' : 'remove';
+  const fallbackAll = toolMode === 'add' ? 'skip-all' : 'keep-all';
+  if (!ports || ports.length === 0) return fallbackAll;
+
+  const candidates = [];
+  let knownCount = 0;
+  for (const port of ports) {
+    const proposal = portProposal(port, toolMode);
+    if (proposal === 'unknown') continue;
+    knownCount += 1;
+    if (proposal === verb) candidates.push(port.name ?? '');
+  }
+  if (knownCount === 0) return 'unknown';
+  if (candidates.length === 0) return fallbackAll;
+  return `${verb}: ${candidates.join(', ')}`;
 }
 
 function csvRow(cells) {

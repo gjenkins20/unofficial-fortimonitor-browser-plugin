@@ -35,13 +35,13 @@ test('audit CSV summary section has one row per group with the expected columns'
   const decisions = new Map([['fpA', { skipped: false, removePortNames: ['wan2'] }]]);
   const csv = buildAuditCsv({ groups, decisions, nameById: {}, toolMode: 'remove' });
   // Summary header
-  assert.match(csv, /^group_number,group_fingerprint,device_count,port_count_per_device,proposed_action,ports_marked$/m);
-  // Summary rows — no quoting needed for "remove: wan2" (no comma in single-port action)
-  assert.match(csv, /^1,fpA,2,2,remove: wan2,wan2$/m);
-  assert.match(csv, /^2,fpB,1,1,undecided,$/m);
+  assert.match(csv, /^group_number,group_fingerprint,device_count,port_count_per_device,proposed_action,operator_decision,ports_marked$/m);
+  // Summary rows — all admin_status=up so proposal is keep-all; operator_decision carries the user's choice
+  assert.match(csv, /^1,fpA,2,2,keep-all,remove: wan2,wan2$/m);
+  assert.match(csv, /^2,fpB,1,1,keep-all,undecided,$/m);
 });
 
-test('proposed_action with multiple marked ports gets CSV-quoted because of the embedded comma', () => {
+test('operator_decision with multiple marked ports gets CSV-quoted because of the embedded comma', () => {
   const groups = [sampleGroup('fp1', [1], [
     { name: 'wan1', admin_status: 'up', oper_status: 'up', isActive: true },
     { name: 'wan2', admin_status: 'up', oper_status: 'up', isActive: true },
@@ -49,7 +49,41 @@ test('proposed_action with multiple marked ports gets CSV-quoted because of the 
   ])];
   const decisions = new Map([['fp1', { skipped: false, removePortNames: ['wan1', 'wan2'] }]]);
   const csv = buildAuditCsv({ groups, decisions, nameById: {}, toolMode: 'remove' });
-  assert.match(csv, /^1,fp1,1,3,"remove: wan1, wan2",wan1\|wan2$/m);
+  assert.match(csv, /^1,fp1,1,3,keep-all,"remove: wan1, wan2",wan1\|wan2$/m);
+});
+
+test('group proposed_action lists ports with admin_status=down (quoted when multi-port)', () => {
+  const groups = [sampleGroup('fp1', [1], [
+    { name: 'wan1', admin_status: 'down', oper_status: 'down', isActive: true },
+    { name: 'wan2', admin_status: 'down', oper_status: 'up', isActive: true },
+    { name: 'wan3', admin_status: 'up', oper_status: 'up', isActive: true }
+  ])];
+  const csv = buildAuditCsv({ groups, decisions: new Map(), nameById: {}, toolMode: 'remove' });
+  assert.match(csv, /^1,fp1,1,3,"remove: wan1, wan2",undecided,$/m);
+});
+
+test('group proposed_action is "unknown" when every port has unknown admin_status', () => {
+  const groups = [sampleGroup('fp1', [1], [
+    { name: 'wan1', admin_status: 'Unknown', oper_status: 'Unknown', isActive: true },
+    { name: 'wan2', admin_status: '', oper_status: '', isActive: true }
+  ])];
+  const csv = buildAuditCsv({ groups, decisions: new Map(), nameById: {}, toolMode: 'remove' });
+  assert.match(csv, /^1,fp1,1,2,unknown,undecided,$/m);
+});
+
+test('add mode group proposed_action is "add: ..." for admin-up ports and "skip-all" when none qualify', () => {
+  const groups = [
+    sampleGroup('fp-candidates', [1], [
+      { name: 'wan1', admin_status: 'up', oper_status: 'down', isActive: true },
+      { name: 'wan2', admin_status: 'down', oper_status: 'down', isActive: true }
+    ]),
+    sampleGroup('fp-none', [2], [
+      { name: 'wan3', admin_status: 'down', oper_status: 'down', isActive: true }
+    ])
+  ];
+  const csv = buildAuditCsv({ groups, decisions: new Map(), nameById: {}, toolMode: 'add' });
+  assert.match(csv, /^1,fp-candidates,1,2,add: wan1,undecided,$/m);
+  assert.match(csv, /^2,fp-none,1,1,skip-all,undecided,$/m);
 });
 
 // --- sort order --------------------------------------------------
@@ -79,7 +113,7 @@ test('groups are sorted by descending device_count in both sections, preserving 
 
 // --- per-port proposed_action --------------------------------------
 
-test('per-port proposed_action reflects the decision: remove/add/keep/skipped/undecided', () => {
+test('per-port operator_decision reflects the decision: remove/add/keep/skipped/undecided', () => {
   const groups = [
     sampleGroup('fp-remove', [1], [
       { name: 'wan2', admin_status: 'up', oper_status: 'down', isActive: true },
@@ -100,14 +134,51 @@ test('per-port proposed_action reflects the decision: remove/add/keep/skipped/un
     ['fp-skipped', { skipped: true, removePortNames: [] }]
   ]);
   const csvRemove = buildAuditCsv({ groups: [groups[0], groups[2], groups[3]], decisions: removeDecisions, nameById: {}, toolMode: 'remove' });
-  assert.match(csvRemove, /^wan2,up,down,yes,remove$/m);
-  assert.match(csvRemove, /^port1,up,up,yes,keep$/m);
-  assert.match(csvRemove, /^wan2,up,up,yes,skipped$/m);
-  assert.match(csvRemove, /^wan2,up,up,yes,undecided$/m);
+  // Columns: port_name,admin_status,oper_status,is_active,proposed_action,operator_decision
+  // admin_status=up in remove mode → proposed=keep for every port in this test
+  assert.match(csvRemove, /^wan2,up,down,yes,keep,remove$/m);
+  assert.match(csvRemove, /^port1,up,up,yes,keep,keep$/m);
+  assert.match(csvRemove, /^wan2,up,up,yes,keep,skipped$/m);
+  assert.match(csvRemove, /^wan2,up,up,yes,keep,undecided$/m);
 
   const addDecisions = new Map([['fp-add', { skipped: false, addPortNames: ['wan2'] }]]);
   const csvAdd = buildAuditCsv({ groups: [groups[1]], decisions: addDecisions, nameById: {}, toolMode: 'add' });
-  assert.match(csvAdd, /^wan2,up,down,no,add$/m);
+  // admin_status=up in add mode → proposed=add
+  assert.match(csvAdd, /^wan2,up,down,no,add,add$/m);
+});
+
+test('per-port proposed_action is derived from admin_status (remove mode)', () => {
+  const groups = [sampleGroup('fp1', [1], [
+    { name: 'a', admin_status: 'down', oper_status: 'down', isActive: true },
+    { name: 'b', admin_status: 'up', oper_status: 'down', isActive: true },
+    { name: 'c', admin_status: 'Unknown', oper_status: 'Unknown', isActive: true }
+  ])];
+  const csv = buildAuditCsv({ groups, decisions: new Map(), nameById: {}, toolMode: 'remove' });
+  assert.match(csv, /^a,down,down,yes,remove,undecided$/m);
+  assert.match(csv, /^b,up,down,yes,keep,undecided$/m);
+  assert.match(csv, /^c,Unknown,Unknown,yes,unknown,undecided$/m);
+});
+
+test('per-port proposed_action is derived from admin_status (add mode)', () => {
+  const groups = [sampleGroup('fp1', [1], [
+    { name: 'a', admin_status: 'up', oper_status: 'down', isActive: true },
+    { name: 'b', admin_status: 'down', oper_status: 'down', isActive: true },
+    { name: 'c', admin_status: '', oper_status: '', isActive: true }
+  ])];
+  const csv = buildAuditCsv({ groups, decisions: new Map(), nameById: {}, toolMode: 'add' });
+  assert.match(csv, /^a,up,down,yes,add,undecided$/m);
+  assert.match(csv, /^b,down,down,yes,skip,undecided$/m);
+  assert.match(csv, /^c,,,yes,unknown,undecided$/m);
+});
+
+test('proposed_action ignores admin_status case (UP/DOWN match lowercase up/down)', () => {
+  const groups = [sampleGroup('fp1', [1], [
+    { name: 'a', admin_status: 'UP', oper_status: 'up', isActive: true },
+    { name: 'b', admin_status: 'Down', oper_status: 'down', isActive: true }
+  ])];
+  const csv = buildAuditCsv({ groups, decisions: new Map(), nameById: {}, toolMode: 'remove' });
+  assert.match(csv, /^a,UP,up,yes,keep,undecided$/m);
+  assert.match(csv, /^b,Down,down,yes,remove,undecided$/m);
 });
 
 // --- is_active rendering ------------------------------------------
@@ -118,8 +189,8 @@ test('is_active renders as yes/no for truthy/falsy values', () => {
     { name: 'b', admin_status: 'up', oper_status: 'up', isActive: false }
   ])];
   const csv = buildAuditCsv({ groups, decisions: new Map(), nameById: {}, toolMode: 'remove' });
-  assert.match(csv, /^a,up,up,yes,undecided$/m);
-  assert.match(csv, /^b,up,up,no,undecided$/m);
+  assert.match(csv, /^a,up,up,yes,keep,undecided$/m);
+  assert.match(csv, /^b,up,up,no,keep,undecided$/m);
 });
 
 // --- device list -------------------------------------------------
@@ -150,7 +221,8 @@ test('admin_status and oper_status are preserved verbatim (including "Unknown")'
     { name: 'wan2', admin_status: 'Unknown', oper_status: 'Unknown', isActive: true }
   ])];
   const csv = buildAuditCsv({ groups, decisions: new Map(), nameById: {}, toolMode: 'remove' });
-  assert.match(csv, /^wan2,Unknown,Unknown,yes,undecided$/m);
+  // Unknown admin_status → proposed_action=unknown; no decision → operator_decision=undecided
+  assert.match(csv, /^wan2,Unknown,Unknown,yes,unknown,undecided$/m);
 });
 
 test('ports_marked summary field is empty for skipped/undecided groups', () => {
@@ -160,8 +232,9 @@ test('ports_marked summary field is empty for skipped/undecided groups', () => {
   ];
   const decisions = new Map([['fp-skipped', { skipped: true, removePortNames: [] }]]);
   const csv = buildAuditCsv({ groups, decisions, nameById: {}, toolMode: 'remove' });
-  assert.match(csv, /^1,fp-skipped,1,1,skipped,$/m);
-  assert.match(csv, /^2,fp-undecided,1,1,undecided,$/m);
+  // admin_status=up → proposed_action=keep-all; operator_decision carries skipped/undecided
+  assert.match(csv, /^1,fp-skipped,1,1,keep-all,skipped,$/m);
+  assert.match(csv, /^2,fp-undecided,1,1,keep-all,undecided,$/m);
 });
 
 test('empty groups list produces a valid CSV with both section markers', () => {
