@@ -1,7 +1,8 @@
 // Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Search Servers — Step 1 (Start).
-// Operator enters a search term (e.g., "FGVMA6"). "Run search" pages
-// through /server with live progress ("scanned N of M, K matches"), then
+// Operator picks an attribute (e.g., "Model") from the tenant's
+// /server_attribute_type catalog, enters a value (e.g., "FGT60F"), and
+// fires the search. Pages through /server with live progress, then
 // transitions to /results.
 
 import { h, titleBar } from '../../../lib/dom.js';
@@ -31,41 +32,62 @@ export function render({ container, store, navigate, events }) {
 
   frame.appendChild(h('div', { class: 'step-header' },
     searchBreadcrumbs('start'),
-    h('h2', {}, 'Free-text search across all servers'),
-    h('p', {}, 'Enter a term (e.g., "FGVMA6" or a FQDN fragment). Matches against server name, FQDN, additional FQDNs, device type, sub-type, tags, and every attribute value. Produces a report of server IDs, names, and FQDNs.')
+    h('h2', {}, 'Filter servers by attribute'),
+    h('p', {}, 'Example: find every device with Model = FGT60F. Pick the attribute name from your tenant\'s catalog, then enter the value you want to match.')
   ));
 
   const body = h('div', { class: 'body-section' });
   frame.appendChild(body);
 
-  body.appendChild(h('h3', { class: 'subhead' }, 'Search term'));
+  // ---- Attribute name dropdown ----
+  body.appendChild(h('h3', { class: 'subhead' }, 'Attribute'));
 
-  const termInput = h('input', {
+  const attrSelect = h('select', { class: 'paste-area', style: 'min-height:0;height:auto;padding:0.6rem 0.8rem;' });
+  attrSelect.appendChild(h('option', { value: '' }, 'Loading attribute types…'));
+  attrSelect.disabled = true;
+  body.appendChild(attrSelect);
+
+  const attrHint = h('div', { class: 'muted', style: 'font-size:0.85rem;margin-top:0.25rem;' }, '');
+  body.appendChild(attrHint);
+
+  // ---- Value ----
+  body.appendChild(h('h3', { class: 'subhead', style: 'margin-top:1rem;' }, 'Value'));
+
+  const valueInput = h('input', {
     type: 'text',
     class: 'paste-area',
-    placeholder: 'FGVMA6',
+    placeholder: 'FGT60F',
     style: 'min-height:0;height:auto;padding:0.6rem 0.8rem;font-family:inherit;'
   });
-  termInput.value = store.term ?? '';
-  body.appendChild(termInput);
+  valueInput.value = store.value ?? '';
+  body.appendChild(valueInput);
+
+  // ---- Match options ----
+  const exactToggle = h('input', { type: 'checkbox' });
+  exactToggle.checked = store.exactMatch !== false;
+  const exactRow = h('label', { class: 'toggle-row', style: 'display:flex;gap:0.5rem;align-items:center;margin:0.75rem 0 0.25rem;' },
+    exactToggle,
+    h('span', {}, 'Exact match (off = substring / contains)')
+  );
+  body.appendChild(exactRow);
 
   const caseToggle = h('input', { type: 'checkbox' });
   caseToggle.checked = store.caseInsensitive !== false;
-  const caseRow = h('label', { class: 'toggle-row', style: 'display:flex;gap:0.5rem;align-items:center;margin:0.75rem 0;' },
+  const caseRow = h('label', { class: 'toggle-row', style: 'display:flex;gap:0.5rem;align-items:center;margin:0 0 0.75rem;' },
     caseToggle,
-    h('span', {}, 'Case-insensitive match')
+    h('span', {}, 'Case-insensitive')
   );
   body.appendChild(caseRow);
 
   body.appendChild(h('div', { class: 'format-hint', html:
-    '<strong>Where we look:</strong> <code>name</code>, <code>fqdn</code>, <code>additional_fqdns</code>, <code>device_type</code>, <code>device_sub_type</code>, <code>tags</code>, and every <code>attribute.value</code>. First matching field wins (reported so you can see <em>why</em> a server hit).'
+    '<strong>How this works:</strong> the tool pages your full <code>/server</code> list and keeps only servers whose <code>attributes[]</code> array contains an entry whose <code>name</code> (or <code>textkey</code>) equals the selected attribute <em>and</em> whose <code>value</code> matches what you enter. Other fields (name, FQDN, tags) are ignored.'
   }));
 
-  // Live progress
+  // Live progress label
   const progressBox = h('div', { class: 'progress-list', hidden: true });
   body.appendChild(progressBox);
 
-  const runBtn = h('button', { class: 'btn btn-primary', disabled: !termInput.value.trim() }, 'Run search');
+  const runBtn = h('button', { class: 'btn btn-primary', disabled: true }, 'Run search');
   const actionBar = h('div', { class: 'action-bar' },
     h('div', { class: 'left' }, h('span', { class: 'execute-state muted' }, '')),
     h('div', { class: 'right' }, runBtn)
@@ -75,9 +97,16 @@ export function render({ container, store, navigate, events }) {
 
   const stateLabel = actionBar.querySelector('.execute-state');
 
-  termInput.addEventListener('input', () => {
-    runBtn.disabled = !termInput.value.trim();
+  function refreshRunDisabled() {
+    runBtn.disabled = !attrSelect.value || !valueInput.value.trim() || attrSelect.disabled;
+  }
+
+  attrSelect.addEventListener('change', () => {
+    const opt = attrSelect.selectedOptions?.[0];
+    attrHint.textContent = opt?.dataset?.textkey ? `textkey: ${opt.dataset.textkey}` : '';
+    refreshRunDisabled();
   });
+  valueInput.addEventListener('input', refreshRunDisabled);
 
   // Subscribe to per-page progress events from the service worker.
   const unsubscribe = events.on((event, payload) => {
@@ -87,26 +116,62 @@ export function render({ container, store, navigate, events }) {
     stateLabel.className = 'execute-state';
   });
 
+  // Populate the attribute dropdown.
+  (async () => {
+    try {
+      const types = await call('search:list-attribute-types', {});
+      attrSelect.innerHTML = '';
+      attrSelect.appendChild(h('option', { value: '' }, '— pick an attribute —'));
+      for (const t of types) {
+        const opt = h('option', {
+          value: t.name,
+          'data-textkey': t.textkey ?? ''
+        }, `${t.name}${t.textkey && t.textkey !== t.name ? ` (${t.textkey})` : ''}`);
+        attrSelect.appendChild(opt);
+      }
+      attrSelect.disabled = false;
+      // Restore prior selection if the user came back from /results.
+      if (store.attributeName) {
+        attrSelect.value = store.attributeName;
+        const opt = attrSelect.selectedOptions?.[0];
+        attrHint.textContent = opt?.dataset?.textkey ? `textkey: ${opt.dataset.textkey}` : '';
+      }
+      refreshRunDisabled();
+    } catch (err) {
+      attrSelect.innerHTML = '';
+      attrSelect.appendChild(h('option', { value: '' }, '(failed to load)'));
+      stateLabel.textContent = `Could not load attribute types: ${err?.message ?? err}`;
+      stateLabel.className = 'execute-state error';
+    }
+  })();
+
   runBtn.addEventListener('click', async () => {
-    const term = termInput.value.trim();
-    if (!term) return;
-    store.term = term;
+    const attributeName = attrSelect.value;
+    const value = valueInput.value.trim();
+    if (!attributeName || !value) return;
+    store.attributeName = attributeName;
+    store.value = value;
+    store.exactMatch = exactToggle.checked;
     store.caseInsensitive = caseToggle.checked;
 
     runBtn.disabled = true;
-    termInput.disabled = true;
+    attrSelect.disabled = true;
+    valueInput.disabled = true;
+    exactToggle.disabled = true;
     caseToggle.disabled = true;
     progressBox.hidden = false;
     progressBox.innerHTML = '';
     progressBox.appendChild(h('div', { class: 'progress-row' },
-      h('span', { class: 'serial' }, `Searching for "${term}"…`)
+      h('span', { class: 'serial' }, `Searching for ${attributeName} ${exactToggle.checked ? '=' : '~'} "${value}"…`)
     ));
     stateLabel.textContent = 'Starting…';
     stateLabel.className = 'execute-state';
 
     try {
       const result = await call('search:servers', {
-        term,
+        attributeName,
+        value,
+        exactMatch: exactToggle.checked,
         caseInsensitive: caseToggle.checked
       });
       store.runResult = result;
@@ -116,7 +181,9 @@ export function render({ container, store, navigate, events }) {
       stateLabel.textContent = `Error: ${err?.message ?? err}`;
       stateLabel.className = 'execute-state error';
       runBtn.disabled = false;
-      termInput.disabled = false;
+      attrSelect.disabled = false;
+      valueInput.disabled = false;
+      exactToggle.disabled = false;
       caseToggle.disabled = false;
     }
   });

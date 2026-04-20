@@ -9,7 +9,9 @@ import { onEvent } from '../../lib/messaging.js';
 document.documentElement.dataset.toolMode = 'server-search';
 
 const store = {
-  term: '',
+  attributeName: '',
+  value: '',
+  exactMatch: true,
   caseInsensitive: true,
   runResult: null
 };
