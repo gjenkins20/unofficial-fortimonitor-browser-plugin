@@ -150,6 +150,13 @@ export function render({ container, store, navigate, events }) {
     try {
       const result = await call('scan-devices', { serverIds: store.serverIds });
       progress.setPhase('grouping');
+      // Merge resolved names into nameById. User-supplied names (from
+      // the input CSV's second column) win over FortiMonitor-resolved
+      // names — the operator may have chosen a different label for
+      // display.
+      if (result.nameById && typeof result.nameById === 'object') {
+        store.nameById = { ...result.nameById, ...store.nameById };
+      }
       store.scanResult = result;
       store.batchId = `b_${new Date().toISOString().replace(/[:\-TZ.]/g, '').slice(0, 14)}`;
       store.reviewIndex = 0;

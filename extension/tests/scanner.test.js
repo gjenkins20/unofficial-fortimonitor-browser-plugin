@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { scanDevices, groupByFingerprint } from '../src/background/scanner.js';
+import { scanDevices, groupByFingerprint, resolveServerNames } from '../src/background/scanner.js';
 
 function fakeClient(perServerPorts) {
   return {
@@ -93,4 +93,66 @@ test('groupByFingerprint routes errored scans to the errored bucket', async () =
 
 test('scanDevices requires a client', async () => {
   await assert.rejects(() => scanDevices([1]), TypeError);
+});
+
+// ----- resolveServerNames (FMN-61) --------------------------------
+
+function nameClient(namesById) {
+  return {
+    async getServerName(id) {
+      return Object.prototype.hasOwnProperty.call(namesById, id) ? namesById[id] : null;
+    }
+  };
+}
+
+test('resolveServerNames returns an empty map for empty input', async () => {
+  const out = await resolveServerNames([], { client: nameClient({}) });
+  assert.deepEqual(out, {});
+});
+
+test('resolveServerNames maps input ids to resolved names', async () => {
+  const client = nameClient({ 1: 'alpha', 2: 'bravo', 3: 'charlie' });
+  const out = await resolveServerNames([1, 2, 3], { client, concurrency: 2 });
+  assert.deepEqual(out, { '1': 'alpha', '2': 'bravo', '3': 'charlie' });
+});
+
+test('resolveServerNames omits ids whose name could not be resolved', async () => {
+  const client = nameClient({ 1: 'alpha', 3: 'charlie' });
+  const out = await resolveServerNames([1, 2, 3], { client });
+  assert.deepEqual(out, { '1': 'alpha', '3': 'charlie' });
+  assert.equal('2' in out, false);
+});
+
+test('resolveServerNames treats client errors the same as null (silent failure)', async () => {
+  const client = {
+    async getServerName(id) {
+      if (id === 2) throw new Error('network');
+      return id === 1 ? 'alpha' : null;
+    }
+  };
+  const out = await resolveServerNames([1, 2, 3], { client });
+  assert.deepEqual(out, { '1': 'alpha' });
+});
+
+test('resolveServerNames requires a client', async () => {
+  await assert.rejects(() => resolveServerNames([1]), TypeError);
+});
+
+test('resolveServerNames requires an array', async () => {
+  await assert.rejects(() => resolveServerNames('not-array', { client: nameClient({}) }), TypeError);
+});
+
+test('resolveServerNames respects concurrency cap', async () => {
+  let inFlight = 0, peak = 0;
+  const client = {
+    async getServerName(id) {
+      inFlight++;
+      if (inFlight > peak) peak = inFlight;
+      await new Promise((r) => setTimeout(r, 5));
+      inFlight--;
+      return `name-${id}`;
+    }
+  };
+  await resolveServerNames([1, 2, 3, 4, 5, 6, 7, 8], { client, concurrency: 3 });
+  assert.ok(peak <= 3, `peak in-flight ${peak} exceeded concurrency 3`);
 });

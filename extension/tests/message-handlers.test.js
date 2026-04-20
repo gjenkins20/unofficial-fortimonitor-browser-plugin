@@ -9,7 +9,7 @@ function freshQueue() {
   return new Queue({ storage: createStorageMock() });
 }
 
-function fakeClient({ portsByServer = {}, saveImpl } = {}) {
+function fakeClient({ portsByServer = {}, saveImpl, namesByServer = null } = {}) {
   return {
     async getDevicePorts(id) {
       const ports = portsByServer[id];
@@ -18,6 +18,10 @@ function fakeClient({ portsByServer = {}, saveImpl } = {}) {
     },
     async savePortSelection(args) {
       return (saveImpl ?? (async () => ({ success: true })))(args);
+    },
+    async getServerName(id) {
+      if (namesByServer == null) return null;
+      return Object.prototype.hasOwnProperty.call(namesByServer, id) ? namesByServer[id] : null;
     }
   };
 }
@@ -40,6 +44,33 @@ test('scan-devices returns fingerprint groups', async () => {
   const out = await handlers['scan-devices']({ serverIds: [1, 2] });
   assert.equal(out.groups.length, 1);
   assert.equal(out.groups[0].devices.length, 2);
+});
+
+test('scan-devices returns resolved names on nameById alongside groups (FMN-61)', async () => {
+  const handlers = createHandlers({
+    client: fakeClient({
+      portsByServer: {
+        1: [{ name: 'wan2', admin_status: 'up', oper_status: 'down' }],
+        2: [{ name: 'wan2', admin_status: 'up', oper_status: 'down' }]
+      },
+      namesByServer: { 1: 'alpha', 2: 'bravo' }
+    }),
+    queue: freshQueue()
+  });
+  const out = await handlers['scan-devices']({ serverIds: [1, 2] });
+  assert.deepEqual(out.nameById, { '1': 'alpha', '2': 'bravo' });
+  assert.equal(out.groups.length, 1);
+});
+
+test('scan-devices returns nameById as {} when no names resolve', async () => {
+  const handlers = createHandlers({
+    client: fakeClient({
+      portsByServer: { 1: [{ name: 'a', admin_status: 'up', oper_status: 'up' }] }
+    }),
+    queue: freshQueue()
+  });
+  const out = await handlers['scan-devices']({ serverIds: [1] });
+  assert.deepEqual(out.nameById, {});
 });
 
 test('scan-devices emits scan:progress events', async () => {

@@ -1,9 +1,10 @@
 // Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // FortiMonitor session-riding client.
 //
-// Wraps the two internal FortiMonitor WebGUI operations the plugin needs:
+// Wraps the internal FortiMonitor WebGUI operations the plugin needs:
 //   - GET /onboarding/getDevicePorts   (read port scope)
 //   - POST /config/save_port_selection (write port scope)
+//   - GET /report/get_idp_data         (resolve server id -> human name)
 //
 // Auth is the user's existing FortiMonitor session cookie, plus the
 // X-XSRF-TOKEN header derived from the XSRF-TOKEN cookie value.
@@ -247,6 +248,45 @@ export class FortimonitorClient {
       });
     }
     return json;
+  }
+
+  /**
+   * Resolve a server id to its human-readable name. Returns null on any
+   * failure (non-existent id, expired session, SPA-shell HTML response,
+   * JSON parse error, missing name field). Callers should treat null as
+   * "name not resolvable" and fall back to the id for display.
+   *
+   * This endpoint returns 200 + HTML for any bad input — see
+   * docs/api-discovery/server-metadata.md for the full failure matrix.
+   *
+   * @param {number|string} serverId
+   * @returns {Promise<string | null>}
+   */
+  async getServerName(serverId) {
+    if (serverId === undefined || serverId === null) return null;
+    const origin = await this.origin();
+    const url = `${origin}/report/get_idp_data?server_id=${encodeURIComponent(String(serverId))}`;
+    let res;
+    try {
+      res = await this.fetch(url, {
+        method: 'GET',
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' }
+      });
+    } catch {
+      return null;
+    }
+    if (!res.ok) return null;
+    const ct = (res.headers?.get?.('content-type') || '').toLowerCase();
+    if (!ct.includes('json')) return null;
+    let body;
+    try {
+      body = await res.json();
+    } catch {
+      return null;
+    }
+    const name = body?.pageData?.instance?.name;
+    return (typeof name === 'string' && name.length > 0) ? name : null;
   }
 
   /**

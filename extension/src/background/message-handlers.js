@@ -7,7 +7,7 @@
 // Promises; the service worker wraps their resolve/reject into the
 // Chrome runtime response shape.
 
-import { scanDevices, groupByFingerprint } from './scanner.js';
+import { scanDevices, groupByFingerprint, resolveServerNames } from './scanner.js';
 import { executeQueue } from './executor.js';
 
 /**
@@ -26,11 +26,19 @@ export function createHandlers({ client, queue, events = {} }) {
   return {
     'scan-devices': async ({ serverIds }) => {
       if (!Array.isArray(serverIds)) throw new TypeError('scan-devices: serverIds must be an array');
-      const results = await scanDevices(serverIds, {
-        client,
-        onProgress: (done, total, last) => emit('scan:progress', { done, total, last })
-      });
-      return groupByFingerprint(results);
+      // Run the port scan and name resolution in parallel. Port scan is
+      // the authoritative source for progress (scan:progress events);
+      // name resolution is best-effort and silent — it populates
+      // store.nameById so the step-3 queue CSV always has a name column
+      // even for plain-ID input (FMN-61).
+      const [results, nameById] = await Promise.all([
+        scanDevices(serverIds, {
+          client,
+          onProgress: (done, total, last) => emit('scan:progress', { done, total, last })
+        }),
+        resolveServerNames(serverIds, { client }).catch(() => ({}))
+      ]);
+      return { ...groupByFingerprint(results), nameById };
     },
 
     'session:probe': async () => {
