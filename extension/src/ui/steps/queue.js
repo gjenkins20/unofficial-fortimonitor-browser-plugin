@@ -217,14 +217,14 @@ export function render({ container, store, navigate }) {
   dlCsv.addEventListener('click', (e) => {
     e.preventDefault();
     const header = csvAttributionHeader('remove');
-    const rows = [['server_id', 'device_name', 'group_fingerprint', 'remove_ports', 'kept_indices']];
+    const rows = [['server_id', 'device_name', 'group_fingerprint', 'remove_ports', 'kept_port_names']];
     for (const e1 of entries) {
       rows.push([
         String(e1.serverId),
         String(e1.deviceName ?? ''),
         String(e1.groupId ?? ''),
         (e1.removedPortNames || []).join('|'),
-        (e1.intendedAction?.selectedIndices || []).join('|')
+        (e1.keptPortNames || []).join('|')
       ]);
     }
     const csv = header + rows.map((r) => r.map(csvEscape).join(',')).join('\n');

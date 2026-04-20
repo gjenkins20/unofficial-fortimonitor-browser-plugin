@@ -130,6 +130,42 @@ test('buildAddQueueEntries requires a Map for decisions', () => {
   }), /decisions/);
 });
 
+// --- keptPortNames (FMN-63) ----------------------------------------
+
+test('buildQueueEntries attaches keptPortNames (the inverse of removedPortNames)', () => {
+  const groups = [sampleGroup('fp1', [1], [
+    { name: 'port1', index: '0' },
+    { name: 'wan2',  index: '1' },
+    { name: 'port3', index: '2' }
+  ])];
+  const decisions = new Map([['fp1', { skipped: false, removePortNames: ['wan2'] }]]);
+  const entries = buildQueueEntries({ groups, decisions, nameById: {}, batchId: 'b1' });
+  assert.deepEqual(entries[0].keptPortNames, ['port1', 'port3']);
+});
+
+test('buildQueueEntries keptPortNames preserves original port order', () => {
+  const groups = [sampleGroup('fp1', [1], [
+    { name: 'zulu', index: '0' },
+    { name: 'alpha', index: '1' },
+    { name: 'mike', index: '2' }
+  ])];
+  const decisions = new Map([['fp1', { skipped: false, removePortNames: ['alpha'] }]]);
+  const entries = buildQueueEntries({ groups, decisions, nameById: {}, batchId: 'b1' });
+  assert.deepEqual(entries[0].keptPortNames, ['zulu', 'mike']);
+});
+
+test('buildAddQueueEntries keptPortNames = in-scope ports + added ports', () => {
+  const groups = [sampleGroup('fpA', [100], [
+    { name: 'wan2',  index: '0', isActive: false },
+    { name: 'port1', index: '1', isActive: true },
+    { name: 'port2', index: '2', isActive: true },
+    { name: 'port6', index: '3', isActive: false }
+  ])];
+  const decisions = new Map([['fpA', { skipped: false, addPortNames: ['wan2', 'port6'] }]]);
+  const entries = buildAddQueueEntries({ groups, decisions, nameById: {}, batchId: 'b1' });
+  assert.deepEqual(entries[0].keptPortNames, ['wan2', 'port1', 'port2', 'port6']);
+});
+
 test('summarizeAddPlan aggregates by group with totalPortsToAdd', () => {
   const entries = [
     { serverId: 1, groupId: 'a', deviceName: 'd1', addedPortNames: ['wan2'] },

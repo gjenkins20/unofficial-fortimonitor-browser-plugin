@@ -36,9 +36,9 @@ export function buildQueueEntries({ groups, decisions, nameById = {}, batchId })
     if (removeSet.size === 0) continue; // no-op decision; skip
 
     const ports = group.portsData?.ports ?? [];
-    const keptIndices = ports
-      .filter((p) => !removeSet.has(p.name))
-      .map((p) => String(p.index));
+    const keptPorts = ports.filter((p) => !removeSet.has(p.name));
+    const keptIndices = keptPorts.map((p) => String(p.index));
+    const keptPortNames = keptPorts.map((p) => p.name);
     const searchTerm = group.portsData?.portFilters?.searchTerm ?? '';
     const filters = group.portsData?.portFilters?.filters ?? [];
     const totalPortCount = ports.length;
@@ -53,6 +53,7 @@ export function buildQueueEntries({ groups, decisions, nameById = {}, batchId })
         serverId,
         deviceName,
         removedPortNames: [...removeSet],
+        keptPortNames,
         intendedAction: {
           portSelectionType: 'manual',
           selectedIndices: keptIndices,
@@ -94,9 +95,9 @@ export function buildAddQueueEntries({ groups, decisions, nameById = {}, batchId
     if (addSet.size === 0) continue;
 
     const ports = group.portsData?.ports ?? [];
-    const keptIndices = ports
-      .filter((p) => p.isActive || addSet.has(p.name))
-      .map((p) => String(p.index));
+    const keptPorts = ports.filter((p) => p.isActive || addSet.has(p.name));
+    const keptIndices = keptPorts.map((p) => String(p.index));
+    const keptPortNames = keptPorts.map((p) => p.name);
     const searchTerm = group.portsData?.portFilters?.searchTerm ?? '';
     const filters = group.portsData?.portFilters?.filters ?? [];
     const totalPortCount = ports.length;
@@ -111,6 +112,7 @@ export function buildAddQueueEntries({ groups, decisions, nameById = {}, batchId
         serverId,
         deviceName,
         addedPortNames: [...addSet],
+        keptPortNames,
         intendedAction: {
           portSelectionType: 'manual',
           selectedIndices: keptIndices,
