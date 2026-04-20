@@ -452,6 +452,8 @@ input.confirm-input[disabled] { background: var(--muted-soft); color: var(--text
   font-weight: 500; cursor: pointer; font-size: 12px;
 }
 .download-link:hover { text-decoration: underline; }
+.audit-download-row { margin-top: 10px; }
+.audit-download { font-size: 12px; }
 
 /* --- execution-progress --- */
 
@@ -465,6 +467,8 @@ input.confirm-input[disabled] { background: var(--muted-soft); color: var(--text
   50% { opacity: 1; }
 }
 
+.scan-progress { padding: 4px 0; }
+.scan-progress .progress-stats { margin-top: 10px; font-size: 13px; color: var(--text); }
 .progress-strip { padding: 14px 20px; border-bottom: 1px solid var(--border); background: white; }
 .progress-bar {
   height: 10px; background: var(--muted-soft);

@@ -7,7 +7,7 @@ import { h, titleBar, breadcrumbs } from '../../lib/dom.js';
 import { parseServerList } from '../parse-csv.js';
 import { call } from '../../lib/messaging.js';
 
-export function render({ container, store, navigate }) {
+export function render({ container, store, navigate, events }) {
   const frame = h('div', { class: 'mockup-frame' });
   const toolName = store.toolMode === 'add'
     ? 'Add to Port Scope (Fabric)'
@@ -128,12 +128,28 @@ export function render({ container, store, navigate }) {
     updateParseResult();
   });
 
+  let unsubscribeScanProgress = null;
+
   startBtn.addEventListener('click', async () => {
     if (!store.serverIds.length) return;
     startBtn.disabled = true;
+    cancelBtn.disabled = true;
     startBtn.textContent = 'Scanning…';
+
+    const total = store.serverIds.length;
+    const progress = renderScanProgress(total);
+    parseResult.className = 'parse-result';
+    parseResult.replaceChildren(progress.el);
+
+    if (events?.on) {
+      unsubscribeScanProgress = events.on((event, payload) => {
+        if (event === 'scan:progress') progress.update(payload.done, payload.total);
+      });
+    }
+
     try {
       const result = await call('scan-devices', { serverIds: store.serverIds });
+      progress.setPhase('grouping');
       store.scanResult = result;
       store.batchId = `b_${new Date().toISOString().replace(/[:\-TZ.]/g, '').slice(0, 14)}`;
       store.reviewIndex = 0;
@@ -144,15 +160,52 @@ export function render({ container, store, navigate }) {
       navigate('/review');
     } catch (err) {
       startBtn.disabled = false;
+      cancelBtn.disabled = false;
       startBtn.textContent = 'Start review →';
-      parseResult.className = 'parse-result';
-      parseResult.appendChild(h('div', { class: 'warn-list' },
+      parseResult.replaceChildren(h('div', { class: 'warn-list' },
         h('strong', {}, 'Scan failed: '), err?.message ?? String(err)
       ));
+    } finally {
+      if (unsubscribeScanProgress) {
+        unsubscribeScanProgress();
+        unsubscribeScanProgress = null;
+      }
     }
   });
 
   if (paste.value) updateParseResult();
+
+  return function teardown() {
+    if (unsubscribeScanProgress) {
+      unsubscribeScanProgress();
+      unsubscribeScanProgress = null;
+    }
+  };
+}
+
+function renderScanProgress(total) {
+  const pbOk = h('div', { class: 'pb-ok', style: { width: '0%' } });
+  const bar = h('div', { class: 'progress-bar' }, pbOk);
+  const label = h('span', {}, 'Scanning devices…');
+  const count = h('span', {}, h('strong', {}, '0'), ` of ${total}`);
+  const stats = h('div', { class: 'progress-stats' }, label, count);
+  const el = h('div', { class: 'scan-progress' }, bar, stats);
+
+  function update(done, t) {
+    const denom = t || total || 1;
+    const pct = Math.min(100, Math.round((done / denom) * 100));
+    pbOk.style.width = `${pct}%`;
+    count.replaceChildren(h('strong', {}, String(done)), ` of ${denom} · ${pct}%`);
+  }
+
+  function setPhase(name) {
+    if (name === 'grouping') {
+      pbOk.style.width = '100%';
+      label.textContent = 'Grouping devices by fingerprint…';
+    }
+  }
+
+  return { el, update, setPhase };
 }
 
 function rebuildPasteValue(serverIds, nameById) {

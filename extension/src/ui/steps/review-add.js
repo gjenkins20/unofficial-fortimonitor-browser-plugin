@@ -5,8 +5,9 @@
 // downstream. Defaults to hiding in-scope ports since they typically
 // dominate the list.
 
-import { h, titleBar, breadcrumbs } from '../../lib/dom.js';
+import { h, titleBar, breadcrumbs, downloadBlob } from '../../lib/dom.js';
 import { buildAddQueueEntries } from '../plan.js';
+import { buildAuditCsv, auditCsvFilename } from './audit-csv.js';
 
 const FORTILINK = 'fortilink';
 const TOOL_NAME = 'Add to Port Scope (Fabric)';
@@ -95,10 +96,24 @@ function renderGroup(container, { store, navigate, groups, index, setIndex }) {
   const frame = h('div', { class: 'mockup-frame' });
   frame.appendChild(titleBar('Select interfaces to add', { toolName: TOOL_NAME }));
 
+  const downloadAuditBtn = h('a', {
+    class: 'download-link audit-download',
+    href: '#',
+    onClick: (e) => {
+      e.preventDefault();
+      const csv = buildAuditCsv({
+        groups, decisions: store.decisions, nameById: store.nameById,
+        toolMode: 'add', batchId: store.batchId
+      });
+      downloadBlob(auditCsvFilename(store.batchId, 'add'), 'text/csv', csv);
+    }
+  }, '↓ Download audit (CSV)');
+
   const crumbHeader = h('div', { class: 'step-header' },
     breadcrumbs('review'),
     h('h2', {}, `Group ${index + 1} of ${groups.length}`),
-    h('p', {}, `${deviceCount} device${deviceCount === 1 ? '' : 's'} share this interface state. One decision applies to every device in this group.`)
+    h('p', {}, `${deviceCount} device${deviceCount === 1 ? '' : 's'} share this interface state. One decision applies to every device in this group.`),
+    h('div', { class: 'audit-download-row' }, downloadAuditBtn)
   );
   frame.appendChild(crumbHeader);
 
