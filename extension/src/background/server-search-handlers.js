@@ -191,11 +191,45 @@ export function createServerSearchHandlers({ events = {}, getClient } = {}) {
   let currentRun = null;
 
   return {
-    'search:list-attribute-types': async () => {
+    'search:list-attribute-types': async (payload) => {
+      // The /server_attribute_type catalog only returns *customer-defined*
+      // attribute types. System/built-in types like "Model" (textkey
+      // dem.model) and "Operating System" (textkey server.os) live on
+      // server records but never appear in that catalog. To surface them
+      // as suggestions, we also sample the first page of /server and
+      // extract the distinct attribute names/textkeys seen there.
       const client = await factory();
-      const types = await client.listAttributeTypes();
-      // Sort by display name for predictable dropdown order.
-      return types.slice().sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
+      const sampleSize = Number.isFinite(payload?.sampleSize) ? payload.sampleSize : 100;
+
+      const [catalog, sample] = await Promise.all([
+        client.listAttributeTypes().catch(() => []),
+        client.listServers({ limit: sampleSize, offset: 0 }).catch(() => ({ server_list: [] }))
+      ]);
+
+      const merged = new Map(); // key: lowercased name → { name, textkey, sources:Set }
+      const add = (name, textkey, source) => {
+        if (!name) return;
+        const key = String(name).toLowerCase();
+        const existing = merged.get(key);
+        if (existing) {
+          if (!existing.textkey && textkey) existing.textkey = textkey;
+          existing.sources.add(source);
+        } else {
+          merged.set(key, { name, textkey: textkey ?? null, sources: new Set([source]) });
+        }
+      };
+
+      for (const t of catalog) add(t.name, t.textkey, 'catalog');
+
+      const servers = Array.isArray(sample?.server_list) ? sample.server_list : [];
+      for (const server of servers) {
+        if (!Array.isArray(server?.attributes)) continue;
+        for (const attr of server.attributes) add(attr?.name, attr?.textkey, 'server');
+      }
+
+      return Array.from(merged.values())
+        .map((v) => ({ name: v.name, textkey: v.textkey, sources: Array.from(v.sources) }))
+        .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
     },
 
     'search:servers': async (payload) => {

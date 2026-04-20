@@ -39,15 +39,29 @@ export function render({ container, store, navigate, events }) {
   const body = h('div', { class: 'body-section' });
   frame.appendChild(body);
 
-  // ---- Attribute name dropdown ----
+  // ---- Attribute name (free-text with datalist suggestions) ----
   body.appendChild(h('h3', { class: 'subhead' }, 'Attribute'));
 
-  const attrSelect = h('select', { class: 'paste-area', style: 'min-height:0;height:auto;padding:0.6rem 0.8rem;' });
-  attrSelect.appendChild(h('option', { value: '' }, 'Loading attribute types…'));
-  attrSelect.disabled = true;
-  body.appendChild(attrSelect);
+  const datalistId = 'server-search-attr-suggestions';
+  const attrInput = h('input', {
+    type: 'text',
+    class: 'paste-area',
+    placeholder: 'Loading suggestions…',
+    list: datalistId,
+    autocomplete: 'off',
+    spellcheck: 'false',
+    style: 'min-height:0;height:auto;padding:0.6rem 0.8rem;font-family:inherit;'
+  });
+  attrInput.value = store.attributeName ?? '';
+  attrInput.disabled = true;
+  body.appendChild(attrInput);
 
-  const attrHint = h('div', { class: 'muted', style: 'font-size:0.85rem;margin-top:0.25rem;' }, '');
+  const attrDatalist = h('datalist', { id: datalistId });
+  body.appendChild(attrDatalist);
+
+  const attrHint = h('div', { class: 'muted', style: 'font-size:0.85rem;margin-top:0.25rem;' },
+    'Type or pick an attribute name (e.g., Model). Suggestions come from your tenant\'s attribute catalog plus attributes seen on a sample of servers.'
+  );
   body.appendChild(attrHint);
 
   // ---- Value ----
@@ -98,14 +112,10 @@ export function render({ container, store, navigate, events }) {
   const stateLabel = actionBar.querySelector('.execute-state');
 
   function refreshRunDisabled() {
-    runBtn.disabled = !attrSelect.value || !valueInput.value.trim() || attrSelect.disabled;
+    runBtn.disabled = !attrInput.value.trim() || !valueInput.value.trim() || attrInput.disabled;
   }
 
-  attrSelect.addEventListener('change', () => {
-    const opt = attrSelect.selectedOptions?.[0];
-    attrHint.textContent = opt?.dataset?.textkey ? `textkey: ${opt.dataset.textkey}` : '';
-    refreshRunDisabled();
-  });
+  attrInput.addEventListener('input', refreshRunDisabled);
   valueInput.addEventListener('input', refreshRunDisabled);
 
   // Subscribe to per-page progress events from the service worker.
@@ -116,37 +126,32 @@ export function render({ container, store, navigate, events }) {
     stateLabel.className = 'execute-state';
   });
 
-  // Populate the attribute dropdown.
+  // Populate the datalist suggestions. The handler unions the
+  // /server_attribute_type catalog with attributes seen on a sample of
+  // servers — necessary because built-in types (Model, Operating System)
+  // are absent from the catalog but appear on server records.
   (async () => {
     try {
       const types = await call('search:list-attribute-types', {});
-      attrSelect.innerHTML = '';
-      attrSelect.appendChild(h('option', { value: '' }, '— pick an attribute —'));
+      attrDatalist.innerHTML = '';
       for (const t of types) {
-        const opt = h('option', {
-          value: t.name,
-          'data-textkey': t.textkey ?? ''
-        }, `${t.name}${t.textkey && t.textkey !== t.name ? ` (${t.textkey})` : ''}`);
-        attrSelect.appendChild(opt);
+        const label = t.textkey && t.textkey !== t.name ? `${t.name} — ${t.textkey}` : t.name;
+        attrDatalist.appendChild(h('option', { value: t.name }, label));
       }
-      attrSelect.disabled = false;
-      // Restore prior selection if the user came back from /results.
-      if (store.attributeName) {
-        attrSelect.value = store.attributeName;
-        const opt = attrSelect.selectedOptions?.[0];
-        attrHint.textContent = opt?.dataset?.textkey ? `textkey: ${opt.dataset.textkey}` : '';
-      }
+      attrInput.disabled = false;
+      attrInput.placeholder = 'Model';
       refreshRunDisabled();
     } catch (err) {
-      attrSelect.innerHTML = '';
-      attrSelect.appendChild(h('option', { value: '' }, '(failed to load)'));
-      stateLabel.textContent = `Could not load attribute types: ${err?.message ?? err}`;
+      attrInput.disabled = false;
+      attrInput.placeholder = 'Attribute name (suggestions unavailable)';
+      stateLabel.textContent = `Could not load attribute suggestions: ${err?.message ?? err}`;
       stateLabel.className = 'execute-state error';
+      refreshRunDisabled();
     }
   })();
 
   runBtn.addEventListener('click', async () => {
-    const attributeName = attrSelect.value;
+    const attributeName = attrInput.value.trim();
     const value = valueInput.value.trim();
     if (!attributeName || !value) return;
     store.attributeName = attributeName;
@@ -155,7 +160,7 @@ export function render({ container, store, navigate, events }) {
     store.caseInsensitive = caseToggle.checked;
 
     runBtn.disabled = true;
-    attrSelect.disabled = true;
+    attrInput.disabled = true;
     valueInput.disabled = true;
     exactToggle.disabled = true;
     caseToggle.disabled = true;
@@ -181,7 +186,7 @@ export function render({ container, store, navigate, events }) {
       stateLabel.textContent = `Error: ${err?.message ?? err}`;
       stateLabel.className = 'execute-state error';
       runBtn.disabled = false;
-      attrSelect.disabled = false;
+      attrInput.disabled = false;
       valueInput.disabled = false;
       exactToggle.disabled = false;
       caseToggle.disabled = false;

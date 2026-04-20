@@ -214,19 +214,76 @@ test('searchServersByAttribute: exact-match mode is the default (avoids FGT60F m
 
 // ---- handlers ------------------------------------------------------
 
-test('search:list-attribute-types: delegates to client.listAttributeTypes and sorts by name', async () => {
+test('search:list-attribute-types: merges catalog types with attribute names discovered on sampled servers', async () => {
+  // Catalog returns only customer-defined types (Environment, Zebra).
+  // Sampled servers carry built-in types the catalog never lists (Model,
+  // Operating System). The handler should union both and dedupe by name.
   const client = {
     async listAttributeTypes() {
       return [
-        { id: 2, name: 'Zebra', textkey: 'z', resourceUrl: 'u2' },
-        { id: 1, name: 'Apple', textkey: 'a', resourceUrl: 'u1' },
-        { id: 3, name: 'Model', textkey: 'dem.model', resourceUrl: 'u3' }
+        { id: 1, name: 'Zebra', textkey: 'z', resourceUrl: 'u' },
+        { id: 2, name: 'Environment', textkey: 'Environment', resourceUrl: 'u' }
       ];
+    },
+    async listServers({ limit }) {
+      void limit;
+      return {
+        server_list: [
+          {
+            attributes: [
+              { name: 'Model', textkey: 'dem.model', value: 'FGT60F' },
+              { name: 'Operating System', textkey: 'server.os', value: 'Linux' }
+            ]
+          },
+          {
+            attributes: [
+              { name: 'Model', textkey: 'dem.model', value: 'FGT61E' }
+            ]
+          }
+        ],
+        meta: { total_count: 2 }
+      };
     }
   };
   const handlers = createServerSearchHandlers({ getClient: async () => client });
   const types = await handlers['search:list-attribute-types']();
-  assert.deepEqual(types.map((t) => t.name), ['Apple', 'Model', 'Zebra']);
+  const names = types.map((t) => t.name);
+  assert.deepEqual(names, ['Environment', 'Model', 'Operating System', 'Zebra']);
+  // Model comes from the server sample only; its textkey should survive.
+  const model = types.find((t) => t.name === 'Model');
+  assert.equal(model.textkey, 'dem.model');
+  assert.deepEqual(model.sources, ['server']);
+  // Environment is catalog-only.
+  const env = types.find((t) => t.name === 'Environment');
+  assert.deepEqual(env.sources, ['catalog']);
+});
+
+test('search:list-attribute-types: survives a listAttributeTypes failure (still returns server-sampled names)', async () => {
+  const client = {
+    async listAttributeTypes() {
+      throw new Error('catalog unavailable');
+    },
+    async listServers() {
+      return {
+        server_list: [{ attributes: [{ name: 'Model', textkey: 'dem.model', value: 'x' }] }]
+      };
+    }
+  };
+  const handlers = createServerSearchHandlers({ getClient: async () => client });
+  const types = await handlers['search:list-attribute-types']();
+  assert.deepEqual(types.map((t) => t.name), ['Model']);
+});
+
+test('search:list-attribute-types: survives a listServers failure (still returns catalog)', async () => {
+  const client = {
+    async listAttributeTypes() {
+      return [{ id: 1, name: 'Zebra', textkey: 'z', resourceUrl: 'u' }];
+    },
+    async listServers() { throw new Error('sample unavailable'); }
+  };
+  const handlers = createServerSearchHandlers({ getClient: async () => client });
+  const types = await handlers['search:list-attribute-types']();
+  assert.deepEqual(types.map((t) => t.name), ['Zebra']);
 });
 
 test('search:servers: end-to-end attribute filter via factory client', async () => {
