@@ -1,5 +1,12 @@
 // Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-import { isDevModeEnabled, setDevModeEnabled, isAskClaudeEnabled, setAskClaudeEnabled } from '../lib/settings.js';
+import {
+  isDevModeEnabled,
+  setDevModeEnabled,
+  isAskClaudeEnabled,
+  setAskClaudeEnabled,
+  isServerSearchEnabled,
+  setServerSearchEnabled
+} from '../lib/settings.js';
 import { resolveFortimonitorOrigin, FEDERATION_ORIGIN } from '../lib/origin-resolver.js';
 
 const FORTIMONITOR_URL = `${FEDERATION_ORIGIN}/`;
@@ -163,10 +170,19 @@ async function loadAskClaudeIntoToggle() {
   toggle.checked = await isAskClaudeEnabled();
 }
 
+async function loadServerSearchIntoToggle() {
+  const toggle = document.getElementById('server-search-toggle');
+  toggle.checked = await isServerSearchEnabled();
+}
+
 async function applyExperimentalVisibility() {
   const askClaudeOn = await isAskClaudeEnabled();
   for (const el of document.querySelectorAll('[data-experimental="ask-claude"]')) {
     el.hidden = !askClaudeOn;
+  }
+  const serverSearchOn = await isServerSearchEnabled();
+  for (const el of document.querySelectorAll('[data-experimental="server-search"]')) {
+    el.hidden = !serverSearchOn;
   }
 }
 
@@ -322,6 +338,7 @@ function init() {
     await loadClaudeKeyIntoInput();
     await loadDevModeIntoToggle();
     await loadAskClaudeIntoToggle();
+    await loadServerSearchIntoToggle();
     showSettings();
   });
   document.getElementById('settings-back').addEventListener('click', hideSettings);
@@ -338,6 +355,12 @@ function init() {
 
   document.getElementById('ask-claude-toggle').addEventListener('change', async (e) => {
     await setAskClaudeEnabled(e.target.checked);
+    await applyExperimentalVisibility();
+    await refreshGuards();
+  });
+
+  document.getElementById('server-search-toggle').addEventListener('change', async (e) => {
+    await setServerSearchEnabled(e.target.checked);
     await applyExperimentalVisibility();
     await refreshGuards();
   });

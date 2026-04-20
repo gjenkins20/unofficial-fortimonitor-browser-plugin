@@ -5,6 +5,7 @@
 
 export const DEV_MODE_KEY = 'fm:devMode';
 export const ASK_CLAUDE_ENABLED_KEY = 'fm:askClaudeEnabled';
+export const SERVER_SEARCH_ENABLED_KEY = 'fm:serverSearchEnabled';
 
 /**
  * Read the developer-mode flag. Returns false on any storage error so
@@ -56,6 +57,31 @@ export async function isAskClaudeEnabled(storage = defaultStorage()) {
  */
 export async function setAskClaudeEnabled(enabled, storage = defaultStorage()) {
   await storage.set({ [ASK_CLAUDE_ENABLED_KEY]: Boolean(enabled) });
+}
+
+/**
+ * Read the Search-Servers-enabled flag. Returns false by default so the
+ * tool stays hidden until the operator opts in via Settings.
+ *
+ * @param {{ get: (key: string) => Promise<Record<string, any>> }} [storage]
+ */
+export async function isServerSearchEnabled(storage = defaultStorage()) {
+  try {
+    const data = await storage.get(SERVER_SEARCH_ENABLED_KEY);
+    return Boolean(data?.[SERVER_SEARCH_ENABLED_KEY]);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Persist the Search-Servers-enabled flag.
+ *
+ * @param {boolean} enabled
+ * @param {{ set: (obj: Record<string, any>) => Promise<void> }} [storage]
+ */
+export async function setServerSearchEnabled(enabled, storage = defaultStorage()) {
+  await storage.set({ [SERVER_SEARCH_ENABLED_KEY]: Boolean(enabled) });
 }
 
 function defaultStorage() {
