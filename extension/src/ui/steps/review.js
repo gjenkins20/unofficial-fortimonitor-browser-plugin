@@ -4,10 +4,11 @@
 // group; "Queue for N devices" advances to the next group (or to the
 // queue overview when all groups are reviewed).
 
-import { h, titleBar, breadcrumbs } from '../../lib/dom.js';
+import { h, titleBar, breadcrumbs, downloadBlob } from '../../lib/dom.js';
 import { buildQueueEntries } from '../plan.js';
 import { isDevModeEnabled } from '../../lib/settings.js';
 import { call } from '../../lib/messaging.js';
+import { buildAuditCsv, auditCsvFilename } from './audit-csv.js';
 
 const FORTILINK = 'fortilink';
 
@@ -199,10 +200,24 @@ function renderGroup(container, { store, navigate, groups, index, setIndex }) {
   frame.appendChild(titleBar('Mark WAN Interfaces for Removal'));
 
   // breadcrumbs live in their own step-header per the mockup
+  const downloadAuditBtn = h('a', {
+    class: 'download-link audit-download',
+    href: '#',
+    onClick: (e) => {
+      e.preventDefault();
+      const csv = buildAuditCsv({
+        groups, decisions: store.decisions, nameById: store.nameById,
+        toolMode: 'remove', batchId: store.batchId
+      });
+      downloadBlob(auditCsvFilename(store.batchId, 'remove'), 'text/csv', csv);
+    }
+  }, '↓ Download audit (CSV)');
+
   const crumbHeader = h('div', { class: 'step-header' },
     breadcrumbs('review'),
     h('h2', {}, `Group ${index + 1} of ${groups.length}`),
-    h('p', {}, `${deviceCount} device${deviceCount === 1 ? '' : 's'} share this interface state. One decision applies to every device in this group.`)
+    h('p', {}, `${deviceCount} device${deviceCount === 1 ? '' : 's'} share this interface state. One decision applies to every device in this group.`),
+    h('div', { class: 'audit-download-row' }, downloadAuditBtn)
   );
   frame.appendChild(crumbHeader);
 
