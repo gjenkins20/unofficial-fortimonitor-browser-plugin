@@ -327,3 +327,77 @@ test('getCookie is called with the resolved origin so cookie lookup follows the 
   await client.savePortSelection({ serverId: 1, totalPortCount: 3 });
   assert.equal(seen[0].urlOverride, 'https://my.us01.fortimonitor.com');
 });
+
+// ----- getServerName (FMN-61) -------------------------------------
+
+test('getServerName returns the name from pageData.instance.name on success', async () => {
+  const fetchMock = createFetchMock(async () => jsonResponse({
+    success: true,
+    pageData: { instance: { id: 42024060, name: 'FGVM01TM24006844' } }
+  }));
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'tok' });
+  const name = await client.getServerName(42024060);
+  assert.equal(name, 'FGVM01TM24006844');
+});
+
+test('getServerName sends server_id as a query param', async () => {
+  const fetchMock = createFetchMock(async () => jsonResponse({
+    pageData: { instance: { name: 'x' } }
+  }));
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'tok' });
+  await client.getServerName(42024060);
+  assert.match(fetchMock.calls[0].url, /\/report\/get_idp_data\?server_id=42024060$/);
+});
+
+test('getServerName returns null on non-JSON (SPA-shell) response', async () => {
+  const fetchMock = createFetchMock(async () => htmlResponse());
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'tok' });
+  const name = await client.getServerName(99999999);
+  assert.equal(name, null);
+});
+
+test('getServerName returns null on HTTP error', async () => {
+  const fetchMock = createFetchMock(async () => errorResponse(500));
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'tok' });
+  assert.equal(await client.getServerName(1), null);
+});
+
+test('getServerName returns null when pageData.instance.name is missing', async () => {
+  const fetchMock = createFetchMock(async () => jsonResponse({ pageData: { instance: {} } }));
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'tok' });
+  assert.equal(await client.getServerName(1), null);
+});
+
+test('getServerName returns null when name is an empty string', async () => {
+  const fetchMock = createFetchMock(async () => jsonResponse({ pageData: { instance: { name: '' } } }));
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'tok' });
+  assert.equal(await client.getServerName(1), null);
+});
+
+test('getServerName returns null when fetch throws', async () => {
+  const client = new FortimonitorClient({
+    fetch: async () => { throw new Error('net'); },
+    getCookie: async () => 'tok'
+  });
+  assert.equal(await client.getServerName(1), null);
+});
+
+test('getServerName returns null for null or undefined serverId', async () => {
+  const client = new FortimonitorClient({
+    fetch: async () => { throw new Error('should not fetch'); },
+    getCookie: async () => 'tok'
+  });
+  assert.equal(await client.getServerName(null), null);
+  assert.equal(await client.getServerName(undefined), null);
+});
+
+test('getServerName uses the injected origin', async () => {
+  const fetchMock = createFetchMock(async () => jsonResponse({ pageData: { instance: { name: 'n' } } }));
+  const client = new FortimonitorClient({
+    fetch: fetchMock,
+    getCookie: async () => 'tok',
+    origin: 'https://my.us01.fortimonitor.com'
+  });
+  await client.getServerName(1);
+  assert.match(fetchMock.calls[0].url, /^https:\/\/my\.us01\.fortimonitor\.com\/report\/get_idp_data/);
+});

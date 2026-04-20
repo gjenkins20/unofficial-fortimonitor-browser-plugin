@@ -89,6 +89,44 @@ function serializeError(err) {
 }
 
 /**
+ * Resolve a batch of server ids to human-readable names using the
+ * session-auth Instance Detail Page endpoint. Failures (non-existent
+ * id, parse error, SPA-shell response) do not appear in the output
+ * map — callers fall back to the id for those.
+ *
+ * @param {Array<string|number>} serverIds
+ * @param {object} options
+ * @param {import('../lib/fortimonitor-client.js').FortimonitorClient} options.client
+ * @param {number} [options.concurrency=3]
+ * @param {AbortSignal} [options.signal]
+ * @returns {Promise<Record<string,string>>} map: String(serverId) -> name
+ */
+export async function resolveServerNames(serverIds, { client, concurrency = 3, signal } = {}) {
+  if (!client) throw new TypeError('resolveServerNames requires a client');
+  if (!Array.isArray(serverIds)) throw new TypeError('resolveServerNames: serverIds must be an array');
+  if (serverIds.length === 0) return {};
+
+  const out = {};
+  await mapConcurrent(
+    serverIds,
+    async (serverId) => {
+      const name = await client.getServerName(serverId);
+      return { serverId, name };
+    },
+    {
+      concurrency,
+      signal,
+      onItem: (i, res) => {
+        if (res.status === 'fulfilled' && res.value?.name) {
+          out[String(res.value.serverId)] = res.value.name;
+        }
+      }
+    }
+  );
+  return out;
+}
+
+/**
  * Collapse scan results into fingerprint groups. Results without a
  * fingerprint (i.e. errored scans) are excluded from grouping and
  * returned separately for operator attention.
