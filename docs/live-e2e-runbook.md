@@ -2,11 +2,11 @@
 
 The Phase 4 UI is statically verified against the FMN-38 mockups via
 `docs/mockups/preview-app.html`. This runbook drives the **live** half:
-load the unpacked extension into Chrome against an active FortiCloud
+load the unpacked extension into Chrome against an active FortiMonitor
 session and exercise the real service-worker orchestration.
 
 **Only the operator can run this.** The flow rides your existing
-FortiCloud cookies and requires you to be logged in.
+FortiMonitor cookies and requires you to be logged in.
 
 ---
 
@@ -26,7 +26,7 @@ FortiCloud cookies and requires you to be logged in.
 
 You should land on **Step 1 — Load devices from CSV**.
 
-## 3. Log into FortiCloud
+## 3. Log into FortiMonitor
 
 Open a second tab in the same Chrome profile and log into
 <https://fortimonitor.forticloud.com/>. This seeds the session cookie
@@ -50,7 +50,7 @@ Expected:
 - Advance to step 2
 
 If you see `No XSRF-TOKEN cookie` or HTTP 401/403 — re-log into
-FortiCloud in the same window, then click **Start review** again.
+FortiMonitor in the same window, then click **Start review** again.
 
 ## 5. Review groups
 
@@ -116,10 +116,10 @@ To restore: re-enter Port Selection in FortiMonitor, re-check the port, save. Fo
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| `No XSRF-TOKEN cookie` on any write | Not logged into FortiCloud in this profile | Log in, retry |
-| HTTP 401/403 on write | Session expired mid-batch | Re-log into FortiCloud, use the inline **Retry** button on failed rows |
+| `No XSRF-TOKEN cookie` on any write | Not logged into FortiMonitor in this profile | Log in, retry |
+| HTTP 401/403 on write | Session expired mid-batch | Re-log into FortiMonitor, use the inline **Retry** button on failed rows |
 | Empty paste-area parse | CSV header missing `server_id` column | Use a plain list OR include a header row |
-| Scan returns "errored" for some IDs | Server doesn't exist in your FortiCloud session | Remove the stale IDs and retry |
+| Scan returns "errored" for some IDs | Server doesn't exist in your FortiMonitor session | Remove the stale IDs and retry |
 | Service worker can't read cookies | Missing `cookies` permission or `fortimonitor.forticloud.com` host permission | Verify `extension/manifest.json`; reload the extension |
 | Extension icon absent from toolbar | No default action popup set (by design) | Click the puzzle-piece menu and pin the extension |
 
@@ -137,7 +137,7 @@ Attach to FMN-39 as a Phase 5 comment.
 
 ## Add Fabric Connection (API) — separate live test (FMN-45)
 
-The Add Fabric Connection tool uses the FortiMonitor v2 public API instead of the FortiCloud session. Its live-test loop is independent of the port-scope tools above.
+The Add Fabric Connection tool uses the FortiMonitor v2 public API instead of the FortiMonitor session. Its live-test loop is independent of the port-scope tools above.
 
 ### 1. Set the API key
 
@@ -171,13 +171,13 @@ Repeat the flow, this time:
 
 ### 5. Verify in FortiMonitor
 
-Open the FortiCloud UI and confirm the new fabric connections appear. Note the API guide caveat: the "Error Creating Persistent Fabric Connection" UI message can take ~5 min to clear when the Control Panel is busy. The 201 response from the API is the source of truth.
+Open the FortiMonitor UI and confirm the new fabric connections appear. Note the API guide caveat: the "Error Creating Persistent Fabric Connection" UI message can take ~5 min to clear when the Control Panel is busy. The 201 response from the API is the source of truth.
 
 ### Artifacts for FMN-45 sign-off
 
 - Screenshot of Settings showing the masked API key + successful test
 - Screenshot of Results step (live mode)
 - Exported CSV/JSON results from the Results step
-- Confirmation that connections appear in the FortiCloud UI
+- Confirmation that connections appear in the FortiMonitor UI
 
 Attach to FMN-45.

@@ -1,6 +1,6 @@
 # FortiMonitor Server Attributes API Contract
 
-This is the **v2 public API** surface used by the *Add/Remove Attributes* tool (FMN-48). Auth choice follows the FMN-45 per-tool rule: attribute mutation is exposed cleanly in v2, so this tool uses the user-supplied RW API key (same `chrome.storage.local` key as the Fabric Connection tool), not FortiCloud session auth.
+This is the **v2 public API** surface used by the *Add/Remove Attributes* tool (FMN-48). Auth choice follows the FMN-45 per-tool rule: attribute mutation is exposed cleanly in v2, so this tool uses the user-supplied RW API key (same `chrome.storage.local` key as the Fabric Connection tool), not FortiMonitor session auth.
 
 Source: live-captured schemas and response samples from the sibling project at `~/Projects/fortimonitor-schema-discovery/` (Swagger 1.2 → OpenAPI 3.0 pipeline). Originally captured 2026-04-15 against production account. Validated against `data/FORTIMONITOR_API_DOCS_v2.md` and `data/response_samples/`.
 

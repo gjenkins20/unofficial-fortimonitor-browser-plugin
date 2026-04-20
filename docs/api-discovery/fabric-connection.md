@@ -1,6 +1,6 @@
 # FortiMonitor Fabric Connection API Contract
 
-This is the **v2 public API** surface used by the *Add Fabric Connection (Bulk)* tool. Unlike port-scope (which lives only in the FortiCloud internal UI), fabric_connection has a clean v2 endpoint, so this tool uses API-key auth instead of FortiCloud session auth. See project memory `no_fortimonitor_api.md` for the per-tool auth-choice rule.
+This is the **v2 public API** surface used by the *Add Fabric Connection (Bulk)* tool. Unlike port-scope (which lives only in the FortiMonitor internal UI), fabric_connection has a clean v2 endpoint, so this tool uses API-key auth instead of FortiMonitor session auth. See project memory `no_fortimonitor_api.md` for the per-tool auth-choice rule.
 
 Source: sibling project at `~/Projects/fortimonitor_fabric_connection/` (Python CLI v1.1) plus its `FortiMonitor_Fabric_Connection_API_Guide_Draft.md`.
 

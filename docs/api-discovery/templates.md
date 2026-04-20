@@ -100,7 +100,7 @@ header contains the mapping id. Response body is empty (`void`).
 
 The `continuous` field controls whether the template continues to add new
 metrics to the server as data collection discovers them. **Default the tool to
-`true`** unless the operator flips a dedicated checkbox — matches the FortiCloud
+`true`** unless the operator flips a dedicated checkbox — matches the FortiMonitor
 UI default and is the low-surprise behavior.
 
 Errors:

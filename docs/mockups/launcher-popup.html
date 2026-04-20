@@ -357,7 +357,7 @@
 
         <div class="session-strip ok">
           <span class="dot"></span>
-          <span>Signed in to FortiCloud</span>
+          <span>Signed in to FortiMonitor</span>
           <span class="link">Open console ↗</span>
         </div>
 
@@ -419,7 +419,7 @@
 
         <div class="session-strip warn">
           <span class="dot"></span>
-          <span>Not signed in — log in to FortiCloud first</span>
+          <span>Not signed in — log in to FortiMonitor first</span>
           <span class="link">Open login ↗</span>
         </div>
 
@@ -437,7 +437,7 @@
                 Remove from Port Scope (Fabric)
                 <span class="badge destructive">Removes</span>
               </div>
-              <div class="tool-desc">Sign in to FortiCloud to enable.</div>
+              <div class="tool-desc">Sign in to FortiMonitor to enable.</div>
             </div>
           </button>
 
@@ -448,7 +448,7 @@
                 Add to Port Scope (Fabric)
                 <span class="badge safe">Adds</span>
               </div>
-              <div class="tool-desc">Sign in to FortiCloud to enable.</div>
+              <div class="tool-desc">Sign in to FortiMonitor to enable.</div>
             </div>
           </button>
         </div>
@@ -479,7 +479,7 @@
 
         <div class="session-strip ok">
           <span class="dot"></span>
-          <span>Signed in to FortiCloud</span>
+          <span>Signed in to FortiMonitor</span>
           <span class="link">Open console ↗</span>
         </div>
 
@@ -529,14 +529,14 @@
   <h2>Design decisions (approved 2026-04-17)</h2>
   <ul>
     <li><strong>Width: 360px.</strong> Chrome popups can go up to 800px but 300–400 is the sweet spot for toolbar popups. 360 matches the density of existing mockups.</li>
-    <li><strong>No subtitle.</strong> Title alone ("Unofficial FortiMonitor Toolkit"). Project is not affiliated with or a client of FortiCloud-the-product; subtitle removed to avoid implying otherwise.</li>
-    <li><strong>Session-status strip.</strong> Every tool needs the FortiCloud cookie, so surfacing sign-in state up front prevents every tool from re-inventing its own error path. Clicking "Open login" / "Open console" opens <code>https://fortimonitor.forticloud.com/</code> in a new tab.</li>
+    <li><strong>No subtitle.</strong> Title alone ("Unofficial FortiMonitor Toolkit"). Project is not affiliated with or a client of FortiMonitor-the-product; subtitle removed to avoid implying otherwise.</li>
+    <li><strong>Session-status strip.</strong> Every tool needs the FortiMonitor session cookie, so surfacing sign-in state up front prevents every tool from re-inventing its own error path. Clicking "Open login" / "Open console" opens <code>https://fortimonitor.forticloud.com/</code> in a new tab.</li>
     <li><strong>Search always visible.</strong> Cheap at the current tool count; valuable as the list grows. No conditional render logic needed later.</li>
     <li><strong>Grouped sections.</strong> "Port scope", future groups could be "Monitoring", "Inventory", "Audit", etc. The <code>tool-group-label</code> is inline HTML so rearrangement is trivial.</li>
     <li><strong>Action-oriented badges.</strong> "Removes" (orange) and "Adds" (green). Operator reads intent, not risk-abstraction — matches how the tools are named and categorized.</li>
     <li><strong>No "Coming soon" entries.</strong> Do not advertise unshipped tools.</li>
     <li><strong>Click behavior.</strong> Click a tool card → <code>chrome.tabs.create({url: '...'})</code> opens that tool's full-tab UI and the popup closes automatically. The existing five-step flow lives inside each tool's tab.</li>
-    <li><strong>Disabled state (Variant B).</strong> When the XSRF-TOKEN cookie is missing, all tools are non-interactive and show "Sign in to FortiCloud to enable" in place of their description. User clicks the session-strip link to log in; popup can re-check on next open.</li>
+    <li><strong>Disabled state (Variant B).</strong> When the XSRF-TOKEN cookie is missing, all tools are non-interactive and show "Sign in to FortiMonitor to enable" in place of their description. User clicks the session-strip link to log in; popup can re-check on next open.</li>
     <li><strong>Icon/logo: placeholder "FM" tile.</strong> No custom glyph planned.</li>
     <li><strong>Footer.</strong> Version + a link to help/feedback. Can host a GitHub-issues link once the repo is public (FMN-41).</li>
   </ul>

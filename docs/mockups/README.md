@@ -42,4 +42,4 @@ The reference device shows populated `admin_status` and `oper_status` values (`"
 
 ## Scope boundary (reaffirmed)
 
-This plugin is frontend-only. No v2 public API calls, no API-key auth, no credentials beyond the FortiCloud browser session. See the project memory file `no_fortimonitor_api.md` for the guardrail rationale.
+This plugin is frontend-only. No v2 public API calls, no API-key auth, no credentials beyond the FortiMonitor browser session. See the project memory file `no_fortimonitor_api.md` for the guardrail rationale.

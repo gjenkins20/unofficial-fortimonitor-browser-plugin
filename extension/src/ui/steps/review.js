@@ -75,7 +75,7 @@ function renderEmpty(container, navigate, store) {
   // URLs or body previews.
   const devSection = h('div', { class: 'body-section dev-diagnostics', hidden: true },
     h('h3', {}, 'Developer diagnostics'),
-    h('p', { class: 'dev-help' }, 'Shown because Developer mode is enabled in Settings. Use Check session to probe FortiCloud directly.')
+    h('p', { class: 'dev-help' }, 'Shown because Developer mode is enabled in Settings. Use Check session to probe FortiMonitor directly.')
   );
   const probeBtn = h('button', { class: 'btn btn-secondary' }, 'Check session');
   const probeResult = h('div', { class: 'dev-probe', hidden: true });
@@ -177,7 +177,7 @@ function interpretProbe(result) {
   }
   const ct = (result.probe?.contentType ?? '').toLowerCase();
   if (ct && !ct.includes('json')) {
-    return 'XSRF cookie is present but FortiCloud returned a non-JSON response — likely a login-page redirect. Session may be expired, or the extension is running in a profile whose cookies do not match the tenant being queried.';
+    return 'XSRF cookie is present but FortiMonitor returned a non-JSON response — likely a login-page redirect. Session may be expired, or the extension is running in a profile whose cookies do not match the tenant being queried.';
   }
   if (result.probe?.ok) {
     return 'Session looks healthy. The earlier failures are likely tenant-scoped — the server IDs you entered may not belong to this tenant.';

@@ -181,7 +181,7 @@ test('FortimonitorClient requires fetch and getCookie', () => {
 
 // ----- non-JSON (login-page) detection ---------------------------
 
-test('getDevicePorts surfaces phase=auth when FortiCloud redirects to an HTML login', async () => {
+test('getDevicePorts surfaces phase=auth when FortiMonitor redirects to an HTML login', async () => {
   const fetchMock = createFetchMock(async () => htmlResponse(
     '<!DOCTYPE html><html><body>login form</body></html>',
     { url: 'https://fortimonitor.forticloud.com/login' }

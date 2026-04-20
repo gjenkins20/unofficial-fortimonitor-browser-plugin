@@ -275,7 +275,7 @@ function summarizeFailure(msg) {
 
 function explainFailure(msg) {
   if (/xsrf|HTTP 4(01|03)/i.test(msg)) {
-    return 'Session cookie may have expired. Re-authenticate in FortiCloud and retry this device. No change was written.';
+    return 'Session cookie may have expired. Re-authenticate in FortiMonitor and retry this device. No change was written.';
   }
   if (/timeout/i.test(msg)) {
     return 'FortiMonitor did not respond within the timeout. The device may be unreachable or the session is experiencing degraded connectivity.';

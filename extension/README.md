@@ -1,6 +1,6 @@
 # Unofficial FortiMonitor Toolkit
 
-Chrome Manifest V3 extension — a suite of operator tools for FortiMonitor. Most tools ride your existing FortiCloud browser session; tools whose capability lives in the v2 public API (e.g., Add Fabric Connection) use a user-supplied RW API key.
+Chrome Manifest V3 extension — a suite of operator tools for FortiMonitor. Most tools ride your existing FortiMonitor browser session; tools whose capability lives in the v2 public API (e.g., Add Fabric Connection) use a user-supplied RW API key.
 
 Clicking the toolbar icon opens a launcher popup; pick a tool from the list and it opens in a full browser tab. Settings (⚙ in the popup header) holds the v2 API key for tools that need one.
 
@@ -8,8 +8,8 @@ Clicking the toolbar icon opens a launcher popup; pick a tool from the list and 
 
 | Tool | Auth | Status | Notes |
 |---|---|---|---|
-| Remove from Port Scope (Fabric) | FortiCloud session | ✅ Shipped (v0.1) | Batch-remove operationally-down WAN interfaces from monitored port scope on Fabric-connected FortiGate instances. Destructive — destroys agent resources and metric history per port removed. |
-| Add to Port Scope (Fabric) | FortiCloud session | ✅ Shipped (v0.2) | Inverse of Remove. Batch-add currently-unmonitored interfaces to port scope on Fabric-connected FortiGate instances. Non-destructive. |
+| Remove from Port Scope (Fabric) | FortiMonitor session | ✅ Shipped (v0.1) | Batch-remove operationally-down WAN interfaces from monitored port scope on Fabric-connected FortiGate instances. Destructive — destroys agent resources and metric history per port removed. |
+| Add to Port Scope (Fabric) | FortiMonitor session | ✅ Shipped (v0.2) | Inverse of Remove. Batch-add currently-unmonitored interfaces to port scope on Fabric-connected FortiGate instances. Non-destructive. |
 | Add Fabric Connection (API) | FortiMonitor v2 API key | 🧪 Beta (v0.3) | Bulk-create OnSight CSF tunnel connections for FortiGate devices via `POST /v2/fabric_connection`. Requires a Read/Write API key (paste once in popup → ⚙ Settings). **Beta until verified in a live FortiMonitor environment.** |
 | Manage Server Attributes (Bulk) | FortiMonitor v2 API key | 🧪 Beta (v0.5) | Bulk-set or remove attribute key/value pairs across many servers via `POST`/`DELETE /v2/server/{id}/server_attribute`. Paste a list of server names or IDs, pick an attribute type, preview per-row plan (add / replace / skip / error), then execute. Uses the same RW API key as Add Fabric Connection. **Beta until verified in a live FortiMonitor environment.** |
 | Manage Server Templates (Bulk) | FortiMonitor v2 API key | 🧪 Beta (v0.6) | Bulk-attach or detach monitoring templates across many servers via `POST`/`DELETE /v2/server/{id}/template`. Detach supports `dissociate` (safe) and `delete` (destructive — wipes metric history); destructive detach and large batches require a typed confirmation. Uses the same RW API key as Add Fabric Connection. **Beta until verified in a live FortiMonitor environment.** |
@@ -21,7 +21,7 @@ Clicking the toolbar icon opens a launcher popup; pick a tool from the list and 
 2. Enable **Developer mode** (top-right toggle)
 3. Click **Load unpacked**
 4. Select the `extension/` directory inside this repo
-5. Log in to FortiCloud in any tab — the extension rides whatever session you already have
+5. Log in to FortiMonitor in any tab — the extension rides whatever session you already have
 6. Click the toolbar icon to open the launcher
 
 ## Run tests
@@ -35,7 +35,7 @@ Uses Node's built-in `node:test` runner — no `npm install` required.
 
 ## Scope guardrails
 
-- Per-tool auth choice is intentional. Tools whose capability lives only in the FortiCloud UI (port-scope) ride the browser session. Tools whose capability is exposed cleanly in the v2 API (fabric_connection) use a user-supplied API key.
+- Per-tool auth choice is intentional. Tools whose capability lives only in the FortiMonitor UI (port-scope) ride the browser session. Tools whose capability is exposed cleanly in the v2 API (fabric_connection) use a user-supplied API key.
 - Each tool declares its own action scope (e.g., Remove targets WAN interfaces; Add Fabric Connection targets new device onboarding).
 - Dry-run is the default for every batch.
 - Destructive and write-capable tools require a typed confirmation phrase before live writes.

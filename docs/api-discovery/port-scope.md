@@ -1,6 +1,6 @@
-# FortiCloud Port Scope API Contract
+# FortiMonitor Port Scope API Contract
 
-Captured from live FortiCloud UI on 2026-04-16 against test device FGVM01TM24006844 (server 42024060). This is the internal UI-only API that the browser extension will consume to provide per-port monitoring scope control — the capability missing from the FortiMonitor v2 public API (see FMN-34).
+Captured from live FortiMonitor UI on 2026-04-16 against test device FGVM01TM24006844 (server 42024060). This is the internal UI-only API that the browser extension will consume to provide per-port monitoring scope control — the capability missing from the FortiMonitor v2 public API (see FMN-34).
 
 ---
 
@@ -94,7 +94,7 @@ Body: (empty)
 
 Two components:
 
-1. **Session cookie** — HttpOnly, set at FortiCloud login, sent automatically by the browser. Not readable from JavaScript. Not visible in `document.cookie`.
+1. **Session cookie** — HttpOnly, set at FortiMonitor login, sent automatically by the browser. Not readable from JavaScript. Not visible in `document.cookie`.
 2. **CSRF token** — a non-HttpOnly cookie named `XSRF-TOKEN` (127-char opaque string). The UI sends it back as the `X-XSRF-TOKEN` request header on state-changing calls. The header value equals the cookie value verbatim (no URL decoding required — the cookie is stored un-encoded).
 
 This is the standard Angular/Axios XSRF convention (`axios` by default reads `XSRF-TOKEN` cookie and mirrors it into `X-XSRF-TOKEN` header for same-origin requests).

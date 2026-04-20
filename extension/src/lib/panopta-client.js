@@ -2,7 +2,7 @@
 // FortiMonitor v2 public API client (Panopta hosted).
 //
 // Used by the Add Fabric Connection (Bulk) tool. Unlike FortimonitorClient
-// (which rides FortiCloud session cookies for internal-UI endpoints), this
+// (which rides FortiMonitor session cookies for internal-UI endpoints), this
 // client uses an `Authorization: ApiKey {key}` header with a user-supplied
 // RW API key.
 //
@@ -507,7 +507,7 @@ export class PanoptaClient {
 
   /**
    * Attach a template to a server. `continuous=true` (default) matches
-   * the FortiCloud UI's default: the template keeps adding new metrics
+   * the FortiMonitor UI's default: the template keeps adding new metrics
    * to the server as data collection discovers them.
    *
    * The API does NOT deduplicate — a repeat POST creates a second
