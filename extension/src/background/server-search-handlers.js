@@ -1,12 +1,12 @@
 // Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Background handlers for the Search Servers tool (FMN-65).
 //
-// Free-text search across a tenant's /server records. The /server endpoint
-// has no server-side filter for model, device_sub_type, tags, or attribute
-// values, so we paginate the full list and filter client-side against a
-// superset of likely fields (name, fqdn, additional_fqdns[], device_type,
-// device_sub_type, tags[], attributes[].value). This makes the tool robust
-// to model/SKU info living in any of those fields.
+// Filters a tenant's /server records by a specific attribute. Callers pick
+// an attribute type by name (e.g., "Model") from the tenant's
+// /server_attribute_type list, then enter a value to match
+// (e.g., "FGT60F"). This is deliberately narrower than a cross-field
+// free-text search — it is the shape the operator actually wants for
+// questions like "which devices have Model=FGT60F".
 //
 // Auth: v2 API key via createProductionPanoptaClient (read-only).
 
@@ -28,10 +28,6 @@ export function isRetryable(err) {
   return true;
 }
 
-/**
- * Extract the numeric server id from a record whose only id carrier is
- * the trailing segment of its `url` field.
- */
 function extractServerId(server) {
   if (server == null) return null;
   if (server.id != null) return server.id;
@@ -43,60 +39,53 @@ function extractServerId(server) {
 }
 
 /**
- * Check whether a single /server record matches `term`. Iterates over the
- * fields most likely to carry a FortiGate model / SKU / hostname. Returns
- * the first match for display so the operator can see *why* the record
- * hit — useful when the search target isn't where you expected.
+ * Decide whether a single /server record has an attribute that matches the
+ * operator's filter. Only considers the `attributes[]` array — not tags,
+ * not name, not fqdn. Filtering is keyed by `name` OR `textkey` (either
+ * can be supplied as `attributeName`) so the operator can use whichever
+ * appears in their tenant.
  *
- * @param {object} server — raw /server record
+ * @param {object} server                    — raw /server record
  * @param {object} opts
- * @param {string} opts.term
+ * @param {string} opts.attributeName        — attribute display name OR textkey
+ * @param {string} opts.value                — value to match
+ * @param {boolean} [opts.exactMatch=true]   — true: attr.value === value; false: contains
  * @param {boolean} [opts.caseInsensitive=true]
- * @returns {{ matched: boolean, field?: string, value?: string }}
+ * @returns {{ matched: boolean, attributeName?: string, textkey?: string, value?: string }}
  */
-export function matchesServer(server, { term, caseInsensitive = true } = {}) {
-  if (!server || !term) return { matched: false };
-  const needle = caseInsensitive ? String(term).toLowerCase() : String(term);
-  const test = (v) => {
-    if (v == null) return false;
-    const s = caseInsensitive ? String(v).toLowerCase() : String(v);
-    return s.includes(needle);
+export function matchesAttribute(server, {
+  attributeName,
+  value,
+  exactMatch = true,
+  caseInsensitive = true
+} = {}) {
+  if (!server || !attributeName || value == null) return { matched: false };
+  if (!Array.isArray(server.attributes)) return { matched: false };
+
+  const nameNeedle = caseInsensitive ? String(attributeName).toLowerCase() : String(attributeName);
+  const valueNeedle = caseInsensitive ? String(value).toLowerCase() : String(value);
+
+  const nameEq = (s) => {
+    if (s == null) return false;
+    const t = caseInsensitive ? String(s).toLowerCase() : String(s);
+    return t === nameNeedle;
+  };
+  const valueMatches = (s) => {
+    if (s == null) return false;
+    const t = caseInsensitive ? String(s).toLowerCase() : String(s);
+    return exactMatch ? t === valueNeedle : t.includes(valueNeedle);
   };
 
-  if (test(server.name)) return { matched: true, field: 'name', value: server.name };
-  if (test(server.fqdn)) return { matched: true, field: 'fqdn', value: server.fqdn };
-
-  if (Array.isArray(server.additional_fqdns)) {
-    for (const fq of server.additional_fqdns) {
-      if (test(fq)) return { matched: true, field: 'additional_fqdns', value: fq };
-    }
+  for (const attr of server.attributes) {
+    if (!nameEq(attr?.name) && !nameEq(attr?.textkey)) continue;
+    if (!valueMatches(attr?.value)) continue;
+    return {
+      matched: true,
+      attributeName: attr.name ?? null,
+      textkey: attr.textkey ?? null,
+      value: attr.value ?? null
+    };
   }
-
-  if (test(server.device_type)) {
-    return { matched: true, field: 'device_type', value: server.device_type };
-  }
-  if (test(server.device_sub_type)) {
-    return { matched: true, field: 'device_sub_type', value: server.device_sub_type };
-  }
-
-  if (Array.isArray(server.tags)) {
-    for (const tag of server.tags) {
-      if (test(tag)) return { matched: true, field: 'tags', value: tag };
-    }
-  }
-
-  if (Array.isArray(server.attributes)) {
-    for (const attr of server.attributes) {
-      if (test(attr?.value)) {
-        return {
-          matched: true,
-          field: `attributes[${attr.name ?? attr.textkey ?? '?'}]`,
-          value: attr.value
-        };
-      }
-    }
-  }
-
   return { matched: false };
 }
 
@@ -112,39 +101,42 @@ export function shapeMatch(server, matchInfo) {
     additionalFqdns: Array.isArray(server.additional_fqdns) ? server.additional_fqdns.slice() : [],
     deviceType: server.device_type ?? null,
     deviceSubType: server.device_sub_type ?? null,
-    matchedField: matchInfo.field ?? null,
+    matchedAttributeName: matchInfo.attributeName ?? null,
+    matchedAttributeTextkey: matchInfo.textkey ?? null,
     matchedValue: matchInfo.value ?? null
   };
 }
 
 /**
- * Page through /server and return every record that matches `term`.
- * Emits `onPage` after every page so the UI can show live progress
- * ("scanned N of M, K matches so far").
+ * Page through /server and return every record whose attributes contain a
+ * match for the operator's filter. Emits `onPage` after every page so the
+ * UI can show live progress.
  *
  * @param {object} args
- * @param {object} args.client           — PanoptaClient (listServers)
- * @param {string} args.term
+ * @param {object} args.client                   — PanoptaClient (listServers)
+ * @param {string} args.attributeName
+ * @param {string} args.value
+ * @param {boolean} [args.exactMatch=true]
  * @param {boolean} [args.caseInsensitive=true]
  * @param {number}  [args.pageSize=100]
- * @param {number}  [args.maxPages=1000] — safety guard against runaway pagination
+ * @param {number}  [args.maxPages=1000]
  * @param {AbortSignal} [args.signal]
  * @param {(evt:{fetched:number,total:number,matches:number}) => void} [args.onPage]
- * @returns {Promise<{ matches: Array, totalScanned: number, totalAvailable: number }>}
  */
-export async function searchServers({
+export async function searchServersByAttribute({
   client,
-  term,
+  attributeName,
+  value,
+  exactMatch = true,
   caseInsensitive = true,
   pageSize = 100,
   maxPages = 1000,
   signal,
   onPage
 } = {}) {
-  if (!client) throw new TypeError('searchServers: client is required');
-  if (!term || typeof term !== 'string') {
-    throw new TypeError('searchServers: term is required');
-  }
+  if (!client) throw new TypeError('searchServersByAttribute: client is required');
+  if (!attributeName) throw new TypeError('searchServersByAttribute: attributeName is required');
+  if (value == null || value === '') throw new TypeError('searchServersByAttribute: value is required');
 
   const matches = [];
   let offset = 0;
@@ -164,7 +156,7 @@ export async function searchServers({
     }
 
     for (const server of list) {
-      const info = matchesServer(server, { term, caseInsensitive });
+      const info = matchesAttribute(server, { attributeName, value, exactMatch, caseInsensitive });
       if (info.matched) matches.push(shapeMatch(server, info));
     }
 
@@ -199,28 +191,42 @@ export function createServerSearchHandlers({ events = {}, getClient } = {}) {
   let currentRun = null;
 
   return {
+    'search:list-attribute-types': async () => {
+      const client = await factory();
+      const types = await client.listAttributeTypes();
+      // Sort by display name for predictable dropdown order.
+      return types.slice().sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
+    },
+
     'search:servers': async (payload) => {
       if (currentRun) throw new Error('A server-search run is already in progress');
       const ac = new AbortController();
       const startedAt = new Date().toISOString();
       currentRun = { ac, startedAt };
       try {
-        const client = await factory();
-        const term = String(payload?.term ?? '').trim();
-        if (!term) throw new Error('search term is required');
-        const caseInsensitive = payload?.caseInsensitive !== false; // default true
+        const attributeName = String(payload?.attributeName ?? '').trim();
+        const value = String(payload?.value ?? '').trim();
+        if (!attributeName) throw new Error('attributeName is required');
+        if (!value) throw new Error('value is required');
+        const exactMatch = payload?.exactMatch !== false;            // default true
+        const caseInsensitive = payload?.caseInsensitive !== false;  // default true
         const pageSize = Number.isFinite(payload?.pageSize) ? payload.pageSize : 100;
 
-        const { matches, totalScanned, totalAvailable } = await searchServers({
+        const client = await factory();
+        const { matches, totalScanned, totalAvailable } = await searchServersByAttribute({
           client,
-          term,
+          attributeName,
+          value,
+          exactMatch,
           caseInsensitive,
           pageSize,
           signal: ac.signal,
           onPage: (evt) => emit('search:page', evt)
         });
         return {
-          term,
+          attributeName,
+          value,
+          exactMatch,
           caseInsensitive,
           matches,
           totalScanned,

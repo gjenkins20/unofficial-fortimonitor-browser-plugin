@@ -1,7 +1,8 @@
 // Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Search Servers — Step 2 (Results).
-// Renders the matched server table and exports a CSV of server_id, name,
-// fqdn — the report the operator asked for.
+// Renders the matched server table and exports a CSV: server_id, name,
+// fqdn — the report the operator asked for, plus extra columns for
+// verification (matched attribute name/value).
 
 import { h, titleBar, downloadBlob } from '../../../lib/dom.js';
 import { searchBreadcrumbs } from './start.js';
@@ -18,9 +19,9 @@ function buildCsv(result) {
   lines.push(`# Unofficial FortiMonitor Toolkit — Search Servers report`);
   lines.push(`# Author: Gregori Jenkins — https://www.linkedin.com/in/gregorijenkins`);
   lines.push(`# Generated: ${new Date().toISOString()}`);
-  lines.push(`# Term: ${result.term} — caseInsensitive=${result.caseInsensitive}`);
+  lines.push(`# Filter: attribute="${result.attributeName}" value${result.exactMatch ? '=' : '~'}"${result.value}" caseInsensitive=${result.caseInsensitive}`);
   lines.push(`# ${result.matches.length} match${result.matches.length === 1 ? '' : 'es'} out of ${result.totalScanned} scanned`);
-  lines.push(['server_id', 'name', 'fqdn', 'additional_fqdns', 'device_type', 'device_sub_type', 'matched_field', 'matched_value']
+  lines.push(['server_id', 'name', 'fqdn', 'additional_fqdns', 'device_type', 'device_sub_type', 'matched_attribute', 'matched_value']
     .map(csvEscape).join(','));
   for (const m of result.matches) {
     lines.push([
@@ -30,7 +31,7 @@ function buildCsv(result) {
       (m.additionalFqdns ?? []).join('|'),
       m.deviceType ?? '',
       m.deviceSubType ?? '',
-      m.matchedField ?? '',
+      m.matchedAttributeName ?? '',
       m.matchedValue ?? ''
     ].map(csvEscape).join(','));
   }
@@ -46,12 +47,16 @@ export function render({ container, store, navigate }) {
   const frame = h('div', { class: 'mockup-frame' });
   frame.appendChild(titleBar('Results', { toolName: TOOL_NAME }));
 
-  const result = store.runResult ?? { term: '', matches: [], totalScanned: 0 };
+  const result = store.runResult ?? {
+    attributeName: '', value: '', exactMatch: true, caseInsensitive: true,
+    matches: [], totalScanned: 0
+  };
   const matchCount = result.matches.length;
+  const op = result.exactMatch ? '=' : '~';
 
   frame.appendChild(h('div', { class: 'step-header' },
     searchBreadcrumbs('results'),
-    h('h2', {}, `${matchCount} match${matchCount === 1 ? '' : 'es'} for "${result.term}"`),
+    h('h2', {}, `${matchCount} server${matchCount === 1 ? '' : 's'} with ${result.attributeName} ${op} "${result.value}"`),
     h('p', {}, `Scanned ${result.totalScanned} server record${result.totalScanned === 1 ? '' : 's'}.`)
   ));
 
@@ -67,7 +72,6 @@ export function render({ container, store, navigate }) {
       h('th', {}, 'Server ID'),
       h('th', {}, 'Name'),
       h('th', {}, 'FQDN'),
-      h('th', {}, 'Matched field'),
       h('th', {}, 'Matched value')
     ));
     const tbody = h('tbody', {});
@@ -77,7 +81,6 @@ export function render({ container, store, navigate }) {
         h('td', {}, m.id != null ? String(m.id) : '—'),
         h('td', {}, m.name ?? '—'),
         h('td', {}, m.fqdn ?? '—'),
-        h('td', {}, h('span', { class: 'muted' }, m.matchedField ?? '—')),
         h('td', {}, m.matchedValue ?? '—')
       ));
     });
@@ -102,8 +105,9 @@ export function render({ container, store, navigate }) {
   });
   exportCsvBtn.addEventListener('click', () => {
     const ts = new Date().toISOString().replace(/[:.]/g, '-');
-    const safeTerm = (result.term || 'search').replace(/[^A-Za-z0-9._-]+/g, '_').slice(0, 40);
-    downloadBlob(`server-search-${safeTerm}-${ts}.csv`, 'text/csv', buildCsv(result));
+    const safeAttr = (result.attributeName || 'attr').replace(/[^A-Za-z0-9._-]+/g, '_').slice(0, 24);
+    const safeVal = (result.value || 'value').replace(/[^A-Za-z0-9._-]+/g, '_').slice(0, 24);
+    downloadBlob(`server-search-${safeAttr}-${safeVal}-${ts}.csv`, 'text/csv', buildCsv(result));
   });
   newBatchBtn.addEventListener('click', () => {
     store.runResult = null;
