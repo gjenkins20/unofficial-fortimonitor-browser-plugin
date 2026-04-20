@@ -321,7 +321,7 @@
       </div>
       <div class="fail-body">
         <div class="err-summary">HTTP 403 — XSRF token rejected</div>
-        <div>Session cookie may have expired during the batch. Re-authenticate in FortiCloud and retry this device. No change was written.</div>
+        <div>Session cookie may have expired during the batch. Re-authenticate in FortiMonitor and retry this device. No change was written.</div>
         <div class="err-detail">POST /config/save_port_selection → 403 Forbidden (XSRF token mismatch)</div>
         <div class="attempts">Attempts: 3 of 3 (failed at 14:22:04, 14:22:07, 14:22:11) · Last: 14:22:11</div>
       </div>
@@ -389,11 +389,11 @@
   · <strong>Verdict banner</strong> has three variants: success (all devices succeeded, green), partial (some failed, amber — shown here), fail (all failed, red). Copy and icon adjust accordingly.<br>
   · <strong>Download report</strong> is a durable audit record. Unlike Remove (which is irreversible), Add can be undone by running the Remove tool against the same devices — but report-as-audit discipline still applies. Report includes batch ID, timing, per-device outcomes, ports added, and error details.<br>
   · <strong>Retry all failures</strong> is a secondary button (not danger-red as in the Remove tool) — retrying an add is non-destructive.<br>
-  · <strong>Failures section</strong> shows every device that did not succeed, with concrete error, attempt history, and an inline Retry button. Retries re-submit just that device using the current session. If the session is expired the operator must re-authenticate in FortiCloud first — the plugin does not handle SSO.<br>
+  · <strong>Failures section</strong> shows every device that did not succeed, with concrete error, attempt history, and an inline Retry button. Retries re-submit just that device using the current session. If the session is expired the operator must re-authenticate in FortiMonitor first — the plugin does not handle SSO.<br>
   · <strong>Retry all failures</strong> runs the failed devices through the same execution pipeline as a mini-batch; results are merged into this view when done.<br>
   · <strong>Start new batch</strong> clears the current queue and returns to step 1 (<code>batch-start.html</code>). <strong>Close</strong> dismisses the plugin UI but preserves the batch record in <code>chrome.storage.local</code> so the operator can reopen it later.<br>
   · Skipped groups are reflected explicitly so the operator has a complete picture of what the batch touched vs. didn't.<br>
-  · All reads and writes use the existing FortiCloud session — the same one the WebGUI uses. Nothing runs outside the browser.
+  · All reads and writes use the existing FortiMonitor session — the same one the WebGUI uses. Nothing runs outside the browser.
 </div>
 
 </body>

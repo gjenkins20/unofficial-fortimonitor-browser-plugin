@@ -1,11 +1,11 @@
 // Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // FortiMonitor session-riding client.
 //
-// Wraps the two internal FortiCloud WebGUI operations the plugin needs:
+// Wraps the two internal FortiMonitor WebGUI operations the plugin needs:
 //   - GET /onboarding/getDevicePorts   (read port scope)
 //   - POST /config/save_port_selection (write port scope)
 //
-// Auth is the user's existing FortiCloud session cookie, plus the
+// Auth is the user's existing FortiMonitor session cookie, plus the
 // X-XSRF-TOKEN header derived from the XSRF-TOKEN cookie value.
 //
 // All IO is injectable (fetch, getCookie) so this module is testable in
@@ -93,7 +93,7 @@ export function buildSavePortSelectionUrl({
 }
 
 /**
- * Normalize the device-ports response shape. The FortiCloud WebGUI wraps
+ * Normalize the device-ports response shape. The FortiMonitor WebGUI wraps
  * the payload in { data: ... }; callers should not need to care.
  */
 export function parseDevicePortsResponse(json) {
@@ -178,7 +178,7 @@ export class FortimonitorClient {
         contentType
       });
     }
-    // FortiCloud redirects unauthenticated requests to a login HTML page
+    // FortiMonitor redirects unauthenticated requests to a login HTML page
     // with HTTP 200, so res.ok doesn't catch it. Sniff content-type and
     // surface a clean auth error instead of a JSON parse failure.
     if (contentType && !contentType.toLowerCase().includes('json')) {
@@ -188,7 +188,7 @@ export class FortimonitorClient {
         bodyPreview = redactSensitive(text.slice(0, 200));
       } catch { /* best effort */ }
       throw new FortimonitorError(
-        'FortiCloud returned a non-JSON response (likely a login page). Your browser session is not being recognized by the extension — confirm you are logged into fortimonitor.forticloud.com in this Chrome profile and that the server ID belongs to that tenant.',
+        'FortiMonitor returned a non-JSON response (likely a login page). Your browser session is not being recognized by the extension — confirm you are logged into fortimonitor.forticloud.com in this Chrome profile and that the server ID belongs to that tenant.',
         {
           status: res.status,
           phase: 'auth',
@@ -214,7 +214,7 @@ export class FortimonitorClient {
     const xsrf = await this.getCookie(XSRF_COOKIE_NAME, origin);
     if (!xsrf) {
       throw new FortimonitorError(
-        `No ${XSRF_COOKIE_NAME} cookie — user is not logged in to FortiCloud.`,
+        `No ${XSRF_COOKIE_NAME} cookie — user is not logged in to FortiMonitor.`,
         { phase: 'auth' }
       );
     }
@@ -229,7 +229,7 @@ export class FortimonitorClient {
         'Content-Type': 'application/x-www-form-urlencoded',
         'X-XSRF-TOKEN': xsrf
       }
-      // body intentionally empty: FortiCloud puts the form data in the query string
+      // body intentionally empty: FortiMonitor puts the form data in the query string
     });
     if (!res.ok) {
       throw new FortimonitorError(`save_port_selection failed: HTTP ${res.status}`, {

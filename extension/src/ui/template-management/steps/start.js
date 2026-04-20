@@ -68,7 +68,7 @@ export function render({ container, store, navigate }) {
     h('label', {}, continuousInput,
       h('span', {},
         h('strong', {}, 'Continuous'),
-        h('span', { class: 'muted' }, ' — keep adding new metrics as collection discovers them (matches FortiCloud default)')
+        h('span', { class: 'muted' }, ' — keep adding new metrics as collection discovers them (matches FortiMonitor default)')
       )
     )
   );

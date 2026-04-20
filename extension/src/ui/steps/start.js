@@ -17,7 +17,7 @@ export function render({ container, store, navigate }) {
   frame.appendChild(h('div', { class: 'step-header' },
     breadcrumbs('start'),
     h('h2', {}, 'Load devices from CSV'),
-    h('p', {}, 'Provide the list of FortiMonitor server IDs you want to review. The plugin will read each device\'s port scope using your active FortiCloud session, group devices by identical interface state, and surface one review prompt per unique group.')
+    h('p', {}, 'Provide the list of FortiMonitor server IDs you want to review. The plugin will read each device\'s port scope using your active FortiMonitor session, group devices by identical interface state, and surface one review prompt per unique group.')
   ));
 
   const body = h('div', { class: 'body-section' });
@@ -56,7 +56,7 @@ export function render({ container, store, navigate }) {
   const startBtn = h('button', { class: 'btn btn-primary', disabled: true }, 'Start review →');
   const cancelBtn = h('button', { class: 'btn btn-secondary' }, 'Clear');
   const actionBar = h('div', { class: 'action-bar' },
-    h('div', { class: 'left' }, 'Uses your active FortiCloud session (cookies)'),
+    h('div', { class: 'left' }, 'Uses your active FortiMonitor session (cookies)'),
     h('div', { class: 'right' }, cancelBtn, startBtn)
   );
   frame.appendChild(actionBar);

@@ -495,13 +495,13 @@
 
 <div class="legend">
   <strong>Mockup notes (not rendered in final plugin):</strong><br>
-  · <strong>Scale model:</strong> plugin reads a CSV of devices, silently reads each device's port scope in the background using the existing FortiCloud session, groups devices by fingerprint (exact match on the set of <code>{port_name, admin_status, oper_status}</code> tuples), presents ONE prompt per unique group. 87 devices might collapse to 5 groups → 5 decisions.<br>
+  · <strong>Scale model:</strong> plugin reads a CSV of devices, silently reads each device's port scope in the background using the existing FortiMonitor session, groups devices by fingerprint (exact match on the set of <code>{port_name, admin_status, oper_status}</code> tuples), presents ONE prompt per unique group. 87 devices might collapse to 5 groups → 5 decisions.<br>
   · Scope: WAN interfaces only. Operator identifies WAN rows manually (naming is inconsistent across sites: <code>wanN</code>, <code>(ISP Name)</code>, <code>xN</code>, etc).<br>
   · No pre-selection. Operator checks WAN row(s) that are <code>oper_status=down</code>. Decision applies to every device in the current group.<br>
   · <code>fortilink</code> row is visually flagged as "fabric link — keep" — the only protected name in v1 scope.<br>
   · "Queue for N devices" stages the decision against every device in this group in <code>chrome.storage.local</code>. Nothing writes to FortiMonitor until queue execution.<br>
   · Next mockup in sequence: queue-overview screen — batch audit, destructive confirmation, per-device execution progress.<br>
-  · All reads and writes use the existing FortiCloud session — the same one the WebGUI uses when an operator opens the Port Selection dialog manually. Nothing runs outside the browser.
+  · All reads and writes use the existing FortiMonitor session — the same one the WebGUI uses when an operator opens the Port Selection dialog manually. Nothing runs outside the browser.
 </div>
 
 </body>

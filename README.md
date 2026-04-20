@@ -1,19 +1,19 @@
 # Unofficial FortiMonitor Toolkit
 
-A Chrome Manifest V3 browser extension that bundles batch operator tools for [FortiMonitor](https://www.fortinet.com/products/fortimonitor) (FortiCloud). Each tool picks the auth surface that matches the underlying capability: tools whose capability lives only in the FortiCloud web UI ride your existing browser session; tools whose capability is exposed cleanly in the v2 public API use a user-supplied RW API key.
+A Chrome Manifest V3 browser extension that bundles batch operator tools for [FortiMonitor](https://www.fortinet.com/products/fortimonitor). Each tool picks the auth surface that matches the underlying capability: tools whose capability lives only in the FortiMonitor web UI ride your existing browser session; tools whose capability is exposed cleanly in the v2 public API use a user-supplied RW API key.
 
 **This project is not affiliated with, endorsed by, or associated with Fortinet.** It's an unofficial operator tool that automates batch tasks the FortiMonitor web UI exposes one-at-a-time.
 
 ## Why this exists
 
-Some FortiMonitor batch operations live only in the FortiCloud UI (per-port scope reconfiguration is the canonical example), and some are exposed cleanly in the v2 API (e.g., bulk fabric-connection creation) but the public CLIs require operators to paste fully-resolved resource URLs per device. Running either workflow against 80+ devices manually is not a reasonable ask of a human. This extension folds both classes of operation into a single launcher with a consistent Load → Review → Execute UX.
+Some FortiMonitor batch operations live only in the FortiMonitor web UI (per-port scope reconfiguration is the canonical example), and some are exposed cleanly in the v2 API (e.g., bulk fabric-connection creation) but the public CLIs require operators to paste fully-resolved resource URLs per device. Running either workflow against 80+ devices manually is not a reasonable ask of a human. This extension folds both classes of operation into a single launcher with a consistent Load → Review → Execute UX.
 
 ## Tools
 
 | Tool | Auth | Status | Action |
 |---|---|---|---|
-| **Remove from Port Scope (Fabric)** | FortiCloud session | Shipped (v0.1) | Batch-remove operationally-down WAN interfaces from monitored port scope on Fabric-connected FortiGate instances. Destructive — deletes agent resources and metric history per removed port. |
-| **Add to Port Scope (Fabric)** | FortiCloud session | Shipped (v0.2) | Inverse of Remove — batch-add currently-unmonitored interfaces to port scope. Non-destructive. |
+| **Remove from Port Scope (Fabric)** | FortiMonitor session | Shipped (v0.1) | Batch-remove operationally-down WAN interfaces from monitored port scope on Fabric-connected FortiGate instances. Destructive — deletes agent resources and metric history per removed port. |
+| **Add to Port Scope (Fabric)** | FortiMonitor session | Shipped (v0.2) | Inverse of Remove — batch-add currently-unmonitored interfaces to port scope. Non-destructive. |
 | **Add Fabric Connection (API)** | FortiMonitor v2 API key | Beta (v0.3) | Bulk-create OnSight CSF tunnel connections for FortiGate devices via `POST /v2/fabric_connection`. Resource pickers (OnSight, server group, optional appliance group) populate from the API. Requires an RW API key — paste once in popup → ⚙ Settings. **Marked Beta pending live-environment verification.** |
 | **Manage Server Attributes (Bulk)** | FortiMonitor v2 API key | Beta (v0.5) | Bulk-set or remove attribute key/value pairs across many servers via `POST`/`DELETE /v2/server/{id}/server_attribute`. Paste a list of server names or IDs, pick an attribute type, preview per-row plan (add / replace / skip / error), then execute. Uses the same RW API key as Add Fabric Connection. **Marked Beta pending live-environment verification.** |
 | **Manage Server Templates (Bulk)** | FortiMonitor v2 API key | Beta (v0.6) | Bulk-attach or detach monitoring templates across many servers via `POST`/`DELETE /v2/server/{id}/template`. Attach mode is non-destructive. Detach mode offers two strategies: `dissociate` (keep metrics the template seeded) and `delete` (wipe metrics and attributes the template seeded — **destructive, no undo**). Destructive detach and large batches (>10 servers) require a typed-confirmation phrase. Uses the same RW API key as Add Fabric Connection. **Marked Beta pending live-environment verification.** |
@@ -59,7 +59,7 @@ docs/
 
 ## Scope guardrails
 
-- **Per-tool auth choice.** Tools whose capability is UI-only (port-scope) ride the FortiCloud browser session. Tools whose capability has a clean v2 endpoint (fabric_connection) use a user-supplied RW API key. Neither auth model leaks across tools.
+- **Per-tool auth choice.** Tools whose capability is UI-only (port-scope) ride the FortiMonitor browser session. Tools whose capability has a clean v2 endpoint (fabric_connection) use a user-supplied RW API key. Neither auth model leaks across tools.
 - **Dry-run is the default** for every batch. Write-capable tools require a typed confirmation phrase before live writes.
 - **`fortilink`** (fabric link) is visually flagged across every port-scope tool — it's protected by name.
 - **Port-scope tools assume Fabric-connected FortiGate instances.** Add Fabric Connection itself onboards FortiGates that aren't yet under a fabric, so it has no such constraint.

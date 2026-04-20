@@ -2,7 +2,7 @@
 import { isDevModeEnabled, setDevModeEnabled, isAskClaudeEnabled, setAskClaudeEnabled } from '../lib/settings.js';
 import { resolveFortimonitorOrigin, FEDERATION_ORIGIN } from '../lib/origin-resolver.js';
 
-const FORTICLOUD_URL = `${FEDERATION_ORIGIN}/`;
+const FORTIMONITOR_URL = `${FEDERATION_ORIGIN}/`;
 const XSRF_COOKIE = 'XSRF-TOKEN';
 const API_KEY_STORAGE_KEY = 'panopta.apiKey';
 const CLAUDE_KEY_STORAGE_KEY = 'claude.apiKey';
@@ -47,8 +47,8 @@ function setSessionState(ok) {
   strip.classList.toggle('ok', ok);
   strip.classList.toggle('warn', !ok);
   text.textContent = ok
-    ? 'Signed in to FortiCloud'
-    : 'Not signed in — log in to FortiCloud first';
+    ? 'Signed in to FortiMonitor'
+    : 'Not signed in — log in to FortiMonitor first';
   link.textContent = ok ? 'Open console ↗' : 'Open login ↗';
 }
 
@@ -64,8 +64,8 @@ function applyToolGuards({ sessionOk, apiKeyOk, claudeKeyOk }) {
     card.classList.toggle('disabled', blocked);
     const desc = card.querySelector('.tool-desc');
     if (needsSession && !sessionOk) {
-      desc.textContent = 'Sign in to FortiCloud to enable.';
-      card.title = 'Sign in to FortiCloud (https://fortimonitor.forticloud.com/) to enable this tool.';
+      desc.textContent = 'Sign in to FortiMonitor to enable.';
+      card.title = 'Sign in to FortiMonitor (https://fortimonitor.forticloud.com/) to enable this tool.';
     } else if (needsApiKey && !apiKeyOk) {
       desc.textContent = 'Set a FortiMonitor v2 API key in Settings (⚙) to enable.';
       card.title = 'No API key configured. Click ⚙ in the popup header to paste your FortiMonitor v2 RW API key.';
@@ -300,7 +300,7 @@ function init() {
 
   document.getElementById('session-link').addEventListener('click', (e) => {
     e.preventDefault();
-    openExternal(FORTICLOUD_URL);
+    openExternal(FORTIMONITOR_URL);
   });
 
   for (const card of document.querySelectorAll('.tool-card')) {
