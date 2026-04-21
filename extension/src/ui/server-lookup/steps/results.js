@@ -1,5 +1,5 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// Server Name → ID Lookup — Step 2 (Results).
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Server Name → ID Lookup - Step 2 (Results).
 // Renders the resolved table and exports a minimal two-column
 // name,server_id CSV that drops cleanly into other tools.
 
@@ -17,7 +17,7 @@ function csvEscape(v) {
  * Build the CSV the user asked for: one row per input name, with the
  * server_id if there was exactly one match. Ambiguous/not_found/error
  * rows have an empty server_id so the file is a safe drop-in for other
- * tools — the status column preserves the distinction for humans.
+ * tools - the status column preserves the distinction for humans.
  */
 function buildCsv(results) {
   const header = ['name', 'server_id', 'status', 'match_count', 'detail'];
@@ -32,7 +32,7 @@ function buildCsv(results) {
 }
 
 function copyToClipboard(text) {
-  // Prefer the async clipboard API — extension pages have permission by
+  // Prefer the async clipboard API - extension pages have permission by
   // default when triggered by a user gesture.
   if (navigator.clipboard?.writeText) {
     return navigator.clipboard.writeText(text);
@@ -59,7 +59,7 @@ export function render({ container, store, navigate }) {
   frame.appendChild(h('div', { class: 'step-header' },
     lookupBreadcrumbs('results'),
     h('h2', {}, `${results.length} name${results.length === 1 ? '' : 's'} resolved`),
-    h('p', {}, summaryParts.join(' · ') || '—')
+    h('p', {}, summaryParts.join(' · ') || '-')
   ));
 
   const body = h('div', { class: 'body-section' });
@@ -76,8 +76,8 @@ export function render({ container, store, navigate }) {
   ));
   const tbody = h('tbody', {});
   results.forEach((r, i) => {
-    let idCell = '—';
-    let candidatesCell = '—';
+    let idCell = '-';
+    let candidatesCell = '-';
     if (r.status === 'found') {
       idCell = String(r.serverId);
       candidatesCell = '1';

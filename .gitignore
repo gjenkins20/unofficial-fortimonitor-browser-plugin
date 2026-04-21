@@ -12,7 +12,7 @@ build/
 *.log
 npm-debug.log*
 
-# Environment / secrets (defense in depth — nothing secret currently expected)
+# Environment / secrets (defense in depth - nothing secret currently expected)
 .env
 .env.local
 .env.*.local
@@ -33,7 +33,7 @@ cookies.txt
 *.pcap
 captures/
 
-# Local Claude state and AI agent instructions — not for public distribution
+# Local Claude state and AI agent instructions - not for public distribution
 .claude/
 CLAUDE.md
 .mcp.json

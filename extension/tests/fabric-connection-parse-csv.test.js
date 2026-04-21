@@ -27,7 +27,7 @@ test('default port applied when port column omitted', () => {
 
 test('custom defaultPort honored', () => {
   const r = parseFortigateList('FGVM01TM24006844,10.0.0.94', { defaultPort: 541 });
-  // No port column, positional layout — port column missing → default
+  // No port column, positional layout - port column missing → default
   assert.equal(r.devices[0].port, 541);
 });
 

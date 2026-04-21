@@ -1,5 +1,5 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// Manage Server Attributes — Step 4 (Results).
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Manage Server Attributes - Step 4 (Results).
 // Final grid with per-server outcome. Download CSV or start over.
 
 import { h, titleBar, downloadBlob } from '../../../lib/dom.js';
@@ -69,7 +69,7 @@ export function render({ container, store, navigate }) {
   rows.forEach((r, i) => {
     const label = r.displayName
       ? (r.serverId ? `${r.displayName}  #${r.serverId}` : r.displayName)
-      : (r.input || '—');
+      : (r.input || '-');
     const detail = r.status === 'failed'
       ? (r.error || '')
       : r.status === 'skipped'
@@ -86,7 +86,7 @@ export function render({ container, store, navigate }) {
     },
       h('td', { class: 'col-n' }, String(i + 1)),
       h('td', { class: 'col-server' }, label),
-      h('td', {}, r.plan || '—'),
+      h('td', {}, r.plan || '-'),
       h('td', {}, h('span', { class: STATUS_CLASS[r.status] || 'plan-pill skip' }, r.status)),
       h('td', { class: 'col-before' }, detail)
     ));
@@ -97,7 +97,7 @@ export function render({ container, store, navigate }) {
   const againBtn = h('button', { class: 'btn btn-secondary' }, 'Start over');
   const closeBtn = h('button', { class: 'btn btn-primary' }, 'Close');
   frame.appendChild(h('div', { class: 'action-bar' },
-    h('div', { class: 'left' }, h('span', { class: 'muted' }, 'You can close this tab — results are not persisted.')),
+    h('div', { class: 'left' }, h('span', { class: 'muted' }, 'You can close this tab - results are not persisted.')),
     h('div', { class: 'right' }, csvBtn, againBtn, closeBtn)
   ));
   container.appendChild(frame);

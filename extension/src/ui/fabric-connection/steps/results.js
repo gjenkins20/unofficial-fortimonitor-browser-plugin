@@ -1,5 +1,5 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// Add Fabric Connection — Step 4 (Results).
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Add Fabric Connection - Step 4 (Results).
 // Final per-device outcome with export buttons.
 
 import { h, titleBar, downloadBlob } from '../../../lib/dom.js';
@@ -55,7 +55,7 @@ export function render({ container, store, navigate }) {
   ));
   const tbody = h('tbody', {});
   results.forEach((r, i) => {
-    let detail = '—';
+    let detail = '-';
     if (r.status === 'failed') detail = r.error ?? '(no error message)';
     else if (r.value?.resourceId) detail = `id ${r.value.resourceId}`;
     else if (r.dryRun) detail = 'preview built';

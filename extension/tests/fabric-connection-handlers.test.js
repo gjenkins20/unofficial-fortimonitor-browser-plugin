@@ -7,7 +7,7 @@ import {
 } from '../src/background/fabric-connection-handlers.js';
 import { PanoptaError } from '../src/lib/panopta-client.js';
 
-// Synthetic client for tests — doesn't touch fetch.
+// Synthetic client for tests - doesn't touch fetch.
 function makeClient(impl) {
   return {
     createFabricConnection: impl,

@@ -1,4 +1,4 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Background-side handlers for the Server Name → ID Lookup tool.
 //
 // Pattern mirrors fabric-connection-handlers.js: pure factory that
@@ -6,7 +6,7 @@
 // this into the main router.
 //
 // Auth: API key via createProductionPanoptaClient (same as fabric).
-// All lookups are read-only — no destructive operations here.
+// All lookups are read-only - no destructive operations here.
 
 import {
   createProductionPanoptaClient,
@@ -30,10 +30,10 @@ export function isRetryable(err) {
 
 /**
  * Resolve a single name to a lookup result. Status values:
- *   - 'found'     — exactly one server matched
- *   - 'not_found' — zero servers matched
- *   - 'ambiguous' — 2+ servers matched (caller surfaces all candidates)
- *   - 'error'     — request failed after retries
+ *   - 'found'     - exactly one server matched
+ *   - 'not_found' - zero servers matched
+ *   - 'ambiguous' - 2+ servers matched (caller surfaces all candidates)
+ *   - 'error'     - request failed after retries
  */
 export async function lookupOne(client, name) {
   const matches = await client.lookupServersByName(name);

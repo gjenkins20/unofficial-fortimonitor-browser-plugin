@@ -12,8 +12,8 @@ Attributes in FortiMonitor are modeled as two distinct resources:
 
 | Resource | What it represents | Scope |
 |---|---|---|
-| `server_attribute_type` | The attribute **definition** (the "key") — has a `name` and a `textkey`. | Customer-global. Referenced by multiple servers. |
-| `server_attribute` | An attribute **value** attached to a specific server — has a `value` plus a pointer to its type. | Per-server. |
+| `server_attribute_type` | The attribute **definition** (the "key") - has a `name` and a `textkey`. | Customer-global. Referenced by multiple servers. |
+| `server_attribute` | An attribute **value** attached to a specific server - has a `value` plus a pointer to its type. | Per-server. |
 
 **Implication for the plugin:** to add `{Environment: prod}` to a server, the type `Environment` must already exist (either auto-populated by FortiMonitor or previously created). The tool has two reasonable UX paths:
 
@@ -31,7 +31,7 @@ Accept: application/json
 ```
 
 - **Read/Write key required** for POST/DELETE. RO key is sufficient for GET.
-- Same key used by the Fabric Connection tool — `chrome.storage.local['panopta.apiKey']`.
+- Same key used by the Fabric Connection tool - `chrome.storage.local['panopta.apiKey']`.
 - Base URL: `https://api2.panopta.com/v2`.
 
 ---
@@ -49,8 +49,8 @@ List all attributes attached to a server.
 | `full` | boolean | `false` | If `true`, resolves `server_attribute_type` URL to the full object inline. |
 | `limit` | integer | `50` | Page size. `0` returns all. |
 | `offset` | integer | `0` | Pagination offset. |
-| `order_by` | string | — | Field to sort on. |
-| `order` | string | — | `asc` or `desc`. |
+| `order_by` | string | - | Field to sort on. |
+| `order` | string | - | `asc` or `desc`. |
 
 **Success response** (`200 OK`):
 
@@ -82,7 +82,7 @@ List all attributes attached to a server.
 }
 ```
 
-Note that `name` and `textkey` are denormalized from the referenced type — the plugin does not need a separate lookup to display them. The `url` field contains the `{server_attribute_id}` needed to DELETE.
+Note that `name` and `textkey` are denormalized from the referenced type - the plugin does not need a separate lookup to display them. The `url` field contains the `{server_attribute_id}` needed to DELETE.
 
 ---
 
@@ -118,7 +118,7 @@ Remove an attribute from a server.
 
 ### `GET /server_attribute_type`
 
-List all attribute types (keys) the customer owns — both auto-populated (e.g. `server.origin`, `server.os`) and user-created.
+List all attribute types (keys) the customer owns - both auto-populated (e.g. `server.origin`, `server.os`) and user-created.
 
 **Query params:** `full`, `limit`, `offset`, `order_by`, `order` (same semantics as above).
 
@@ -156,7 +156,7 @@ Create a new attribute type (key).
 
 Delete an attribute type. `204 No Content`.
 
-**Destructive.** Out of scope for v1 of the plugin — we manipulate *values*, not definitions.
+**Destructive.** Out of scope for v1 of the plugin - we manipulate *values*, not definitions.
 
 ---
 
@@ -174,7 +174,7 @@ Standard v2 error model:
 
 | Code | Meaning |
 |---|---|
-| `400` | Validation error — check response body. E.g. POST with a `server_attribute_type` URL that doesn't exist. |
+| `400` | Validation error - check response body. E.g. POST with a `server_attribute_type` URL that doesn't exist. |
 | `401` | Missing/invalid API key, or RO key used on a write. |
 | `404` | Unknown `server_id`, `server_attribute_id`, or `server_attribute_type_id`. |
 | `405` | Wrong method on the endpoint. |
@@ -185,5 +185,5 @@ Standard v2 error model:
 ## Open questions (not blocking v1)
 
 - **Soft cap on attributes per server?** Not documented. Test account has 5 on one server; no cap observed.
-- **Multi-server batch?** No dedicated batch endpoint — multi-server apply is one POST per server. Bounded concurrency (4) matches the pattern in `lookupBatch`.
-- **Uniqueness:** can the same `server_attribute_type` have multiple values on the same server? The docs list `value` as a plain string, not an array, which hints "one value per type per server." Needs a live probe to confirm — POST a second value for the same type and see whether it replaces, errors, or stacks.
+- **Multi-server batch?** No dedicated batch endpoint - multi-server apply is one POST per server. Bounded concurrency (4) matches the pattern in `lookupBatch`.
+- **Uniqueness:** can the same `server_attribute_type` have multiple values on the same server? The docs list `value` as a plain string, not an array, which hints "one value per type per server." Needs a live probe to confirm - POST a second value for the same type and see whether it replaces, errors, or stacks.

@@ -1,4 +1,4 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Bounded-concurrency async map. Returns per-item results in the shape of
 // Promise.allSettled so callers can iterate without per-item try/catch.
 // Honors an AbortSignal for cooperative cancellation.

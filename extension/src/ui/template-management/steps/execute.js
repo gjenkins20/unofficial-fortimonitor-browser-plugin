@@ -1,5 +1,5 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// Manage Server Templates — Step 3 (Execute).
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Manage Server Templates - Step 3 (Execute).
 // Apply the plan; stream per-row progress via events.
 
 import { h, titleBar } from '../../../lib/dom.js';
@@ -26,10 +26,10 @@ export function render({ container, store, navigate, events }) {
 
   const rowByInput = new Map();
   for (const row of store.plan) {
-    const label = row.displayName || row.input || '—';
+    const label = row.displayName || row.input || '-';
     const detail = row.plan === 'attach' ? `attach (continuous=${store.continuous})`
       : row.plan === 'detach' ? 'detach (dissociate)'
-      : row.plan === 'destroy' ? 'detach (delete — wipes metrics)'
+      : row.plan === 'destroy' ? 'detach (delete - wipes metrics)'
       : row.plan === 'skip' ? 'skip (pre-flight matched target state)'
       : row.plan === 'error' ? (row.error || 'resolution error')
       : row.plan;

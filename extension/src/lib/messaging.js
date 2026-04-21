@@ -1,4 +1,4 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Thin wrapper around chrome.runtime.sendMessage so step modules don't
 // have to juggle the { ok, result, error } envelope or the two-arg
 // callback signature. All errors surface as thrown Errors.

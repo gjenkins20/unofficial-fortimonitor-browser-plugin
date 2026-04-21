@@ -1,4 +1,4 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // FortiMonitor session-riding client.
 //
 // Wraps the internal FortiMonitor WebGUI operations the plugin needs:
@@ -15,7 +15,7 @@
 
 // Default origin kept for tests and back-compat. In production the
 // service worker resolves the tenant origin at runtime and injects it
-// into the client — see origin-resolver.js.
+// into the client - see origin-resolver.js.
 export const FM_ORIGIN = 'https://fortimonitor.forticloud.com';
 const XSRF_COOKIE_NAME = 'XSRF-TOKEN';
 
@@ -43,7 +43,7 @@ export class FortimonitorError extends Error {
  * Remove long opaque tokens and query strings from a string before we
  * attach it to an error. Long base64-ish runs (32+ chars) and entire
  * query strings are the two shapes most likely to contain session
- * secrets — redacting both keeps diagnostics useful without leaking
+ * secrets - redacting both keeps diagnostics useful without leaking
  * cookies or XSRF values into log surfaces.
  *
  * Exported for tests.
@@ -189,7 +189,7 @@ export class FortimonitorClient {
         bodyPreview = redactSensitive(text.slice(0, 200));
       } catch { /* best effort */ }
       throw new FortimonitorError(
-        'FortiMonitor returned a non-JSON response (likely a login page). Your browser session is not being recognized by the extension — confirm you are logged into fortimonitor.forticloud.com in this Chrome profile and that the server ID belongs to that tenant.',
+        'FortiMonitor returned a non-JSON response (likely a login page). Your browser session is not being recognized by the extension - confirm you are logged into fortimonitor.forticloud.com in this Chrome profile and that the server ID belongs to that tenant.',
         {
           status: res.status,
           phase: 'auth',
@@ -215,7 +215,7 @@ export class FortimonitorClient {
     const xsrf = await this.getCookie(XSRF_COOKIE_NAME, origin);
     if (!xsrf) {
       throw new FortimonitorError(
-        `No ${XSRF_COOKIE_NAME} cookie — user is not logged in to FortiMonitor.`,
+        `No ${XSRF_COOKIE_NAME} cookie - user is not logged in to FortiMonitor.`,
         { phase: 'auth' }
       );
     }
@@ -256,7 +256,7 @@ export class FortimonitorClient {
    * JSON parse error, missing name field). Callers should treat null as
    * "name not resolvable" and fall back to the id for display.
    *
-   * This endpoint returns 200 + HTML for any bad input — see
+   * This endpoint returns 200 + HTML for any bad input - see
    * docs/api-discovery/server-metadata.md for the full failure matrix.
    *
    * @param {number|string} serverId
@@ -291,7 +291,7 @@ export class FortimonitorClient {
 
   /**
    * Cheap diagnostic probe used by the developer-mode "Check session"
-   * button. Does not throw — returns a shape the UI can render directly.
+   * button. Does not throw - returns a shape the UI can render directly.
    * Redacts URLs and long tokens so the result is safe to show next to
    * operator-facing error text.
    */

@@ -1,4 +1,4 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Top-level UI controller for the Server Name → ID Lookup tool.
 // 2-step flow: /start (paste names, fire lookup) → /results (table + CSV).
 
@@ -10,7 +10,7 @@ document.documentElement.dataset.toolMode = 'server-lookup';
 
 const store = {
   // From the Start step:
-  names: [],              // string[] — the deduped input list
+  names: [],              // string[] - the deduped input list
   warnings: [],
 
   // From the Execute/fan-out call:

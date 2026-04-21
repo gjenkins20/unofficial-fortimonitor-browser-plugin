@@ -1,9 +1,9 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Anthropic Messages API client for the "Ask Claude" prototype (FMN-53).
 //
 // Lives in the service worker. Streams via fetch + ReadableStream (SSE parser),
 // drives a tool-use loop against a user-supplied Claude API key. Tool schemas
-// and handlers are passed in — see claude-tools.js for the FortiMonitor tool
+// and handlers are passed in - see claude-tools.js for the FortiMonitor tool
 // subset this prototype ships with.
 //
 // Scope: prototype. No retries, no rate-limit backoff beyond what the Messages
@@ -241,7 +241,7 @@ export async function runToolLoop({
 
 /**
  * Mark the last tool definition as ephemeral-cached so the whole tools
- * block is reused across turns. Mutates a shallow copy — the original
+ * block is reused across turns. Mutates a shallow copy - the original
  * array is untouched.
  */
 export function withToolCache(tools) {

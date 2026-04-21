@@ -1,4 +1,4 @@
-// Unofficial FortiMonitor Toolkit — Ask Claude (FMN-53) UI
+// Unofficial FortiMonitor Toolkit - Ask Claude (FMN-53) UI
 // Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 //
 // Thin chat UI. Sends user turns to the service worker ('chat:send'),

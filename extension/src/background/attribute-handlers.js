@@ -1,4 +1,4 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Background-side handlers for the Manage Server Attributes (Bulk) tool.
 //
 // Pattern mirrors fabric-connection-handlers.js: a factory that returns
@@ -6,12 +6,12 @@
 // service worker.
 //
 // Three main operations surfaced to the UI:
-//   * attr:list-types          — populate the type dropdown
-//   * attr:plan-batch          — resolve names→ids, fetch current values,
+//   * attr:list-types          - populate the type dropdown
+//   * attr:plan-batch          - resolve names→ids, fetch current values,
 //                                produce a per-row preview plan
-//   * attr:execute-batch       — apply the plan (add/replace/delete),
+//   * attr:execute-batch       - apply the plan (add/replace/delete),
 //                                emit progress, return results
-//   * attr:abort               — cancel in-flight execute
+//   * attr:abort               - cancel in-flight execute
 
 import {
   createProductionPanoptaClient,
@@ -66,7 +66,7 @@ export async function resolveTargets({ entries, client, concurrency = 4, signal 
     try {
       const matches = await client.lookupServersByName(entry);
       if (matches.length === 0) return { input: entry, status: 'error', error: 'Name not found' };
-      if (matches.length > 1) return { input: entry, status: 'error', error: `Ambiguous — ${matches.length} matches` };
+      if (matches.length > 1) return { input: entry, status: 'error', error: `Ambiguous - ${matches.length} matches` };
       return { input: entry, status: 'resolved', serverId: matches[0].id, displayName: matches[0].name };
     } catch (reason) {
       return {

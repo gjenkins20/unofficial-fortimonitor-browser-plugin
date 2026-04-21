@@ -1,4 +1,4 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // FortiMonitor v2 public API client (Panopta hosted).
 //
 // Used by the Add Fabric Connection (Bulk) tool. Unlike FortimonitorClient
@@ -38,7 +38,7 @@ export class PanoptaError extends Error {
 /**
  * Redact long opaque tokens and query strings from diagnostic text
  * before it is surfaced in errors. API keys frequently appear in URLs
- * or response echoes — strip them before they reach log surfaces.
+ * or response echoes - strip them before they reach log surfaces.
  *
  * Exported for tests.
  */
@@ -53,7 +53,7 @@ export function redactSensitive(text) {
 /**
  * Build the request body the v2 fabric_connection endpoint expects.
  * `appliance_group` is omitted (not nulled) when not provided so the API
- * default kicks in — the sibling Python script does the same.
+ * default kicks in - the sibling Python script does the same.
  */
 export function buildFabricConnectionPayload({
   serial,
@@ -116,7 +116,7 @@ export function parseListResponse(json, baseUrl = PANOPTA_BASE) {
  * Normalize a /v2/server list response. Differs from parseListResponse
  * in two ways:
  *   1. Wrapper is `server_list`, not `objects`.
- *   2. Items do not expose `id` or `resource_uri` directly — the numeric
+ *   2. Items do not expose `id` or `resource_uri` directly - the numeric
  *      server id is only reachable by parsing the trailing segment of
  *      the `url` field (e.g. ".../v2/server/40234446"). We still honor
  *      `o.id` / `o.resource_uri` defensively in case a future API build
@@ -241,9 +241,9 @@ export class PanoptaClient {
    * Look up servers whose name exactly matches `name`.
    *
    * The v2 `/server?name=` filter is a substring/contains match (verified
-   * live 2026-04-17 — partial prefix returned 3 hits). We pass the term
+   * live 2026-04-17 - partial prefix returned 3 hits). We pass the term
    * through unchanged for server-side prefiltering, then enforce exact
-   * equality client-side. Case-sensitive — callers wanting CI must lower
+   * equality client-side. Case-sensitive - callers wanting CI must lower
    * both sides themselves.
    *
    * Returns an array (0, 1, or N matches). Caller decides how to handle
@@ -262,7 +262,7 @@ export class PanoptaClient {
   /**
    * Cheap probe used by the settings UI's "Test Connection" button.
    * 200 → key works (read access at minimum); 401 → bad key.
-   * This does NOT verify RW vs RO permissions — that surfaces only on
+   * This does NOT verify RW vs RO permissions - that surfaces only on
    * the actual POST.
    */
   async testConnection() {
@@ -273,8 +273,8 @@ export class PanoptaClient {
   // ---- Server attribute management (FMN-48) -----------------------------
   //
   // Two-resource model (see docs/api-discovery/attributes.md):
-  //   * server_attribute_type — the "key" (customer-global, has name/textkey)
-  //   * server_attribute      — the "value" attached to one server
+  //   * server_attribute_type - the "key" (customer-global, has name/textkey)
+  //   * server_attribute      - the "value" attached to one server
   //
   // Endpoints:
   //   GET    /server_attribute_type
@@ -286,7 +286,7 @@ export class PanoptaClient {
 
   /**
    * List all attribute types the customer owns (for the UI dropdown).
-   * Pages through until total_count is exhausted — the test account has
+   * Pages through until total_count is exhausted - the test account has
    * 183 types so one round trip at limit=200 is sufficient in practice,
    * but we page to be safe.
    *
@@ -392,7 +392,7 @@ export class PanoptaClient {
 
   /**
    * Remove an attribute from a server. Accepts either a full resource URL
-   * (preferred — comes straight from listServerAttributes) or a
+   * (preferred - comes straight from listServerAttributes) or a
    * {serverId, attributeId} pair.
    *
    * @returns {Promise<{status:number}>}
@@ -422,7 +422,7 @@ export class PanoptaClient {
   //
   // The DELETE's strategy query parameter is the most sensitive part of
   // this tool: "dissociate" (default) unlinks only; "delete" also wipes
-  // metrics and attributes the template seeded — destructive, no undo.
+  // metrics and attributes the template seeded - destructive, no undo.
 
   /**
    * List all monitoring templates the customer owns (for the template
@@ -466,7 +466,7 @@ export class PanoptaClient {
    * List the templates currently attached to a server. Used by the
    * preview step to decide attach-vs-skip / detach-vs-skip per row.
    *
-   * Note: the mapping resource shape is NOT the full template — it's
+   * Note: the mapping resource shape is NOT the full template - it's
    * `{continuous, server_template: <url>}`. Caller extracts templateId
    * from the URL.
    *
@@ -510,7 +510,7 @@ export class PanoptaClient {
    * the FortiMonitor UI's default: the template keeps adding new metrics
    * to the server as data collection discovers them.
    *
-   * The API does NOT deduplicate — a repeat POST creates a second
+   * The API does NOT deduplicate - a repeat POST creates a second
    * mapping row. Callers are expected to pre-flight via
    * listServerTemplateMappings and skip already-attached rows.
    *
@@ -601,9 +601,9 @@ export class PanoptaClient {
    * @param {string|number} templateId  Template id (not the mapping id)
    * @param {object} [opts]
    * @param {'dissociate'|'delete'} [opts.strategy='dissociate']
-   *   'dissociate' — remove association only; metrics/attributes the
+   *   'dissociate' - remove association only; metrics/attributes the
    *     template seeded stay on the server.
-   *   'delete' — remove association AND wipe metrics/attributes the
+   *   'delete' - remove association AND wipe metrics/attributes the
    *     template added. DESTRUCTIVE, no undo. UI must gate this behind a
    *     typed confirmation (see FMN-49 plan).
    * @returns {Promise<{status:number}>}
@@ -615,7 +615,7 @@ export class PanoptaClient {
       throw new TypeError(`detachTemplate: strategy must be 'dissociate' or 'delete', got '${strategy}'`);
     }
     const path = `/server/${encodeURIComponent(serverId)}/template/${encodeURIComponent(templateId)}`;
-    // Always send the body — even though dissociate is the server-side
+    // Always send the body - even though dissociate is the server-side
     // default, we want the wire behavior to be deterministic and
     // inspectable, not dependent on an implicit default.
     const { res } = await this._request('DELETE', path, { body: { strategy } });
@@ -628,7 +628,7 @@ export class PanoptaClient {
  * each call rather than caching, so storage updates take effect
  * immediately without a service-worker reload.
  *
- * @param {object} [overrides] — for tests; injects a different storage / fetch
+ * @param {object} [overrides] - for tests; injects a different storage / fetch
  * @returns {Promise<PanoptaClient>}
  */
 export async function createProductionPanoptaClient(overrides = {}) {

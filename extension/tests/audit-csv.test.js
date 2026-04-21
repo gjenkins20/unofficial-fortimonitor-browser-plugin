@@ -36,7 +36,7 @@ test('audit CSV summary section has one row per group with the expected columns'
   const csv = buildAuditCsv({ groups, decisions, nameById: {}, toolMode: 'remove' });
   // Summary header
   assert.match(csv, /^group_number,group_fingerprint,device_count,port_count_per_device,proposed_action,operator_decision,ports_marked$/m);
-  // Summary rows — all admin_status=up so proposal is keep-all; operator_decision carries the user's choice
+  // Summary rows - all admin_status=up so proposal is keep-all; operator_decision carries the user's choice
   assert.match(csv, /^1,fpA,2,2,keep-all,remove: wan2,wan2$/m);
   assert.match(csv, /^2,fpB,1,1,keep-all,undecided,$/m);
 });
@@ -106,9 +106,9 @@ test('groups are sorted by descending device_count in both sections, preserving 
   assert.match(summaryLines[2], /^1,small,1,/);
   // Detail section headers appear in the same order
   const detailHeaders = csv.split('\n').filter((l) => l.startsWith('# Group '));
-  assert.match(detailHeaders[0], /^# Group 2 of 3 — fingerprint=big/);
-  assert.match(detailHeaders[1], /^# Group 3 of 3 — fingerprint=mid/);
-  assert.match(detailHeaders[2], /^# Group 1 of 3 — fingerprint=small/);
+  assert.match(detailHeaders[0], /^# Group 2 of 3 - fingerprint=big/);
+  assert.match(detailHeaders[1], /^# Group 3 of 3 - fingerprint=mid/);
+  assert.match(detailHeaders[2], /^# Group 1 of 3 - fingerprint=small/);
 });
 
 // --- per-port proposed_action --------------------------------------

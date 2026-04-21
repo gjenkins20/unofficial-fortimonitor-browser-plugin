@@ -1,9 +1,9 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Resolve the FortiMonitor tenant origin the user is actually logged into.
 //
 // FortiMonitor hosts each tenant on a regional subdomain of
 // fortimonitor.com (e.g. my.us01.fortimonitor.com). The forticloud.com
-// URL is only a federated entry point — after sign-in the session cookie
+// URL is only a federated entry point - after sign-in the session cookie
 // lives on the regional host, not the federation URL. So extension
 // fetches MUST target the regional origin, not the federation one, or
 // they come back as HTML login-page redirects (see FMN-47).

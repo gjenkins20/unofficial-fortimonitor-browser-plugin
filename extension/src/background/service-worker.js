@@ -1,5 +1,5 @@
-// Unofficial FortiMonitor Toolkit — service worker.
-// Built by Gregori Jenkins — https://www.linkedin.com/in/gregorijenkins
+// Unofficial FortiMonitor Toolkit - service worker.
+// Built by Gregori Jenkins - https://www.linkedin.com/in/gregorijenkins
 //
 // Thin Chrome-API wrapper. All orchestration lives in modules that are
 // testable in Node (scanner, executor, message-handlers, queue). This
@@ -30,7 +30,7 @@ const queue = new Queue(); // uses chrome.storage.local by default
 // Broadcast runtime events to any listening extension page.
 function emit(name, payload) {
   chrome.runtime.sendMessage({ type: '__event__', event: name, payload }).catch(() => {
-    // No listener — that's fine.
+    // No listener - that's fine.
   });
 }
 
@@ -46,7 +46,7 @@ const handlers = {
 
 chrome.runtime.onInstalled.addListener(() => {
   const m = chrome.runtime.getManifest();
-  console.log(`[fm-toolkit] installed — ${m.name} v${m.version}`);
+  console.log(`[fm-toolkit] installed - ${m.name} v${m.version}`);
   console.log(`[fm-toolkit] built by ${BUILT_BY}`);
 });
 

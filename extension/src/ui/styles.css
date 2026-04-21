@@ -1,4 +1,4 @@
-/* Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins> */
+/* Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins> */
 /* Shared styles for Unofficial FortiMonitor Toolkit tool UIs (Remove and
    Add from Port Scope). Distilled from the FMN-38 / FMN-40 mockups so
    every step renders with consistent chrome. */
@@ -713,11 +713,11 @@ input.confirm-input[disabled] { background: var(--muted-soft); color: var(--text
   background: var(--border-strong); color: white;
   display: grid; place-items: center; font-size: 10px; font-weight: bold;
 }
-.skipped-summary .dash-icon::after { content: "—"; }
+.skipped-summary .dash-icon::after { content: "-"; }
 
 /* ================= Add-tool styles ================= */
 
-/* Info banner — non-destructive variant of the red destructive banner */
+/* Info banner - non-destructive variant of the red destructive banner */
 .info-banner {
   margin: 0;
   padding: 10px 20px;
@@ -755,7 +755,7 @@ input.confirm-input[disabled] { background: var(--muted-soft); color: var(--text
 [data-tool-mode="add"] .instruction-row strong { color: var(--ok); }
 [data-tool-mode="add"] .gate-section { background: var(--ok-soft); }
 
-/* In-scope rows (muted, disabled checkbox) — hidden by default via .hidden-scope */
+/* In-scope rows (muted, disabled checkbox) - hidden by default via .hidden-scope */
 tr.in-scope-muted td {
   color: var(--text-muted);
   background: #fafbfc;
@@ -805,7 +805,7 @@ tr.hidden-scope { display: none; }
   filter: brightness(0.95);
 }
 
-/* Action summary pill in queue overview — green variant */
+/* Action summary pill in queue overview - green variant */
 .action-summary.add {
   background: var(--ok-soft);
   color: var(--ok);

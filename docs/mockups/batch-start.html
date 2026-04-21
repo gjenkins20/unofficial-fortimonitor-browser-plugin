@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Mockup — Batch Start (FMN-38)</title>
+<title>Mockup - Batch Start (FMN-38)</title>
 <style>
   :root {
     --bg: #f5f6f8;
@@ -257,7 +257,7 @@
     <h1>
       <span class="icon">F</span>
       FortiMonitor WAN Cleanup
-      <span class="subtitle">— Start Batch</span>
+      <span class="subtitle">- Start Batch</span>
     </h1>
   </div>
 
@@ -318,7 +318,7 @@ server_id,device_name
         <span class="sid">42024060, 42024061, 42024075, 42024142, 42024143, 42024156, 42024201, 42024207, 42024302, 42024311, 42024377, 42024388, 42024411, 42024419, 42024425, 42024447, 42024461, 42024478, 42024489, 42024502, 42024516, 42024530, 42024541, 42024555, 42024569, ...</span>
       </div>
       <div class="warn-list">
-        <strong>2 warnings:</strong> server ID <code>99999999</code> on line 47 was not found in your FortiMonitor session — it will be skipped. Duplicate ID <code>42024489</code> on line 61 was deduplicated.
+        <strong>2 warnings:</strong> server ID <code>99999999</code> on line 47 was not found in your FortiMonitor session - it will be skipped. Duplicate ID <code>42024489</code> on line 61 was deduplicated.
       </div>
     </div>
   </div>
@@ -337,9 +337,9 @@ server_id,device_name
   · This is Step 1 of 4. Next step is the group-level prompt (<code>interface-report.html</code>).<br>
   · CSV input accepts either a plain list of server IDs (one per line) or a CSV with a <code>server_id</code> column. Additional columns are ignored.<br>
   · Before "Start review" is enabled, the plugin validates each ID against the current FortiMonitor session by silently reading its port scope in the background (concurrency cap 3). IDs with no matching device are flagged as warnings and skipped, not a hard fail.<br>
-  · After "Start review", the plugin silently reads each device's port scope using the existing session, computes a fingerprint (sorted hash of <code>{port_name, admin_status, oper_status}</code> tuples), groups devices by identical fingerprint, then presents the interface-report prompt once per group. No visible tab navigation in the default mode — reads happen in the background.<br>
-  · Session validity is shown passively — no OAuth or credential entry. Session is whatever the user already has in FortiMonitor.<br>
-  · All reads and writes use the existing FortiMonitor session — the same one the WebGUI uses. Nothing runs outside the browser.
+  · After "Start review", the plugin silently reads each device's port scope using the existing session, computes a fingerprint (sorted hash of <code>{port_name, admin_status, oper_status}</code> tuples), groups devices by identical fingerprint, then presents the interface-report prompt once per group. No visible tab navigation in the default mode - reads happen in the background.<br>
+  · Session validity is shown passively - no OAuth or credential entry. Session is whatever the user already has in FortiMonitor.<br>
+  · All reads and writes use the existing FortiMonitor session - the same one the WebGUI uses. Nothing runs outside the browser.
 </div>
 
 </body>

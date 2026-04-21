@@ -1,5 +1,5 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// Manage Server Attributes — Step 1 (Start).
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Manage Server Attributes - Step 1 (Start).
 // Pick operation (set/remove), attribute type, value (if set), and paste
 // a list of servers to apply to.
 
@@ -109,7 +109,7 @@ export function render({ container, store, navigate }) {
         : await call('attr:list-types', {});
       store.attributeTypes = types;
       while (typeSelect.firstChild) typeSelect.removeChild(typeSelect.firstChild);
-      typeSelect.appendChild(h('option', { value: '' }, `— Choose type (${types.length}) —`));
+      typeSelect.appendChild(h('option', { value: '' }, `- Choose type (${types.length}) -`));
       for (const t of types) {
         const label = t.textkey && t.textkey !== t.name ? `${t.name}  (${t.textkey})` : t.name;
         typeSelect.appendChild(h('option', { value: t.resourceUrl }, label));
@@ -136,7 +136,7 @@ export function render({ container, store, navigate }) {
 
     if (entries.length > 0) {
       statusRow.className = 'parse-result ok';
-      statusRow.textContent = `${entries.length} target${entries.length === 1 ? '' : 's'} queued — preview will resolve names and show the plan.`;
+      statusRow.textContent = `${entries.length} target${entries.length === 1 ? '' : 's'} queued - preview will resolve names and show the plan.`;
     } else if (!textarea.value.trim()) {
       statusRow.className = 'parse-result empty';
       statusRow.textContent = '';

@@ -1,4 +1,4 @@
-// Port Scope API — minimal Manifest V3 service-worker-compatible snippet.
+// Port Scope API - minimal Manifest V3 service-worker-compatible snippet.
 // Captured from live UI on 2026-04-16. See ./port-scope.md for full contract.
 //
 // Manifest requirements:
@@ -9,7 +9,7 @@ const FM_ORIGIN = 'https://fortimonitor.forticloud.com';
 
 async function getXsrfToken() {
   const cookie = await chrome.cookies.get({ url: FM_ORIGIN, name: 'XSRF-TOKEN' });
-  if (!cookie) throw new Error('No XSRF-TOKEN cookie — user not logged in to FortiMonitor?');
+  if (!cookie) throw new Error('No XSRF-TOKEN cookie - user not logged in to FortiMonitor?');
   return cookie.value;
 }
 
@@ -54,7 +54,7 @@ async function savePortSelection({
       'Content-Type': 'application/x-www-form-urlencoded',
       'X-XSRF-TOKEN': xsrf
     }
-    // Body intentionally omitted — FortiMonitor puts the form data in the query string.
+    // Body intentionally omitted - FortiMonitor puts the form data in the query string.
   });
   if (!r.ok) throw new Error(`save_port_selection failed: HTTP ${r.status}`);
   const body = await r.json();

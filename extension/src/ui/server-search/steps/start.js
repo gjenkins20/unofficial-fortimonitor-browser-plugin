@@ -1,5 +1,5 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// Search Servers — Step 1 (Start).
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Search Servers - Step 1 (Start).
 // Operator picks an attribute (e.g., "Model") from the tenant's
 // /server_attribute_type catalog, enters a value (e.g., "FGT60F"), and
 // fires the search. Pages through /server with live progress, then
@@ -122,20 +122,20 @@ export function render({ container, store, navigate, events }) {
   const unsubscribe = events.on((event, payload) => {
     if (event !== 'search:page') return;
     const { fetched, total, matches } = payload ?? {};
-    stateLabel.textContent = `Scanned ${fetched}${total ? ` of ${total}` : ''} — ${matches} match${matches === 1 ? '' : 'es'}`;
+    stateLabel.textContent = `Scanned ${fetched}${total ? ` of ${total}` : ''} - ${matches} match${matches === 1 ? '' : 'es'}`;
     stateLabel.className = 'execute-state';
   });
 
   // Populate the datalist suggestions. The handler unions the
   // /server_attribute_type catalog with attributes seen on a sample of
-  // servers — necessary because built-in types (Model, Operating System)
+  // servers - necessary because built-in types (Model, Operating System)
   // are absent from the catalog but appear on server records.
   (async () => {
     try {
       const types = await call('search:list-attribute-types', {});
       attrDatalist.innerHTML = '';
       for (const t of types) {
-        const label = t.textkey && t.textkey !== t.name ? `${t.name} — ${t.textkey}` : t.name;
+        const label = t.textkey && t.textkey !== t.name ? `${t.name} - ${t.textkey}` : t.name;
         attrDatalist.appendChild(h('option', { value: t.name }, label));
       }
       attrInput.disabled = false;
@@ -180,7 +180,7 @@ export function render({ container, store, navigate, events }) {
         caseInsensitive: caseToggle.checked
       });
       store.runResult = result;
-      stateLabel.textContent = `Done — ${result.matches.length} match${result.matches.length === 1 ? '' : 'es'} of ${result.totalScanned} scanned`;
+      stateLabel.textContent = `Done - ${result.matches.length} match${result.matches.length === 1 ? '' : 'es'} of ${result.totalScanned} scanned`;
       setTimeout(() => navigate('/results'), 400);
     } catch (err) {
       stateLabel.textContent = `Error: ${err?.message ?? err}`;

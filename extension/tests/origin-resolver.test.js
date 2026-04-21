@@ -28,7 +28,7 @@ test('falls back to federation origin when no regional tab is open', async () =>
     'https://*.fortimonitor.com/*': [],
     'https://fortimonitor.forticloud.com/*': [{ url: 'https://fortimonitor.forticloud.com/login' }]
   });
-  // makeQueryTabs returns {url} objects but we stored an object — flatten
+  // makeQueryTabs returns {url} objects but we stored an object - flatten
   const tabs = { 'https://fortimonitor.forticloud.com/*': ['https://fortimonitor.forticloud.com/login'] };
   const origin = await resolveFortimonitorOrigin({
     queryTabs: makeQueryTabs({ 'https://*.fortimonitor.com/*': [], ...tabs })

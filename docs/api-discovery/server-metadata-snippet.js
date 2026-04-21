@@ -1,4 +1,4 @@
-// Server Metadata API — minimal Manifest V3 service-worker-compatible snippet.
+// Server Metadata API - minimal Manifest V3 service-worker-compatible snippet.
 // Captured from live UI on 2026-04-20. See ./server-metadata.md for full contract.
 //
 // Manifest requirements (already present for port-scope tools):
@@ -50,7 +50,7 @@ async function resolveServerName(serverId) {
  * Resolve many server ids to names in parallel, concurrency-capped.
  *
  * Unresolved ids (failure/invalid/missing) map to the original id as a
- * string so the caller can always look up a value — the display is
+ * string so the caller can always look up a value - the display is
  * degraded but never empty.
  *
  * @param {Array<number|string>} serverIds

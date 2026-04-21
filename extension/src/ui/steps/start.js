@@ -1,5 +1,5 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// Step 1 — Load devices. Operator pastes/uploads a list of server IDs
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Step 1 - Load devices. Operator pastes/uploads a list of server IDs
 // (optionally with device names via CSV), we validate by silently
 // reading each device's port scope, then hand off to the review step.
 
@@ -151,7 +151,7 @@ export function render({ container, store, navigate, events }) {
       progress.setPhase('grouping');
       // Merge resolved names into nameById. User-supplied names (from
       // the input CSV's second column) win over FortiMonitor-resolved
-      // names — the operator may have chosen a different label for
+      // names - the operator may have chosen a different label for
       // display.
       if (result.nameById && typeof result.nameById === 'object') {
         store.nameById = { ...result.nameById, ...store.nameById };
@@ -225,7 +225,7 @@ function renderSampleTable(serverIds, nameById) {
   const rows = serverIds.slice(0, PREVIEW_LIMIT).map((id) => {
     const name = nameById[id];
     return h('tr', {},
-      h('td', { class: name ? 'name' : 'name missing' }, name ?? '—'),
+      h('td', { class: name ? 'name' : 'name missing' }, name ?? '-'),
       h('td', { class: 'id' }, id)
     );
   });

@@ -1,6 +1,6 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Top-level UI controller for the Manage Server Attributes (Bulk) tool.
-// Mirrors src/ui/fabric-connection/app.js — hash router, in-memory store,
+// Mirrors src/ui/fabric-connection/app.js - hash router, in-memory store,
 // fan-out event subscription.
 
 import * as start from './steps/start.js';

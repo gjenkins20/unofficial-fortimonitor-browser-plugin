@@ -249,7 +249,7 @@ test('detachTemplate: rejects unknown strategy', async () => {
     () => client.detachTemplate(1, 2, { strategy: 'nuke' }),
     TypeError
   );
-  // fetch should not have been called — validation is pre-flight
+  // fetch should not have been called - validation is pre-flight
   assert.equal(fetch.calls.length, 0);
 });
 

@@ -201,7 +201,7 @@ test('scan-devices per-device errors are serialized (POJO, not Error instance)',
   const { errored } = await handlers['scan-devices']({ serverIds: ['bad'] });
   assert.equal(errored.length, 1);
   const e = errored[0].error;
-  // POJO, not Error — chrome.runtime.sendMessage strips Error prototypes.
+  // POJO, not Error - chrome.runtime.sendMessage strips Error prototypes.
   assert.equal(Object.getPrototypeOf(e), Object.prototype);
   assert.equal(e.message, 'login redirect');
   assert.equal(e.phase, 'auth');

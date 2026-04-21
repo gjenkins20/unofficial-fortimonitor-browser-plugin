@@ -1,5 +1,5 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// Add Fabric Connection — Step 2 (Review).
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Add Fabric Connection - Step 2 (Review).
 // Show the parsed devices, the selected targets, an example payload,
 // and the dry-run / live mode toggle. Live mode requires a typed
 // confirmation phrase before the Execute button enables.
@@ -37,7 +37,7 @@ export function render({ container, store, navigate }) {
   frame.appendChild(h('div', { class: 'step-header' },
     fcBreadcrumbs('review'),
     h('h2', {}, `${store.devices.length} device${store.devices.length === 1 ? '' : 's'} ready to onboard`),
-    h('p', {}, 'Verify the planned changes below. Dry-run is the default — switch to live mode and type the confirmation phrase to enable Execute.')
+    h('p', {}, 'Verify the planned changes below. Dry-run is the default - switch to live mode and type the confirmation phrase to enable Execute.')
   ));
 
   const body = h('div', { class: 'body-section' });
@@ -46,9 +46,9 @@ export function render({ container, store, navigate }) {
   // ---- Targets summary ----
   body.appendChild(h('h3', { class: 'subhead' }, 'Targets'));
   body.appendChild(h('div', { class: 'targets-summary' },
-    h('div', {}, h('strong', {}, 'OnSight: '), nameForUrl(store.onsightUrl, store.onsightOptions) ?? '—'),
-    h('div', {}, h('strong', {}, 'Server group: '), nameForUrl(store.serverGroupUrl, store.serverGroupOptions) ?? '—'),
-    h('div', {}, h('strong', {}, 'Appliance group: '), nameForUrl(store.applianceGroupUrl, store.onsightGroupOptions) ?? '— none —'),
+    h('div', {}, h('strong', {}, 'OnSight: '), nameForUrl(store.onsightUrl, store.onsightOptions) ?? '-'),
+    h('div', {}, h('strong', {}, 'Server group: '), nameForUrl(store.serverGroupUrl, store.serverGroupOptions) ?? '-'),
+    h('div', {}, h('strong', {}, 'Appliance group: '), nameForUrl(store.applianceGroupUrl, store.onsightGroupOptions) ?? '- none -'),
     h('div', {}, h('strong', {}, 'Discover frequency: '), `${store.discoverFrequency}s`)
   ));
 

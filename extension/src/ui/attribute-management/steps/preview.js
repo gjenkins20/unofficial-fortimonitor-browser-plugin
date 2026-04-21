@@ -1,5 +1,5 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// Manage Server Attributes — Step 2 (Preview).
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Manage Server Attributes - Step 2 (Preview).
 // Build the per-row plan by resolving names → ids and fetching each
 // server's current attribute value. Operator reviews before executing.
 
@@ -33,7 +33,7 @@ function renderRow(i, row) {
 
   if (row.status === 'error' || row.plan === 'error') {
     cells.push(
-      h('td', { class: 'col-server' }, row.input || row.displayName || '—'),
+      h('td', { class: 'col-server' }, row.input || row.displayName || '-'),
       h('td', { colspan: 2, class: 'col-error' }, row.error || 'Resolution error'),
       h('td', { class: 'col-plan' }, h('span', { class: PLAN_CLASSES.error }, PLAN_LABELS.error))
     );
@@ -44,8 +44,8 @@ function renderRow(i, row) {
     const current = row.existing?.value ?? row.currentValue ?? null;
     cells.push(
       h('td', { class: 'col-server' }, label),
-      h('td', { class: 'col-before' }, current ?? '—'),
-      h('td', { class: 'col-after' }, row.newValue ?? (row.plan === 'remove' ? '(removed)' : '—')),
+      h('td', { class: 'col-before' }, current ?? '-'),
+      h('td', { class: 'col-after' }, row.newValue ?? (row.plan === 'remove' ? '(removed)' : '-')),
       h('td', { class: 'col-plan' },
         h('span', { class: PLAN_CLASSES[row.plan] || PLAN_CLASSES.pending }, PLAN_LABELS[row.plan] || row.plan)
       )

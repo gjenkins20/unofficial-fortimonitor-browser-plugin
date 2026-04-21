@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Mockup — Launcher Popup (FMN-40)</title>
+<title>Mockup - Launcher Popup (FMN-40)</title>
 <style>
   :root {
     --bg: #f5f6f8;
@@ -72,7 +72,7 @@
     border-top-left-radius: 3px;
   }
 
-  /* Popup itself — Chrome constrains width to 800px max, but practical range
+  /* Popup itself - Chrome constrains width to 800px max, but practical range
      is ~280–400px. 360px reads well and matches the existing mockup density. */
   .popup {
     width: 360px;
@@ -339,7 +339,7 @@
 
 <div class="canvas">
 
-  <!-- VARIANT A: Default — session active, multiple tools -->
+  <!-- VARIANT A: Default - session active, multiple tools -->
   <div>
     <div class="variant-label">A · Default (session active)</div>
     <div class="chrome-frame">
@@ -419,7 +419,7 @@
 
         <div class="session-strip warn">
           <span class="dot"></span>
-          <span>Not signed in — log in to FortiMonitor first</span>
+          <span>Not signed in - log in to FortiMonitor first</span>
           <span class="link">Open login ↗</span>
         </div>
 
@@ -533,7 +533,7 @@
     <li><strong>Session-status strip.</strong> Every tool needs the FortiMonitor session cookie, so surfacing sign-in state up front prevents every tool from re-inventing its own error path. Clicking "Open login" / "Open console" opens <code>https://fortimonitor.forticloud.com/</code> in a new tab.</li>
     <li><strong>Search always visible.</strong> Cheap at the current tool count; valuable as the list grows. No conditional render logic needed later.</li>
     <li><strong>Grouped sections.</strong> "Port scope", future groups could be "Monitoring", "Inventory", "Audit", etc. The <code>tool-group-label</code> is inline HTML so rearrangement is trivial.</li>
-    <li><strong>Action-oriented badges.</strong> "Removes" (orange) and "Adds" (green). Operator reads intent, not risk-abstraction — matches how the tools are named and categorized.</li>
+    <li><strong>Action-oriented badges.</strong> "Removes" (orange) and "Adds" (green). Operator reads intent, not risk-abstraction - matches how the tools are named and categorized.</li>
     <li><strong>No "Coming soon" entries.</strong> Do not advertise unshipped tools.</li>
     <li><strong>Click behavior.</strong> Click a tool card → <code>chrome.tabs.create({url: '...'})</code> opens that tool's full-tab UI and the popup closes automatically. The existing five-step flow lives inside each tool's tab.</li>
     <li><strong>Disabled state (Variant B).</strong> When the XSRF-TOKEN cookie is missing, all tools are non-interactive and show "Sign in to FortiMonitor to enable" in place of their description. User clicks the session-strip link to log in; popup can re-check on next open.</li>
@@ -543,9 +543,9 @@
 
   <h2>What's NOT in this mockup (intentionally)</h2>
   <ul>
-    <li>Settings/options page — reserved for the <code>⋯</code> menu button; separate design pass.</li>
-    <li>Per-tool pinning/favoriting — scale-time feature; not needed at two tools.</li>
-    <li>Keyboard navigation affordances — handled in implementation (<code>Tab</code>, <code>Enter</code>, arrow keys); no visual mockup needed.</li>
+    <li>Settings/options page - reserved for the <code>⋯</code> menu button; separate design pass.</li>
+    <li>Per-tool pinning/favoriting - scale-time feature; not needed at two tools.</li>
+    <li>Keyboard navigation affordances - handled in implementation (<code>Tab</code>, <code>Enter</code>, arrow keys); no visual mockup needed.</li>
   </ul>
 </div>
 

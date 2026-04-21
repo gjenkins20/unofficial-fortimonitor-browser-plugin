@@ -1,7 +1,7 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// Search Servers — Step 2 (Results).
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Search Servers - Step 2 (Results).
 // Renders the matched server table and exports a CSV: server_id, name,
-// fqdn — the report the operator asked for, plus extra columns for
+// fqdn - the report the operator asked for, plus extra columns for
 // verification (matched attribute name/value).
 
 import { h, titleBar, downloadBlob } from '../../../lib/dom.js';
@@ -16,8 +16,8 @@ function csvEscape(v) {
 
 function buildCsv(result) {
   const lines = [];
-  lines.push(`# Unofficial FortiMonitor Toolkit — Search Servers report`);
-  lines.push(`# Author: Gregori Jenkins — https://www.linkedin.com/in/gregorijenkins`);
+  lines.push(`# Unofficial FortiMonitor Toolkit - Search Servers report`);
+  lines.push(`# Author: Gregori Jenkins - https://www.linkedin.com/in/gregorijenkins`);
   lines.push(`# Generated: ${new Date().toISOString()}`);
   lines.push(`# Filter: attribute="${result.attributeName}" value${result.exactMatch ? '=' : '~'}"${result.value}" caseInsensitive=${result.caseInsensitive}`);
   lines.push(`# ${result.matches.length} match${result.matches.length === 1 ? '' : 'es'} out of ${result.totalScanned} scanned`);
@@ -78,10 +78,10 @@ export function render({ container, store, navigate }) {
     result.matches.forEach((m, i) => {
       tbody.appendChild(h('tr', {},
         h('td', {}, String(i + 1)),
-        h('td', {}, m.id != null ? String(m.id) : '—'),
-        h('td', {}, m.name ?? '—'),
-        h('td', {}, m.fqdn ?? '—'),
-        h('td', {}, m.matchedValue ?? '—')
+        h('td', {}, m.id != null ? String(m.id) : '-'),
+        h('td', {}, m.name ?? '-'),
+        h('td', {}, m.fqdn ?? '-'),
+        h('td', {}, m.matchedValue ?? '-')
       ));
     });
     table.appendChild(thead);

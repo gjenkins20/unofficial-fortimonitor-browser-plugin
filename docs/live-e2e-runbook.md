@@ -1,4 +1,4 @@
-# Phase 5 — Live E2E Runbook
+# Phase 5 - Live E2E Runbook
 
 The Phase 4 UI is statically verified against the FMN-38 mockups via
 `docs/mockups/preview-app.html`. This runbook drives the **live** half:
@@ -17,14 +17,14 @@ FortiMonitor cookies and requires you to be logged in.
 3. Click **Load unpacked**
 4. Select `unofficial-fortimonitor-browser-plugin/extension/`
 5. Confirm the extension appears as **FortiMonitor WAN Cleanup (Unofficial)**, version `0.1.0`
-6. Note the extension ID — needed below
+6. Note the extension ID - needed below
 
 ## 2. Open the plugin
 
 - Click the extension's toolbar icon (if not pinned, find it via the puzzle-piece menu)
 - OR navigate directly: `chrome-extension://<id>/src/ui/app.html`
 
-You should land on **Step 1 — Load devices from CSV**.
+You should land on **Step 1 - Load devices from CSV**.
 
 ## 3. Log into FortiMonitor
 
@@ -32,7 +32,7 @@ Open a second tab in the same Chrome profile and log into
 <https://fortimonitor.forticloud.com/>. This seeds the session cookie
 and `XSRF-TOKEN` that the service worker reads via `chrome.cookies.get`.
 
-## 4. Start batch — 3 test VMs
+## 4. Start batch - 3 test VMs
 
 Paste this into the textarea and click **Start review →**:
 
@@ -49,7 +49,7 @@ Expected:
 - Service worker issues 3 `GET /onboarding/getDevicePorts` requests (check DevTools → Network)
 - Advance to step 2
 
-If you see `No XSRF-TOKEN cookie` or HTTP 401/403 — re-log into
+If you see `No XSRF-TOKEN cookie` or HTTP 401/403 - re-log into
 FortiMonitor in the same window, then click **Start review** again.
 
 ## 5. Review groups
@@ -62,7 +62,7 @@ during FMN-34/FMN-36 capture work).
 **Dry-run-safe exercise:**
 - Mark **wan2** (or any WAN row that shows `oper_status = down`)
 - Verify the `fortilink` row is highlighted in yellow with the
-  "fabric link — keep" tag
+  "fabric link - keep" tag
 - Click **Queue for N devices →**
 
 If the 3 VMs split into 2 groups, repeat the marking for each group
@@ -84,10 +84,10 @@ On the queue-overview screen verify:
   no network calls)
 - Metric strip fills: succeeded = total, failed = 0
 - **View results** enables when the simulator finishes
-- Click it — land on the success verdict banner
+- Click it - land on the success verdict banner
 - Download the CSV and JSON reports; verify they parse
 
-## 8. STOP — decision gate
+## 8. STOP - decision gate
 
 **Do not proceed to live execution** unless you're ready for
 destructive changes. Each live save deletes the affected port's agent
@@ -96,8 +96,8 @@ resources and metric history in FortiMonitor. Rolling back is manual
 
 If you do proceed:
 - Back to the queue-overview step
-- Toggle **Dry run** OFF — confirmation input activates and the primary button turns red ("Execute and remove N ports")
-- Type `EXECUTE N PORTS` exactly (N matches the live count shown in the gate) — button enables
+- Toggle **Dry run** OFF - confirmation input activates and the primary button turns red ("Execute and remove N ports")
+- Type `EXECUTE N PORTS` exactly (N matches the live count shown in the gate) - button enables
 - Click **Execute and remove N ports**
 - Watch the execution-progress screen show real HTTP POSTs via DevTools → Network
 - Check each `POST /config/save_port_selection` → 200 with `{"success": true}`
@@ -135,7 +135,7 @@ Attach to FMN-39 as a Phase 5 comment.
 
 ---
 
-## Add Fabric Connection (API) — separate live test (FMN-45)
+## Add Fabric Connection (API) - separate live test (FMN-45)
 
 The Add Fabric Connection tool uses the FortiMonitor v2 public API instead of the FortiMonitor session. Its live-test loop is independent of the port-scope tools above.
 
@@ -144,7 +144,7 @@ The Add Fabric Connection tool uses the FortiMonitor v2 public API instead of th
 1. Open the launcher popup
 2. Click ⚙ in the header → **Settings**
 3. Paste an RW API key obtained from your FortiMonitor account
-4. Click **Save** then **Test connection** — expect "Connection OK (HTTP 200)"
+4. Click **Save** then **Test connection** - expect "Connection OK (HTTP 200)"
 
 ### 2. Open the tool
 
@@ -157,7 +157,7 @@ The Add Fabric Connection tool uses the FortiMonitor v2 public API instead of th
 Paste 2–3 test FortiGates (CSV: `serial,ip,port`), pick OnSight + server group, click Continue → Review.
 
 In Review:
-- Inspect the example payload — confirm `upstream_sn` / `upstream_host` / `upstream_port` match your input
+- Inspect the example payload - confirm `upstream_sn` / `upstream_host` / `upstream_port` match your input
 - Leave mode on **Dry-run**
 - Click Execute. Results should show all rows as **succeeded** with `preview built` detail
 
@@ -166,7 +166,7 @@ In Review:
 Repeat the flow, this time:
 - Switch mode to **Live**
 - Type `CREATE` in the confirmation field to enable Execute
-- Watch the per-device progress list — each row transitions pending → running → succeeded/failed
+- Watch the per-device progress list - each row transitions pending → running → succeeded/failed
 - On completion, the Results step shows resource IDs from the API's `id` response header
 
 ### 5. Verify in FortiMonitor

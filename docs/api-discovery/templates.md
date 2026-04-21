@@ -7,7 +7,7 @@ and `server_template.json`) plus live response samples from that project's
 `data/response_samples/`.
 
 All endpoints are under `https://api2.panopta.com/v2`. Auth is
-`Authorization: ApiKey {key}` — same pattern `PanoptaClient` already uses for
+`Authorization: ApiKey {key}` - same pattern `PanoptaClient` already uses for
 Add Fabric Connection (FMN-45) and Manage Attributes (FMN-48).
 
 ## Resource model
@@ -15,11 +15,11 @@ Add Fabric Connection (FMN-45) and Manage Attributes (FMN-48).
 The FortiMonitor "template" concept we care about is `server_template`: a bundle
 of service checks, metric counters, and attributes that can be applied to one
 or more servers. The attach/detach relationship lives **on the server side** as
-a mapping resource — there is no way to attach/detach via the template's own
+a mapping resource - there is no way to attach/detach via the template's own
 endpoints. The template's `applied_servers[]` field is a read-only projection.
 
 Each template has a `template_type` (e.g. `dem_template`). For this tool's v1
-we do not filter on type — the operator picks any template by name.
+we do not filter on type - the operator picks any template by name.
 
 ## Endpoints
 
@@ -30,10 +30,10 @@ GET /v2/server_template?limit=100&offset=0
 ```
 
 Query params:
-- `limit` (default 50, `0` = unbounded), `offset` — standard pagination
-- `name` — substring filter (same contains-match as `/v2/server?name=` per
+- `limit` (default 50, `0` = unbounded), `offset` - standard pagination
+- `name` - substring filter (same contains-match as `/v2/server?name=` per
   FMN-45 findings; client must re-filter for exact match if needed)
-- `tags`, `attributes`, `server_group` — additional filters
+- `tags`, `attributes`, `server_group` - additional filters
 
 Response:
 
@@ -58,7 +58,7 @@ Response:
 ```
 
 Used by the tool's start step for the template picker. Pull with `limit=100`
-and follow `meta.next` until exhausted — tenants in the wild have ≥40.
+and follow `meta.next` until exhausted - tenants in the wild have ≥40.
 
 ### List templates attached to a server
 
@@ -100,16 +100,16 @@ header contains the mapping id. Response body is empty (`void`).
 
 The `continuous` field controls whether the template continues to add new
 metrics to the server as data collection discovers them. **Default the tool to
-`true`** unless the operator flips a dedicated checkbox — matches the FortiMonitor
+`true`** unless the operator flips a dedicated checkbox - matches the FortiMonitor
 UI default and is the low-surprise behavior.
 
 Errors:
-- `400` — validation (e.g. template belongs to a different server_group,
+- `400` - validation (e.g. template belongs to a different server_group,
   malformed URL)
-- `401` — auth: bad/missing API key
-- `404` — server or template not found
-- `405` — method not allowed (typo on URL)
-- `500` — server-side
+- `401` - auth: bad/missing API key
+- `404` - server or template not found
+- `405` - method not allowed (typo on URL)
+- `500` - server-side
 
 ### Detach a template from a server
 
@@ -120,14 +120,14 @@ Content-Type: application/json
 { "strategy": "dissociate" }
 ```
 
-Path uses the **template id** (not the mapping id) — simpler for the client.
+Path uses the **template id** (not the mapping id) - simpler for the client.
 
 Success: `204 No Content`.
 
 Strategy parameter (optional body):
-- `"dissociate"` (default) — removes the association only. Metrics/attributes
+- `"dissociate"` (default) - removes the association only. Metrics/attributes
   previously seeded by the template stay on the server.
-- `"delete"` — removes the association **AND** removes all metrics and
+- `"delete"` - removes the association **AND** removes all metrics and
   attributes the template added. **Destructive.**
 
 **UX requirement:** the start step exposes this as a radio: "Dissociate (keep
@@ -136,7 +136,7 @@ confirmation gate echoes whichever was chosen so the operator cannot
 sleep-walk into the destructive variant.
 
 Errors:
-- `401` / `404` / `405` / `500` — as above. Detaching a template that is not
+- `401` / `404` / `405` / `500` - as above. Detaching a template that is not
   currently attached returns `404`, which the bulk runner treats as
   skipped-no-change (parity with the attribute tool's remove-of-absent
   behavior).
@@ -151,7 +151,7 @@ endpoint exists. Plan accordingly:
   compute skip set for dry-run preview.
 - Attach idempotence: the API accepts repeat `POST` of an already-attached
   template and creates a second mapping (confirmed by the `id` header
-  semantics — each POST creates a new mapping row). The tool dedupes client
+  semantics - each POST creates a new mapping row). The tool dedupes client
   side against the pre-flight list rather than relying on server-side
   idempotence.
 - Detach of non-attached: returns `404`, treat as skipped.
@@ -167,7 +167,7 @@ endpoint exists. Plan accordingly:
 - Confirm `strategy=delete` destructiveness against a test server: does it
   wipe agent_resources the template seeded, or only attribute values?
 - Confirm behavior when detaching a template whose `template_type` is
-  `dem_template` vs. other types — any edge behavior.
+  `dem_template` vs. other types - any edge behavior.
 - Cross-group attach: the catalog entries carry a `server_group`. Can a
   template be attached to a server in a different group, and what happens if
   that is attempted?

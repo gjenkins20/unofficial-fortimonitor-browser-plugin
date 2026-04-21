@@ -1,4 +1,4 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Service-worker handlers for the "Ask Claude" prototype (FMN-53).
 //
 // Streams assistant turns + tool-call lifecycle back to the UI via
@@ -78,7 +78,7 @@ export function createClaudeChatHandlers({ events = {}, getPanoptaClient, getApi
     },
 
     'chat:test-claude-key': async () => {
-      // Cheap probe — one message, no tools, no streaming needed but we
+      // Cheap probe - one message, no tools, no streaming needed but we
       // reuse the streaming path for consistency.
       const apiKey = await keyFactory();
       const res = await fetch('https://api.anthropic.com/v1/messages', {
