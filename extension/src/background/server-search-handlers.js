@@ -1,11 +1,11 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Background handlers for the Search Servers tool (FMN-65).
 //
 // Filters a tenant's /server records by a specific attribute. Callers pick
 // an attribute type by name (e.g., "Model") from the tenant's
 // /server_attribute_type list, then enter a value to match
 // (e.g., "FGT60F"). This is deliberately narrower than a cross-field
-// free-text search — it is the shape the operator actually wants for
+// free-text search - it is the shape the operator actually wants for
 // questions like "which devices have Model=FGT60F".
 //
 // Auth: v2 API key via createProductionPanoptaClient (read-only).
@@ -40,16 +40,16 @@ function extractServerId(server) {
 
 /**
  * Decide whether a single /server record has an attribute that matches the
- * operator's filter. Only considers the `attributes[]` array — not tags,
+ * operator's filter. Only considers the `attributes[]` array - not tags,
  * not name, not fqdn. Filtering is keyed by `name` OR `textkey` (either
  * can be supplied as `attributeName`) so the operator can use whichever
  * appears in their tenant.
  *
- * @param {object} server                    — raw /server record
+ * @param {object} server                    - raw /server record
  * @param {object} opts
- * @param {string} opts.attributeName        — attribute display name OR textkey
- * @param {string} opts.value                — value to match
- * @param {boolean} [opts.exactMatch=true]   — true: attr.value === value; false: contains
+ * @param {string} opts.attributeName        - attribute display name OR textkey
+ * @param {string} opts.value                - value to match
+ * @param {boolean} [opts.exactMatch=true]   - true: attr.value === value; false: contains
  * @param {boolean} [opts.caseInsensitive=true]
  * @returns {{ matched: boolean, attributeName?: string, textkey?: string, value?: string }}
  */
@@ -113,7 +113,7 @@ export function shapeMatch(server, matchInfo) {
  * UI can show live progress.
  *
  * @param {object} args
- * @param {object} args.client                   — PanoptaClient (listServers)
+ * @param {object} args.client                   - PanoptaClient (listServers)
  * @param {string} args.attributeName
  * @param {string} args.value
  * @param {boolean} [args.exactMatch=true]

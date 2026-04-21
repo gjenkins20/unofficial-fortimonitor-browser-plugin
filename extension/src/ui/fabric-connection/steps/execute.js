@@ -1,5 +1,5 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// Add Fabric Connection — Step 3 (Execute).
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Add Fabric Connection - Step 3 (Execute).
 // Trigger 'fc:create-batch' on entry. Subscribe to fc:entry-start /
 // fc:entry-done events to render per-device progress.
 

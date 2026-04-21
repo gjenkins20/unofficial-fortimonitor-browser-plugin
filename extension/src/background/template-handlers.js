@@ -1,4 +1,4 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Background-side handlers for the Manage Server Templates (Bulk) tool.
 //
 // Pattern mirrors attribute-handlers.js: a factory that returns
@@ -6,12 +6,12 @@
 // service worker.
 //
 // Message types surfaced to the UI:
-//   * tmpl:list-templates      — populate the template picker
-//   * tmpl:plan-batch          — resolve names→ids, pre-flight each server,
+//   * tmpl:list-templates      - populate the template picker
+//   * tmpl:plan-batch          - resolve names→ids, pre-flight each server,
 //                                produce a per-row preview plan
-//   * tmpl:execute-batch       — apply the plan (attach/detach), emit
+//   * tmpl:execute-batch       - apply the plan (attach/detach), emit
 //                                progress, return results
-//   * tmpl:abort               — cancel in-flight execute
+//   * tmpl:abort               - cancel in-flight execute
 
 import {
   createProductionPanoptaClient,
@@ -39,7 +39,7 @@ function looksLikeId(s) {
 
 /**
  * Resolve a list of server names/ids into target rows. Copy of the
- * attribute tool's helper — dedupes identical entries, preserves input
+ * attribute tool's helper - dedupes identical entries, preserves input
  * order. Kept local (not shared) because the shape of `row` differs
  * between tools and a shared helper would grow flags for each.
  */
@@ -65,7 +65,7 @@ export async function resolveTargets({ entries, client, concurrency = 4, signal 
     try {
       const matches = await client.lookupServersByName(entry);
       if (matches.length === 0) return { input: entry, status: 'error', error: 'Name not found' };
-      if (matches.length > 1) return { input: entry, status: 'error', error: `Ambiguous — ${matches.length} matches` };
+      if (matches.length > 1) return { input: entry, status: 'error', error: `Ambiguous - ${matches.length} matches` };
       return { input: entry, status: 'resolved', serverId: matches[0].id, displayName: matches[0].name };
     } catch (reason) {
       return {
@@ -84,7 +84,7 @@ export async function resolveTargets({ entries, client, concurrency = 4, signal 
  * Build the per-row plan.
  *
  * For attach: check whether the chosen template is already attached to
- *   the server. If yes → skip (prevents duplicate mapping — the API
+ *   the server. If yes → skip (prevents duplicate mapping - the API
  *   does NOT dedupe on its own). If no → attach.
  * For detach: check whether the chosen template is currently attached.
  *   If no → skip. If yes → detach. Strategy=delete escalates the plan

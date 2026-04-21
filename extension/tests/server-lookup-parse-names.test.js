@@ -67,15 +67,15 @@ test('parseNameList: literal "name" as first non-header row is preserved', () =>
   // "name" as a header is skipped, but if the user *intends* a server
   // literally called "name" they would have a header above it. Document
   // the boundary case: the first occurrence of "name" is always treated
-  // as a header — there's no way to escape it. This is an accepted
+  // as a header - there's no way to escape it. This is an accepted
   // limitation given the rarity.
   const r = parseNameList('name\nname');
   // First "name" is consumed as header, second is the only candidate but
-  // also called "name" — it goes through.
+  // also called "name" - it goes through.
   assert.deepEqual(r.names, ['name']);
 });
 
-test('parseNameList: case-sensitive — "Alpha" and "alpha" are distinct', () => {
+test('parseNameList: case-sensitive - "Alpha" and "alpha" are distinct', () => {
   const r = parseNameList('Alpha\nalpha');
   assert.deepEqual(r.names, ['Alpha', 'alpha']);
   assert.equal(r.warnings.length, 0);

@@ -1,5 +1,5 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// Step 2 — Review groups. Present one prompt per unique fingerprint
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Step 2 - Review groups. Present one prompt per unique fingerprint
 // group. Operator checks WAN port row(s) to remove for everyone in the
 // group; "Queue for N devices" advances to the next group (or to the
 // queue overview when all groups are reviewed).
@@ -30,7 +30,7 @@ export function render({ container, store, navigate }) {
   function setIndex(next) {
     store.reviewIndex = next;
     if (next >= groups.length) {
-      // All groups reviewed — compute queue entries and advance.
+      // All groups reviewed - compute queue entries and advance.
       const entries = buildQueueEntries({
         groups,
         decisions: store.decisions,
@@ -178,10 +178,10 @@ function interpretProbe(result) {
   }
   const ct = (result.probe?.contentType ?? '').toLowerCase();
   if (ct && !ct.includes('json')) {
-    return 'XSRF cookie is present but FortiMonitor returned a non-JSON response — likely a login-page redirect. Session may be expired, or the extension is running in a profile whose cookies do not match the tenant being queried.';
+    return 'XSRF cookie is present but FortiMonitor returned a non-JSON response - likely a login-page redirect. Session may be expired, or the extension is running in a profile whose cookies do not match the tenant being queried.';
   }
   if (result.probe?.ok) {
-    return 'Session looks healthy. The earlier failures are likely tenant-scoped — the server IDs you entered may not belong to this tenant.';
+    return 'Session looks healthy. The earlier failures are likely tenant-scoped - the server IDs you entered may not belong to this tenant.';
   }
   return null;
 }
@@ -194,7 +194,7 @@ function renderGroup(container, { store, navigate, groups, index, setIndex }) {
 
   const upCount = ports.filter((p) => String(p.oper_status).toLowerCase() === 'up').length;
   const downCount = ports.filter((p) => String(p.oper_status).toLowerCase() === 'down').length;
-  const fingerprintShort = group.fingerprint ? `${group.fingerprint.slice(0, 4)}…${group.fingerprint.slice(-4)}` : '—';
+  const fingerprintShort = group.fingerprint ? `${group.fingerprint.slice(0, 4)}…${group.fingerprint.slice(-4)}` : '-';
 
   const frame = h('div', { class: 'mockup-frame' });
   frame.appendChild(titleBar('Mark WAN Interfaces for Removal'));
@@ -217,6 +217,7 @@ function renderGroup(container, { store, navigate, groups, index, setIndex }) {
     breadcrumbs('review'),
     h('h2', {}, `Group ${index + 1} of ${groups.length}`),
     h('p', {}, `${deviceCount} device${deviceCount === 1 ? '' : 's'} share this interface state. One decision applies to every device in this group.`),
+    renderDevicePreview(group.devices, store.nameById),
     h('div', { class: 'audit-download-row' }, downloadAuditBtn)
   );
   frame.appendChild(crumbHeader);
@@ -259,20 +260,20 @@ function renderGroup(container, { store, navigate, groups, index, setIndex }) {
     h('span', { class: 'bang' }, '!'),
     h('div', {},
       h('strong', {}, `One decision applies to all ${deviceCount} device${deviceCount === 1 ? '' : 's'} in this group.`),
-      ' Scope is WAN interfaces only — identify the WAN row(s) this template uses and mark any that are operationally down. Your selection will be queued for every device in the group. Removing a port deletes its agent resources and metric history — irreversible. Nothing writes to FortiMonitor until you execute the queue in step 4. (You\'re in step 2.)'
+      ' Scope is WAN interfaces only - identify the WAN row(s) this template uses and mark any that are operationally down. Your selection will be queued for every device in the group. Removing a port deletes its agent resources and metric history - irreversible. Nothing writes to FortiMonitor until you execute the queue in step 4. (You\'re in step 2.)'
     )
   ));
 
   // Instruction row
   frame.appendChild(h('div', { class: 'instruction-row' },
     h('strong', {}, 'What to do:'),
-    ' check any WAN interface(s) you want to remove from monitoring — typically the ones showing ',
+    ' check any WAN interface(s) you want to remove from monitoring - typically the ones showing ',
     h('code', {}, 'oper_status = down'),
     '. WAN naming varies per site: it may be ',
     h('code', {}, 'wan2'), ', ',
     h('code', {}, 'x1'), '/', h('code', {}, 'x2'), ', ',
     h('code', {}, '(ISP Name)'),
-    ', or similar. Leave non-WAN interfaces alone even if they\'re down — the plugin will not touch anything you don\'t check.'
+    ', or similar. Leave non-WAN interfaces alone even if they\'re down - the plugin will not touch anything you don\'t check.'
   ));
 
   // Toolbar
@@ -296,7 +297,7 @@ function renderGroup(container, { store, navigate, groups, index, setIndex }) {
       h('td', { class: 'col-check' }, checkbox),
       h('td', { class: 'col-name' },
         port.name,
-        isFortilink ? h('span', { class: 'special-tag' }, 'fabric link — keep') : null
+        isFortilink ? h('span', { class: 'special-tag' }, 'fabric link - keep') : null
       ),
       h('td', {}, port.descr ?? ''),
       h('td', { class: 'col-status' }, statusBadge(admin)),
@@ -389,14 +390,14 @@ function renderGroup(container, { store, navigate, groups, index, setIndex }) {
   function updateActionSummary() {
     queueBtn.textContent = queueButtonLabel();
     if (decision.removePortNames.length === 0) {
-      leftSummary.textContent = 'Nothing marked for removal — this group will be skipped.';
+      leftSummary.textContent = 'Nothing marked for removal - this group will be skipped.';
       selectedPillWrap.style.display = 'none';
     } else {
       leftSummary.replaceChildren(
         'Marked for removal: ',
         h('strong', { style: { color: 'var(--accent)', fontFamily: 'SF Mono, Menlo, monospace' } },
           decision.removePortNames.join(', ')),
-        ` — applies to all ${deviceCount} device${deviceCount === 1 ? '' : 's'} in this group`
+        ` - applies to all ${deviceCount} device${deviceCount === 1 ? '' : 's'} in this group`
       );
       selectedPillWrap.style.display = '';
       selectedPillWrap.replaceChildren(
@@ -414,6 +415,23 @@ function normStatus(v) {
 
 function statusBadge(status) {
   return h('span', { class: `status-badge ${status}` }, status);
+}
+
+// Compact device-name preview for the step-header. Operators track devices by
+// name, not server ID - this surfaces names up-front instead of hiding them
+// inside the collapsed `<details>` below.
+function renderDevicePreview(devices, nameById) {
+  const PREVIEW_LIMIT = 3;
+  const labels = devices.map((d) => nameById[String(d.serverId)] ?? String(d.serverId));
+  const head = labels.slice(0, PREVIEW_LIMIT);
+  const overflow = labels.length - head.length;
+  const children = [h('strong', {}, 'Devices: ')];
+  head.forEach((label, i) => {
+    if (i > 0) children.push(', ');
+    children.push(h('span', { class: 'device-chip' }, label));
+  });
+  if (overflow > 0) children.push(`, +${overflow} more`);
+  return h('p', { class: 'devices-preview' }, ...children);
 }
 
 function computeQueuedCount(store, groups) {

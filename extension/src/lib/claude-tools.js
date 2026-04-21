@@ -1,8 +1,8 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // FortiMonitor tool subset for the "Ask Claude" prototype (FMN-53).
 //
 // Tool definitions (Anthropic schema) + JS handlers that call PanoptaClient.
-// Mirrors a narrow slice of the fortimonitor-mcp-server Python tools — see
+// Mirrors a narrow slice of the fortimonitor-mcp-server Python tools - see
 // docs/mcp-chat-prototype.md for the scope rationale.
 //
 // Writes are gated: acknowledge_outage is the only write in the prototype
@@ -141,7 +141,7 @@ export function buildToolDefinitions() {
     },
     {
       name: 'acknowledge_outage',
-      description: 'Acknowledge a specific outage by id. WRITE operation — only use when the user has explicitly asked to acknowledge a particular outage id.',
+      description: 'Acknowledge a specific outage by id. WRITE operation - only use when the user has explicitly asked to acknowledge a particular outage id.',
       input_schema: {
         type: 'object',
         properties: {

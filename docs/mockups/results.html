@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Mockup — Results (FMN-38)</title>
+<title>Mockup - Results (FMN-38)</title>
 <style>
   :root {
     --bg: #f5f6f8;
@@ -211,7 +211,7 @@
     background: var(--border-strong); color: white;
     display: grid; place-items: center; font-size: 10px; font-weight: bold;
   }
-  .skipped-summary .dash-icon::after { content: "—"; }
+  .skipped-summary .dash-icon::after { content: "-"; }
 
   .action-bar {
     padding: 14px 20px; border-top: 1px solid var(--border);
@@ -247,7 +247,7 @@
     <h1>
       <span class="icon">F</span>
       FortiMonitor WAN Cleanup
-      <span class="subtitle">— Batch Complete</span>
+      <span class="subtitle">- Batch Complete</span>
     </h1>
   </div>
 
@@ -262,13 +262,13 @@
       <span class="step">4. Execute ✓</span>
     </div>
     <h2>Batch complete</h2>
-    <p>Queue executed at 2026-04-16 14:22:08 PDT. Some devices failed — review the details below, retry if appropriate, and download the report for audit.</p>
+    <p>Queue executed at 2026-04-16 14:22:08 PDT. Some devices failed - review the details below, retry if appropriate, and download the report for audit.</p>
   </div>
 
   <div class="verdict-banner partial">
     <div class="verdict-icon">!</div>
     <div class="verdict-text">
-      <h3>Partial success — 76 of 79 devices completed</h3>
+      <h3>Partial success - 76 of 79 devices completed</h3>
       <div class="sub">3 devices failed after retry attempts. 76 ports removed from port scope across FortiMonitor.</div>
     </div>
   </div>
@@ -303,7 +303,7 @@
 
   <div class="download-strip">
     <div class="dl-label">
-      <strong>Download the batch report</strong> — the executed changes are irreversible; keep a copy for audit.
+      <strong>Download the batch report</strong> - the executed changes are irreversible; keep a copy for audit.
     </div>
     <button class="dl-btn">↓ Report (CSV)</button>
     <button class="dl-btn">↓ Report (JSON)</button>
@@ -320,7 +320,7 @@
         <button class="retry-btn">Retry</button>
       </div>
       <div class="fail-body">
-        <div class="err-summary">HTTP 403 — XSRF token rejected</div>
+        <div class="err-summary">HTTP 403 - XSRF token rejected</div>
         <div>Session cookie may have expired during the batch. Re-authenticate in FortiMonitor and retry this device. No change was written.</div>
         <div class="err-detail">POST /config/save_port_selection → 403 Forbidden (XSRF token mismatch)</div>
         <div class="attempts">Attempts: 3 of 3 (failed at 14:22:04, 14:22:07, 14:22:11) · Last: 14:22:11</div>
@@ -335,7 +335,7 @@
         <button class="retry-btn">Retry</button>
       </div>
       <div class="fail-body">
-        <div class="err-summary">Network timeout (30s) — no response</div>
+        <div class="err-summary">Network timeout (30s) - no response</div>
         <div>FortiMonitor did not respond within the timeout on any retry. The device may be unreachable or the session is experiencing degraded connectivity.</div>
         <div class="err-detail">POST /config/save_port_selection → timeout after 30000ms</div>
         <div class="attempts">Attempts: 3 of 3 (failed at 14:22:09, 14:22:42, 14:23:18) · Last: 14:23:18</div>
@@ -350,7 +350,7 @@
         <button class="retry-btn">Retry</button>
       </div>
       <div class="fail-body">
-        <div class="err-summary">HTTP 500 — FortiMonitor rejected the request</div>
+        <div class="err-summary">HTTP 500 - FortiMonitor rejected the request</div>
         <div>FortiMonitor returned an internal server error. The device's port scope is unchanged. Inspect this server manually in the FortiMonitor UI before retrying.</div>
         <div class="err-detail">POST /config/save_port_selection → 500 Internal Server Error</div>
         <div class="attempts">Attempts: 2 of 3 (failed at 14:22:12, 14:22:15) · Retry exhausted after 2nd 500</div>
@@ -386,13 +386,13 @@
 <div class="legend">
   <strong>Mockup notes (not rendered in final plugin):</strong><br>
   · Final step in the flow. Reached automatically when every device in the queue has settled into a terminal state (succeeded or failed-after-retries-exhausted).<br>
-  · <strong>Verdict banner</strong> has three variants: success (all devices succeeded, green), partial (some failed, amber — shown here), fail (all failed, red). Copy and icon adjust accordingly.<br>
-  · <strong>Download report</strong> is prominent because the executed changes are irreversible — the CSV/JSON is the durable record of what was done. Report includes batch ID, timing, per-device outcomes, ports removed, and error details.<br>
-  · <strong>Failures section</strong> shows every device that did not succeed, with concrete error, attempt history, and an inline Retry button. Retries re-submit just that device using the current session. If the session is expired the operator must re-authenticate in FortiMonitor first — the plugin does not handle SSO.<br>
+  · <strong>Verdict banner</strong> has three variants: success (all devices succeeded, green), partial (some failed, amber - shown here), fail (all failed, red). Copy and icon adjust accordingly.<br>
+  · <strong>Download report</strong> is prominent because the executed changes are irreversible - the CSV/JSON is the durable record of what was done. Report includes batch ID, timing, per-device outcomes, ports removed, and error details.<br>
+  · <strong>Failures section</strong> shows every device that did not succeed, with concrete error, attempt history, and an inline Retry button. Retries re-submit just that device using the current session. If the session is expired the operator must re-authenticate in FortiMonitor first - the plugin does not handle SSO.<br>
   · <strong>Retry all failures</strong> runs the failed devices through the same execution pipeline as a mini-batch; results are merged into this view when done.<br>
   · <strong>Start new batch</strong> clears the current queue and returns to step 1 (<code>batch-start.html</code>). <strong>Close</strong> dismisses the plugin UI but preserves the batch record in <code>chrome.storage.local</code> so the operator can reopen it later.<br>
   · Skipped groups are reflected explicitly so the operator has a complete picture of what the batch touched vs. didn't.<br>
-  · All reads and writes use the existing FortiMonitor session — the same one the WebGUI uses. Nothing runs outside the browser.
+  · All reads and writes use the existing FortiMonitor session - the same one the WebGUI uses. Nothing runs outside the browser.
 </div>
 
 </body>

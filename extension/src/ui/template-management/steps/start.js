@@ -1,5 +1,5 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// Manage Server Templates — Step 1 (Start).
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Manage Server Templates - Step 1 (Start).
 // Pick mode (attach/detach), template, strategy (detach only), continuous
 // (attach only), and paste a list of servers.
 
@@ -68,7 +68,7 @@ export function render({ container, store, navigate }) {
     h('label', {}, continuousInput,
       h('span', {},
         h('strong', {}, 'Continuous'),
-        h('span', { class: 'muted' }, ' — keep adding new metrics as collection discovers them (matches FortiMonitor default)')
+        h('span', { class: 'muted' }, ' - keep adding new metrics as collection discovers them (matches FortiMonitor default)')
       )
     )
   );
@@ -83,7 +83,7 @@ export function render({ container, store, navigate }) {
       strategyDissociate,
       h('span', { class: 'strategy-meta' },
         h('span', { class: 'strategy-head' }, 'Dissociate (safe)'),
-        h('span', { class: 'strategy-sub muted' }, 'Keep metrics and attributes the template added. Reversible — you can re-attach later.')
+        h('span', { class: 'strategy-sub muted' }, 'Keep metrics and attributes the template added. Reversible - you can re-attach later.')
       )
     ),
     h('label', { class: 'strategy-option destructive' },
@@ -140,7 +140,7 @@ export function render({ container, store, navigate }) {
         : await call('tmpl:list-templates', {});
       store.templates = templates;
       while (templateSelect.firstChild) templateSelect.removeChild(templateSelect.firstChild);
-      templateSelect.appendChild(h('option', { value: '' }, `— Choose template (${templates.length}) —`));
+      templateSelect.appendChild(h('option', { value: '' }, `- Choose template (${templates.length}) -`));
       for (const t of templates) {
         const typeHint = t.templateType ? ` [${t.templateType}]` : '';
         const appliedHint = t.appliedServerUrls?.length ? ` · applied to ${t.appliedServerUrls.length}` : '';
@@ -167,7 +167,7 @@ export function render({ container, store, navigate }) {
 
     if (entries.length > 0) {
       statusRow.className = 'parse-result ok';
-      statusRow.textContent = `${entries.length} target${entries.length === 1 ? '' : 's'} queued — preview will resolve names and show the plan.`;
+      statusRow.textContent = `${entries.length} target${entries.length === 1 ? '' : 's'} queued - preview will resolve names and show the plan.`;
     } else if (!textarea.value.trim()) {
       statusRow.className = 'parse-result empty';
       statusRow.textContent = '';

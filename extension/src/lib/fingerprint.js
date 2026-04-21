@@ -1,5 +1,5 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// Device fingerprint — deterministic hash over the port scope state.
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Device fingerprint - deterministic hash over the port scope state.
 //
 // Two devices that return the same { port_name, admin_status, oper_status }
 // tuple set produce the same fingerprint, regardless of the order the

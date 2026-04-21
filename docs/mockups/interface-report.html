@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Mockup — Interface Report (FMN-38)</title>
+<title>Mockup - Interface Report (FMN-38)</title>
 <style>
   :root {
     --bg: #f5f6f8;
@@ -312,13 +312,13 @@
     <h1>
       <span class="icon">F</span>
       FortiMonitor WAN Cleanup
-      <span class="subtitle">— Mark WAN Interfaces for Removal</span>
+      <span class="subtitle">- Mark WAN Interfaces for Removal</span>
     </h1>
     <span class="close">✕</span>
   </div>
 
   <div class="device-header">
-    <div class="device-name">Group 2 of 5 <span style="color: var(--text-muted); font-weight: 400;">— 23 devices share this interface state</span></div>
+    <div class="device-name">Group 2 of 5 <span style="color: var(--text-muted); font-weight: 400;">- 23 devices share this interface state</span></div>
     <div class="device-meta">Batch progress: 31 of 87 devices reviewed · 16 ports per device · fingerprint <code style="font-family: 'SF Mono', Menlo, monospace; font-size: 11px;">7f3a…c9d1</code></div>
 
     <div class="summary-row">
@@ -339,12 +339,12 @@
   <div class="destructive-banner">
     <span class="bang">!</span>
     <div>
-      <strong>One decision applies to all 23 devices in this group.</strong> Scope is WAN interfaces only — identify the WAN row(s) this template uses and mark any that are operationally down. Your selection will be queued for every device in the group. Removing a port deletes its agent resources and metric history — irreversible. Nothing writes to FortiMonitor until you execute the queue.
+      <strong>One decision applies to all 23 devices in this group.</strong> Scope is WAN interfaces only - identify the WAN row(s) this template uses and mark any that are operationally down. Your selection will be queued for every device in the group. Removing a port deletes its agent resources and metric history - irreversible. Nothing writes to FortiMonitor until you execute the queue.
     </div>
   </div>
 
   <div class="instruction-row">
-    <strong>What to do:</strong> check any WAN interface(s) you want to remove from monitoring — typically the ones showing <code>oper_status = down</code>. WAN naming varies per site: it may be <code>wan2</code>, <code>x1</code>/<code>x2</code>, <code>(Comcast Business)</code>, or similar. Leave non-WAN interfaces alone even if they're down — the plugin will not touch anything you don't check.
+    <strong>What to do:</strong> check any WAN interface(s) you want to remove from monitoring - typically the ones showing <code>oper_status = down</code>. WAN naming varies per site: it may be <code>wan2</code>, <code>x1</code>/<code>x2</code>, <code>(Comcast Business)</code>, or similar. Leave non-WAN interfaces alone even if they're down - the plugin will not touch anything you don't check.
   </div>
 
   <div class="toolbar">
@@ -410,7 +410,7 @@
         </tr>
         <tr class="fortilink-warn">
           <td class="col-check"><input type="checkbox" /></td>
-          <td class="col-name">fortilink <span class="special-tag">fabric link — keep</span></td>
+          <td class="col-name">fortilink <span class="special-tag">fabric link - keep</span></td>
           <td></td>
           <td class="col-status"><span class="status-badge up">up</span></td>
           <td class="col-status"><span class="status-badge down">down</span></td>
@@ -484,7 +484,7 @@
 
   <div class="action-bar">
     <div class="left">
-      <span>Marked for removal: <strong style="color: var(--accent); font-family: 'SF Mono', Menlo, monospace;">wan2</strong> — applies to all 23 devices in this group</span>
+      <span>Marked for removal: <strong style="color: var(--accent); font-family: 'SF Mono', Menlo, monospace;">wan2</strong> - applies to all 23 devices in this group</span>
     </div>
     <div class="right">
       <button class="btn btn-secondary">Skip this group</button>
@@ -498,10 +498,10 @@
   · <strong>Scale model:</strong> plugin reads a CSV of devices, silently reads each device's port scope in the background using the existing FortiMonitor session, groups devices by fingerprint (exact match on the set of <code>{port_name, admin_status, oper_status}</code> tuples), presents ONE prompt per unique group. 87 devices might collapse to 5 groups → 5 decisions.<br>
   · Scope: WAN interfaces only. Operator identifies WAN rows manually (naming is inconsistent across sites: <code>wanN</code>, <code>(ISP Name)</code>, <code>xN</code>, etc).<br>
   · No pre-selection. Operator checks WAN row(s) that are <code>oper_status=down</code>. Decision applies to every device in the current group.<br>
-  · <code>fortilink</code> row is visually flagged as "fabric link — keep" — the only protected name in v1 scope.<br>
+  · <code>fortilink</code> row is visually flagged as "fabric link - keep" - the only protected name in v1 scope.<br>
   · "Queue for N devices" stages the decision against every device in this group in <code>chrome.storage.local</code>. Nothing writes to FortiMonitor until queue execution.<br>
-  · Next mockup in sequence: queue-overview screen — batch audit, destructive confirmation, per-device execution progress.<br>
-  · All reads and writes use the existing FortiMonitor session — the same one the WebGUI uses when an operator opens the Port Selection dialog manually. Nothing runs outside the browser.
+  · Next mockup in sequence: queue-overview screen - batch audit, destructive confirmation, per-device execution progress.<br>
+  · All reads and writes use the existing FortiMonitor session - the same one the WebGUI uses when an operator opens the Port Selection dialog manually. Nothing runs outside the browser.
 </div>
 
 </body>

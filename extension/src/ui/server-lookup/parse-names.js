@@ -1,7 +1,7 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Parse operator input for the Server Name → ID Lookup tool.
 //
-// Input is a single column of server names — one per line. Accepts a
+// Input is a single column of server names - one per line. Accepts a
 // bare list or a CSV whose first line is the `name` header. No format
 // validation is applied to the names themselves: FortiMonitor lets
 // users pick arbitrary server names (hostnames, friendly labels, etc.),
@@ -9,7 +9,7 @@
 //
 // Returns { names, warnings, totalLines }.
 //
-// Pure module — no chrome APIs, fully unit-testable.
+// Pure module - no chrome APIs, fully unit-testable.
 
 function splitLines(text) {
   return String(text ?? '').replace(/\r\n?/g, '\n').split('\n');
@@ -22,7 +22,7 @@ function stripComment(line) {
 
 function firstCell(line) {
   // Accept either "name,extra,stuff" or plain "name". Quoting is rare
-  // here so a basic split is enough — we only look at the first cell.
+  // here so a basic split is enough - we only look at the first cell.
   const firstComma = line.indexOf(',');
   const cell = firstComma === -1 ? line : line.slice(0, firstComma);
   return cell.trim().replace(/^"(.*)"$/, '$1');
@@ -55,7 +55,7 @@ export function parseNameList(input) {
     }
 
     if (seen.has(cell)) {
-      warnings.push(`Duplicate name "${cell}" — deduplicated`);
+      warnings.push(`Duplicate name "${cell}" - deduplicated`);
       continue;
     }
     seen.add(cell);

@@ -1,4 +1,4 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Device scanner: given a list of server IDs, read each device's port
 // scope with bounded concurrency, fingerprint it, and return per-device
 // results. Group-by-fingerprint produces the N-groups-from-M-devices
@@ -92,7 +92,7 @@ function serializeError(err) {
  * Resolve a batch of server ids to human-readable names using the
  * session-auth Instance Detail Page endpoint. Failures (non-existent
  * id, parse error, SPA-shell response) do not appear in the output
- * map — callers fall back to the id for those.
+ * map - callers fall back to the id for those.
  *
  * @param {Array<string|number>} serverIds
  * @param {object} options

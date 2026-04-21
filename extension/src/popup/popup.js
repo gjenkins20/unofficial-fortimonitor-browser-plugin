@@ -1,4 +1,4 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 import {
   isDevModeEnabled,
   setDevModeEnabled,
@@ -55,7 +55,7 @@ function setSessionState(ok) {
   strip.classList.toggle('warn', !ok);
   text.textContent = ok
     ? 'Signed in to FortiMonitor'
-    : 'Not signed in — log in to FortiMonitor first';
+    : 'Not signed in - log in to FortiMonitor first';
   link.textContent = ok ? 'Open console ↗' : 'Open login ↗';
 }
 
@@ -83,8 +83,8 @@ function applyToolGuards({ sessionOk, apiKeyOk, claudeKeyOk }) {
       // Enabled but still benefits from a reminder of what auth surface it uses.
       desc.textContent = desc.dataset.defaultDesc ?? desc.textContent;
       card.title = needsClaudeKey
-        ? 'Requires FortiMonitor v2 API key + Anthropic API key — manage in popup → Settings (⚙).'
-        : 'Requires a FortiMonitor v2 API key — manage in popup → Settings (⚙).';
+        ? 'Requires FortiMonitor v2 API key + Anthropic API key - manage in popup → Settings (⚙).'
+        : 'Requires a FortiMonitor v2 API key - manage in popup → Settings (⚙).';
     } else {
       desc.textContent = desc.dataset.defaultDesc ?? desc.textContent;
       card.title = '';
@@ -193,7 +193,7 @@ async function loadApiKeyIntoInput() {
   if (key) {
     // Show a masked placeholder; never re-display the real key.
     input.value = '';
-    input.placeholder = `••••••••${key.slice(-4)} (saved — paste a new key to replace)`;
+    input.placeholder = `••••••••${key.slice(-4)} (saved - paste a new key to replace)`;
   } else {
     input.value = '';
     input.placeholder = 'Paste API key';
@@ -237,7 +237,7 @@ async function loadClaudeKeyIntoInput() {
   const input = document.getElementById('claude-key-input');
   if (key) {
     input.value = '';
-    input.placeholder = `••••••••${key.slice(-4)} (saved — paste a new key to replace)`;
+    input.placeholder = `••••••••${key.slice(-4)} (saved - paste a new key to replace)`;
   } else {
     input.value = '';
     input.placeholder = 'Paste Claude API key';

@@ -55,7 +55,7 @@ test('isRetryable: AbortError does not retry', () => {
   assert.equal(isRetryable(err), false);
 });
 
-// ----- planBatch — attach mode --------------------
+// ----- planBatch - attach mode --------------------
 
 test('planBatch (attach): not attached → plan=attach, attached → plan=skip', async () => {
   const targets = [
@@ -115,7 +115,7 @@ test('planBatch: unresolved targets pass through as plan=error', async () => {
   assert.equal(rows[0].error, 'Name not found');
 });
 
-// ----- planBatch — detach mode --------------------
+// ----- planBatch - detach mode --------------------
 
 test('planBatch (detach, dissociate): attached → plan=detach, not attached → plan=skip', async () => {
   const targets = [
@@ -294,7 +294,7 @@ test('createTemplateHandlers: tmpl:abort returns aborted=false when no run', asy
 
 test('createTemplateHandlers: concurrent execute-batch is rejected', async () => {
   // Hold up the first run with a detach that never resolves, then fire
-  // a second — must reject with "already running".
+  // a second - must reject with "already running".
   let release;
   const slow = new Promise((r) => { release = r; });
   const client = fakeClient({

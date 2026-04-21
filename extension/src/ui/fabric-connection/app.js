@@ -1,4 +1,4 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Top-level UI controller for the Add Fabric Connection (Bulk) tool.
 // Mirrors src/ui/app.js's pattern (hash router, in-memory store,
 // fan-out event subscription) but with a simpler 4-step flow.

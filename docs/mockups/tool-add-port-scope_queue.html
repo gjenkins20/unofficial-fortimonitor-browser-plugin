@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Mockup — Add to Port Scope (Fabric) · Queue (FMN-40)</title>
+<title>Mockup - Add to Port Scope (Fabric) · Queue (FMN-40)</title>
 <style>
   :root {
     --bg: #f5f6f8;
@@ -241,7 +241,7 @@
     <h1>
       <span class="icon">F</span>
       Add to Port Scope (Fabric)
-      <span class="subtitle">— Queue Overview</span>
+      <span class="subtitle">- Queue Overview</span>
     </h1>
   </div>
 
@@ -256,7 +256,7 @@
       <span class="step">4. Execute</span>
     </div>
     <h2>Audit the queue before executing</h2>
-    <p>Every staged change across all reviewed groups is listed below. Adding a port provisions new agent resources and begins metric collection — non-destructive and reversible via the Remove tool. Dry-run is on by default for confidence; no typed-confirmation gate is required.</p>
+    <p>Every staged change across all reviewed groups is listed below. Adding a port provisions new agent resources and begins metric collection - non-destructive and reversible via the Remove tool. Dry-run is on by default for confidence; no typed-confirmation gate is required.</p>
   </div>
 
   <div class="overview-strip">
@@ -289,7 +289,7 @@
       <div class="group-head">
         <div class="group-badge">Group 1</div>
         <div class="group-title">
-          <div class="name">Standard branch template — generic WAN</div>
+          <div class="name">Standard branch template - generic WAN</div>
           <div class="meta">41 devices · fingerprint <code style="font-family: 'SF Mono', Menlo, monospace; font-size: 11px;">3b2e…a881</code> · 16 ports per device</div>
         </div>
         <div class="action-summary">Add wan2 × 41</div>
@@ -300,7 +300,7 @@
           <div class="k">Ports marked:</div>
           <div class="v"><span class="removed-badge" style="background: var(--ok-soft); color: var(--ok);">ADD</span><code>wan2</code> <span style="color: var(--text-muted);">(currently out of scope · admin up, oper up)</span></div>
           <div class="k">Already in scope:</div>
-          <div class="v">15 — <code>DATA</code>, <code>GUEST</code>, <code>MGMT</code>, <code>VoIP</code>, <code>a</code>, <code>b</code>, <code>fortilink</code>, <code>modem</code>, <code>port1</code>–<code>port6</code>, <code>(Comcast Business)</code></div>
+          <div class="v">15 - <code>DATA</code>, <code>GUEST</code>, <code>MGMT</code>, <code>VoIP</code>, <code>a</code>, <code>b</code>, <code>fortilink</code>, <code>modem</code>, <code>port1</code>–<code>port6</code>, <code>(Comcast Business)</code></div>
           <div class="k">Devices:</div>
           <div class="v">
             <div class="device-sample">FGT-Branch-002 · FGT-Branch-004 · FGT-Branch-005 · FGT-Branch-006 · FGT-Branch-008 · FGT-Branch-009 · FGT-Branch-010 · FGT-Branch-011 · FGT-Branch-013 · FGT-Branch-015 · FGT-Branch-016 · FGT-Branch-017 · FGT-Branch-019 · FGT-Branch-020 · FGT-Branch-022 · FGT-Branch-023 · FGT-Branch-024 · FGT-Branch-026 · FGT-Branch-027 · FGT-Branch-028 · FGT-Branch-030 · FGT-Branch-032 · FGT-Branch-033 · … +18 more</div>
@@ -314,7 +314,7 @@
       <div class="group-head">
         <div class="group-badge">Group 2</div>
         <div class="group-title">
-          <div class="name">Branch template — ISP label + wan2</div>
+          <div class="name">Branch template - ISP label + wan2</div>
           <div class="meta">23 devices · fingerprint <code style="font-family: 'SF Mono', Menlo, monospace; font-size: 11px;">7f3a…c9d1</code> · 16 ports per device</div>
         </div>
         <div class="action-summary">Add wan2 × 23</div>
@@ -350,7 +350,7 @@
       <div class="group-head">
         <div class="group-badge">Group 5</div>
         <div class="group-title">
-          <div class="name">Minor variant — nothing out of scope to add</div>
+          <div class="name">Minor variant - nothing out of scope to add</div>
           <div class="meta">8 devices · fingerprint <code style="font-family: 'SF Mono', Menlo, monospace; font-size: 11px;">5a67…9b23</code> · operator chose "Skip this group"</div>
         </div>
         <div class="action-summary">No changes</div>
@@ -370,12 +370,12 @@
 
     <div class="dryrun-box">
       <input type="checkbox" id="dryrun" checked />
-      <label for="dryrun"><strong>Dry run</strong> — simulate every save without modifying FortiMonitor (recommended for the first pass)</label>
+      <label for="dryrun"><strong>Dry run</strong> - simulate every save without modifying FortiMonitor (recommended for the first pass)</label>
     </div>
 
     <div class="verbose-box">
       <input type="checkbox" id="verbose" />
-      <label for="verbose"><strong>Verbose mode</strong> — open a separate tab and visibly navigate to each device while it's processed. Slower and serial (one at a time), but you can watch each change happen. Off by default — execution runs silently in the background otherwise.</label>
+      <label for="verbose"><strong>Verbose mode</strong> - open a separate tab and visibly navigate to each device while it's processed. Slower and serial (one at a time), but you can watch each change happen. Off by default - execution runs silently in the background otherwise.</label>
     </div>
   </div>
 
@@ -397,10 +397,10 @@
   · Five mock groups shown: 4 have pending additions (79 devices), 1 was skipped by the operator (8 devices). Total batch: 87 devices.<br>
   · Group cards are collapsible. Group 1 is shown expanded as the reference pattern. Expanded view shows ports marked to add, ports already in scope, and a device sample with "+N more" overflow.<br>
   · "Edit this group" returns the operator to the review screen for that specific group; their prior selection is preserved so they can modify rather than start over.<br>
-  · <strong>No typed-confirmation gate.</strong> The Remove tool requires operator to type <code>EXECUTE N PORTS</code> because deletion is irreversible. Adding ports is non-destructive — reversible via the Remove tool — so dry-run (on by default) is the only guard. Primary button reads "Run dry run →" until dry-run is off; then it becomes "Add N ports" (green, no typed gate).<br>
+  · <strong>No typed-confirmation gate.</strong> The Remove tool requires operator to type <code>EXECUTE N PORTS</code> because deletion is irreversible. Adding ports is non-destructive - reversible via the Remove tool - so dry-run (on by default) is the only guard. Primary button reads "Run dry run →" until dry-run is off; then it becomes "Add N ports" (green, no typed gate).<br>
   · <strong>Plan export</strong>: JSON and CSV downloads offered so the operator still has an audit trail even though the action is reversible.<br>
-  · Queue state is kept in <code>chrome.storage.local</code> so it survives tab navigation. Executing the queue replays the same <code>save_port_selection</code> that the FortiMonitor Port Selection dialog performs when the operator clicks Save manually — once per device, using the existing logged-in session. No separate credentials, no external system.<br>
-  · <strong>Execution modes:</strong> default is silent background execution (no visible tab navigation, concurrency up to 3). <strong>Verbose mode</strong> opts into visibly navigating a dedicated tab through each device serially so the operator can watch each change — useful for spot-checking, too slow for routine runs at fleet scale.
+  · Queue state is kept in <code>chrome.storage.local</code> so it survives tab navigation. Executing the queue replays the same <code>save_port_selection</code> that the FortiMonitor Port Selection dialog performs when the operator clicks Save manually - once per device, using the existing logged-in session. No separate credentials, no external system.<br>
+  · <strong>Execution modes:</strong> default is silent background execution (no visible tab navigation, concurrency up to 3). <strong>Verbose mode</strong> opts into visibly navigating a dedicated tab through each device serially so the operator can watch each change - useful for spot-checking, too slow for routine runs at fleet scale.
 </div>
 
 </body>

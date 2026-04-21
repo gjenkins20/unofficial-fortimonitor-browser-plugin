@@ -1,4 +1,4 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Shared settings read/write. Currently exposes the developer-mode flag
 // used to surface diagnostic fields in error UIs. Settings live in
 // chrome.storage.local so all extension pages see the same value.
@@ -9,7 +9,7 @@ export const SERVER_SEARCH_ENABLED_KEY = 'fm:serverSearchEnabled';
 
 /**
  * Read the developer-mode flag. Returns false on any storage error so
- * diagnostic surfaces stay hidden by default — we never want to leak
+ * diagnostic surfaces stay hidden by default - we never want to leak
  * URLs or body previews to normal operators.
  *
  * @param {{ get: (key: string) => Promise<Record<string, any>> }} [storage]
@@ -35,7 +35,7 @@ export async function setDevModeEnabled(enabled, storage = defaultStorage()) {
 
 /**
  * Read the Ask-Claude-enabled flag. Returns false on any storage error so
- * the prototype stays hidden by default — users only see it after
+ * the prototype stays hidden by default - users only see it after
  * explicitly opting in via the Settings toggle.
  *
  * @param {{ get: (key: string) => Promise<Record<string, any>> }} [storage]

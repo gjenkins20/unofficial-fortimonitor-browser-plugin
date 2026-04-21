@@ -1,4 +1,4 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Queue executor: iterate over approved queue entries, invoke
 // client.savePortSelection for each, honor retry + concurrency rules.
 // Verbose mode forces serial execution (concurrency=1) without changing
@@ -19,7 +19,7 @@ export function isRetryable(err) {
     if (err.status === null || err.status === undefined) return true; // network error
     return RETRYABLE_STATUSES.has(err.status);
   }
-  // Unknown error class — assume transient.
+  // Unknown error class - assume transient.
   return true;
 }
 
@@ -109,7 +109,7 @@ export async function executeQueue(entries, {
   }, { concurrency: effectiveConcurrency, signal });
 
   // mapConcurrent returns per-item { status, value|reason }. Our fn above
-  // never throws — it captures failure in the return value — so every
+  // never throws - it captures failure in the return value - so every
   // result here is 'fulfilled'.
   return pendingResults.map((r) => r.value);
 }

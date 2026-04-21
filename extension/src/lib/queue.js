@@ -1,5 +1,5 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// Cleanup queue — operator-reviewed intended actions, one entry per
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Cleanup queue - operator-reviewed intended actions, one entry per
 // device, grouped by fingerprint. Persisted in chrome.storage.local so
 // the queue survives tab navigation and accidental closures.
 //

@@ -1,4 +1,4 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Background-side handlers for the Add Fabric Connection (Bulk) tool.
 //
 // Pattern mirrors message-handlers.js: pure factory that returns an
@@ -40,7 +40,7 @@ export function isRetryable(err) {
  * @param {string} params.serverGroupUrl
  * @param {string|null} [params.applianceGroupUrl]
  * @param {number} [params.discoverFrequency]
- * @param {object} [params.client] — PanoptaClient (factory call result)
+ * @param {object} [params.client] - PanoptaClient (factory call result)
  * @param {number} [params.concurrency=1]
  * @param {number} [params.maxAttempts=3]
  * @param {boolean} [params.dryRun=false]
@@ -138,7 +138,7 @@ export async function executeFabricBatch({
  *
  * @param {object} deps
  * @param {{ emit?: (event: string, payload: any) => void }} [deps.events]
- * @param {() => Promise<object>} [deps.getClient] — factory; defaults to createProductionPanoptaClient
+ * @param {() => Promise<object>} [deps.getClient] - factory; defaults to createProductionPanoptaClient
  */
 export function createFabricHandlers({ events = {}, getClient } = {}) {
   const emit = events.emit ?? (() => {});

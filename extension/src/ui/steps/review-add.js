@@ -1,7 +1,7 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// Step 2 (Add tool) — Review groups. Inverse of review.js: operator
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Step 2 (Add tool) - Review groups. Inverse of review.js: operator
 // marks ports to ADD to port scope (ports that are currently out of
-// scope — isActive=false). Non-destructive; no typed-confirmation gate
+// scope - isActive=false). Non-destructive; no typed-confirmation gate
 // downstream. Defaults to hiding in-scope ports since they typically
 // dominate the list.
 
@@ -88,7 +88,7 @@ function renderGroup(container, { store, navigate, groups, index, setIndex }) {
 
   const inScopeCount = ports.filter((p) => p.isActive).length;
   const outOfScopeCount = ports.length - inScopeCount;
-  const fingerprintShort = group.fingerprint ? `${group.fingerprint.slice(0, 4)}…${group.fingerprint.slice(-4)}` : '—';
+  const fingerprintShort = group.fingerprint ? `${group.fingerprint.slice(0, 4)}…${group.fingerprint.slice(-4)}` : '-';
 
   // UI-local state: show in-scope ports toggle (default off)
   const viewState = { showInScope: false };
@@ -113,6 +113,7 @@ function renderGroup(container, { store, navigate, groups, index, setIndex }) {
     breadcrumbs('review'),
     h('h2', {}, `Group ${index + 1} of ${groups.length}`),
     h('p', {}, `${deviceCount} device${deviceCount === 1 ? '' : 's'} share this interface state. One decision applies to every device in this group.`),
+    renderDevicePreview(group.devices, store.nameById),
     h('div', { class: 'audit-download-row' }, downloadAuditBtn)
   );
   frame.appendChild(crumbHeader);
@@ -156,7 +157,7 @@ function renderGroup(container, { store, navigate, groups, index, setIndex }) {
     h('span', { class: 'info-i' }, 'i'),
     h('div', {},
       h('strong', {}, `One decision applies to all ${deviceCount} device${deviceCount === 1 ? '' : 's'} in this group.`),
-      ' Check each interface you want to start monitoring. Adding a port provisions new agent resources and begins collecting metrics — non-destructive, reversible by re-running the Remove tool. Nothing writes to FortiMonitor until you execute the queue in step 4. (You\'re in step 2.)'
+      ' Check each interface you want to start monitoring. Adding a port provisions new agent resources and begins collecting metrics - non-destructive, reversible by re-running the Remove tool. Nothing writes to FortiMonitor until you execute the queue in step 4. (You\'re in step 2.)'
     )
   ));
 
@@ -164,7 +165,7 @@ function renderGroup(container, { store, navigate, groups, index, setIndex }) {
     h('strong', {}, 'What to do:'),
     ' check any interface(s) currently ',
     h('code', {}, 'out of scope'),
-    ' that you want to add to monitoring. In-scope ports are hidden by default — toggle ',
+    ' that you want to add to monitoring. In-scope ports are hidden by default - toggle ',
     h('em', {}, 'Show in-scope'),
     ' below if you need to see the full list. ',
     h('code', {}, 'fortilink'),
@@ -344,14 +345,14 @@ function renderGroup(container, { store, navigate, groups, index, setIndex }) {
   function updateActionSummary() {
     queueBtn.textContent = queueButtonLabel();
     if (decision.addPortNames.length === 0) {
-      leftSummary.textContent = 'Nothing marked to add — this group will be skipped.';
+      leftSummary.textContent = 'Nothing marked to add - this group will be skipped.';
       selectedPillWrap.style.display = 'none';
     } else {
       leftSummary.replaceChildren(
         'Marked to add: ',
         h('strong', { style: { color: 'var(--ok)', fontFamily: 'SF Mono, Menlo, monospace' } },
           decision.addPortNames.join(', ')),
-        ` — applies to all ${deviceCount} device${deviceCount === 1 ? '' : 's'} in this group`
+        ` - applies to all ${deviceCount} device${deviceCount === 1 ? '' : 's'} in this group`
       );
       selectedPillWrap.style.display = '';
       selectedPillWrap.replaceChildren(
@@ -369,6 +370,23 @@ function normStatus(v) {
 
 function statusBadge(status) {
   return h('span', { class: `status-badge ${status}` }, status);
+}
+
+// Compact device-name preview for the step-header. Operators track devices by
+// name, not server ID - this surfaces names up-front instead of hiding them
+// inside the collapsed `<details>` below.
+function renderDevicePreview(devices, nameById) {
+  const PREVIEW_LIMIT = 3;
+  const labels = devices.map((d) => nameById[String(d.serverId)] ?? String(d.serverId));
+  const head = labels.slice(0, PREVIEW_LIMIT);
+  const overflow = labels.length - head.length;
+  const children = [h('strong', {}, 'Devices: ')];
+  head.forEach((label, i) => {
+    if (i > 0) children.push(', ');
+    children.push(h('span', { class: 'device-chip' }, label));
+  });
+  if (overflow > 0) children.push(`, +${overflow} more`);
+  return h('p', { class: 'devices-preview' }, ...children);
 }
 
 function computeQueuedCount(store, groups) {

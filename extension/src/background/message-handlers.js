@@ -1,4 +1,4 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Message router handlers. Pure functions over injected client + queue;
 // testable in Node without touching chrome.runtime.onMessage.
 //
@@ -28,7 +28,7 @@ export function createHandlers({ client, queue, events = {} }) {
       if (!Array.isArray(serverIds)) throw new TypeError('scan-devices: serverIds must be an array');
       // Run the port scan and name resolution in parallel. Port scan is
       // the authoritative source for progress (scan:progress events);
-      // name resolution is best-effort and silent — it populates
+      // name resolution is best-effort and silent - it populates
       // store.nameById so the step-3 queue CSV always has a name column
       // even for plain-ID input (FMN-61).
       const [results, nameById] = await Promise.all([

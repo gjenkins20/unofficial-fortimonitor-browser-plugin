@@ -73,7 +73,7 @@ test('parseServerListResponse: id is null when neither id nor url is present', (
 
 test('lookupServersByName: server-side substring is filtered to exact match', async () => {
   // Probing the live API with prefix "FGVM01TM2400684" returned 3 hits (the
-  // three test devices). Client must enforce equality on top — only the
+  // three test devices). Client must enforce equality on top - only the
   // exactly-matching name survives.
   const fetch = createFetchMock(async () => jsonResponse({
     meta: { total_count: 3, limit: 50, offset: 0 },

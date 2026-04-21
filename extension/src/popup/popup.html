@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  Unofficial FortiMonitor Toolkit — launcher popup
+  Unofficial FortiMonitor Toolkit - launcher popup
   Built by Gregori Jenkins · https://www.linkedin.com/in/gregorijenkins
   If you are forking or redistributing this extension, please keep this attribution intact.
 -->
@@ -9,7 +9,7 @@
 <meta charset="UTF-8">
 <title>Unofficial FortiMonitor Toolkit</title>
 <meta name="author" content="Gregori Jenkins">
-<meta name="description" content="Unofficial FortiMonitor Toolkit — launcher popup">
+<meta name="description" content="Unofficial FortiMonitor Toolkit - launcher popup">
 <link rel="stylesheet" href="popup.css">
 </head>
 <body>
@@ -77,7 +77,7 @@
               data-tool="add-fabric-connection"
               data-url="src/ui/fabric-connection/app.html"
               data-api-key-required="true"
-              title="Requires a FortiMonitor v2 API key — configure in popup → Settings (⚙).">
+              title="Requires a FortiMonitor v2 API key - configure in popup → Settings (⚙).">
         <div class="tool-icon api">FC</div>
         <div class="tool-meta">
           <div class="tool-name">
@@ -98,7 +98,7 @@
               data-tool="server-name-lookup"
               data-url="src/ui/server-lookup/app.html"
               data-api-key-required="true"
-              title="Requires a FortiMonitor v2 API key — configure in popup → Settings (⚙).">
+              title="Requires a FortiMonitor v2 API key - configure in popup → Settings (⚙).">
         <div class="tool-icon api">SL</div>
         <div class="tool-meta">
           <div class="tool-name">
@@ -119,7 +119,7 @@
               data-api-key-required="true"
               data-experimental="server-search"
               hidden
-              title="Requires a FortiMonitor v2 API key — configure in popup → Settings (⚙).">
+              title="Requires a FortiMonitor v2 API key - configure in popup → Settings (⚙).">
         <div class="tool-icon api">SS</div>
         <div class="tool-meta">
           <div class="tool-name">
@@ -140,7 +140,7 @@
               data-tool="manage-attributes"
               data-url="src/ui/attribute-management/app.html"
               data-api-key-required="true"
-              title="Requires a FortiMonitor v2 API key — configure in popup → Settings (⚙).">
+              title="Requires a FortiMonitor v2 API key - configure in popup → Settings (⚙).">
         <div class="tool-icon api">AT</div>
         <div class="tool-meta">
           <div class="tool-name">
@@ -164,7 +164,7 @@
               data-claude-key-required="true"
               data-experimental="ask-claude"
               hidden
-              title="Requires FortiMonitor v2 API key + Anthropic (Claude) API key — both configured in Settings (⚙).">
+              title="Requires FortiMonitor v2 API key + Anthropic (Claude) API key - both configured in Settings (⚙).">
         <div class="tool-icon api">AC</div>
         <div class="tool-meta">
           <div class="tool-name">
@@ -185,7 +185,7 @@
               data-tool="manage-templates"
               data-url="src/ui/template-management/app.html"
               data-api-key-required="true"
-              title="Requires a FortiMonitor v2 API key — configure in popup → Settings (⚙).">
+              title="Requires a FortiMonitor v2 API key - configure in popup → Settings (⚙).">
         <div class="tool-icon api">TP</div>
         <div class="tool-meta">
           <div class="tool-name">
@@ -201,7 +201,7 @@
     </div>
 
     <div id="no-matches" class="empty-search" hidden>
-      No tools match — try a different keyword.
+      No tools match - try a different keyword.
     </div>
   </div>
 
@@ -234,7 +234,7 @@
         Required for the <strong>Ask Claude</strong> tool (Beta). Create a key at
         <code>console.anthropic.com</code>. Stored locally in your browser via
         <code>chrome.storage.local</code>; sent only to <code>api.anthropic.com</code>.
-        <strong>Cost warning:</strong> calls go directly to Anthropic with your key — no rate limit or budget cap is enforced by this extension.
+        <strong>Cost warning:</strong> calls go directly to Anthropic with your key - no rate limit or budget cap is enforced by this extension.
       </p>
       <input id="claude-key-input" type="password" placeholder="Paste Claude API key" autocomplete="off" spellcheck="false">
       <div class="settings-actions">
@@ -248,7 +248,7 @@
     <div class="settings-section">
       <label class="settings-label" for="ask-claude-toggle">Experimental tools</label>
       <p class="settings-help">
-        Off by default. When on, the launcher and this settings panel expose the <strong>Ask Claude</strong> prototype — an in-plugin Claude chat that queries your FortiMonitor environment via a curated set of v2 API tools. Requires an Anthropic API key in addition to your FortiMonitor RW key. See <code>docs/mcp-chat-prototype.md</code>.
+        Off by default. When on, the launcher and this settings panel expose the <strong>Ask Claude</strong> prototype - an in-plugin Claude chat that queries your FortiMonitor environment via a curated set of v2 API tools. Requires an Anthropic API key in addition to your FortiMonitor RW key. See <code>docs/mcp-chat-prototype.md</code>.
       </p>
       <label class="toggle-row">
         <input id="ask-claude-toggle" type="checkbox">
@@ -266,7 +266,7 @@
     <div class="settings-section">
       <label class="settings-label" for="dev-mode-toggle">Developer mode</label>
       <p class="settings-help">
-        Off by default. When on, scan-failure and API-error screens include diagnostic fields — HTTP status, final URL after redirects, content-type, and a short redacted response-body preview — plus a <strong>Check session</strong> button that probes FortiMonitor and reports XSRF-cookie presence. Intended for troubleshooting installs where your browser session is not being recognized.
+        Off by default. When on, scan-failure and API-error screens include diagnostic fields - HTTP status, final URL after redirects, content-type, and a short redacted response-body preview - plus a <strong>Check session</strong> button that probes FortiMonitor and reports XSRF-cookie presence. Intended for troubleshooting installs where your browser session is not being recognized.
       </p>
       <label class="toggle-row">
         <input id="dev-mode-toggle" type="checkbox">

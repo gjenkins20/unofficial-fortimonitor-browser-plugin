@@ -1,4 +1,4 @@
-# Ask Claude in-plugin chat — prototype (FMN-53)
+# Ask Claude in-plugin chat - prototype (FMN-53)
 
 A narrow-slice prototype that embeds a Claude chat surface directly in the
 extension popup's launcher, driven by a user-supplied Anthropic API key and
@@ -15,14 +15,14 @@ Companion ticket: **FMN-53** (branch `feature/fmn-53-ask-claude-prototype`).
 ## Why a prototype (vs. full port)
 
 The FortiMonitor MCP server exposes 241 tools across 33 modules. Porting all
-of them into the extension is a multi-week effort with an unknown payoff —
+of them into the extension is a multi-week effort with an unknown payoff -
 much of that surface area (compound services, dashboards, reference data,
 reporting, SNMP discovery) is only rarely touched, and the knowledge layer
 (LanceDB + PDF embeddings) cannot be carried over at all without a hosted
 component.
 
-Rather than commit to that investment blind, we ship a minimal slice —
-roughly what you'd reach for during an incident triage session — and see
+Rather than commit to that investment blind, we ship a minimal slice -
+roughly what you'd reach for during an incident triage session - and see
 whether users want more breadth, different breadth, or whether the existing
 deterministic tools already cover the ground they need.
 
@@ -56,14 +56,14 @@ any cost guardrails beyond a warning.
          ▼                              │
  Service worker (src/background/service-worker.js)
    └── claude-chat-handlers.js
-         ├── Messages API (api.anthropic.com) — streaming SSE
-         └── PanoptaClient (lib/panopta-client.js) — FortiMonitor v2 API
+         ├── Messages API (api.anthropic.com) - streaming SSE
+         └── PanoptaClient (lib/panopta-client.js) - FortiMonitor v2 API
 ```
 
 - **Auth.** Two API keys in `chrome.storage.local`:
-  - `panopta.apiKey` — existing FortiMonitor v2 RW key.
-  - `claude.apiKey` — new, Anthropic key.
-  Stored identically to the existing key. No secret rotation, no vault —
+  - `panopta.apiKey` - existing FortiMonitor v2 RW key.
+  - `claude.apiKey` - new, Anthropic key.
+  Stored identically to the existing key. No secret rotation, no vault -
   parity with the existing tools.
 - **Tool loop.** `lib/claude-client.js` runs a bounded loop: send messages
   → parse SSE → if `stop_reason: tool_use`, execute tool blocks locally
@@ -74,7 +74,7 @@ any cost guardrails beyond a warning.
   of schema) is reused across turns within the 5-min TTL. Without this,
   every user turn re-sends the full catalog and racks up cost quickly.
 - **Streaming.** Native `fetch` + `ReadableStream`; SSE parsed in
-  `lib/claude-client.js::parseSSE`. No SDK dependency — keeps the bundle
+  `lib/claude-client.js::parseSSE`. No SDK dependency - keeps the bundle
   clean and dodges the `dangerouslyAllowBrowser` flag plumbing.
 - **Messaging.** The chat UI listens on `chrome.runtime.onMessage` for the
   standard `__event__` broadcasts that the other tools already emit. UI
@@ -99,18 +99,18 @@ any cost guardrails beyond a warning.
 
 Tool results are post-processed server-side (`buildToolHandlers` in
 `claude-tools.js`) to strip fields Claude doesn't need (internal URLs,
-pagination scaffolding) — this keeps the tool result payload small,
+pagination scaffolding) - this keeps the tool result payload small,
 which materially reduces the input-token count of subsequent turns.
 
 ## Rejected / deferred choices
 
 - **Anthropic TypeScript SDK.** Smaller surface without it. Re-evaluate
-  if the prototype graduates — retries and streaming primitives are nice
+  if the prototype graduates - retries and streaming primitives are nice
   to have but not necessary for a ~200-LOC client.
 - **Persisted conversation history.** Prototype keeps state in memory
-  only — close the tab and the conversation is gone. Persisting is
+  only - close the tab and the conversation is gone. Persisting is
   cheap to add later if the tool earns it.
-- **Per-user cost guardrails.** Out of scope — surface a warning in the
+- **Per-user cost guardrails.** Out of scope - surface a warning in the
   settings panel and call it done for the prototype. If we graduate to
   shipped, `chrome.storage` counters + a soft daily cap is the obvious
   next step.
@@ -119,7 +119,7 @@ which materially reduces the input-token count of subsequent turns.
   embeddings in the FM Knowledge Worker project (FMK) and call it from
   the extension as a remote lookup tool.
 
-## Expand / kill — what we're watching for
+## Expand / kill - what we're watching for
 
 Ship the prototype to a handful of test accounts and answer:
 
@@ -133,40 +133,40 @@ Ship the prototype to a handful of test accounts and answer:
    when the tool surface is too narrow? Does it try to call unsupported
    tools?
 4. **Vs. existing deterministic tools.** Do users reach for this
-   *instead of* the bulk tools (good — conversational flow wins) or
-   *in addition to* them (good — complementary) or not at all (kill
+   *instead of* the bulk tools (good - conversational flow wins) or
+   *in addition to* them (good - complementary) or not at all (kill
    signal)?
 
 If we expand: carve follow-up FMN tickets per tool family (e.g. "add
 maintenance window tools", "add SNMP resource tools") rather than porting
 everything at once.
 
-If we kill: rip out the feature cleanly — the surface is deliberately
+If we kill: rip out the feature cleanly - the surface is deliberately
 contained (`src/ui/ask-claude/`, `src/background/claude-chat-handlers.js`,
 `src/lib/claude-*.js`, manifest host permission, one popup card, one
 settings section) so removal is a small PR.
 
 ## Files introduced
 
-- `extension/src/lib/claude-client.js` — Anthropic Messages API + tool loop.
-- `extension/src/lib/claude-tools.js` — tool manifest + JS handlers.
-- `extension/src/background/claude-chat-handlers.js` — service-worker wiring.
-- `extension/src/ui/ask-claude/{app.html,app.js,app.css}` — chat UI.
+- `extension/src/lib/claude-client.js` - Anthropic Messages API + tool loop.
+- `extension/src/lib/claude-tools.js` - tool manifest + JS handlers.
+- `extension/src/background/claude-chat-handlers.js` - service-worker wiring.
+- `extension/src/ui/ask-claude/{app.html,app.js,app.css}` - chat UI.
 
 ## Files modified additively
 
-- `extension/manifest.json` — added `https://api.anthropic.com/*` host
+- `extension/manifest.json` - added `https://api.anthropic.com/*` host
   permission; version → `0.7.0`.
-- `extension/src/background/service-worker.js` — registered the chat
+- `extension/src/background/service-worker.js` - registered the chat
   handlers alongside the other tools' handlers.
-- `extension/src/lib/panopta-client.js` — added read helpers
+- `extension/src/lib/panopta-client.js` - added read helpers
   (`listServers`, `getServer`, `listOutages`, `getOutage`,
   `listAgentResourcesForServer`, `listFabricConnections`,
   `acknowledgeOutage`).
-- `extension/src/popup/popup.html` + `popup.js` — added Ask Claude
+- `extension/src/popup/popup.html` + `popup.js` - added Ask Claude
   launcher card, Claude API key settings section, tool-guard extension
   for `data-claude-key-required`.
 
-No existing files were trimmed — shared registries (service worker,
+No existing files were trimmed - shared registries (service worker,
 popup launcher, panopta client) were edited additively per project
 memory `additive_edits_to_shared_registries.md`.

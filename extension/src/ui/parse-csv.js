@@ -1,4 +1,4 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Parse the operator's CSV/paste input from the batch-start screen.
 //
 // Accepts two shapes:
@@ -14,7 +14,7 @@
 //     totalLines: number           // non-blank input lines (excluding header)
 //   }
 //
-// Pure module — no chrome APIs, fully unit-testable.
+// Pure module - no chrome APIs, fully unit-testable.
 
 const SERVER_ID_RE = /^\d{1,20}$/;
 
@@ -90,15 +90,15 @@ export function parseServerList(input) {
     const nameRaw = headerCols.nameIdx >= 0 ? tokens[headerCols.nameIdx] ?? '' : '';
 
     if (!idRaw) {
-      warnings.push(`Line ${lineNum + 1}: no server ID — skipped`);
+      warnings.push(`Line ${lineNum + 1}: no server ID - skipped`);
       continue;
     }
     if (!SERVER_ID_RE.test(idRaw)) {
-      warnings.push(`Line ${lineNum + 1}: "${idRaw}" is not a numeric server ID — skipped`);
+      warnings.push(`Line ${lineNum + 1}: "${idRaw}" is not a numeric server ID - skipped`);
       continue;
     }
     if (seen.has(idRaw)) {
-      warnings.push(`Line ${lineNum + 1}: duplicate server ID ${idRaw} — deduplicated`);
+      warnings.push(`Line ${lineNum + 1}: duplicate server ID ${idRaw} - deduplicated`);
       continue;
     }
     seen.add(idRaw);

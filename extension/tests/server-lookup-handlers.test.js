@@ -73,7 +73,7 @@ test('lookupOne: 2+ matches → status=ambiguous with all candidates', async () 
 
 // ----- lookupBatch ---------------------------------------------------
 
-test('lookupBatch: dedupes input — one API call per unique name, fans out to original order', async () => {
+test('lookupBatch: dedupes input - one API call per unique name, fans out to original order', async () => {
   let calls = 0;
   const client = makeClient(async (name) => {
     calls++;

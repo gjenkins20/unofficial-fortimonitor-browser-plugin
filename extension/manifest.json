@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Unofficial FortiMonitor Toolkit",
   "short_name": "FM Toolkit",
-  "description": "Session-authenticated tools for FortiMonitor — batch operations on port scope and more. Rides your existing FortiMonitor session; frontend-only, no API keys.",
+  "description": "Session-authenticated tools for FortiMonitor - batch operations on port scope and more. Rides your existing FortiMonitor session; frontend-only, no API keys.",
   "version": "0.7.0",
   "author": "Gregori Jenkins",
   "homepage_url": "https://www.linkedin.com/in/gregorijenkins",

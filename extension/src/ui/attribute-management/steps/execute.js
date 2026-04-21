@@ -1,5 +1,5 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// Manage Server Attributes — Step 3 (Execute).
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Manage Server Attributes - Step 3 (Execute).
 // Apply the plan; stream per-row progress via events.
 
 import { h, titleBar } from '../../../lib/dom.js';
@@ -26,7 +26,7 @@ export function render({ container, store, navigate, events }) {
 
   const rowByInput = new Map();
   for (const row of store.plan) {
-    const label = row.displayName || row.input || '—';
+    const label = row.displayName || row.input || '-';
     const detail = row.plan === 'add' ? `add "${row.newValue}"`
       : row.plan === 'replace' ? `replace "${row.existing?.value ?? ''}" → "${row.newValue}"`
       : row.plan === 'remove' ? `remove "${row.existing?.value ?? ''}"`

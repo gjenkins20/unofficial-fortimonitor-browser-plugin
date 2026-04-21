@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Mockup — Queue Overview (FMN-38)</title>
+<title>Mockup - Queue Overview (FMN-38)</title>
 <style>
   :root {
     --bg: #f5f6f8;
@@ -240,7 +240,7 @@
     <h1>
       <span class="icon">F</span>
       FortiMonitor WAN Cleanup
-      <span class="subtitle">— Queue Overview</span>
+      <span class="subtitle">- Queue Overview</span>
     </h1>
   </div>
 
@@ -255,7 +255,7 @@
       <span class="step">4. Execute</span>
     </div>
     <h2>Audit the queue before executing</h2>
-    <p>Every staged change across all reviewed groups is listed below. Destructive actions are irreversible — FortiMonitor deletes agent resources and metric history for each deselected port. Review carefully. Dry-run is on by default; you must turn it off and type a confirmation phrase to write changes.</p>
+    <p>Every staged change across all reviewed groups is listed below. Destructive actions are irreversible - FortiMonitor deletes agent resources and metric history for each deselected port. Review carefully. Dry-run is on by default; you must turn it off and type a confirmation phrase to write changes.</p>
   </div>
 
   <div class="overview-strip">
@@ -288,7 +288,7 @@
       <div class="group-head">
         <div class="group-badge">Group 1</div>
         <div class="group-title">
-          <div class="name">Standard branch template — generic WAN</div>
+          <div class="name">Standard branch template - generic WAN</div>
           <div class="meta">41 devices · fingerprint <code style="font-family: 'SF Mono', Menlo, monospace; font-size: 11px;">3b2e…a881</code> · 16 ports per device</div>
         </div>
         <div class="action-summary">Remove wan2 × 41</div>
@@ -299,7 +299,7 @@
           <div class="k">Ports marked:</div>
           <div class="v"><span class="removed-badge">REMOVE</span><code>wan2</code> <span style="color: var(--text-muted);">(admin up, oper down)</span></div>
           <div class="k">Ports kept:</div>
-          <div class="v">15 — <code>DATA</code>, <code>GUEST</code>, <code>MGMT</code>, <code>VoIP</code>, <code>a</code>, <code>b</code>, <code>fortilink</code>, <code>modem</code>, <code>port1</code>–<code>port6</code>, <code>(Comcast Business)</code></div>
+          <div class="v">15 - <code>DATA</code>, <code>GUEST</code>, <code>MGMT</code>, <code>VoIP</code>, <code>a</code>, <code>b</code>, <code>fortilink</code>, <code>modem</code>, <code>port1</code>–<code>port6</code>, <code>(Comcast Business)</code></div>
           <div class="k">Devices:</div>
           <div class="v">
             <div class="device-sample">FGT-Branch-002 · FGT-Branch-004 · FGT-Branch-005 · FGT-Branch-006 · FGT-Branch-008 · FGT-Branch-009 · FGT-Branch-010 · FGT-Branch-011 · FGT-Branch-013 · FGT-Branch-015 · FGT-Branch-016 · FGT-Branch-017 · FGT-Branch-019 · FGT-Branch-020 · FGT-Branch-022 · FGT-Branch-023 · FGT-Branch-024 · FGT-Branch-026 · FGT-Branch-027 · FGT-Branch-028 · FGT-Branch-030 · FGT-Branch-032 · FGT-Branch-033 · … +18 more</div>
@@ -313,7 +313,7 @@
       <div class="group-head">
         <div class="group-badge">Group 2</div>
         <div class="group-title">
-          <div class="name">Branch template — ISP label + wan2</div>
+          <div class="name">Branch template - ISP label + wan2</div>
           <div class="meta">23 devices · fingerprint <code style="font-family: 'SF Mono', Menlo, monospace; font-size: 11px;">7f3a…c9d1</code> · 16 ports per device</div>
         </div>
         <div class="action-summary">Remove wan2 × 23</div>
@@ -349,7 +349,7 @@
       <div class="group-head">
         <div class="group-badge">Group 5</div>
         <div class="group-title">
-          <div class="name">Minor variant — no WAN to remove</div>
+          <div class="name">Minor variant - no WAN to remove</div>
           <div class="meta">8 devices · fingerprint <code style="font-family: 'SF Mono', Menlo, monospace; font-size: 11px;">5a67…9b23</code> · operator chose "Skip this group"</div>
         </div>
         <div class="action-summary">No changes</div>
@@ -369,12 +369,12 @@
 
     <div class="dryrun-box">
       <input type="checkbox" id="dryrun" checked />
-      <label for="dryrun"><strong>Dry run</strong> — simulate every save without modifying FortiMonitor</label>
+      <label for="dryrun"><strong>Dry run</strong> - simulate every save without modifying FortiMonitor</label>
     </div>
 
     <div class="verbose-box">
       <input type="checkbox" id="verbose" />
-      <label for="verbose"><strong>Verbose mode</strong> — open a separate tab and visibly navigate to each device while it's processed. Slower and serial (one at a time), but you can watch each change happen. Off by default — execution runs silently in the background otherwise.</label>
+      <label for="verbose"><strong>Verbose mode</strong> - open a separate tab and visibly navigate to each device while it's processed. Slower and serial (one at a time), but you can watch each change happen. Off by default - execution runs silently in the background otherwise.</label>
     </div>
 
     <div class="confirm-row">
@@ -403,8 +403,8 @@
   · "Edit this group" returns the operator to the interface-report for that specific group; their prior selection is preserved so they can modify rather than start over.<br>
   · <strong>Destructive gate</strong>: dry-run is ON by default. Primary button reads "Run dry run →" until dry-run is off. When dry-run is off, operator must type the exact phrase <code>EXECUTE N PORTS</code> (N matches the live count) into the confirmation input before the primary button (then "Execute and remove N ports") enables. This is a soft guard against bulk accidents.<br>
   · <strong>Plan export</strong>: JSON and CSV downloads are offered before execution since the action is irreversible. The export is the durable record of what was done.<br>
-  · Queue state is kept in <code>chrome.storage.local</code> so it survives tab navigation. Executing the queue replays the same Port Selection save that the FortiMonitor WebGUI dialog performs when the operator clicks Save — once per device, using the existing logged-in session. No separate credentials, no external system.<br>
-  · <strong>Execution modes:</strong> default is silent background execution (no visible tab navigation, concurrency up to 3). <strong>Verbose mode</strong> opts into visibly navigating a dedicated tab through each device serially so the operator can watch each change — useful for spot-checking early in a batch, too slow for routine runs at fleet scale.
+  · Queue state is kept in <code>chrome.storage.local</code> so it survives tab navigation. Executing the queue replays the same Port Selection save that the FortiMonitor WebGUI dialog performs when the operator clicks Save - once per device, using the existing logged-in session. No separate credentials, no external system.<br>
+  · <strong>Execution modes:</strong> default is silent background execution (no visible tab navigation, concurrency up to 3). <strong>Verbose mode</strong> opts into visibly navigating a dedicated tab through each device serially so the operator can watch each change - useful for spot-checking early in a batch, too slow for routine runs at fleet scale.
 </div>
 
 </body>

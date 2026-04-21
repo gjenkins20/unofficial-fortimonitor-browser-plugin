@@ -1,9 +1,9 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Convert operator decisions (one per fingerprint group) into the list of
 // queue entries the executor will consume.
 //
 // Input:
-//   groups:   scan-devices output's groups[] — each has { fingerprint, portsData, devices: [{ serverId }] }
+//   groups:   scan-devices output's groups[] - each has { fingerprint, portsData, devices: [{ serverId }] }
 //   decisions: Map<fingerprint, { skipped: boolean, removePortNames: string[] }>
 //   nameById: Record<serverId, string> (optional display names)
 //   batchId:  string

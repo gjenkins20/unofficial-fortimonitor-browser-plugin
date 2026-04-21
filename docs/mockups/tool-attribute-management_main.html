@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Mockup — Manage Server Attributes (Bulk) · Preview (FMN-48)</title>
+<title>Mockup - Manage Server Attributes (Bulk) · Preview (FMN-48)</title>
 <style>
   :root {
     --bg: #f5f6f8;
@@ -292,7 +292,7 @@
       <span class="icon">A</span>
       Manage Server Attributes (Bulk)
       <span class="beta">BETA</span>
-      <span class="subtitle">— v2 API</span>
+      <span class="subtitle">- v2 API</span>
     </h1>
     <span class="close">✕</span>
   </div>
@@ -312,7 +312,7 @@
       <button>Remove</button>
     </div>
     <select>
-      <option selected>Environment  —  server_attribute_type/14629</option>
+      <option selected>Environment  -  server_attribute_type/14629</option>
       <option>Site</option>
       <option>Owner</option>
       <option>... (181 more)</option>
@@ -335,7 +335,7 @@ server-does-not-exist</textarea>
   </div>
 
   <div class="summary-bar">
-    Plan: <strong>set Environment = "prod"</strong> on 8 targets — 4 will add · 2 will replace · 1 already set (skip) · 1 unresolved (error)
+    Plan: <strong>set Environment = "prod"</strong> on 8 targets - 4 will add · 2 will replace · 1 already set (skip) · 1 unresolved (error)
   </div>
 
   <div class="section-head">
@@ -358,14 +358,14 @@ server-does-not-exist</textarea>
         <tr>
           <td class="col-n">1</td>
           <td class="col-server">FGVM01TM24006844 <span style="color:var(--text-muted);font-weight:400;">#42024060</span></td>
-          <td class="col-before" style="color:var(--text-muted);">—</td>
+          <td class="col-before" style="color:var(--text-muted);">-</td>
           <td class="col-after">prod</td>
           <td class="col-plan"><span class="plan-pill add">ADD</span></td>
         </tr>
         <tr>
           <td class="col-n">2</td>
           <td class="col-server">FGVM01TM24006845 <span style="color:var(--text-muted);font-weight:400;">#42024061</span></td>
-          <td class="col-before" style="color:var(--text-muted);">—</td>
+          <td class="col-before" style="color:var(--text-muted);">-</td>
           <td class="col-after">prod</td>
           <td class="col-plan"><span class="plan-pill add">ADD</span></td>
         </tr>
@@ -386,7 +386,7 @@ server-does-not-exist</textarea>
         <tr>
           <td class="col-n">5</td>
           <td class="col-server">FGT-Branch-003 <span style="color:var(--text-muted);font-weight:400;">#40001345</span></td>
-          <td class="col-before" style="color:var(--text-muted);">—</td>
+          <td class="col-before" style="color:var(--text-muted);">-</td>
           <td class="col-after">prod</td>
           <td class="col-plan"><span class="plan-pill add">ADD</span></td>
         </tr>
@@ -400,14 +400,14 @@ server-does-not-exist</textarea>
         <tr>
           <td class="col-n">7</td>
           <td class="col-server">(id) <span style="color:var(--text-muted);font-weight:400;">#42024075</span></td>
-          <td class="col-before" style="color:var(--text-muted);">—</td>
+          <td class="col-before" style="color:var(--text-muted);">-</td>
           <td class="col-after">prod</td>
           <td class="col-plan"><span class="plan-pill add">ADD</span></td>
         </tr>
         <tr class="error-row">
           <td class="col-n">8</td>
           <td class="col-server">server-does-not-exist</td>
-          <td class="col-before" colspan="2" style="color:var(--danger);">Name not found — no matching server</td>
+          <td class="col-before" colspan="2" style="color:var(--danger);">Name not found - no matching server</td>
           <td class="col-plan"><span class="plan-pill error">ERROR</span></td>
         </tr>
       </tbody>
@@ -416,7 +416,7 @@ server-does-not-exist</textarea>
 
   <div class="action-bar">
     <div class="left">
-      Will execute on <strong style="color:var(--text);">6 of 8 servers</strong> (skipping 1 already-set, 1 error). No dry-run — preview IS the dry-run.
+      Will execute on <strong style="color:var(--text);">6 of 8 servers</strong> (skipping 1 already-set, 1 error). No dry-run - preview IS the dry-run.
     </div>
     <div class="right">
       <button class="btn btn-secondary">← Back</button>
@@ -429,10 +429,10 @@ server-does-not-exist</textarea>
   <strong>Mockup notes (not rendered in the plugin):</strong><br>
   · <strong>Bulk by design.</strong> Mirrors FMN-45: paste-a-list input, one shared operation, per-row preview, explicit Execute. Single-server is just N=1.<br>
   · <strong>Two operations in one tool:</strong> Add/Set (with a value) or Remove (type only, value field hidden). Segmented control at the top.<br>
-  · <strong>REPLACE semantic:</strong> when a server already has a different value for the chosen type, the tool deletes the old value then POSTs the new one. This depends on the live-probe open question in <code>docs/api-discovery/attributes.md</code> — if POST-with-existing-type actually replaces on the server, the DELETE becomes unnecessary; if it stacks, REPLACE is correct; if it errors, REPLACE is required. Pick the safe path and verify on the first real run.<br>
+  · <strong>REPLACE semantic:</strong> when a server already has a different value for the chosen type, the tool deletes the old value then POSTs the new one. This depends on the live-probe open question in <code>docs/api-discovery/attributes.md</code> - if POST-with-existing-type actually replaces on the server, the DELETE becomes unnecessary; if it stacks, REPLACE is correct; if it errors, REPLACE is required. Pick the safe path and verify on the first real run.<br>
   · <strong>ALREADY SET skip:</strong> rows where the current value equals the new value are shown but skipped, so the operator can see the full intended state without churn.<br>
-  · <strong>Unresolved names surface in the preview, not silently.</strong> Same name→id resolver as FMN-50 will handle this — reuse, don't reinvent.<br>
-  · <strong>System attributes (<code>server.origin</code>, <code>server.os</code>):</strong> not pickable in the type dropdown for Remove — FortiMonitor repopulates them from the agent, so operating on them is pointless.<br>
+  · <strong>Unresolved names surface in the preview, not silently.</strong> Same name→id resolver as FMN-50 will handle this - reuse, don't reinvent.<br>
+  · <strong>System attributes (<code>server.origin</code>, <code>server.os</code>):</strong> not pickable in the type dropdown for Remove - FortiMonitor repopulates them from the agent, so operating on them is pointless.<br>
   · <strong>No queue, no typed confirmation:</strong> low blast radius (attribute metadata, not port scope or monitoring config). Preview + Execute is sufficient.<br>
   · <strong>Error handling post-Execute:</strong> step 4 (Results) shows per-server success/fail with status code and body. Partial failures don't abort the batch.
 </div>

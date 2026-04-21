@@ -1,5 +1,5 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// Minimal DOM helpers. No framework — vanilla JS keeps the MV3 bundle at
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Minimal DOM helpers. No framework - vanilla JS keeps the MV3 bundle at
 // zero runtime dependencies (matches the testing story in the service
 // worker modules).
 
@@ -54,7 +54,7 @@ export function titleBar(subtitle, { runningDot = false, toolName = 'Remove from
     h('h1', {},
       h('span', { class: 'icon' }, 'F'),
       toolName,
-      subtitle ? h('span', { class: 'subtitle' }, `— ${subtitle}`) : null,
+      subtitle ? h('span', { class: 'subtitle' }, `- ${subtitle}`) : null,
       runningDot ? h('span', { class: 'running-dot' }) : null
     )
   );

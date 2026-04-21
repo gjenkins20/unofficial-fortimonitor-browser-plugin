@@ -1,6 +1,6 @@
 # FortiMonitor Port Scope API Contract
 
-Captured from live FortiMonitor UI on 2026-04-16 against test device FGVM01TM24006844 (server 42024060). This is the internal UI-only API that the browser extension will consume to provide per-port monitoring scope control — the capability missing from the FortiMonitor v2 public API (see FMN-34).
+Captured from live FortiMonitor UI on 2026-04-16 against test device FGVM01TM24006844 (server 42024060). This is the internal UI-only API that the browser extension will consume to provide per-port monitoring scope control - the capability missing from the FortiMonitor v2 public API (see FMN-34).
 
 ---
 
@@ -94,8 +94,8 @@ Body: (empty)
 
 Two components:
 
-1. **Session cookie** — HttpOnly, set at FortiMonitor login, sent automatically by the browser. Not readable from JavaScript. Not visible in `document.cookie`.
-2. **CSRF token** — a non-HttpOnly cookie named `XSRF-TOKEN` (127-char opaque string). The UI sends it back as the `X-XSRF-TOKEN` request header on state-changing calls. The header value equals the cookie value verbatim (no URL decoding required — the cookie is stored un-encoded).
+1. **Session cookie** - HttpOnly, set at FortiMonitor login, sent automatically by the browser. Not readable from JavaScript. Not visible in `document.cookie`.
+2. **CSRF token** - a non-HttpOnly cookie named `XSRF-TOKEN` (127-char opaque string). The UI sends it back as the `X-XSRF-TOKEN` request header on state-changing calls. The header value equals the cookie value verbatim (no URL decoding required - the cookie is stored un-encoded).
 
 This is the standard Angular/Axios XSRF convention (`axios` by default reads `XSRF-TOKEN` cookie and mirrors it into `X-XSRF-TOKEN` header for same-origin requests).
 
@@ -103,7 +103,7 @@ This is the standard Angular/Axios XSRF convention (`axios` by default reads `XS
 
 - `fetch()` with `credentials: 'include'` will send both cookies automatically, provided `host_permissions` in the manifest includes `https://fortimonitor.forticloud.com/*`.
 - The service worker cannot read `document.cookie` (no DOM). Use `chrome.cookies.get({ url: 'https://fortimonitor.forticloud.com', name: 'XSRF-TOKEN' })` to read the token for the `X-XSRF-TOKEN` header. Manifest must include the `cookies` permission and host permission for the target domain.
-- Requests from the service worker are same-origin with respect to the cookie jar (host permissions grant access). No CORS preflight issues observed in UI traffic, but MV3 fetch does not perform CORS checks the way a content script would — treat failures as actionable.
+- Requests from the service worker are same-origin with respect to the cookie jar (host permissions grant access). No CORS preflight issues observed in UI traffic, but MV3 fetch does not perform CORS checks the way a content script would - treat failures as actionable.
 
 ---
 
@@ -113,14 +113,14 @@ Captured:
 
 | Mode | Captured payload shape |
 |---|---|
-| `all` | All `selectedPorts[]` indices present (`0`, `1`, `2`). Server behavior is consistent with "select all regardless of list" — the list appears redundant but is always sent by the UI. |
+| `all` | All `selectedPorts[]` indices present (`0`, `1`, `2`). Server behavior is consistent with "select all regardless of list" - the list appears redundant but is always sent by the UI. |
 | `manual` | Only selected indices in `selectedPorts[]`. This is the per-port granular control path. |
 
 Not yet captured (inferred):
 
 | Mode | Expected payload shape |
 |---|---|
-| `none` | `selectedPorts[]` likely absent or empty. Destructive — skips provisioning entirely. |
+| `none` | `selectedPorts[]` likely absent or empty. Destructive - skips provisioning entirely. |
 | `name` | `searchTerm` and `filters` populated; `selectedPorts[]` may be computed server-side from the filter match. |
 
 If the plugin only needs WAN-interface-level granularity (enable/disable specific ports), **`portSelectionType=manual`** with an explicit `selectedPorts[]` list is the only mode required.

@@ -1,5 +1,5 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// Step 4 — Executing Batch. Two execution paths:
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Step 4 - Executing Batch. Two execution paths:
 //   Dry run: simulate locally, do not touch the service worker queue.
 //   Live:    call execute-queue, listen for execute:entry-start/-done events.
 //
@@ -54,14 +54,14 @@ export function render({ container, store, navigate, events }) {
       ? `Simulating ${totalPortsChanged} port ${verbs.actionPlural}…`
       : `Executing ${totalPortsChanged} port ${verbs.actionPlural}…`),
     h('p', {}, plan.dryRun
-      ? 'Dry run mode — no requests are sent to FortiMonitor. This screen shows exactly what the live run would dispatch.'
+      ? 'Dry run mode - no requests are sent to FortiMonitor. This screen shows exactly what the live run would dispatch.'
       : `The plugin is working through the queue. Up to ${plan.verbose ? 1 : 3} device${plan.verbose ? '' : 's'} are processed in parallel to respect FortiMonitor session limits.`)
   ));
 
   if (plan.dryRun) {
     frame.appendChild(h('div', { class: 'dryrun-banner' },
       h('strong', {}, 'DRY RUN'),
-      ` — no changes sent to FortiMonitor. Rows labeled "Would ${verbs.verb}" instead of "${verbs.pastTense}".`
+      ` - no changes sent to FortiMonitor. Rows labeled "Would ${verbs.verb}" instead of "${verbs.pastTense}".`
     ));
   }
 
@@ -133,7 +133,7 @@ export function render({ container, store, navigate, events }) {
       if (p.status === 'ok' || p.status === 'fail') done++;
     }
     const pct = entries.length > 0 ? Math.round((done / entries.length) * 100) : 0;
-    const suffix = state.finished ? ' — complete' : '';
+    const suffix = state.finished ? ' - complete' : '';
     statsElapsed.textContent = `Elapsed ${fmtDuration(elapsedMs)} · ${pct}%${suffix}`;
   }
 
@@ -223,7 +223,7 @@ export function render({ container, store, navigate, events }) {
     };
   }
 
-  // Bind event stream — live run only.
+  // Bind event stream - live run only.
   let unsubscribe = null;
   if (!plan.dryRun) {
     unsubscribe = events.on((event, payload) => {
@@ -256,7 +256,7 @@ export function render({ container, store, navigate, events }) {
     (async () => {
       try {
         const res = await call('execute-queue', { verbose: plan.verbose });
-        // Merge any errors surfaced in the result payload — the events
+        // Merge any errors surfaced in the result payload - the events
         // flag status changes but don't carry error messages.
         for (const r of res.results ?? []) {
           const prog = store.executeProgress.get(r.entry.id) ?? {};
@@ -284,7 +284,7 @@ export function render({ container, store, navigate, events }) {
       }
     })();
   } else {
-    // Dry-run simulator — tick through entries with up to 3 in flight.
+    // Dry-run simulator - tick through entries with up to 3 in flight.
     runDryRunSimulator({ entries, store, plan, state, updateRow, refreshCounts });
   }
 
@@ -337,7 +337,7 @@ function buildRow(entry, prog, plan, verbs = REMOVE_VERBS) {
         plan.dryRun ? `Would ${verbs.verb} ` : `${verbs.pastTense} `,
         h('code', {}, portNames)
       );
-      const dur = typeof p.durationMs === 'number' && p.durationMs > 0 ? ` — ${(p.durationMs / 1000).toFixed(1)}s` : '';
+      const dur = typeof p.durationMs === 'number' && p.durationMs > 0 ? ` - ${(p.durationMs / 1000).toFixed(1)}s` : '';
       statusText.replaceChildren(plan.dryRun ? 'Simulated' + dur : 'Success' + dur);
     } else if (p.status === 'fail') {
       statusText.replaceChildren(
@@ -380,7 +380,7 @@ function entryPortNames(entry) {
 function summarizeError(msg) {
   if (typeof msg !== 'string') return '';
   if (/xsrf/i.test(msg)) return 'Session cookie may have expired';
-  if (/timeout/i.test(msg)) return 'Network timeout — FortiMonitor did not respond';
+  if (/timeout/i.test(msg)) return 'Network timeout - FortiMonitor did not respond';
   if (/HTTP 4\d\d/.test(msg)) return 'FortiMonitor rejected the request';
   if (/HTTP 5\d\d/.test(msg)) return 'FortiMonitor server error';
   return 'See network tab for details';

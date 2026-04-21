@@ -1,5 +1,5 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// Manage Server Templates — Step 2 (Preview).
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Manage Server Templates - Step 2 (Preview).
 // Resolve names → ids, fetch each server's current mappings, decide
 // attach / detach / skip per row. Destructive detach requires typed
 // confirmation before the Execute button unlocks.
@@ -31,7 +31,7 @@ function renderRow(i, row) {
   const cells = [h('td', { class: 'col-n' }, String(i + 1))];
   if (row.status === 'error' || row.plan === 'error') {
     cells.push(
-      h('td', { class: 'col-server' }, row.input || row.displayName || '—'),
+      h('td', { class: 'col-server' }, row.input || row.displayName || '-'),
       h('td', { colspan: 1, class: 'col-error' }, row.error || 'Resolution error'),
       h('td', { class: 'col-plan' }, h('span', { class: PLAN_CLASSES.error }, PLAN_LABELS.error))
     );
@@ -146,7 +146,7 @@ export function render({ container, store, navigate }) {
         execBtn.disabled = true;
         execBtn.textContent = 'Nothing to do';
       } else if (phrase) {
-        // Destructive or large — require typed confirmation.
+        // Destructive or large - require typed confirmation.
         const isDestructive = store.operation === 'detach' && store.strategy === 'delete';
         confirmWrap.hidden = false;
         confirmWrap.className = isDestructive ? 'confirm-block danger' : 'confirm-block';
@@ -156,7 +156,7 @@ export function render({ container, store, navigate }) {
         ));
         confirmWrap.appendChild(h('div', { class: 'warn-body' },
           isDestructive
-            ? `You are about to detach "${store.templateName}" from ${actionable} server${actionable === 1 ? '' : 's'} using strategy=delete. This removes metrics and attributes the template seeded — metric history on those counters will be wiped. Switch to Dissociate on the previous step if you meant the safe path.`
+            ? `You are about to detach "${store.templateName}" from ${actionable} server${actionable === 1 ? '' : 's'} using strategy=delete. This removes metrics and attributes the template seeded - metric history on those counters will be wiped. Switch to Dissociate on the previous step if you meant the safe path.`
             : `${actionable} servers will be ${store.operation === 'attach' ? 'attached to' : 'detached from'} "${store.templateName}". Confirm below to proceed.`
         ));
         const confirmInput = h('input', { type: 'text', placeholder: phrase, class: 'confirm-input' });

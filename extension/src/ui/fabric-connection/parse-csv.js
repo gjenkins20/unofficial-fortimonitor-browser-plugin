@@ -1,4 +1,4 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Parse the operator's CSV/paste input for the Add Fabric Connection tool.
 //
 // Each row is a FortiGate: serial, IP, port. Header optional.
@@ -10,7 +10,7 @@
 //     totalLines: number
 //   }
 //
-// Pure module — no chrome APIs, fully unit-testable.
+// Pure module - no chrome APIs, fully unit-testable.
 
 const SERIAL_RE = /^[A-Za-z0-9]{8,}$/;          // FortiGate serials are alphanumeric, ≥ 8 chars
 const IP_RE = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
@@ -110,19 +110,19 @@ export function parseFortigateList(input, { defaultPort = 8013 } = {}) {
     const portRaw = headerCols.portIdx >= 0 ? (tokens[headerCols.portIdx] ?? '') : '';
 
     if (!serial) {
-      warnings.push(`Line ${lineNum + 1}: missing serial — skipped`);
+      warnings.push(`Line ${lineNum + 1}: missing serial - skipped`);
       continue;
     }
     if (!SERIAL_RE.test(serial)) {
-      warnings.push(`Line ${lineNum + 1}: "${serial}" doesn't look like a FortiGate serial — skipped`);
+      warnings.push(`Line ${lineNum + 1}: "${serial}" doesn't look like a FortiGate serial - skipped`);
       continue;
     }
     if (!ip) {
-      warnings.push(`Line ${lineNum + 1}: missing IP for serial ${serial} — skipped`);
+      warnings.push(`Line ${lineNum + 1}: missing IP for serial ${serial} - skipped`);
       continue;
     }
     if (!isValidIP(ip)) {
-      warnings.push(`Line ${lineNum + 1}: "${ip}" is not a valid IPv4 address — skipped`);
+      warnings.push(`Line ${lineNum + 1}: "${ip}" is not a valid IPv4 address - skipped`);
       continue;
     }
 
@@ -132,14 +132,14 @@ export function parseFortigateList(input, { defaultPort = 8013 } = {}) {
     } else {
       const parsed = Number(portRaw);
       if (!isValidPort(parsed)) {
-        warnings.push(`Line ${lineNum + 1}: "${portRaw}" is not a valid port (1–65535) — skipped`);
+        warnings.push(`Line ${lineNum + 1}: "${portRaw}" is not a valid port (1–65535) - skipped`);
         continue;
       }
       port = parsed;
     }
 
     if (seenSerials.has(serial)) {
-      warnings.push(`Line ${lineNum + 1}: duplicate serial ${serial} — deduplicated`);
+      warnings.push(`Line ${lineNum + 1}: duplicate serial ${serial} - deduplicated`);
       continue;
     }
     seenSerials.add(serial);

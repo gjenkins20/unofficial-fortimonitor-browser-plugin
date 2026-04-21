@@ -1,5 +1,5 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// Add Fabric Connection — Step 1 (Start).
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Add Fabric Connection - Step 1 (Start).
 // Operator pastes/uploads a CSV of FortiGates and picks an OnSight +
 // server group from dropdowns populated by the v2 API list endpoints.
 
@@ -82,7 +82,7 @@ export function render({ container, store, navigate }) {
 
   const onsightSelect = h('select', { class: 'select' }, h('option', { value: '' }, 'Loading…'));
   const serverGroupSelect = h('select', { class: 'select' }, h('option', { value: '' }, 'Loading…'));
-  const applianceGroupSelect = h('select', { class: 'select' }, h('option', { value: '' }, '— None (skip) —'));
+  const applianceGroupSelect = h('select', { class: 'select' }, h('option', { value: '' }, '- None (skip) -'));
   const discoverFreqInput = h('input', { type: 'number', min: '10', max: '3600', value: String(store.discoverFrequency || 60), class: 'select' });
 
   body.appendChild(h('div', { class: 'targets-grid' },
@@ -182,7 +182,7 @@ export function render({ container, store, navigate }) {
     return call(messageType, {});
   }
 
-  function fillSelect(select, items, { placeholder = '— Select —' } = {}) {
+  function fillSelect(select, items, { placeholder = '- Select -' } = {}) {
     select.innerHTML = '';
     select.appendChild(h('option', { value: '' }, placeholder));
     for (const item of items) {
@@ -217,7 +217,7 @@ export function render({ container, store, navigate }) {
     store.onsightGroupOptions = onsightGroups?.__err ? [] : (onsightGroups ?? []);
     fillSelect(onsightSelect, store.onsightOptions);
     fillSelect(serverGroupSelect, store.serverGroupOptions);
-    fillSelect(applianceGroupSelect, store.onsightGroupOptions, { placeholder: '— None (skip) —' });
+    fillSelect(applianceGroupSelect, store.onsightGroupOptions, { placeholder: '- None (skip) -' });
     refreshContinue();
   });
 }

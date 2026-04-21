@@ -2,7 +2,7 @@
 
 Captured from live FortiMonitor UI on 2026-04-20 against test device FGVM01TM24006844 (server 42024060) plus two additional test IDs (42024061, 42024075). This is the session-authenticated internal UI endpoint that powers the Instance Detail Page, used here to resolve server IDs → human-readable names for FMN-61. Unlocks auto-population of the `device_name` column in the step-3 queue CSV.
 
-Discovery path: the Instance Detail Page at `/report/Instance/{server_id}/details` is a Vue SPA shell (the initial HTML from the server does not contain the server name — `markerCount: 0` for the name in the raw response body). The Vue app hydrates by calling a `getPageData()` method on the instance-page component, which issues the XHR documented below.
+Discovery path: the Instance Detail Page at `/report/Instance/{server_id}/details` is a Vue SPA shell (the initial HTML from the server does not contain the server name - `markerCount: 0` for the name in the raw response body). The Vue app hydrates by calling a `getPageData()` method on the instance-page component, which issues the XHR documented below.
 
 ---
 
@@ -73,10 +73,10 @@ Field notes:
 | Field | Type | Meaning |
 |---|---|---|
 | `pageData.instance.id` | integer | Server id (matches `server_id` query param) |
-| `pageData.instance.name` | string | **Human-readable server name** — what the operator sees in the UI breadcrumbs and page title |
-| `pageData.instance.formattedName` | string | `"{name} ({fqdn})"` — useful for display contexts that want both |
+| `pageData.instance.name` | string | **Human-readable server name** - what the operator sees in the UI breadcrumbs and page title |
+| `pageData.instance.formattedName` | string | `"{name} ({fqdn})"` - useful for display contexts that want both |
 | `pageData.instance.fqdn` | string | Primary host/IP |
-| `pageData.instance.deviceSubType` | string | e.g., `"fortinet.fortigate"` — useful filter for FortiGate-only tools |
+| `pageData.instance.deviceSubType` | string | e.g., `"fortinet.fortigate"` - useful filter for FortiGate-only tools |
 | `pageData.instance.serverKey` | string | Internal key (not used by plugin) |
 | `pageData.instance.status` | string | `"active"` for normal devices |
 | `success` | boolean | Set on successful JSON responses |
@@ -105,7 +105,7 @@ Session cookie only. No XSRF token required (GET, idempotent, non-mutating).
 | `server_id=abc` (non-numeric) | `200` + HTML shell |
 | `server_id=-1` | `200` + HTML shell |
 | `server_id=` (empty) | `200` + HTML shell |
-| Session expired / not logged in | (inferred — same HTML shell, redirect-to-login pattern) |
+| Session expired / not logged in | (inferred - same HTML shell, redirect-to-login pattern) |
 
 Callers must **not** rely on HTTP status alone. The correct detection pattern:
 
@@ -113,14 +113,14 @@ Callers must **not** rely on HTTP status alone. The correct detection pattern:
 2. Attempt `response.json()`; catch parse errors.
 3. Check `pageData?.instance?.name` is a non-empty string before trusting the result.
 
-Any of these failing means "name not resolvable" — degrade gracefully to empty. This mirrors the existing port-scope client's handling in `extension/src/lib/fortimonitor-client.js:181-199` (same non-JSON-on-auth-failure pattern).
+Any of these failing means "name not resolvable" - degrade gracefully to empty. This mirrors the existing port-scope client's handling in `extension/src/lib/fortimonitor-client.js:181-199` (same non-JSON-on-auth-failure pattern).
 
 ---
 
 ## Concurrency and performance
 
-- Payload is ~49KB per device. For 200 servers resolved in parallel that's ~10MB of network traffic — acceptable for a one-time scan but not free.
-- Recommended concurrency: **3** — matches the existing scan-loop concurrency in `scanner.js` and keeps per-tenant load predictable.
+- Payload is ~49KB per device. For 200 servers resolved in parallel that's ~10MB of network traffic - acceptable for a one-time scan but not free.
+- Recommended concurrency: **3** - matches the existing scan-loop concurrency in `scanner.js` and keeps per-tenant load predictable.
 - No rate-limit headers observed during discovery; no 429s during the probe phase.
 - Response time typically <500ms per request in the test tenant.
 
@@ -128,7 +128,7 @@ Any of these failing means "name not resolvable" — degrade gracefully to empty
 
 ## Bulk-variant: not found
 
-Probed nine guessed bulk-endpoint paths (`/report/get_lsp_data`, `/report/get_servers_data`, `/util/list_servers`, etc.) — all returned the SPA shell, meaning they're not real endpoints. The Instance List page (`/report/ListServers`) presumably has its own data endpoint, but capturing it requires a fresh session observation (it loads before an injected interceptor can register).
+Probed nine guessed bulk-endpoint paths (`/report/get_lsp_data`, `/report/get_servers_data`, `/util/list_servers`, etc.) - all returned the SPA shell, meaning they're not real endpoints. The Instance List page (`/report/ListServers`) presumably has its own data endpoint, but capturing it requires a fresh session observation (it loads before an injected interceptor can register).
 
 Follow-up: if FMN-61 performance at scale is a concern, open a capture ticket to observe `/report/ListServers` traffic and find the bulk endpoint. The current single-server endpoint is sufficient to unblock FMN-61.
 

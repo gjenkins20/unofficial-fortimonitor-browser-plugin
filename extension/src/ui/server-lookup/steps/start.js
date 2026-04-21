@@ -1,5 +1,5 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// Server Name → ID Lookup — Step 1 (Start).
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Server Name → ID Lookup - Step 1 (Start).
 // Operator pastes/uploads a list of server names. "Run lookup" fires the
 // lookup:server-ids call, shows per-name progress inline, then transitions
 // to /results when the batch finishes.

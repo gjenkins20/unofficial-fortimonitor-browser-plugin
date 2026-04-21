@@ -1,8 +1,8 @@
-// Unofficial FortiMonitor Toolkit — Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
+// Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Retry policy for per-device save operations.
 //
 // Exponential backoff with jitter, capped. Callers inject a predicate so
-// they can opt out of retrying classes of error (e.g. auth failures —
+// they can opt out of retrying classes of error (e.g. auth failures -
 // retrying won't help until the user re-authenticates).
 
 /**
@@ -20,7 +20,7 @@ export function backoffDelayMs(attemptIndex, { base = 500, max = 10_000, jitter 
 /**
  * Call `fn` until it resolves, up to `maxAttempts` times. Waits
  * `backoff(attempt)` between attempts. `shouldRetry(err)` gates whether
- * a failure is retried — return false to fail fast on permanent errors.
+ * a failure is retried - return false to fail fast on permanent errors.
  */
 export async function withRetry(fn, {
   maxAttempts = 3,

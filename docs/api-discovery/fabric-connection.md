@@ -99,10 +99,10 @@ Body:
 
 | Status | Cause | Retry? |
 |---|---|---|
-| `400` | Invalid request body or missing required field. Body has `{ error, message, details: { field, expected } }`. | No — fix payload. |
-| `401` | Invalid / missing / read-only API key. | No — re-prompt for key. |
-| `405` | Method other than POST used. | No — bug. |
-| `408`, `425`, `429`, `500`, `502`, `503`, `504` | Transient. | Yes — backoff + retry per `lib/retry.js`. |
+| `400` | Invalid request body or missing required field. Body has `{ error, message, details: { field, expected } }`. | No - fix payload. |
+| `401` | Invalid / missing / read-only API key. | No - re-prompt for key. |
+| `405` | Method other than POST used. | No - bug. |
+| `408`, `425`, `429`, `500`, `502`, `503`, `504` | Transient. | Yes - backoff + retry per `lib/retry.js`. |
 
 > **Latency caveat from API guide:** "Error Creating Persistent Fabric Connection" may surface immediately after a successful 201 if the FortiMonitor Control Panel is busy. Allow ~5 minutes before treating it as a real failure when verifying via the UI. The 201 itself is the source of truth for the API outcome.
 

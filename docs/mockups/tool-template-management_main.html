@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Mockup — Manage Server Templates (Bulk) · Preview (FMN-49)</title>
+<title>Mockup - Manage Server Templates (Bulk) · Preview (FMN-49)</title>
 <style>
   :root {
     --bg: #f5f6f8;
@@ -193,7 +193,7 @@
       <span class="icon">T</span>
       Manage Server Templates (Bulk)
       <span class="beta">BETA</span>
-      <span class="subtitle">— v2 API</span>
+      <span class="subtitle">- v2 API</span>
     </h1>
     <span class="close">✕</span>
   </div>
@@ -213,9 +213,9 @@
       <button class="active">Detach</button>
     </div>
     <select>
-      <option selected>FortiGate Baseline (dem_template) — #40430873</option>
-      <option>Windows Core (agent_template) — #40430874</option>
-      <option>Linux Core (agent_template) — #40430880</option>
+      <option selected>FortiGate Baseline (dem_template) - #40430873</option>
+      <option>Windows Core (agent_template) - #40430874</option>
+      <option>Linux Core (agent_template) - #40430880</option>
       <option>... (38 more, paginated from /v2/server_template)</option>
     </select>
   </div>
@@ -254,7 +254,7 @@ server-does-not-exist</textarea>
   </div>
 
   <div class="summary-bar">
-    Plan: <strong>DETACH + DELETE metrics</strong> — template <em>FortiGate Baseline</em> — 3 will be removed destructively · 2 not attached (skip) · 1 unresolved (error)
+    Plan: <strong>DETACH + DELETE metrics</strong> - template <em>FortiGate Baseline</em> - 3 will be removed destructively · 2 not attached (skip) · 1 unresolved (error)
   </div>
 
   <div class="section-head">
@@ -306,7 +306,7 @@ server-does-not-exist</textarea>
         <tr class="error-row">
           <td class="col-n">6</td>
           <td class="col-server">server-does-not-exist</td>
-          <td class="col-currently" colspan="1" style="color:var(--danger);">Name not found — no matching server</td>
+          <td class="col-currently" colspan="1" style="color:var(--danger);">Name not found - no matching server</td>
           <td class="col-plan"><span class="plan-pill error">ERROR</span></td>
         </tr>
       </tbody>
@@ -318,8 +318,8 @@ server-does-not-exist</textarea>
     <div class="warn-head">⚠ Destructive operation</div>
     <div class="warn-body">
       You are about to <strong>detach "FortiGate Baseline"</strong> from 3 servers using <strong>strategy=delete</strong>.
-      This removes metrics and attributes the template seeded — <strong>metric history on those counters will be wiped</strong>.
-      Dissociate (safe) leaves them intact — switch above if you meant that.
+      This removes metrics and attributes the template seeded - <strong>metric history on those counters will be wiped</strong>.
+      Dissociate (safe) leaves them intact - switch above if you meant that.
     </div>
     <div class="typed-row">
       Type <code>DELETE METRICS</code> to confirm:
@@ -341,14 +341,14 @@ server-does-not-exist</textarea>
 <div class="legend">
   <strong>Mockup notes (not rendered in the plugin):</strong><br>
   · <strong>Two modes, one tool.</strong> Attach and Detach share the start → preview → execute → results flow. The segmented control at the top is the mode switch; the strategy radio only appears in Detach mode.<br>
-  · <strong>Strategy radio is the critical UX of this tool.</strong> v2 DELETE accepts <code>{strategy: "dissociate"|"delete"}</code>. Default to dissociate — the safe path. "Delete" is visually marked danger and requires typed confirmation.<br>
+  · <strong>Strategy radio is the critical UX of this tool.</strong> v2 DELETE accepts <code>{strategy: "dissociate"|"delete"}</code>. Default to dissociate - the safe path. "Delete" is visually marked danger and requires typed confirmation.<br>
   · <strong>Typed confirmation gate.</strong> Shown when: (a) Detach with <code>strategy=delete</code>, OR (b) Attach to >10 servers. Confirmation phrase differs by operation so muscle memory doesn't cross-apply: <code>ATTACH N SERVERS</code> / <code>DETACH N SERVERS</code> / <code>DELETE METRICS</code>.<br>
   · <strong>Pre-flight is mandatory.</strong> Before the preview table renders, the background issues one <code>GET /v2/server/{id}/template</code> per resolved target to decide attach-vs-skip and detach-vs-skip. This is concurrency-budgeted the same way execute is (default 4).<br>
   · <strong>NOT ATTACHED skip (Detach mode).</strong> Servers without the template attached are shown but skipped so the operator sees the full intended state. Same shape as FMN-48's ALREADY SET skip.<br>
   · <strong>ALREADY ATTACHED skip (Attach mode, not shown).</strong> Symmetric case: if the template is already attached to a server, we show it with a skip pill rather than POST a duplicate mapping. Prevents the duplicate-mapping footgun the schema allows.<br>
   · <strong>Name resolution is FMN-50.</strong> Reuse <code>lookupServersByName</code>, case-sensitive exact match, unresolved names surface as preview errors (not silent). Same as FMN-48.<br>
-  · <strong>Beta.</strong> Stays Beta until the FMN-46-style live E2E ticket passes (delete-strategy destructiveness needs to be verified against a real lab server — the schema claims it but we've never run it).<br>
-  · <strong>Alert storm risk:</strong> attaching a template with service checks at scale creates real monitoring checks — misconfigured threshold = alert storm. That's why Attach at &gt;10 servers also requires typed confirmation, even though it isn't "destructive" in the API sense.
+  · <strong>Beta.</strong> Stays Beta until the FMN-46-style live E2E ticket passes (delete-strategy destructiveness needs to be verified against a real lab server - the schema claims it but we've never run it).<br>
+  · <strong>Alert storm risk:</strong> attaching a template with service checks at scale creates real monitoring checks - misconfigured threshold = alert storm. That's why Attach at &gt;10 servers also requires typed confirmation, even though it isn't "destructive" in the API sense.
 </div>
 
 </body>
