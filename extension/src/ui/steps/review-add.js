@@ -157,7 +157,9 @@ function renderGroup(container, { store, navigate, groups, index, setIndex }) {
     h('span', { class: 'info-i' }, 'i'),
     h('div', {},
       h('strong', {}, `One decision applies to all ${deviceCount} device${deviceCount === 1 ? '' : 's'} in this group.`),
-      ' Check each interface you want to start monitoring. Adding a port provisions new agent resources and begins collecting metrics - non-destructive, reversible by re-running the Remove tool. Nothing writes to FortiMonitor until you execute the queue in step 4. (You\'re in step 2.)'
+      ' Check each interface you want to start monitoring. Adding a port provisions new agent resources and begins collecting metrics - non-destructive, reversible by re-running the Remove tool. Nothing writes to FortiMonitor until you execute the queue in step 4. (You\'re in step 2.) Every group you review lands on the step 3 audit queue, where you can click ',
+      h('code', {}, '← Edit this group'),
+      ' to reopen it and change your selection before executing.'
     )
   ));
 

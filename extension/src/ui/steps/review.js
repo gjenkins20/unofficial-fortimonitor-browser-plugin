@@ -264,6 +264,19 @@ function renderGroup(container, { store, navigate, groups, index, setIndex }) {
     )
   ));
 
+  // Revisable-in-step-3 banner (FMN-56): operators worry that advancing past a
+  // group is one-way. Call out that step 3 lets them reopen any group before
+  // executing.
+  frame.appendChild(h('div', { class: 'info-banner' },
+    h('span', { class: 'info-i' }, 'i'),
+    h('div', {},
+      h('strong', {}, 'Revisable on the next step.'),
+      ' Every group you review lands on the step 3 audit queue, where you can click ',
+      h('code', {}, '← Edit this group'),
+      ' to reopen it and change your port selection before executing.'
+    )
+  ));
+
   // Instruction row
   frame.appendChild(h('div', { class: 'instruction-row' },
     h('strong', {}, 'What to do:'),
