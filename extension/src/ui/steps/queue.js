@@ -63,7 +63,7 @@ export function render({ container, store, navigate }) {
     const head = h('div', { class: 'group-head' },
       h('div', { class: 'group-badge' }, `Group ${groupNumber}`),
       h('div', { class: 'group-title' },
-        h('div', { class: 'name' }, describeGroup(g, dec)),
+        h('div', { class: 'name' }, describeGroup(g, store.nameById)),
         h('div', { class: 'meta' },
           `${g.devices.length} device${g.devices.length === 1 ? '' : 's'} · fingerprint `,
           h('code', { class: 'fingerprint' }, fpShort),
@@ -250,11 +250,16 @@ function metric(label, value, color = '') {
   );
 }
 
-function describeGroup(group, decision) {
-  if (!decision || decision.skipped || !decision.removePortNames?.length) return 'No changes for this group';
-  const names = decision.removePortNames;
-  if (names.length === 1) return `Remove ${names[0]}`;
-  return `Remove ${names.join(', ')}`;
+// Name-led group title: shows the first few device names (operators track
+// devices by name, not ID). Falls back to the server ID if a device has no
+// resolved name. The queue's action-summary pill still carries the
+// Remove-ports-× count, so we don't duplicate that here.
+function describeGroup(group, nameById) {
+  const PREVIEW_LIMIT = 3;
+  const labels = group.devices.map((d) => nameById[String(d.serverId)] ?? String(d.serverId));
+  if (labels.length === 0) return '(no devices)';
+  if (labels.length <= PREVIEW_LIMIT) return labels.join(', ');
+  return `${labels.slice(0, PREVIEW_LIMIT).join(', ')}, +${labels.length - PREVIEW_LIMIT} more`;
 }
 
 function populateGroupBody(el, group, decision, store, navigate, groupNumber) {

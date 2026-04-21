@@ -78,6 +78,23 @@ body {
 .step-breadcrumbs .arrow { color: var(--border-strong); }
 .step-header h2 { margin: 0; font-size: 16px; }
 .step-header p { margin: 4px 0 0; font-size: 12px; color: var(--text-muted); max-width: 640px; }
+.step-header p.devices-preview {
+  margin-top: 8px;
+  color: var(--text);
+  font-size: 12px;
+}
+.step-header p.devices-preview strong { color: var(--text-muted); font-weight: 600; }
+.device-chip {
+  display: inline-block;
+  background: var(--muted-soft);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  color: var(--text);
+  line-height: 1.5;
+}
 
 .body-section { padding: 20px; }
 .body-section h3 {
@@ -194,6 +211,52 @@ textarea.paste-area:focus { outline: 2px solid var(--accent); outline-offset: -1
   overflow-y: auto;
   line-height: 1.6;
   word-break: break-all;
+}
+.sample-table-wrap {
+  margin-top: 10px;
+  background: white;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.sample-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+.sample-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+  text-align: left;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--accent);
+}
+.sample-table td {
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.sample-table tr:last-child td { border-bottom: none; }
+.sample-table th.name,
+.sample-table td.name { width: 60%; }
+.sample-table th.id,
+.sample-table td.id {
+  font-family: "SF Mono", Menlo, monospace;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.sample-table td.name.missing { color: var(--text-muted); font-style: italic; }
+.sample-table-overflow {
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--muted-soft);
+  border-top: 1px solid var(--border);
+  font-style: italic;
 }
 .warn-list {
   margin-top: 10px; font-size: 12px; color: var(--warn);

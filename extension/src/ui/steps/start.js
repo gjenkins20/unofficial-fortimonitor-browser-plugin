@@ -81,12 +81,11 @@ export function render({ container, store, navigate, events }) {
     }
 
     parseResult.className = 'parse-result';
-    const sample = parsed.serverIds.slice(0, 25).join(', ');
-    const more = parsed.serverIds.length > 25 ? `, … +${parsed.serverIds.length - 25} more` : '';
+    const namedCount = Object.keys(parsed.nameById).length;
     const kids = [
       h('div', { class: 'headline' }, `${parsed.serverIds.length} device${parsed.serverIds.length === 1 ? '' : 's'} ready to review`),
-      h('div', { class: 'sub' }, `${parsed.totalLines} line${parsed.totalLines === 1 ? '' : 's'} read · ${Object.keys(parsed.nameById).length} named from CSV`),
-      h('div', { class: 'sample-ids' }, h('span', { class: 'sid' }, sample + more))
+      h('div', { class: 'sub' }, `${parsed.totalLines} line${parsed.totalLines === 1 ? '' : 's'} read · ${namedCount} named from CSV${namedCount < parsed.serverIds.length ? ' (unnamed rows will be auto-resolved during scan)' : ''}`),
+      renderSampleTable(parsed.serverIds, parsed.nameById)
     ];
     if (parsed.warnings.length) {
       kids.push(h('div', { class: 'warn-list' },
@@ -217,4 +216,31 @@ function renderScanProgress(total) {
 
 function rebuildPasteValue(serverIds, nameById) {
   return serverIds.map((id) => nameById[id] ? `${id},${nameById[id]}` : id).join('\n');
+}
+
+// Two-column Name | Server ID preview for the parse-result panel.
+// Shows up to 25 rows; anything beyond that collapses into a "+N more" line.
+function renderSampleTable(serverIds, nameById) {
+  const PREVIEW_LIMIT = 25;
+  const rows = serverIds.slice(0, PREVIEW_LIMIT).map((id) => {
+    const name = nameById[id];
+    return h('tr', {},
+      h('td', { class: name ? 'name' : 'name missing' }, name ?? '—'),
+      h('td', { class: 'id' }, id)
+    );
+  });
+  const body = h('tbody', {}, ...rows);
+  const overflow = serverIds.length > PREVIEW_LIMIT
+    ? h('div', { class: 'sample-table-overflow' }, `… +${serverIds.length - PREVIEW_LIMIT} more`)
+    : null;
+  return h('div', { class: 'sample-table-wrap' },
+    h('table', { class: 'sample-table' },
+      h('thead', {}, h('tr', {},
+        h('th', { class: 'name' }, 'Device name'),
+        h('th', { class: 'id' }, 'Server ID')
+      )),
+      body
+    ),
+    overflow
+  );
 }
