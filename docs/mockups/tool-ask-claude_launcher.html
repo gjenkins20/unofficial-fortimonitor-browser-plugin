@@ -59,9 +59,6 @@
   .tool-card:not(:last-child) { border-bottom: 1px solid var(--border); }
   .tool-card.disabled { opacity: 0.55; cursor: default; }
   .tool-card.highlight { outline: 2px solid var(--purple); outline-offset: -2px; background: #faf7ff; }
-  .tool-icon { width: 32px; height: 32px; border-radius: 6px; display: grid; place-items: center; font-size: 11.5px; font-weight: 700; flex-shrink: 0; }
-  .tool-icon.api { background: var(--accent-soft); color: var(--accent); }
-  .tool-icon.ai { background: var(--purple-soft); color: var(--purple); }
   .tool-card .tool-meta { flex: 1; min-width: 0; }
   .tool-card .tool-name { font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .tool-card .tool-desc { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; line-height: 1.35; }
@@ -123,7 +120,6 @@
           <div class="tool-group-label">AI assistant</div>
 
           <button class="tool-card highlight">
-            <div class="tool-icon ai">AC</div>
             <div class="tool-meta">
               <div class="tool-name">
                 Ask Claude
@@ -136,7 +132,6 @@
 
           <div class="tool-group-label">Port scope</div>
           <button class="tool-card">
-            <div class="tool-icon api" style="background:#fde9dd;color:#d9541e">−</div>
             <div class="tool-meta">
               <div class="tool-name">Remove from Port Scope (Fabric)</div>
               <div class="tool-desc">Batch-remove operationally-down WAN interfaces from monitored port scope.</div>
@@ -146,7 +141,6 @@
 
           <div class="tool-group-label">Fabric connection</div>
           <button class="tool-card">
-            <div class="tool-icon api">FC</div>
             <div class="tool-meta">
               <div class="tool-name">Add Fabric Connection (API) <span class="badge">Beta</span></div>
               <div class="tool-desc">Bulk-create OnSight CSF tunnel connections.</div>
@@ -194,7 +188,6 @@
           <div class="tool-group-label">AI assistant</div>
 
           <button class="tool-card disabled" title="No Claude API key configured. Click ⚙ to paste your Anthropic key.">
-            <div class="tool-icon ai">AC</div>
             <div class="tool-meta">
               <div class="tool-name">
                 Ask Claude
@@ -207,7 +200,6 @@
 
           <div class="tool-group-label">Port scope</div>
           <button class="tool-card">
-            <div class="tool-icon api" style="background:#fde9dd;color:#d9541e">−</div>
             <div class="tool-meta">
               <div class="tool-name">Remove from Port Scope (Fabric)</div>
               <div class="tool-desc">Batch-remove operationally-down WAN interfaces from monitored port scope.</div>

@@ -224,18 +224,6 @@
     cursor: default;
   }
   .tool-card.disabled:hover { background: transparent; }
-  .tool-card .tool-icon {
-    width: 32px; height: 32px;
-    border-radius: 6px;
-    display: grid;
-    place-items: center;
-    font-size: 14px;
-    font-weight: 600;
-    flex-shrink: 0;
-  }
-  .tool-icon.destructive { background: #fde9dd; color: var(--accent); }
-  .tool-icon.additive { background: var(--ok-soft); color: var(--ok); }
-  .tool-icon.neutral { background: var(--bg); color: var(--text-muted); }
   .tool-card .tool-meta {
     flex: 1;
     min-width: 0;
@@ -369,7 +357,6 @@
           <div class="tool-group-label">Port scope</div>
 
           <button class="tool-card">
-            <div class="tool-icon destructive">−</div>
             <div class="tool-meta">
               <div class="tool-name">
                 Remove from Port Scope (Fabric)
@@ -381,7 +368,6 @@
           </button>
 
           <button class="tool-card">
-            <div class="tool-icon additive">+</div>
             <div class="tool-meta">
               <div class="tool-name">
                 Add to Port Scope (Fabric)
@@ -431,7 +417,6 @@
           <div class="tool-group-label">Port scope</div>
 
           <button class="tool-card disabled">
-            <div class="tool-icon destructive">−</div>
             <div class="tool-meta">
               <div class="tool-name">
                 Remove from Port Scope (Fabric)
@@ -442,7 +427,6 @@
           </button>
 
           <button class="tool-card disabled">
-            <div class="tool-icon additive">+</div>
             <div class="tool-meta">
               <div class="tool-name">
                 Add to Port Scope (Fabric)
@@ -491,7 +475,6 @@
           <div class="tool-group-label">2 matches</div>
 
           <button class="tool-card">
-            <div class="tool-icon destructive">−</div>
             <div class="tool-meta">
               <div class="tool-name">
                 Remove from <mark style="background: var(--warn-soft); color: inherit; padding: 0 2px; border-radius: 2px;">Port</mark> Scope (Fabric)
@@ -503,7 +486,6 @@
           </button>
 
           <button class="tool-card">
-            <div class="tool-icon additive">+</div>
             <div class="tool-meta">
               <div class="tool-name">
                 Add to <mark style="background: var(--warn-soft); color: inherit; padding: 0 2px; border-radius: 2px;">Port</mark> Scope (Fabric)

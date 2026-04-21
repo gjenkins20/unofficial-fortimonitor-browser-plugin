@@ -168,17 +168,6 @@ html, body {
   cursor: default;
 }
 
-.tool-icon {
-  width: 32px; height: 32px;
-  border-radius: 6px;
-  display: grid;
-  place-items: center;
-  font-size: 14px;
-  font-weight: 600;
-  flex-shrink: 0;
-}
-.tool-icon.api { background: var(--info-soft); color: var(--info); font-size: 11px; }
-
 .tool-meta {
   flex: 1;
   min-width: 0;
