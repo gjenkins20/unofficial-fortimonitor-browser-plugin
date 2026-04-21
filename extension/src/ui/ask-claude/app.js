@@ -202,4 +202,14 @@ els.input.addEventListener('keydown', (e) => {
   }
 });
 
+// Self-heal the setup-needed banner when keys are saved in the popup or
+// when the tab comes back to the foreground after configuring elsewhere.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local') return;
+  if (changes[PANOPTA_KEY] || changes[CLAUDE_KEY]) preflight();
+});
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) preflight();
+});
+
 preflight();

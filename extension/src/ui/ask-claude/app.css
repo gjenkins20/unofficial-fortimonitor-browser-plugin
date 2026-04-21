@@ -41,6 +41,10 @@
   font-size: 12px; line-height: 1.45;
   display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline;
 }
+/* `.alert` sets display:flex, which tied (and beat) the browser default
+   `[hidden] { display: none }` at equal specificity. Scope a higher-specificity
+   rule so the hidden attribute actually hides alerts. */
+.alert[hidden] { display: none; }
 .alert.warn { background: var(--warn-soft); color: var(--warn); border: 1px solid #e6d594; }
 .alert.info { background: var(--running-soft); color: var(--running); border: 1px solid #b9cde6; }
 .alert .link { color: inherit; text-decoration: underline; }

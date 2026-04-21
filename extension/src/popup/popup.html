@@ -169,7 +169,7 @@
         <div class="tool-meta">
           <div class="tool-name">
             Ask Claude
-            <span class="badge beta">Beta · Prototype</span>
+            <span class="badge beta">Beta</span>
           </div>
           <div class="tool-desc" data-default-desc="Natural-language Q&amp;A against your FortiMonitor environment, powered by Claude with tool use. Uses your Anthropic API key.">
             Natural-language Q&amp;A against your FortiMonitor environment, powered by Claude with tool use. Uses your Anthropic API key.
@@ -248,11 +248,11 @@
     <div class="settings-section">
       <label class="settings-label" for="ask-claude-toggle">Experimental tools</label>
       <p class="settings-help">
-        Off by default. When on, the launcher and this settings panel expose the <strong>Ask Claude</strong> prototype - an in-plugin Claude chat that queries your FortiMonitor environment via a curated set of v2 API tools. Requires an Anthropic API key in addition to your FortiMonitor RW key. See <code>docs/mcp-chat-prototype.md</code>.
+        <strong>Ask Claude</strong> is an in-plugin Claude chat that queries your FortiMonitor environment via a curated set of v2 API tools. Shown by default; toggle off to hide the tile and the Anthropic API key settings section. Requires an Anthropic API key in addition to your FortiMonitor RW key.
       </p>
       <label class="toggle-row">
         <input id="ask-claude-toggle" type="checkbox">
-        <span>Show Ask Claude (prototype)</span>
+        <span>Show Ask Claude</span>
       </label>
       <p class="settings-help" style="margin-top:0.75rem;">
         <strong>Search Servers</strong> pages the full <code>/server</code> list and filters by a specific attribute (e.g., Model = FGT60F). Pick the attribute from your tenant's catalog, enter the value, exports matches as CSV. Read-only. Hidden by default.

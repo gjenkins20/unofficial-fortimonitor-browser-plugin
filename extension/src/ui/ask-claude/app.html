@@ -15,7 +15,7 @@
 <div class="tool-shell">
   <header class="tool-header">
     <a href="../../popup/popup.html" class="back-link">‹ Back</a>
-    <h1>Ask Claude <span class="badge beta">Beta · Prototype</span></h1>
+    <h1>Ask Claude <span class="badge beta">Beta</span></h1>
     <p class="tool-subtitle">
       Natural-language Q&amp;A against your FortiMonitor environment, powered by Claude with
       a curated set of v2 API tools.
@@ -28,11 +28,22 @@
     <a href="../../popup/popup.html" class="link">Open popup to configure ↗</a>
   </section>
 
-  <section class="cost-warning alert info">
-    <strong>Cost warning.</strong> This tool calls the Anthropic API directly with <em>your</em> key.
-    There is no rate limit or budget cap on our side - cost exposure is on your account.
-    Keep conversations short and close this tab when you're done.
-  </section>
+  <details class="alert info tool-notes">
+    <summary>Heads up: cost warning + related projects</summary>
+    <div class="notes-body">
+      <p>
+        <strong>Cost warning.</strong> This tool calls the Anthropic API directly with <em>your</em> key.
+        There is no rate limit or budget cap on our side - cost exposure is on your account.
+        Keep conversations short and close this tab when you're done.
+      </p>
+      <p>
+        <strong>Like this?</strong>
+        This is a narrow slice (11 tools). For full 241-tool coverage plus a knowledge layer over the FortiMonitor docs, check out the
+        <a class="link" href="https://github.com/gjenkins20/unofficial-fortimonitor-mcp-server" target="_blank" rel="noopener">Unofficial FortiMonitor MCP Server</a>.
+        Runs alongside Claude Desktop or any MCP client.
+      </p>
+    </div>
+  </details>
 
   <section id="chat-pane" class="chat-pane">
     <div id="messages" class="messages" aria-live="polite"></div>
@@ -51,7 +62,7 @@
   </section>
 
   <footer class="tool-footer">
-    <span>Prototype - FMN-53. Tools: servers, outages, agent resources, fabric, templates, groups.</span>
+    <span>Tools: servers, outages, agent resources, fabric, templates, groups.</span>
     <a href="https://www.linkedin.com/in/gregorijenkins" target="_blank" rel="noopener">Built by Gregori Jenkins</a>
   </footer>
 </div>

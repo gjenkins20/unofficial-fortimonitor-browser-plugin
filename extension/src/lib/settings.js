@@ -34,18 +34,21 @@ export async function setDevModeEnabled(enabled, storage = defaultStorage()) {
 }
 
 /**
- * Read the Ask-Claude-enabled flag. Returns false on any storage error so
- * the prototype stays hidden by default - users only see it after
- * explicitly opting in via the Settings toggle.
+ * Read the Ask-Claude-enabled flag. Shown by default now that the tool
+ * has graduated from prototype: returns true when the setting is absent,
+ * only false when the operator has explicitly toggled it off. Storage
+ * errors fail open (return true) so a transient storage blip never hides
+ * a tool the operator expects to see.
  *
  * @param {{ get: (key: string) => Promise<Record<string, any>> }} [storage]
  */
 export async function isAskClaudeEnabled(storage = defaultStorage()) {
   try {
     const data = await storage.get(ASK_CLAUDE_ENABLED_KEY);
-    return Boolean(data?.[ASK_CLAUDE_ENABLED_KEY]);
+    const value = data?.[ASK_CLAUDE_ENABLED_KEY];
+    return value === undefined ? true : Boolean(value);
   } catch {
-    return false;
+    return true;
   }
 }
 
