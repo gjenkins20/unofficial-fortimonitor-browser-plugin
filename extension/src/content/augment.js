@@ -1,14 +1,19 @@
-// FMN-69: FortiMonitor WebGUI augmentation framework + toolkit-launcher sidebar entry.
-// Runs as a content script on FortiMonitor domains. Survives SPA re-renders via
-// MutationObserver and route changes via pushState/replaceState/popstate hooks.
+// FMN-69: FortiMonitor WebGUI augmentation framework + FM Toolkit sidebar
+// entry. Runs as a content script on FortiMonitor domains. Survives SPA
+// re-renders via MutationObserver and route changes via pushState/replaceState
+// /popstate hooks. Clicking the FM Toolkit entry toggles an iframe overlay
+// that embeds the existing popup.html, so the sidebar menu IS the popup with
+// identical styling, search, settings, tool cards, and behavior.
 
 (() => {
   const LAUNCHER_ID = 'toolkit-launcher';
+  const OVERLAY_ID = 'fmn-toolkit-overlay';
   const ENTRY_ATTR = 'data-fmn-entry';
-  const LAUNCHER_URL = chrome.runtime.getURL('src/popup/popup.html') + '?mode=tab';
   const SVG_NS = 'http://www.w3.org/2000/svg';
+  const POPUP_URL = chrome.runtime.getURL('src/popup/popup.html');
 
   const augmentations = [];
+  const overlayState = { el: null, outsideHandler: null, keyHandler: null };
 
   function register(aug) {
     augmentations.push(aug);
@@ -24,8 +29,6 @@
     }
   }
 
-  // --- Toolkit launcher: sidebar entry below Teams & Activity -----------------
-
   register({
     id: LAUNCHER_ID,
     mount() {
@@ -40,7 +43,7 @@
     const li = document.createElement('li');
     li.setAttribute(ENTRY_ATTR, LAUNCHER_ID);
     li.className = 'pa-side-nav__top-level-item pa-py-8';
-    li.title = 'Open the Unofficial FortiMonitor Toolkit launcher';
+    li.title = 'Open the Unofficial FortiMonitor Toolkit';
     Object.assign(li.style, {
       background: '#1f6feb',
       color: '#fff',
@@ -57,6 +60,7 @@
       fontSize: '14px',
       lineHeight: '1',
       transition: 'background 120ms ease',
+      userSelect: 'none',
     });
     li.addEventListener('mouseenter', () => {
       li.style.background = '#1a5fcf';
@@ -67,14 +71,91 @@
     li.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      window.open(LAUNCHER_URL, '_blank', 'noopener');
+      if (overlayState.el) {
+        hideOverlay();
+      } else {
+        showOverlay(li);
+      }
     });
 
     li.appendChild(buildGridIcon());
     const label = document.createElement('span');
     label.textContent = 'FM Toolkit';
+    label.style.flex = '1';
     li.appendChild(label);
     return li;
+  }
+
+  function showOverlay(anchor) {
+    if (overlayState.el) return;
+
+    const anchorRect = anchor.getBoundingClientRect();
+    const MARGIN = 8;
+    const height = 540;
+    const anchorMidY = (anchorRect.top + anchorRect.bottom) / 2;
+    const top = anchorMidY - height / 2;
+
+    const wrap = document.createElement('div');
+    wrap.id = OVERLAY_ID;
+    Object.assign(wrap.style, {
+      position: 'fixed',
+      left: (anchorRect.right + MARGIN) + 'px',
+      top: top + 'px',
+      width: '360px',
+      height: height + 'px',
+      background: '#fff',
+      border: '1px solid #c5cbd3',
+      borderRadius: '8px',
+      boxShadow: '0 8px 28px rgba(0, 0, 0, 0.22)',
+      overflow: 'hidden',
+      zIndex: '2147483647',
+      display: 'flex',
+      flexDirection: 'column',
+    });
+
+    const iframe = document.createElement('iframe');
+    iframe.src = POPUP_URL;
+    iframe.setAttribute('title', 'Unofficial FortiMonitor Toolkit');
+    Object.assign(iframe.style, {
+      width: '100%',
+      height: '100%',
+      border: 'none',
+      background: '#fff',
+      display: 'block',
+    });
+    wrap.appendChild(iframe);
+
+    document.body.appendChild(wrap);
+    overlayState.el = wrap;
+
+    const outsideHandler = (e) => {
+      const target = e.target;
+      if (wrap.contains(target) || anchor.contains(target) || target === anchor) return;
+      hideOverlay();
+    };
+    document.addEventListener('mousedown', outsideHandler, true);
+    overlayState.outsideHandler = outsideHandler;
+
+    const keyHandler = (e) => {
+      if (e.key === 'Escape') hideOverlay();
+    };
+    document.addEventListener('keydown', keyHandler);
+    overlayState.keyHandler = keyHandler;
+  }
+
+  function hideOverlay() {
+    if (overlayState.el) {
+      overlayState.el.remove();
+      overlayState.el = null;
+    }
+    if (overlayState.outsideHandler) {
+      document.removeEventListener('mousedown', overlayState.outsideHandler, true);
+      overlayState.outsideHandler = null;
+    }
+    if (overlayState.keyHandler) {
+      document.removeEventListener('keydown', overlayState.keyHandler);
+      overlayState.keyHandler = null;
+    }
   }
 
   function buildGridIcon() {
@@ -99,8 +180,6 @@
     }
     return svg;
   }
-
-  // --- Survival loop ----------------------------------------------------------
 
   function start() {
     ensureAll();

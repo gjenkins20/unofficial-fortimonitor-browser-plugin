@@ -33,5 +33,14 @@
       "js": ["src/content/augment.js"],
       "run_at": "document_idle"
     }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["src/popup/popup.html"],
+      "matches": [
+        "https://fortimonitor.forticloud.com/*",
+        "https://*.fortimonitor.com/*"
+      ]
+    }
   ]
 }
