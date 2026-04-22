@@ -17,7 +17,8 @@ Some FortiMonitor batch operations live only in the FortiMonitor web UI (per-por
 | **Add Fabric Connection (API)** | FortiMonitor v2 API key | Beta (v0.3) | Bulk-create OnSight CSF tunnel connections for FortiGate devices via `POST /v2/fabric_connection`. Resource pickers (OnSight, server group, optional appliance group) populate from the API. Requires an RW API key - paste once in popup → ⚙ Settings. **Marked Beta pending live-environment verification.** |
 | **Manage Server Attributes (Bulk)** | FortiMonitor v2 API key | Beta (v0.5) | Bulk-set or remove attribute key/value pairs across many servers via `POST`/`DELETE /v2/server/{id}/server_attribute`. Paste a list of server names or IDs, pick an attribute type, preview per-row plan (add / replace / skip / error), then execute. Uses the same RW API key as Add Fabric Connection. **Marked Beta pending live-environment verification.** |
 | **Manage Server Templates (Bulk)** | FortiMonitor v2 API key | Beta (v0.6) | Bulk-attach or detach monitoring templates across many servers via `POST`/`DELETE /v2/server/{id}/template`. Attach mode is non-destructive. Detach mode offers two strategies: `dissociate` (keep metrics the template seeded) and `delete` (wipe metrics and attributes the template seeded - **destructive, no undo**). Destructive detach and large batches (>10 servers) require a typed-confirmation phrase. Uses the same RW API key as Add Fabric Connection. **Marked Beta pending live-environment verification.** |
-| **Ask Claude** | FortiMonitor v2 API key + Anthropic API key | Beta · Prototype (v0.7) · hidden by default | In-plugin Claude chat with tool use against a curated ~10-12 read-only FortiMonitor v2 endpoints (servers, outages, agent resources, fabric connections, templates, server groups) plus a single gated write (`acknowledge_outage`). Uses *your* Anthropic API key - cost exposure is direct, no rate limit. Prompt-caches the tool definitions. **Hidden by default** - enable in popup → ⚙ Settings → Experimental tools → *Show Ask Claude (prototype)*. See [`docs/mcp-chat-prototype.md`](docs/mcp-chat-prototype.md) for scope, tool subset, and expand/kill criteria. |
+| **Ask Claude** | FortiMonitor v2 API key + Anthropic API key | Beta (v0.7) | In-plugin Claude chat with tool use against a curated set of read-only FortiMonitor v2 endpoints (servers, outages, agent resources, fabric connections, templates, server groups) plus a single gated write (`acknowledge_outage`). Uses *your* Anthropic API key - cost exposure is direct, no rate limit. Prompt-caches the tool definitions. Shown by default; toggle off in popup → ⚙ Settings → Experimental tools to hide the tile. See [`docs/mcp-chat-prototype.md`](docs/mcp-chat-prototype.md) for scope and tool subset. |
+| **Search Servers** | FortiMonitor v2 API key | Prototype · hidden by default | Pages the full `/v2/server` list and filters client-side by a single attribute (built-in like Model / OS, or any customer-defined type). Useful because `/v2/server` has no native attribute filter. Exports matches as CSV. Read-only. Enable in popup → ⚙ Settings → Experimental tools → *Show Search Servers (prototype)*. |
 
 Click the extension's toolbar icon to open the launcher and pick a tool. Each tool opens its own full-tab UI with a Load → Review → Execute → Results flow (port-scope tools add a Queue step in the middle).
 
@@ -48,8 +49,9 @@ extension/
                       ui/fabric-connection/app.html (Add Fabric Connection)
                       ui/attribute-management/app.html (Manage Server Attributes)
                       ui/template-management/app.html (Manage Server Templates)
-                      ui/ask-claude/app.html (Ask Claude - prototype)
-  tests/            - Node test runner unit tests (165 tests)
+                      ui/ask-claude/app.html (Ask Claude)
+                      ui/server-search/app.html (Search Servers - prototype)
+  tests/            - Node test runner unit tests
 
 docs/
   api-discovery/    - captured FortiMonitor internal API contracts
