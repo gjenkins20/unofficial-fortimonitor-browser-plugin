@@ -327,9 +327,16 @@ function init() {
     });
   }
 
-  document.getElementById('search').addEventListener('input', (e) => {
+  const searchInput = document.getElementById('search');
+  searchInput.addEventListener('input', (e) => {
     filterTools(e.target.value);
   });
+  // Autofocus only when the popup is the top-level document (toolbar popup).
+  // In a cross-origin iframe (FMN-69 sidebar overlay), Chrome blocks autofocus
+  // on cross-origin subframes and logs a warning, so skip it there.
+  if (window.top === window) {
+    searchInput.focus();
+  }
 
   document.getElementById('settings-toggle').addEventListener('click', async () => {
     clearStatus();

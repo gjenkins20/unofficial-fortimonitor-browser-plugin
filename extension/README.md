@@ -13,7 +13,8 @@ Clicking the toolbar icon opens a launcher popup; pick a tool from the list and 
 | Add Fabric Connection (API) | FortiMonitor v2 API key | 🧪 Beta (v0.3) | Bulk-create OnSight CSF tunnel connections for FortiGate devices via `POST /v2/fabric_connection`. Requires a Read/Write API key (paste once in popup → ⚙ Settings). **Beta until verified in a live FortiMonitor environment.** |
 | Manage Server Attributes (Bulk) | FortiMonitor v2 API key | 🧪 Beta (v0.5) | Bulk-set or remove attribute key/value pairs across many servers via `POST`/`DELETE /v2/server/{id}/server_attribute`. Paste a list of server names or IDs, pick an attribute type, preview per-row plan (add / replace / skip / error), then execute. Uses the same RW API key as Add Fabric Connection. **Beta until verified in a live FortiMonitor environment.** |
 | Manage Server Templates (Bulk) | FortiMonitor v2 API key | 🧪 Beta (v0.6) | Bulk-attach or detach monitoring templates across many servers via `POST`/`DELETE /v2/server/{id}/template`. Detach supports `dissociate` (safe) and `delete` (destructive - wipes metric history); destructive detach and large batches require a typed confirmation. Uses the same RW API key as Add Fabric Connection. **Beta until verified in a live FortiMonitor environment.** |
-| Ask Claude | FortiMonitor v2 API key + Anthropic API key | 🧪 Beta · Prototype (v0.7) · hidden by default | In-plugin Claude chat with tool use against ~10-12 read-only FortiMonitor v2 endpoints plus one gated write (`acknowledge_outage`). Streams via SSE; caches tool definitions for cost. Uses *your* Anthropic API key - direct cost exposure, no rate limit. **Hidden by default** - enable via popup → ⚙ Settings → Experimental tools → *Show Ask Claude (prototype)*. See [../docs/mcp-chat-prototype.md](../docs/mcp-chat-prototype.md) for scope and expand/kill criteria. |
+| Ask Claude | FortiMonitor v2 API key + Anthropic API key | 🧪 Beta (v0.7) | In-plugin Claude chat with tool use against a curated set of read-only FortiMonitor v2 endpoints plus one gated write (`acknowledge_outage`). Streams via SSE; prompt-caches tool definitions. Uses *your* Anthropic API key - direct cost exposure, no rate limit. Shown by default; toggle off in popup → ⚙ Settings → Experimental tools to hide. See [../docs/mcp-chat-prototype.md](../docs/mcp-chat-prototype.md) for scope. |
+| Search Servers | FortiMonitor v2 API key | 🧪 Prototype · hidden by default | Pages the full `/v2/server` list and filters client-side by a single attribute (built-in like Model / OS, or any customer-defined type). Exports matches as CSV. Read-only. Enable via popup → ⚙ Settings → Experimental tools → *Show Search Servers (prototype)*. |
 
 ## Install (developer mode)
 
@@ -47,7 +48,7 @@ Uses Node's built-in `node:test` runner - no `npm install` required.
 extension/
   manifest.json
   src/
-    popup/          - toolbar popup launcher (Phase B)
+    popup/          - toolbar popup launcher
     background/     - service worker, tool-specific orchestration
     lib/            - shared infrastructure (client, queue, retry,
                       concurrency, fingerprint, dom helpers, messaging)
@@ -55,7 +56,6 @@ extension/
   tests/            - Node test runner unit tests
 ```
 
-Tickets: FMN-35 (original WAN-cleanup epic, closed), FMN-39 (Remove tool implementation, closed), FMN-40 (launcher + rebrand + Add tool, in progress).
 
 ## About the Developer
 

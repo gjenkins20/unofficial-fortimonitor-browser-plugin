@@ -23,5 +23,24 @@
     "https://*.fortimonitor.com/*",
     "https://api2.panopta.com/*",
     "https://api.anthropic.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://fortimonitor.forticloud.com/*",
+        "https://*.fortimonitor.com/*"
+      ],
+      "js": ["src/content/augment.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["src/popup/popup.html"],
+      "matches": [
+        "https://fortimonitor.forticloud.com/*",
+        "https://*.fortimonitor.com/*"
+      ]
+    }
   ]
 }

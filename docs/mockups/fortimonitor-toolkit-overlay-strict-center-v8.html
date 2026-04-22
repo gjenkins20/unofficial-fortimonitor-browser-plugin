@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FMN-69 Overlay — v8 (red-outlined FM Toolkit box, JS-measured)</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #d0d6db;
+    color: #1f2328;
+    margin: 0;
+    padding: 24px;
+    line-height: 1.4;
+  }
+  h1 { font-size: 18px; margin: 0 0 6px 0; }
+  p.meta { color: #4d555c; font-size: 13px; margin: 0 0 20px 0; max-width: 900px; }
+
+  .stage {
+    position: relative;
+    width: 100%;
+    max-width: 1400px;
+    height: 900px;
+    background: #fff;
+    border: 1px solid #b9c0c7;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    margin-bottom: 12px;
+  }
+
+  .fm-top-bar {
+    height: 54px;
+    background: #fff;
+    border-bottom: 1px solid #e2e5ea;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 24px;
+  }
+  .fm-logo { font-weight: 700; font-size: 20px; color: #1f2d3d; }
+  .fm-logo .cloud { color: #2b9fd9; }
+  .fm-search {
+    margin-left: auto;
+    padding: 6px 12px 6px 30px;
+    border: 1px solid #e2e5ea;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #8a939d;
+    position: relative;
+    width: 220px;
+  }
+  .fm-search::before { content: "🔍"; position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 12px; }
+  .fm-account { font-size: 13px; color: #1f2d3d; }
+
+  .fm-body { display: flex; height: calc(100% - 54px); position: static; }
+  .fm-sidebar {
+    width: 220px;
+    background: #13293d;
+    color: #c0cdd8;
+    padding: 12px 0;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+  .fm-sidebar .brand {
+    padding: 8px 16px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    border-bottom: 1px solid #1f3a55;
+    margin-bottom: 6px;
+  }
+  .fm-sidebar .brand .sub {
+    font-size: 11px;
+    font-weight: 400;
+    color: #8fa3b5;
+    margin-top: 2px;
+  }
+  .fm-nav { list-style: none; margin: 0; padding: 0; }
+  .fm-nav li {
+    padding: 9px 16px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    position: relative;
+    height: 37px;
+  }
+  .fm-nav li.active::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 6px; bottom: 6px;
+    width: 3px; background: #fff;
+  }
+  .fm-nav li.active { color: #fff; }
+  .fm-nav li .icon-square {
+    width: 14px; height: 14px;
+    border: 1.5px solid currentColor;
+    border-radius: 2px;
+    flex-shrink: 0;
+    opacity: 0.8;
+  }
+  .fm-nav-sub {
+    list-style: none;
+    margin: 0;
+    padding: 2px 0 6px 0;
+    background: rgba(0,0,0,0.12);
+  }
+  .fm-nav-sub li {
+    padding: 7px 16px 7px 44px;
+    font-size: 13px;
+    color: #8fa3b5;
+    display: block;
+    height: 34px;
+  }
+  .fm-nav-sub li.active {
+    background: rgba(255,255,255,0.06);
+    color: #fff;
+    font-weight: 600;
+  }
+  .fm-main { flex: 1; background: #f4f5f7; padding: 20px 28px; overflow: hidden; }
+  .fm-main h2 { margin: 0 0 16px 0; font-size: 20px; color: #253241; }
+  .fm-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+  .fm-grid .cell { height: 50px; border-radius: 4px; background: #7dd4a7; }
+  .fm-grid .cell.warn { background: #eb6161; }
+
+  .fmn-entry {
+    background: #1f6feb !important;
+    color: #fff !important;
+    font-weight: 600;
+    margin: 6px 10px;
+    padding: 9px 14px !important;
+    border-radius: 5px;
+    border: 1px solid #1a5fcf;
+    height: 40px !important;
+    /* RED OUTLINE so you can see exactly which box I'm calling "FM Toolkit" */
+    outline: 3px solid #ef4444;
+    outline-offset: 2px;
+  }
+  .fmn-entry .icon-grid { width: 14px; height: 14px; position: relative; flex-shrink: 0; }
+  .fmn-entry .icon-grid::before,
+  .fmn-entry .icon-grid::after {
+    content: "";
+    position: absolute;
+    width: 5px; height: 5px;
+    background: #fff;
+    border-radius: 1px;
+  }
+  .fmn-entry .icon-grid::before { top: 0; left: 0; box-shadow: 9px 0 0 #fff; }
+  .fmn-entry .icon-grid::after { bottom: 0; left: 0; box-shadow: 9px 0 0 #fff; }
+
+  .popup-frame {
+    position: absolute;
+    width: 360px;
+    height: 540px;
+    background: #fff;
+    border: 1px solid #c5cbd3;
+    border-radius: 8px;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.22);
+    z-index: 20;
+    font-size: 13px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .popup-inner-header {
+    padding: 14px 16px 12px;
+    border-bottom: 1px solid #e2e5ea;
+    background: linear-gradient(180deg, #fff 0%, #fafbfc 100%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  .popup-inner-header .fm-icon {
+    width: 28px; height: 28px;
+    background: #d9541e;
+    border-radius: 6px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .popup-inner-header h3 { flex: 1; margin: 0; font-size: 13px; font-weight: 600; }
+  .popup-inner-header .cog { color: #6b7380; font-size: 16px; }
+  .session-strip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    font-size: 11px;
+    background: #dcf4e1;
+    color: #1e7a3c;
+    border-bottom: 1px solid #e2e5ea;
+    flex-shrink: 0;
+  }
+  .session-strip .dot { width: 8px; height: 8px; background: #1e7a3c; border-radius: 50%; }
+  .session-strip .link { margin-left: auto; text-decoration: underline; color: inherit; }
+  .search-row { padding: 10px 12px; border-bottom: 1px solid #e2e5ea; flex-shrink: 0; }
+  .search-row .input {
+    padding: 7px 10px 7px 30px;
+    font-size: 12px;
+    border: 1px solid #e2e5ea;
+    border-radius: 4px;
+    color: #8a939d;
+    position: relative;
+  }
+  .search-row .input::before { content: "🔍"; position: absolute; left: 8px; top: 50%; transform: translateY(-50%); font-size: 11px; }
+  .popup-scroll { overflow-y: auto; }
+  .tool-group-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #6b7380;
+    padding: 10px 16px 4px;
+    font-weight: 600;
+  }
+  .tool-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid #f0f2f4;
+  }
+  .tool-meta { flex: 1; }
+  .tool-name { font-size: 13px; font-weight: 600; color: #222a35; margin-bottom: 2px; }
+  .tool-name .badge {
+    font-size: 9.5px;
+    background: #fff4d1;
+    color: #8b6f00;
+    border-radius: 3px;
+    padding: 1px 5px;
+    margin-left: 4px;
+    vertical-align: middle;
+    font-weight: 600;
+  }
+  .tool-desc { font-size: 11.5px; color: #6b7380; line-height: 1.35; }
+  .chevron { color: #c5cbd3; font-size: 16px; padding-top: 6px; }
+  .popup-footer {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 14px;
+    border-top: 1px solid #e2e5ea;
+    background: #fafbfc;
+    font-size: 11px;
+    color: #6b7380;
+    flex-shrink: 0;
+  }
+
+  /* Reference overlays — SIBLINGS OF .stage's children, positioned relative to .stage directly. */
+  .ref-line {
+    position: absolute;
+    left: 0; right: 0;
+    z-index: 30;
+    pointer-events: none;
+    height: 0;
+  }
+  .ref-line-gold { border-top: 2px solid #d4a72c; }
+  .ref-line-gold::before {
+    content: "gold · center of FM Toolkit TEXT";
+    position: absolute;
+    right: 12px;
+    top: -20px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #8b6f00;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: rgba(255, 244, 209, 0.98);
+    padding: 2px 7px;
+    border-radius: 3px;
+    border: 1px solid #d4a72c;
+  }
+  .ref-line-blue { border-top: 2px dashed #0c5ab3; }
+  .ref-line-blue::before {
+    content: "blue · center of FM Toolkit BOX (red-outlined below)";
+    position: absolute;
+    left: 12px;
+    top: -40px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #0c5ab3;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: rgba(219, 234, 254, 0.98);
+    padding: 2px 7px;
+    border-radius: 3px;
+    border: 1px solid #0c5ab3;
+  }
+
+  .red-callout {
+    position: absolute;
+    left: 240px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #b91c1c;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: rgba(254, 226, 226, 0.98);
+    padding: 2px 7px;
+    border-radius: 3px;
+    border: 1px solid #ef4444;
+    z-index: 45;
+  }
+  .red-callout::before {
+    content: "";
+    position: absolute;
+    left: -10px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0; height: 0;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    border-right: 7px solid #ef4444;
+  }
+
+  .legend {
+    background: #fff;
+    border: 1px solid #b9c0c7;
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 12px 0;
+    max-width: 900px;
+    font-size: 13px;
+  }
+  .legend h3 {
+    margin: 0 0 10px 0;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6b7380;
+  }
+  .legend table { width: 100%; border-collapse: collapse; }
+  .legend td { padding: 4px 8px; vertical-align: top; }
+  .legend .swatch {
+    display: inline-block;
+    width: 20px; height: 3px;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  .legend .box-swatch {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 3px solid #ef4444;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  .legend code { background: #eaeef2; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+  .legend .measurements {
+    background: #0f172a;
+    color: #e2e8f0;
+    padding: 10px 14px;
+    border-radius: 4px;
+    margin-top: 10px;
+    font-family: Menlo, monospace;
+    font-size: 12px;
+    white-space: pre;
+    overflow-x: auto;
+  }
+</style>
+</head>
+<body>
+
+<h1>FMN-69 — Red-Outlined FM Toolkit Box + Two Measured Lines (v8)</h1>
+<p class="meta">The FM Toolkit menuitem is outlined in <strong>bright red</strong> so you can verify I'm measuring the correct element. Both reference lines are positioned by JavaScript via <code>getBoundingClientRect()</code> on that exact red-outlined element. Fixed the v7 bug where lines were computed relative to the stage but positioned relative to <code>.fm-body</code> (54px off).</p>
+
+<div class="stage" id="stage">
+
+  <div class="fm-top-bar">
+    <span class="fm-logo">Forti<span class="cloud">Cloud</span></span>
+    <span class="fm-search">Search Instances</span>
+    <span class="fm-account">👤 gjenkins20@gmail.com ▾</span>
+  </div>
+
+  <div class="fm-body">
+    <div class="fm-sidebar">
+      <div class="brand">
+        FORTIMONITOR
+        <div class="sub">Fortinet - TCSM</div>
+      </div>
+      <ul class="fm-nav">
+        <li><span class="icon-square"></span>Dashboards</li>
+        <li class="active"><span class="icon-square"></span>Monitoring</li>
+        <ul class="fm-nav-sub">
+          <li>Applications</li>
+          <li class="active">Instances</li>
+          <li>OnSights</li>
+          <li>Public Probes</li>
+          <li>Attributes &amp; Tags</li>
+          <li>Advanced Metrics</li>
+          <li>Infra Settings</li>
+          <li>Monitoring Policies</li>
+        </ul>
+        <li><span class="icon-square"></span>Incidents</li>
+        <li><span class="icon-square"></span>Maintenance</li>
+        <li><span class="icon-square"></span>Reporting</li>
+        <li><span class="icon-square"></span>Teams &amp; Activity</li>
+        <li class="fmn-entry" id="fm-toolkit-li">
+          <span class="icon-grid"></span>
+          <span id="fm-toolkit-label">FM Toolkit</span>
+        </li>
+      </ul>
+    </div>
+
+    <div class="fm-main">
+      <h2>Infrastructure Map</h2>
+      <div class="fm-grid">
+        <div class="cell"></div><div class="cell"></div><div class="cell"></div>
+        <div class="cell warn"></div><div class="cell"></div><div class="cell"></div>
+        <div class="cell"></div><div class="cell"></div><div class="cell warn"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Popup + lines + callout are siblings of .fm-top-bar / .fm-body, ALL inside .stage.
+       Positioned absolutely relative to the stage (no more fm-body offset bug). -->
+  <div class="popup-frame" id="popup">
+    <div class="popup-inner-header">
+      <span class="fm-icon">FM</span>
+      <h3>Unofficial FortiMonitor Toolkit</h3>
+      <span class="cog">⚙</span>
+    </div>
+    <div class="session-strip">
+      <span class="dot"></span>
+      Signed in to FortiMonitor
+      <a class="link" href="#">Open console ↗</a>
+    </div>
+    <div class="search-row">
+      <div class="input">Search tools…</div>
+    </div>
+    <div class="popup-scroll">
+      <div class="tool-group-label">Port scope</div>
+      <div class="tool-card">
+        <div class="tool-meta">
+          <div class="tool-name">Remove from Port Scope (Fabric)</div>
+          <div class="tool-desc">Batch-remove operationally-down WAN interfaces from monitored port scope.</div>
+        </div>
+        <div class="chevron">›</div>
+      </div>
+      <div class="tool-card">
+        <div class="tool-meta">
+          <div class="tool-name">Add to Port Scope (Fabric)</div>
+          <div class="tool-desc">Select currently-unmonitored ports and add them to port scope.</div>
+        </div>
+        <div class="chevron">›</div>
+      </div>
+      <div class="tool-group-label">Fabric connection</div>
+      <div class="tool-card">
+        <div class="tool-meta">
+          <div class="tool-name">Add Fabric Connection (API)<span class="badge">Beta</span></div>
+          <div class="tool-desc">Bulk-create OnSight CSF tunnel connections for FortiGate devices via the FortiMonitor v2 API.</div>
+        </div>
+        <div class="chevron">›</div>
+      </div>
+      <div class="tool-group-label">Lookup</div>
+      <div class="tool-card">
+        <div class="tool-meta">
+          <div class="tool-name">Server Name → ID Lookup<span class="badge">Beta</span></div>
+          <div class="tool-desc">Resolve a list of FortiMonitor server names to server IDs via the v2 API. Exports CSV.</div>
+        </div>
+        <div class="chevron">›</div>
+      </div>
+    </div>
+    <div class="popup-footer">
+      <span>v0.7.0</span>
+      <span>Built by Gregori Jenkins</span>
+    </div>
+  </div>
+
+  <div class="ref-line ref-line-gold" id="goldLine"></div>
+  <div class="ref-line ref-line-blue" id="blueLine"></div>
+  <div class="red-callout" id="redCallout">◂ FM Toolkit BOX (the red-outlined rectangle)</div>
+</div>
+
+<div class="legend">
+  <h3>What you're looking at</h3>
+  <table>
+    <tr><td><span class="box-swatch"></span></td>
+        <td><strong>Red outline</strong> — wraps the FM Toolkit menuitem (<code>li.fmn-entry</code>). Every measurement below refers to <em>this exact element</em>.</td></tr>
+    <tr><td><span class="swatch" style="background:#d4a72c"></span></td>
+        <td><strong>Gold line</strong> — vertical center of the <strong>"FM Toolkit" TEXT</strong> (measured via <code>Range.getBoundingClientRect()</code> on the label text).</td></tr>
+    <tr><td><span class="swatch" style="background:#0c5ab3; border-style: dashed"></span></td>
+        <td><strong>Blue dashed line</strong> — vertical center of the <strong>FM Toolkit BOX</strong> (the red-outlined <code>li</code>, measured via <code>li.getBoundingClientRect()</code>).</td></tr>
+  </table>
+  <div class="measurements" id="measurements">measuring…</div>
+</div>
+
+<script>
+(function () {
+  function layout() {
+    const stage = document.getElementById('stage');
+    const li = document.getElementById('fm-toolkit-li');
+    const label = document.getElementById('fm-toolkit-label');
+    const popup = document.getElementById('popup');
+    const goldLine = document.getElementById('goldLine');
+    const blueLine = document.getElementById('blueLine');
+    const redCallout = document.getElementById('redCallout');
+    const measurements = document.getElementById('measurements');
+
+    const stageRect = stage.getBoundingClientRect();
+    const liRect = li.getBoundingClientRect();
+
+    // y-coords relative to stage origin (stage is position: relative, popup/lines are
+    // absolute children of stage, so this is the correct reference frame)
+    const boxTop = liRect.top - stageRect.top;
+    const boxBottom = liRect.bottom - stageRect.top;
+    const boxCenterY = (boxTop + boxBottom) / 2;
+
+    const range = document.createRange();
+    range.selectNodeContents(label);
+    const textRect = range.getBoundingClientRect();
+    const textTop = textRect.top - stageRect.top;
+    const textBottom = textRect.bottom - stageRect.top;
+    const textCenterY = (textTop + textBottom) / 2;
+
+    // Popup: horizontally after sidebar (sidebar is inside fm-body, so its right edge
+    // relative to stage = li.right), vertically centered on box midpoint.
+    const POPUP_H = 540;
+    const POPUP_W = 360;
+    const MARGIN = 8;
+    const sidebarRightRelStage = liRect.right + (liRect.left - stageRect.left - liRect.left + stageRect.left);
+    // simpler: sidebar is 220px wide starting at stage x=0
+    const popupLeft = 220 + MARGIN;
+    popup.style.left = popupLeft + 'px';
+    popup.style.top = (boxCenterY - POPUP_H / 2) + 'px';
+
+    goldLine.style.top = textCenterY + 'px';
+    blueLine.style.top = boxCenterY + 'px';
+
+    // Red callout arrow pointing at the red-outlined box
+    redCallout.style.top = (boxCenterY - 10) + 'px';
+
+    measurements.textContent =
+      'stage origin:              (' + Math.round(stageRect.left) + ', ' + Math.round(stageRect.top) + ')\n' +
+      'FM Toolkit BOX (red):      y = ' + Math.round(boxTop) + '  to  ' + Math.round(boxBottom) + '   (height ' + Math.round(boxBottom - boxTop) + ')   center = ' + Math.round(boxCenterY) + '\n' +
+      'FM Toolkit TEXT:           y = ' + Math.round(textTop) + '  to  ' + Math.round(textBottom) + '   (height ' + Math.round(textBottom - textTop) + ')   center = ' + Math.round(textCenterY) + '\n' +
+      'delta (box - text center): ' + Math.round(boxCenterY - textCenterY) + ' px\n' +
+      'popup:                     y = ' + Math.round(boxCenterY - POPUP_H / 2) + '  to  ' + Math.round(boxCenterY + POPUP_H / 2) + '   center = ' + Math.round(boxCenterY) + '  (= box center)';
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', layout);
+  } else {
+    layout();
+  }
+  window.addEventListener('resize', layout);
+})();
+</script>
+</body>
+</html>
