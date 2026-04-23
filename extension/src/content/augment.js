@@ -43,6 +43,10 @@
   // Source: /report/get_idp_data?server_id={id} -> pageData.instance.fqdn,
   // classified into IP vs. DNS by regex. Fetches are per-row with
   // concurrency 3 and cached in-memory for the session.
+  //
+  // FMN-72/FMN-73: order + visibility per sub-column, persisted in
+  // chrome.storage.local under "fm:webguiColumns". Mirror of the registry +
+  // normalize logic in src/lib/column-order.js — keep both in sync.
   const INSTANCES_PATH = '/report/ListServers';
   const SERVER_ID_RE = /^s-(\d+)$/;
   const IPV4_RE = /^(\d{1,3}\.){3}\d{1,3}$/;
@@ -52,11 +56,98 @@
   const ROW_AUG_ATTR = 'data-fmn-ip-row-augmented';
   const IP_CELL_ATTR = 'data-fmn-ip-cell';
   const DNS_CELL_ATTR = 'data-fmn-dns-cell';
+  const COL_ATTR = 'data-fmn-col';
+  const WEBGUI_COLUMNS_KEY = 'fm:webguiColumns';
+  const AUG_ID = 'instances-ip-dns-columns';
+
+  // Column metadata for the Instances list augmentation. Mirror of the
+  // 'instances-ip-dns-columns' entry in src/lib/column-order.js.
+  const COLUMNS = {
+    instance: { label: 'Instance',   lockedVisible: true,  width: 'minmax(120px, 1fr)' },
+    ip:       { label: 'IP Address', lockedVisible: false, width: 'minmax(110px, 130px)' },
+    dns:      { label: 'DNS Name',   lockedVisible: false, width: 'minmax(140px, 200px)' },
+  };
+  const DEFAULT_COL_IDS = ['instance', 'ip', 'dns'];
 
   const fetchCache = new Map();
   const fetchQueue = [];
   let activeFetches = 0;
   const sortState = { column: null, direction: null };
+  let currentColumns = defaultColumnOrder();
+  let columnOrderLoaded = false;
+
+  function defaultColumnOrder() {
+    return DEFAULT_COL_IDS.map((id) => ({ id, hidden: false }));
+  }
+
+  function normalizeColumnOrder(persisted) {
+    const known = new Set(DEFAULT_COL_IDS);
+    const seen = new Set();
+    const out = [];
+    if (Array.isArray(persisted)) {
+      for (const entry of persisted) {
+        if (!entry || typeof entry.id !== 'string') continue;
+        if (!known.has(entry.id)) continue;
+        if (seen.has(entry.id)) continue;
+        seen.add(entry.id);
+        const meta = COLUMNS[entry.id];
+        out.push({
+          id: entry.id,
+          hidden: meta.lockedVisible ? false : Boolean(entry.hidden),
+        });
+      }
+    }
+    for (const id of DEFAULT_COL_IDS) {
+      if (!seen.has(id)) out.push({ id, hidden: false });
+    }
+    return out;
+  }
+
+  async function loadColumnOrder() {
+    try {
+      const data = await chrome.storage.local.get(WEBGUI_COLUMNS_KEY);
+      const all = (data && data[WEBGUI_COLUMNS_KEY]) || {};
+      currentColumns = normalizeColumnOrder(all[AUG_ID]);
+    } catch {
+      currentColumns = defaultColumnOrder();
+    }
+    columnOrderLoaded = true;
+  }
+
+  async function persistColumnOrder(list) {
+    const normalized = normalizeColumnOrder(list);
+    let current = {};
+    try {
+      const data = await chrome.storage.local.get(WEBGUI_COLUMNS_KEY);
+      current = (data && data[WEBGUI_COLUMNS_KEY]) || {};
+    } catch {
+      current = {};
+    }
+    const next = Object.assign({}, current, { [AUG_ID]: normalized });
+    await chrome.storage.local.set({ [WEBGUI_COLUMNS_KEY]: next });
+  }
+
+  function subscribeColumnOrder() {
+    if (!chrome.storage || !chrome.storage.onChanged) return;
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName && areaName !== 'local') return;
+      const change = changes && changes[WEBGUI_COLUMNS_KEY];
+      if (!change) return;
+      const newAll = (change.newValue) || {};
+      const next = normalizeColumnOrder(newAll[AUG_ID]);
+      if (sameOrder(currentColumns, next)) return;
+      currentColumns = next;
+      applyColumnOrderToDom();
+    });
+  }
+
+  function sameOrder(a, b) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (a[i].id !== b[i].id || a[i].hidden !== b[i].hidden) return false;
+    }
+    return true;
+  }
 
   register({
     id: 'instances-ip-dns-columns',
@@ -94,12 +185,12 @@
       }
       .fmn-hdr-grid, .fmn-cell-grid {
         display: grid;
-        grid-template-columns: minmax(120px, 1fr) minmax(110px, 130px) minmax(140px, 200px);
         gap: 14px;
         align-items: center;
       }
       .fmn-hdr-grid > * { min-width: 0; }
       .fmn-cell-grid > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .fmn-hdr-grid > [hidden], .fmn-cell-grid > [hidden] { display: none !important; }
       .fmn-cell-ip { font-variant-numeric: tabular-nums; color: #394449; }
       .fmn-cell-dns { color: #394449; }
       .fmn-cell-ip.fmn-unresolved, .fmn-cell-dns.fmn-unresolved {
@@ -134,11 +225,25 @@
       .fmn-sub-hdr.fmn-sort-desc .fmn-chev { opacity: 1; color: #1f6feb; }
       .fmn-sub-hdr.fmn-sort-asc, .fmn-sub-hdr.fmn-sort-desc { color: #1f6feb; }
       .fmn-hdr-instance-label { color: inherit; font-weight: inherit; }
+
+      /* Drag affordance + drop indicators on the in-page sub-headers. */
+      .fmn-hdr-grid > [${COL_ATTR}] {
+        cursor: grab;
+        padding: 2px 4px;
+        border-radius: 3px;
+        transition: background 80ms ease, opacity 80ms ease;
+      }
+      .fmn-hdr-grid > [${COL_ATTR}]:hover { background: #eef1f5; }
+      .fmn-hdr-grid > [${COL_ATTR}]:active { cursor: grabbing; }
+      .fmn-hdr-grid > [${COL_ATTR}].fmn-dragging { opacity: 0.4; }
+      .fmn-hdr-grid > [${COL_ATTR}].fmn-drop-before { box-shadow: inset 2px 0 0 0 #1f6feb; }
+      .fmn-hdr-grid > [${COL_ATTR}].fmn-drop-after  { box-shadow: inset -2px 0 0 0 #1f6feb; }
     `;
     document.head.appendChild(style);
   }
 
   function augmentTable(table) {
+    let headerMutated = false;
     const thead = table.querySelector('thead');
     if (thead) {
       const headerRow = thead.querySelector('tr');
@@ -148,6 +253,7 @@
           augmentInstanceHeader(instanceTh);
           headerRow.setAttribute(HEADER_AUG_ATTR, '1');
           updateSortIndicators();
+          headerMutated = true;
         }
       }
     }
@@ -158,6 +264,10 @@
     for (const row of tbody.querySelectorAll('tr')) {
       if (augmentRow(row)) addedAny = true;
     }
+    // Only re-apply order when something actually got augmented this pass.
+    // Calling appendChild on every slot every pass mutates the DOM and the
+    // MutationObserver feedback would loop forever, freezing the page.
+    if (headerMutated || addedAny) applyColumnOrderToDom();
     if (addedAny && sortState.column) applySortIfActive();
   }
 
@@ -173,8 +283,9 @@
     const originalText = (th.textContent || '').trim() || 'Instance';
     // Move any existing inline children (text, sort-arrow spans) into a
     // wrapper so FortiMonitor's own sort-click continues to hit the same TH
-    // when the operator clicks "Instance". The wrapper is the first grid
-    // slot; IP Address and DNS Name get their own slots next to it.
+    // when the operator clicks "Instance". The wrapper occupies whichever
+    // grid slot is assigned to it; IP and DNS slots stop click propagation
+    // so they never trigger native sort.
     th.classList.add('fmn-instance-merged');
     const originalChildren = Array.from(th.childNodes);
     th.textContent = '';
@@ -182,17 +293,27 @@
     const grid = document.createElement('div');
     grid.className = 'fmn-hdr-grid';
 
-    const nameSlot = document.createElement('span');
-    nameSlot.className = 'fmn-hdr-instance-label';
-    if (originalChildren.length > 0) {
-      for (const c of originalChildren) nameSlot.appendChild(c);
-    } else {
-      nameSlot.textContent = originalText;
+    // Build all known column slots once. Order/visibility/widths are
+    // applied separately by applyColumnOrderToDom() so the same code path
+    // handles initial mount and later storage-driven re-renders.
+    for (const id of DEFAULT_COL_IDS) {
+      let slot;
+      if (id === 'instance') {
+        slot = document.createElement('span');
+        slot.className = 'fmn-hdr-instance-label';
+        if (originalChildren.length > 0) {
+          for (const c of originalChildren) slot.appendChild(c);
+        } else {
+          slot.textContent = originalText;
+        }
+      } else {
+        slot = buildSortableSubHeader(id === 'ip' ? 'IP Address' : 'DNS Name', id);
+      }
+      slot.setAttribute(COL_ATTR, id);
+      slot.setAttribute('draggable', 'true');
+      attachHeaderDrag(slot);
+      grid.appendChild(slot);
     }
-    grid.appendChild(nameSlot);
-
-    grid.appendChild(buildSortableSubHeader('IP Address', 'ip'));
-    grid.appendChild(buildSortableSubHeader('DNS Name', 'dns'));
     th.appendChild(grid);
   }
 
@@ -217,36 +338,64 @@
     const grid = document.createElement('div');
     grid.className = 'fmn-cell-grid';
 
-    const nameSlot = document.createElement('span');
-    nameSlot.className = 'fmn-cell-name';
-    for (const c of originalChildren) nameSlot.appendChild(c);
-    grid.appendChild(nameSlot);
-
-    const ipSlot = document.createElement('span');
-    ipSlot.className = 'fmn-cell-ip';
-    if (serverId) ipSlot.setAttribute(IP_CELL_ATTR, serverId);
-    grid.appendChild(ipSlot);
-
-    const dnsSlot = document.createElement('span');
-    dnsSlot.className = 'fmn-cell-dns';
-    if (serverId) dnsSlot.setAttribute(DNS_CELL_ATTR, serverId);
-    grid.appendChild(dnsSlot);
+    for (const id of DEFAULT_COL_IDS) {
+      const slot = document.createElement('span');
+      slot.setAttribute(COL_ATTR, id);
+      if (id === 'instance') {
+        slot.className = 'fmn-cell-name';
+        for (const c of originalChildren) slot.appendChild(c);
+      } else if (id === 'ip') {
+        slot.className = 'fmn-cell-ip';
+        if (serverId) slot.setAttribute(IP_CELL_ATTR, serverId);
+      } else {
+        slot.className = 'fmn-cell-dns';
+        if (serverId) slot.setAttribute(DNS_CELL_ATTR, serverId);
+      }
+      grid.appendChild(slot);
+    }
 
     instanceCell.appendChild(grid);
     row.setAttribute(ROW_AUG_ATTR, '1');
 
     if (serverId) {
-      renderCell(ipSlot, fetchCache.get(serverId));
-      renderCell(dnsSlot, fetchCache.get(serverId));
+      renderCell(grid.querySelector('[' + IP_CELL_ATTR + ']'), fetchCache.get(serverId));
+      renderCell(grid.querySelector('[' + DNS_CELL_ATTR + ']'), fetchCache.get(serverId));
       enqueueFetch(serverId);
     } else {
-      renderUnavailableCell(ipSlot, 'ip');
-      renderUnavailableCell(dnsSlot, 'dns');
+      renderUnavailableCell(grid.querySelector('.fmn-cell-ip'), 'ip');
+      renderUnavailableCell(grid.querySelector('.fmn-cell-dns'), 'dns');
     }
     return true;
   }
 
+  // Reorder + show/hide every augmented grid (the header and each row).
+  // Slot DOM nodes are kept; only their order, visibility, and the parent
+  // grid-template-columns are mutated. This keeps event handlers attached
+  // and avoids tearing down DataTables-managed structure.
+  function applyColumnOrderToDom() {
+    const widths = currentColumns
+      .filter((c) => !c.hidden)
+      .map((c) => COLUMNS[c.id].width)
+      .join(' ');
+    for (const grid of document.querySelectorAll('.fmn-hdr-grid, .fmn-cell-grid')) {
+      grid.style.gridTemplateColumns = widths;
+      for (const col of currentColumns) {
+        const slot = grid.querySelector('[' + COL_ATTR + '="' + col.id + '"]');
+        if (!slot) continue;
+        if (col.hidden) {
+          slot.setAttribute('hidden', '');
+        } else {
+          slot.removeAttribute('hidden');
+        }
+        // appendChild moves an existing node to the end of children -
+        // iterating in desired order yields the desired order.
+        grid.appendChild(slot);
+      }
+    }
+  }
+
   function renderUnavailableCell(cell, kind) {
+    if (!cell) return;
     cell.classList.add('fmn-unresolved');
     cell.textContent = 'not captured';
     cell.title = kind === 'ip'
@@ -264,6 +413,16 @@
     chev.className = 'fmn-chev';
     span.appendChild(chev);
     span.addEventListener('click', (e) => {
+      // Suppress click as sort if we just finished a drag - HTML5 DnD fires
+      // a synthetic click on the source element after dragend on some
+      // browsers, and we don't want to flip the IP/DNS sort as a side
+      // effect of dropping a column.
+      if (span.__fmnJustDragged) {
+        span.__fmnJustDragged = false;
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
       // Stop propagation so the Instance TH's own FortiMonitor sort doesn't
       // fire when the operator is sorting by IP or DNS.
       e.preventDefault();
@@ -271,6 +430,66 @@
       onSortClick(col);
     });
     return span;
+  }
+
+  // Drag-and-drop on the in-page sub-headers. stopPropagation everywhere so
+  // FortiMonitor's native Instance-column sort handler on the TH never sees
+  // these events; otherwise dragging would flip native sort.
+  function attachHeaderDrag(slot) {
+    slot.addEventListener('dragstart', (e) => {
+      e.stopPropagation();
+      slot.classList.add('fmn-dragging');
+      slot.__fmnJustDragged = true;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', slot.getAttribute(COL_ATTR));
+    });
+    slot.addEventListener('dragend', (e) => {
+      e.stopPropagation();
+      slot.classList.remove('fmn-dragging');
+      for (const s of document.querySelectorAll('.fmn-drop-before, .fmn-drop-after')) {
+        s.classList.remove('fmn-drop-before', 'fmn-drop-after');
+      }
+    });
+    slot.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = 'move';
+      const rect = slot.getBoundingClientRect();
+      const before = e.clientX < rect.left + rect.width / 2;
+      slot.classList.toggle('fmn-drop-before', before);
+      slot.classList.toggle('fmn-drop-after', !before);
+    });
+    slot.addEventListener('dragleave', (e) => {
+      e.stopPropagation();
+      slot.classList.remove('fmn-drop-before', 'fmn-drop-after');
+    });
+    slot.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const fromId = e.dataTransfer.getData('text/plain');
+      const targetId = slot.getAttribute(COL_ATTR);
+      const rect = slot.getBoundingClientRect();
+      const before = e.clientX < rect.left + rect.width / 2;
+      slot.classList.remove('fmn-drop-before', 'fmn-drop-after');
+      if (!fromId || fromId === targetId) return;
+
+      const next = currentColumns.slice();
+      const fromIdx = next.findIndex((c) => c.id === fromId);
+      if (fromIdx < 0) return;
+      const [item] = next.splice(fromIdx, 1);
+      let toIdx = next.findIndex((c) => c.id === targetId);
+      if (toIdx < 0) toIdx = next.length;
+      if (!before) toIdx += 1;
+      next.splice(toIdx, 0, item);
+
+      currentColumns = next;
+      applyColumnOrderToDom();
+      // Persist - the storage subscription will broadcast to the popup; the
+      // local DOM is already updated so we don't wait on the round-trip.
+      persistColumnOrder(currentColumns).catch((err) => {
+        console.error('[FMN augment] persist column order failed', err);
+      });
+    });
   }
 
   function onSortClick(col) {
@@ -409,6 +628,7 @@
   }
 
   function renderCell(cell, cached) {
+    if (!cell) return;
     const isIp = cell.hasAttribute(IP_CELL_ATTR);
     cell.textContent = '';
     cell.classList.remove('fmn-unresolved');
@@ -578,23 +798,31 @@
   }
 
   function start() {
-    ensureAll();
-    const observer = new MutationObserver(() => ensureAll());
-    observer.observe(document.documentElement, { childList: true, subtree: true });
+    // Load persisted column order before the first ensureAll() so the
+    // initial mount paints in the user's preferred order rather than the
+    // default and then snapping. Also subscribe so popup changes propagate
+    // back into the page without a reload.
+    loadColumnOrder().finally(() => {
+      ensureAll();
+      const observer = new MutationObserver(() => ensureAll());
+      observer.observe(document.documentElement, { childList: true, subtree: true });
 
-    const origPush = history.pushState;
-    const origReplace = history.replaceState;
-    history.pushState = function () {
-      const r = origPush.apply(this, arguments);
-      queueMicrotask(ensureAll);
-      return r;
-    };
-    history.replaceState = function () {
-      const r = origReplace.apply(this, arguments);
-      queueMicrotask(ensureAll);
-      return r;
-    };
-    window.addEventListener('popstate', ensureAll);
+      const origPush = history.pushState;
+      const origReplace = history.replaceState;
+      history.pushState = function () {
+        const r = origPush.apply(this, arguments);
+        queueMicrotask(ensureAll);
+        return r;
+      };
+      history.replaceState = function () {
+        const r = origReplace.apply(this, arguments);
+        queueMicrotask(ensureAll);
+        return r;
+      };
+      window.addEventListener('popstate', ensureAll);
+
+      subscribeColumnOrder();
+    });
   }
 
   if (document.readyState === 'loading') {

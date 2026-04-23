@@ -258,6 +258,17 @@
     </div>
 
     <div class="settings-section">
+      <label class="settings-label">WebGUI columns</label>
+      <p class="settings-help">
+        Reorder or hide the columns this plugin adds to FortiMonitor pages.
+        Each augmentation has its own list. Changes apply immediately and
+        persist across sessions. You can also drag the sub-headers directly
+        on the FortiMonitor page itself.
+      </p>
+      <div id="webgui-columns-list"></div>
+    </div>
+
+    <div class="settings-section">
       <label class="settings-label" for="dev-mode-toggle">Developer mode</label>
       <p class="settings-help">
         Off by default. When on, scan-failure and API-error screens include diagnostic fields - HTTP status, final URL after redirects, content-type, and a short redacted response-body preview - plus a <strong>Check session</strong> button that probes FortiMonitor and reports XSRF-cookie presence. Intended for troubleshooting installs where your browser session is not being recognized.

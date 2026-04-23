@@ -7,6 +7,13 @@ import {
   isServerSearchEnabled,
   setServerSearchEnabled
 } from '../lib/settings.js';
+import {
+  listAugmentations,
+  getRegistry,
+  getAllColumnOrders,
+  setColumnOrder,
+  resetColumnOrder
+} from '../lib/column-order.js';
 import { resolveFortimonitorOrigin, FEDERATION_ORIGIN } from '../lib/origin-resolver.js';
 
 const FORTIMONITOR_URL = `${FEDERATION_ORIGIN}/`;
@@ -298,6 +305,185 @@ async function testConnection() {
   }
 }
 
+// -------- WebGUI columns (FMN-72 / FMN-73) --------
+
+async function loadWebguiColumnsIntoSettings() {
+  const container = document.getElementById('webgui-columns-list');
+  if (!container) return;
+  container.innerHTML = '';
+  const all = await getAllColumnOrders();
+  for (const aug of listAugmentations()) {
+    const card = buildAugCard(aug, all[aug.id] || []);
+    container.appendChild(card);
+  }
+}
+
+function buildAugCard(aug, columns) {
+  const card = document.createElement('div');
+  card.className = 'aug-card';
+
+  const header = document.createElement('div');
+  header.className = 'aug-card-header';
+  const label = document.createElement('span');
+  label.textContent = aug.label;
+  const ctx = document.createElement('span');
+  ctx.className = 'ctx';
+  ctx.textContent = aug.context;
+  header.appendChild(label);
+  header.appendChild(ctx);
+  card.appendChild(header);
+
+  const list = document.createElement('div');
+  list.dataset.augId = aug.id;
+  card.appendChild(list);
+
+  const reset = document.createElement('div');
+  reset.className = 'reset-row';
+  const resetBtn = document.createElement('button');
+  resetBtn.className = 'btn';
+  resetBtn.type = 'button';
+  resetBtn.textContent = 'Reset to default';
+  resetBtn.addEventListener('click', async () => {
+    await resetColumnOrder(aug.id);
+    await loadWebguiColumnsIntoSettings();
+  });
+  reset.appendChild(resetBtn);
+  card.appendChild(reset);
+
+  renderColumnRows(list, aug.id, columns);
+  return card;
+}
+
+function renderColumnRows(listEl, augId, columns) {
+  listEl.innerHTML = '';
+  const reg = getRegistry(augId);
+  if (!reg) return;
+  const metaById = new Map(reg.columns.map((c) => [c.id, c]));
+
+  columns.forEach((col, idx) => {
+    const meta = metaById.get(col.id);
+    if (!meta) return;
+    const row = document.createElement('div');
+    row.className = 'col-row';
+    row.setAttribute('draggable', 'true');
+    row.dataset.idx = String(idx);
+    if (col.hidden) row.classList.add('is-hidden');
+    if (meta.lockedVisible) row.classList.add('is-locked');
+
+    const handle = document.createElement('span');
+    handle.className = 'drag-handle';
+    handle.textContent = '⋮⋮';
+    handle.title = 'Drag to reorder';
+
+    const upBtn = document.createElement('button');
+    upBtn.className = 'icon-btn';
+    upBtn.type = 'button';
+    upBtn.textContent = '↑';
+    upBtn.title = 'Move up';
+    upBtn.disabled = idx === 0;
+    upBtn.addEventListener('click', () => moveColumn(augId, idx, idx - 1));
+
+    const downBtn = document.createElement('button');
+    downBtn.className = 'icon-btn';
+    downBtn.type = 'button';
+    downBtn.textContent = '↓';
+    downBtn.title = 'Move down';
+    downBtn.disabled = idx === columns.length - 1;
+    downBtn.addEventListener('click', () => moveColumn(augId, idx, idx + 1));
+
+    const name = document.createElement('div');
+    name.className = 'col-name';
+    name.textContent = meta.label;
+
+    const eyeBtn = document.createElement('button');
+    eyeBtn.className = 'icon-btn eye' + (col.hidden ? '' : ' is-on');
+    eyeBtn.type = 'button';
+    eyeBtn.textContent = col.hidden ? '⌀' : '◉';
+    eyeBtn.title = meta.lockedVisible
+      ? 'Always visible'
+      : (col.hidden ? 'Show column' : 'Hide column');
+    eyeBtn.disabled = !!meta.lockedVisible;
+    eyeBtn.addEventListener('click', () => toggleColumnVisibility(augId, idx));
+
+    row.appendChild(handle);
+    row.appendChild(upBtn);
+    row.appendChild(downBtn);
+    row.appendChild(name);
+    row.appendChild(eyeBtn);
+
+    attachRowDrag(row, augId);
+    listEl.appendChild(row);
+  });
+}
+
+async function readCurrentColumns(augId) {
+  const all = await getAllColumnOrders();
+  return all[augId] || [];
+}
+
+async function moveColumn(augId, fromIdx, toIdx) {
+  const cols = await readCurrentColumns(augId);
+  if (toIdx < 0 || toIdx >= cols.length) return;
+  const next = cols.slice();
+  const [item] = next.splice(fromIdx, 1);
+  next.splice(toIdx, 0, item);
+  await setColumnOrder(augId, next);
+  await loadWebguiColumnsIntoSettings();
+}
+
+async function toggleColumnVisibility(augId, idx) {
+  const cols = await readCurrentColumns(augId);
+  const reg = getRegistry(augId);
+  if (!reg) return;
+  const meta = reg.columns.find((c) => c.id === cols[idx].id);
+  if (!meta || meta.lockedVisible) return;
+  const next = cols.slice();
+  next[idx] = { id: cols[idx].id, hidden: !cols[idx].hidden };
+  await setColumnOrder(augId, next);
+  await loadWebguiColumnsIntoSettings();
+}
+
+function attachRowDrag(row, augId) {
+  row.addEventListener('dragstart', (e) => {
+    row.classList.add('is-dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', row.dataset.idx);
+  });
+  row.addEventListener('dragend', () => {
+    row.classList.remove('is-dragging');
+    document.querySelectorAll('.col-row.drop-above, .col-row.drop-below')
+      .forEach((r) => r.classList.remove('drop-above', 'drop-below'));
+  });
+  row.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const rect = row.getBoundingClientRect();
+    const above = e.clientY < rect.top + rect.height / 2;
+    row.classList.toggle('drop-above', above);
+    row.classList.toggle('drop-below', !above);
+  });
+  row.addEventListener('dragleave', () => {
+    row.classList.remove('drop-above', 'drop-below');
+  });
+  row.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    const fromIdx = Number(e.dataTransfer.getData('text/plain'));
+    const rect = row.getBoundingClientRect();
+    const above = e.clientY < rect.top + rect.height / 2;
+    let toIdx = Number(row.dataset.idx);
+    if (!above) toIdx += 1;
+    if (fromIdx < toIdx) toIdx -= 1;
+    row.classList.remove('drop-above', 'drop-below');
+    if (Number.isNaN(fromIdx) || fromIdx === toIdx) return;
+    const cols = await readCurrentColumns(augId);
+    const next = cols.slice();
+    const [item] = next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, item);
+    await setColumnOrder(augId, next);
+    await loadWebguiColumnsIntoSettings();
+  });
+}
+
 // -------- Init --------
 
 async function refreshGuards() {
@@ -346,6 +532,7 @@ function init() {
     await loadDevModeIntoToggle();
     await loadAskClaudeIntoToggle();
     await loadServerSearchIntoToggle();
+    await loadWebguiColumnsIntoSettings();
     showSettings();
   });
   document.getElementById('settings-back').addEventListener('click', hideSettings);
