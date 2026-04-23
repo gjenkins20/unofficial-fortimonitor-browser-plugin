@@ -49,6 +49,8 @@
   // normalize logic in src/lib/column-order.js — keep both in sync.
   const INSTANCES_PATH = '/report/ListServers';
   const SERVER_ID_RE = /^s-(\d+)$/;
+  const APPLIANCE_ID_RE = /^a-\d+$/;
+  const OTHER_ID_RE = /^cs-\d+$/;
   const IPV4_RE = /^(\d{1,3}\.){3}\d{1,3}$/;
   const IPV6_HINT_RE = /^[0-9a-fA-F:]+$/;
   const FETCH_CONCURRENCY = 3;
@@ -66,8 +68,20 @@
     instance: { label: 'Instance',   lockedVisible: true,  width: 'minmax(120px, 1fr)' },
     ip:       { label: 'IP Address', lockedVisible: false, width: 'minmax(110px, 130px)' },
     dns:      { label: 'DNS Name',   lockedVisible: false, width: 'minmax(140px, 200px)' },
+    type:     { label: 'Type',       lockedVisible: false, width: 'minmax(110px, 150px)' },
   };
-  const DEFAULT_COL_IDS = ['instance', 'ip', 'dns'];
+  const DEFAULT_COL_IDS = ['instance', 'ip', 'dns', 'type'];
+
+  // FMN-75: classify the row by its checkbox-value prefix (per FMN-71 capture).
+  // Returns a display label or null if the value doesn't match a known prefix.
+  function classifyInstancePrefix(value) {
+    if (typeof value !== 'string') return null;
+    const v = value.trim();
+    if (SERVER_ID_RE.test(v)) return 'Server';
+    if (APPLIANCE_ID_RE.test(v)) return 'OnSight Appliance';
+    if (OTHER_ID_RE.test(v)) return 'Other';
+    return null;
+  }
 
   const fetchCache = new Map();
   const fetchQueue = [];
@@ -180,7 +194,7 @@
          halts pagination/native sort, so we stay inside the cell DataTables
          already manages. */
       th.fmn-instance-merged, td.instance-column.fmn-instance-merged {
-        min-width: 520px !important;
+        min-width: 640px !important;
         padding-right: 12px !important;
       }
       .fmn-hdr-grid, .fmn-cell-grid {
@@ -193,7 +207,9 @@
       .fmn-hdr-grid > [hidden], .fmn-cell-grid > [hidden] { display: none !important; }
       .fmn-cell-ip { font-variant-numeric: tabular-nums; color: #394449; }
       .fmn-cell-dns { color: #394449; }
-      .fmn-cell-ip.fmn-unresolved, .fmn-cell-dns.fmn-unresolved {
+      .fmn-cell-type { color: #394449; }
+      .fmn-cell-ip.fmn-unresolved, .fmn-cell-dns.fmn-unresolved,
+      .fmn-cell-type.fmn-unresolved {
         color: #9AA4BC; font-style: italic; font-weight: 400;
       }
       .fmn-skel {
@@ -308,7 +324,7 @@
           slot.textContent = originalText;
         }
       } else {
-        slot = buildSortableSubHeader(id === 'ip' ? 'IP Address' : 'DNS Name', id);
+        slot = buildSortableSubHeader(COLUMNS[id].label, id);
       }
       slot.setAttribute(COL_ATTR, id);
       slot.setAttribute('draggable', 'true');
@@ -339,6 +355,9 @@
     const grid = document.createElement('div');
     grid.className = 'fmn-cell-grid';
 
+    const rawValue = (checkbox.value || '').trim();
+    const typeLabel = classifyInstancePrefix(rawValue);
+
     for (const id of DEFAULT_COL_IDS) {
       const slot = document.createElement('span');
       slot.setAttribute(COL_ATTR, id);
@@ -348,9 +367,21 @@
       } else if (id === 'ip') {
         slot.className = 'fmn-cell-ip';
         if (serverId) slot.setAttribute(IP_CELL_ATTR, serverId);
-      } else {
+      } else if (id === 'dns') {
         slot.className = 'fmn-cell-dns';
         if (serverId) slot.setAttribute(DNS_CELL_ATTR, serverId);
+      } else {
+        // id === 'type'. Populated synchronously from the checkbox-value prefix;
+        // no fetch, no skeleton, no async state.
+        slot.className = 'fmn-cell-type';
+        if (typeLabel) {
+          slot.textContent = typeLabel;
+          slot.title = 'Row type derived from checkbox prefix (' + rawValue.split('-')[0] + '-).';
+        } else {
+          slot.classList.add('fmn-unresolved');
+          slot.textContent = 'unknown';
+          slot.title = 'Unrecognized row checkbox prefix: ' + rawValue;
+        }
       }
       grid.appendChild(slot);
     }
@@ -406,7 +437,7 @@
 
   function buildSortableSubHeader(label, col) {
     const span = document.createElement('span');
-    span.className = 'fmn-sub-hdr ' + (col === 'ip' ? 'fmn-ip-hdr' : 'fmn-dns-hdr');
+    span.className = 'fmn-sub-hdr fmn-' + col + '-hdr';
     span.setAttribute('data-fmn-sort-col', col);
     span.setAttribute('title', 'Sort (client-side; within currently rendered rows)');
     span.textContent = label;
@@ -541,6 +572,10 @@
   function rowValue(row, col) {
     const cb = row.querySelector('input.pa-table-row-checkbox');
     if (!cb) return null;
+    if (col === 'type') {
+      // Synchronous: derived from the checkbox value prefix, no cache dependency.
+      return classifyInstancePrefix(cb.value);
+    }
     const m = SERVER_ID_RE.exec(cb.value || '');
     if (!m) return null;
     const cached = fetchCache.get(m[1]);

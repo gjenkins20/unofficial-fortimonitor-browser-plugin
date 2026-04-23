@@ -21,6 +21,7 @@ export const COLUMN_REGISTRY = {
       { id: 'instance', label: 'Instance',   lockedVisible: true  },
       { id: 'ip',       label: 'IP Address', lockedVisible: false },
       { id: 'dns',      label: 'DNS Name',   lockedVisible: false },
+      { id: 'type',     label: 'Type',       lockedVisible: false },
     ],
   },
 };

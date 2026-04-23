@@ -23,7 +23,7 @@ test('listAugmentations returns registered augmentations with metadata', () => {
   assert.ok(inst, 'instances-ip-dns-columns should be registered');
   assert.equal(inst.context, '/report/ListServers');
   assert.equal(inst.label, 'Instances list');
-  assert.equal(inst.columns.length, 3);
+  assert.equal(inst.columns.length, 4);
 });
 
 test('defaultOrder returns the registry order with all visible', () => {
@@ -32,6 +32,7 @@ test('defaultOrder returns the registry order with all visible', () => {
     { id: 'instance', hidden: false },
     { id: 'ip', hidden: false },
     { id: 'dns', hidden: false },
+    { id: 'type', hidden: false },
   ]);
 });
 
@@ -45,6 +46,7 @@ test('normalize fills in missing columns at the end in registry order', () => {
     { id: 'dns', hidden: false },
     { id: 'instance', hidden: false },
     { id: 'ip', hidden: false },
+    { id: 'type', hidden: false },
   ]);
 });
 
@@ -54,11 +56,13 @@ test('normalize drops unknown ids', () => {
     { id: 'totally-fake', hidden: true },
     { id: 'ip', hidden: true },
     { id: 'dns', hidden: false },
+    { id: 'type', hidden: false },
   ]);
   assert.deepEqual(out, [
     { id: 'instance', hidden: false },
     { id: 'ip', hidden: true },
     { id: 'dns', hidden: false },
+    { id: 'type', hidden: false },
   ]);
 });
 
@@ -68,11 +72,13 @@ test('normalize drops duplicate ids (first wins)', () => {
     { id: 'ip', hidden: false },
     { id: 'instance', hidden: false },
     { id: 'dns', hidden: false },
+    { id: 'type', hidden: false },
   ]);
   assert.deepEqual(out, [
     { id: 'ip', hidden: true },
     { id: 'instance', hidden: false },
     { id: 'dns', hidden: false },
+    { id: 'type', hidden: false },
   ]);
 });
 
@@ -102,7 +108,7 @@ test('normalize coerces non-boolean hidden to a boolean', () => {
 test('normalize tolerates non-array, null, and garbage input', () => {
   for (const input of [null, undefined, {}, 'oops', 42, [{}, null, 'x', { id: 5 }]]) {
     const out = normalize(AUG, input);
-    assert.equal(out.length, 3, `garbage input ${JSON.stringify(input)} still yields full default order`);
+    assert.equal(out.length, 4, `garbage input ${JSON.stringify(input)} still yields full default order`);
   }
 });
 
@@ -118,12 +124,14 @@ test('setColumnOrder + getColumnOrder roundtrip', async () => {
     { id: 'dns', hidden: false },
     { id: 'instance', hidden: false },
     { id: 'ip', hidden: true },
+    { id: 'type', hidden: false },
   ], storage);
   const out = await getColumnOrder(AUG, storage);
   assert.deepEqual(out, [
     { id: 'dns', hidden: false },
     { id: 'instance', hidden: false },
     { id: 'ip', hidden: true },
+    { id: 'type', hidden: false },
   ]);
 });
 
@@ -138,6 +146,7 @@ test('setColumnOrder normalizes before persisting (drops unknown, fills missing)
     { id: 'dns', hidden: true },
     { id: 'instance', hidden: false },
     { id: 'ip', hidden: false },
+    { id: 'type', hidden: false },
   ]);
 });
 
@@ -214,6 +223,7 @@ test('subscribeColumnOrder fires with normalized list when slot changes', () => 
     { id: 'dns', hidden: false },
     { id: 'instance', hidden: false },
     { id: 'ip', hidden: false },
+    { id: 'type', hidden: false },
   ], 'normalized to fill missing entries');
 
   unsubscribe();
