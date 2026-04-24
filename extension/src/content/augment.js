@@ -245,7 +245,17 @@
   function augmentTable(table) {
     let headerMutated = false;
     const thead = table.querySelector('thead');
-    if (thead) {
+    // FMN-78: DataTables fixed-header layouts duplicate the table - a
+    // scroll-head clone (visible thead, empty tbody) sits above a body
+    // table (collapsed thead, tbody with rows). Augmenting both theads
+    // can leak a duplicate "IP Address / DNS Name" sub-header row during
+    // scroll-sync transitions. When the scroll-head wrapper is present,
+    // only augment the thead inside it; otherwise (legacy layout / no
+    // DataTables fixed header) augment any thead we find.
+    const pageHasScrollHead = !!document.querySelector('.dataTables_scrollHeadInner');
+    const isScrollHeadTable = !!table.closest('.dataTables_scrollHeadInner');
+    const shouldAugmentHeader = !pageHasScrollHead || isScrollHeadTable;
+    if (thead && shouldAugmentHeader) {
       const headerRow = thead.querySelector('tr');
       if (headerRow && !headerRow.hasAttribute(HEADER_AUG_ATTR)) {
         const instanceTh = findInstanceCell(Array.from(headerRow.children));

@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Harness: Instances list - DataTables fixed-header (FMN-78)</title>
+<!--
+  Synthetic harness for FMN-78: when /report/ListServers uses DataTables'
+  fixed-header (scroll-y) layout, the page contains TWO table.pa-table_outage
+  elements - a scroll-head clone (visible thead, empty tbody) and a body
+  table (collapsed thead, tbody with rows). The fix in augment.js gates
+  header augmentation so only the scroll-head's thead gets augmented; the
+  body's thead is left alone to stay collapsed.
+
+  This harness reproduces that two-table layout and verifies the fix.
+
+  How to run:
+    1. From repo root: python3 -m http.server 8765
+    2. Open http://localhost:8765/docs/harnesses/instances-list-scroll-head.html
+    3. Click "Verify gating" - should report scroll-head augmented, body skipped.
+
+  Companion harness: instances-list.html covers the legacy single-table
+  fallback path (no scroll-head wrapper -> any thead is augmented).
+-->
+<style>
+  body {
+    font: 13px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    margin: 0; padding: 16px; background: #f4f5f7; color: #222;
+  }
+  h1 { font-size: 16px; margin: 0 0 12px; }
+  .top { display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
+  .panel { background: #fff; border: 1px solid #d4d7dc; border-radius: 6px; padding: 12px; }
+  .panel + .panel { margin-top: 10px; }
+  .panel h2 { font-size: 12px; margin: 0 0 8px; color: #555; text-transform: uppercase; letter-spacing: 0.04em; }
+  button { font: inherit; padding: 4px 10px; margin: 0 4px 4px 0; cursor: pointer;
+    background: #fff; border: 1px solid #c4c8cf; border-radius: 4px; }
+  button:hover { background: #f0f2f5; }
+  pre { font: 11.5px ui-monospace, Menlo, monospace; background: #f7f8fa;
+    border: 1px solid #e3e6eb; padding: 6px 8px; border-radius: 4px; margin: 4px 0;
+    white-space: pre-wrap; word-break: break-all; }
+  .heartbeat { background: #d6f5d6; border: 1px solid #67c167; border-radius: 4px;
+    padding: 4px 10px; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .heartbeat.frozen { background: #f7c7c7; border-color: #c25c5c; }
+
+  /* Approximate the parts of DataTables' scroll-y wrapper layout that the
+     real FortiMonitor page produces. Class names match the real DOM. */
+  .dataTables_scroll { border: 1px dashed #b7bdc7; border-radius: 6px; }
+  .dataTables_scrollHead { background: #fafbfc; }
+  .dataTables_scrollHeadInner { overflow: hidden; }
+  .dataTables_scrollBody {
+    /* Real DataTables collapses the body's thead via tr { height: 0 }. We
+       mirror that here so the body thead is invisible by default; the bug
+       being fixed is when the augmentation gives it back its height. */
+  }
+  .dataTables_scrollBody table.pa-table_outage > thead > tr { height: 0; visibility: collapse; }
+  .dataTables_scrollBody table.pa-table_outage > thead > tr > th { padding: 0; border: 0; }
+
+  table.pa-table_outage { width: 100%; background: #fff; border-collapse: collapse; }
+  table.pa-table_outage th, table.pa-table_outage td {
+    border-bottom: 1px solid #e3e6eb; padding: 8px 10px; text-align: left;
+    vertical-align: middle;
+  }
+  table.pa-table_outage thead th { background: #fafbfc; font-weight: 600; font-size: 12px; }
+  table.pa-table_outage td.instance-column { min-width: 320px; }
+
+  .verdict.pass { color: #2a8b2a; font-weight: 700; }
+  .verdict.fail { color: #c25c5c; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <h1>DataTables fixed-header layout <span style="font-size:11.5px;color:#666">(FMN-78)</span></h1>
+  <div class="heartbeat" id="hb">heartbeat: 0</div>
+</div>
+
+<div class="panel">
+  <h2>Simulated DataTables scroll-y layout</h2>
+  <p style="font-size:11.5px;color:#666;margin:0 0 8px">
+    Two tables share the same column structure. The scroll-head clone owns the visible
+    header; the body table owns the data rows but its thead is CSS-collapsed.
+  </p>
+
+  <div class="dataTables_scroll">
+    <div class="dataTables_scrollHead">
+      <div class="dataTables_scrollHeadInner">
+        <table class="pa-table_outage" id="scroll-head-table">
+          <thead>
+            <tr>
+              <th><input type="checkbox" /></th>
+              <th>Status</th>
+              <th>Instance</th>
+              <th>Group</th>
+              <th>Tags</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="dataTables_scrollBody">
+      <table class="pa-table_outage" id="scroll-body-table">
+        <thead>
+          <tr>
+            <th><input type="checkbox" /></th>
+            <th>Status</th>
+            <th>Instance</th>
+            <th>Group</th>
+            <th>Tags</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-scroll">
+          <!-- rows injected -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Verification</h2>
+  <button id="verify-btn">Verify gating</button>
+  <button id="dump-btn">Dump full augmentation state</button>
+  <button id="add-row-btn">Inject a row (re-trigger MutationObserver)</button>
+  <pre id="verdict"></pre>
+</div>
+
+<div class="panel">
+  <h2>Console echo (last 30 lines)</h2>
+  <pre id="console-echo"></pre>
+</div>
+
+<script>
+  // Heartbeat - same pattern as instances-list.html.
+  (function () {
+    const el = document.getElementById('hb');
+    let n = 0;
+    let lastTick = performance.now();
+    setInterval(function () {
+      n += 1;
+      const now = performance.now();
+      const gap = now - lastTick;
+      lastTick = now;
+      el.textContent = 'heartbeat: ' + n + ' (last gap ' + Math.round(gap) + 'ms)';
+      if (gap > 800) { el.classList.add('frozen'); el.textContent += ' [STARVED]'; }
+    }, 100);
+  })();
+
+  // Console echo.
+  (function () {
+    const echo = document.getElementById('console-echo');
+    const lines = [];
+    const orig = { log: console.log, warn: console.warn, error: console.error };
+    function append(level, args) {
+      const text = '[' + level + '] ' + args.map(function (a) {
+        if (typeof a === 'string') return a;
+        try { return JSON.stringify(a); } catch (e) { return String(a); }
+      }).join(' ');
+      lines.push(text);
+      while (lines.length > 30) lines.shift();
+      echo.textContent = lines.join('\n');
+    }
+    console.log = function () { orig.log.apply(console, arguments); append('log', Array.from(arguments)); };
+    console.warn = function () { orig.warn.apply(console, arguments); append('warn', Array.from(arguments)); };
+    console.error = function () { orig.error.apply(console, arguments); append('error', Array.from(arguments)); };
+  })();
+
+  // chrome.* stubs - same pattern as instances-list.html.
+  (function () {
+    const storeData = {};
+    const listeners = new Set();
+    function clone(v) { return v == null ? v : JSON.parse(JSON.stringify(v)); }
+    window.chrome = {
+      runtime: { getURL: function (p) { return p; }, id: 'harness-extension-id' },
+      storage: {
+        local: {
+          get: function (key) {
+            return new Promise(function (resolve) {
+              if (typeof key === 'string') {
+                const out = {};
+                if (key in storeData) out[key] = clone(storeData[key]);
+                resolve(out);
+              } else { resolve(clone(storeData)); }
+            });
+          },
+          set: function (obj) {
+            return new Promise(function (resolve) {
+              const changes = {};
+              for (const k of Object.keys(obj)) {
+                changes[k] = { oldValue: clone(storeData[k]), newValue: clone(obj[k]) };
+                storeData[k] = clone(obj[k]);
+              }
+              for (const fn of listeners) {
+                try { fn(changes, 'local'); } catch (e) { console.error('listener error', e); }
+              }
+              resolve();
+            });
+          },
+        },
+        onChanged: {
+          addListener: function (fn) { listeners.add(fn); },
+          removeListener: function (fn) { listeners.delete(fn); },
+        },
+      },
+    };
+    window.__harnessStore = storeData;
+  })();
+
+  // get_idp_data interceptor - same as instances-list.html.
+  (function () {
+    const origFetch = window.fetch;
+    window.fetch = function (input) {
+      const url = typeof input === 'string' ? input : (input && input.url) || '';
+      const m = url.match(/\/report\/get_idp_data\?server_id=(\d+)/);
+      if (m) {
+        const id = m[1];
+        const useIp = (Number(id) % 2) === 0;
+        const fqdn = useIp ? ('10.0.0.' + (Number(id) % 200)) : ('host-' + id + '.example.com');
+        return Promise.resolve(new Response(
+          JSON.stringify({ pageData: { instance: { name: 'instance-' + id, fqdn: fqdn } } }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        ));
+      }
+      return origFetch.apply(this, arguments);
+    };
+  })();
+
+  history.replaceState({}, '', '/report/ListServers');
+
+  function makeRow(serverId, name) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td><input type="checkbox" class="pa-table-row-checkbox" value="s-' + serverId + '" /></td>' +
+      '<td><span class="status-dot status-up"></span></td>' +
+      '<td class="instance-column">' + name + '</td>' +
+      '<td>Production</td>' +
+      '<td>tag-1, tag-2</td>';
+    return tr;
+  }
+  (function seed() {
+    const tbody = document.getElementById('tbody-scroll');
+    tbody.appendChild(makeRow(401, 'edge-fw-01'));
+    tbody.appendChild(makeRow(402, 'edge-fw-02'));
+    tbody.appendChild(makeRow(403, 'core-sw-01'));
+  })();
+
+  function verifyGating() {
+    const head = document.getElementById('scroll-head-table');
+    const body = document.getElementById('scroll-body-table');
+    const headHasGrid = !!head.querySelector('thead .fmn-hdr-grid');
+    const bodyHasGrid = !!body.querySelector('thead .fmn-hdr-grid');
+    const bodyRowsAugmented = body.querySelectorAll('tbody tr[data-fmn-ip-row-augmented]').length;
+    const expectedRows = body.querySelectorAll('tbody tr').length;
+
+    const ok = headHasGrid && !bodyHasGrid && bodyRowsAugmented === expectedRows;
+    const verdict = ok
+      ? 'PASS - scroll-head thead augmented, body thead skipped, ' + bodyRowsAugmented + '/' + expectedRows + ' rows augmented.'
+      : 'FAIL - headHasGrid=' + headHasGrid + ', bodyHasGrid=' + bodyHasGrid + ', rowsAugmented=' + bodyRowsAugmented + '/' + expectedRows;
+    const el = document.getElementById('verdict');
+    el.textContent = verdict;
+    el.className = ok ? 'verdict pass' : 'verdict fail';
+    console.log(verdict);
+    return ok;
+  }
+
+  function dumpFullState() {
+    const head = document.getElementById('scroll-head-table');
+    const body = document.getElementById('scroll-body-table');
+    const dump = {
+      scrollHead: {
+        theadGrid: !!head.querySelector('thead .fmn-hdr-grid'),
+        theadAugAttr: !!head.querySelector('[data-fmn-ip-augmented]'),
+        bodyRowsCount: head.querySelectorAll('tbody tr').length,
+      },
+      scrollBody: {
+        theadGrid: !!body.querySelector('thead .fmn-hdr-grid'),
+        theadAugAttr: !!body.querySelector('[data-fmn-ip-augmented]'),
+        bodyRowsCount: body.querySelectorAll('tbody tr').length,
+        bodyRowsAugmented: body.querySelectorAll('tbody tr[data-fmn-ip-row-augmented]').length,
+        cellGridCount: body.querySelectorAll('.fmn-cell-grid').length,
+      },
+    };
+    console.log('full state:', JSON.stringify(dump));
+    return dump;
+  }
+
+  document.getElementById('verify-btn').addEventListener('click', verifyGating);
+  document.getElementById('dump-btn').addEventListener('click', dumpFullState);
+  document.getElementById('add-row-btn').addEventListener('click', function () {
+    const tbody = document.getElementById('tbody-scroll');
+    const id = 500 + tbody.children.length;
+    tbody.appendChild(makeRow(id, 'late-arrival-' + id));
+    console.log('row injected: s-' + id);
+    setTimeout(verifyGating, 200);
+  });
+</script>
+
+<script src="../../extension/src/content/augment.js"></script>
+
+</body>
+</html>
