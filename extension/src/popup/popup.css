@@ -354,6 +354,103 @@ html, body {
   margin: 10px 0 0;
 }
 
+/* WebGUI column-order card (FMN-72 / FMN-73) */
+.aug-card {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-top: 4px;
+  overflow: hidden;
+  background: #fff;
+}
+.aug-card + .aug-card {
+  margin-top: 10px;
+}
+.aug-card-header {
+  padding: 8px 10px;
+  background: #fafbfc;
+  border-bottom: 1px solid var(--border);
+  font-size: 11.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.aug-card-header .ctx {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.col-row {
+  display: grid;
+  grid-template-columns: 18px 22px 22px 1fr 22px;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  background: #fff;
+  transition: background 80ms ease;
+}
+.col-row:first-child { border-top: none; }
+.col-row.is-hidden .col-name {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+.col-row.is-locked .col-name::after {
+  content: " (always visible)";
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-style: italic;
+  font-weight: 400;
+}
+.col-row.is-dragging { opacity: 0.4; background: #fafbfc; }
+.col-row.drop-above { box-shadow: inset 0 2px 0 0 var(--info); }
+.col-row.drop-below { box-shadow: inset 0 -2px 0 0 var(--info); }
+.drag-handle {
+  cursor: grab;
+  color: #b6bcc6;
+  font-size: 14px;
+  line-height: 1;
+  user-select: none;
+  text-align: center;
+}
+.drag-handle:hover { color: var(--text-muted); }
+.drag-handle:active { cursor: grabbing; }
+.icon-btn {
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: inline-grid;
+  place-items: center;
+  font-size: 11px;
+  line-height: 1;
+  padding: 0;
+  font-family: inherit;
+}
+.icon-btn:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: #fafbfc;
+}
+.icon-btn:disabled { opacity: 0.35; cursor: default; }
+.icon-btn.eye.is-on {
+  color: var(--info);
+  border-color: #b6c8eb;
+  background: var(--info-soft);
+}
+.col-name { font-size: 12px; min-width: 0; }
+.reset-row {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+  background: #fafbfc;
+}
+
 /* Tab-mode rendering: when the popup is opened in a full browser tab
    (via the FMN-69 sidebar launcher), the viewport is much wider than
    the ~360px popup. Center the launcher and give it breathing room. */
