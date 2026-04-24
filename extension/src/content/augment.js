@@ -214,15 +214,6 @@
         padding: 2px 4px 2px 0; border-radius: 2px;
       }
       .fmn-sub-hdr:hover { color: #394449; }
-      .fmn-sub-hdr .fmn-chev {
-        display: inline-block; width: 0; height: 0;
-        border-left: 4px solid transparent; border-right: 4px solid transparent;
-        border-top: 5px solid currentColor; opacity: 0.35;
-        margin-left: 6px; vertical-align: middle;
-        transition: transform 120ms ease, opacity 120ms ease;
-      }
-      .fmn-sub-hdr.fmn-sort-asc .fmn-chev { transform: rotate(180deg); opacity: 1; color: #1f6feb; }
-      .fmn-sub-hdr.fmn-sort-desc .fmn-chev { opacity: 1; color: #1f6feb; }
       .fmn-sub-hdr.fmn-sort-asc, .fmn-sub-hdr.fmn-sort-desc { color: #1f6feb; }
       .fmn-hdr-instance-label { color: inherit; font-weight: inherit; }
 
@@ -419,9 +410,6 @@
     span.setAttribute('data-fmn-sort-col', col);
     span.setAttribute('title', 'Sort (client-side; within currently rendered rows)');
     span.textContent = label;
-    const chev = document.createElement('span');
-    chev.className = 'fmn-chev';
-    span.appendChild(chev);
     span.addEventListener('click', (e) => {
       // Suppress click as sort if we just finished a drag - HTML5 DnD fires
       // a synthetic click on the source element after dragend on some
