@@ -433,35 +433,42 @@
     alignHeaderToBody();
   }
 
-  // FMN-80 (v2): in DataTables fixed-header layouts the scroll-head TH and
-  // body TD live in different scroll containers and have different paddings
-  // (TH ~10px paddingLeft, TD ~8.28px), plus a parent-container offsetLeft
-  // delta of ~9px. Net effect: header sub-cells are constantly ~10px to the
-  // right of body sub-cells - "Instance" sits over "yahoo.com"+10px, etc.
-  // The first sticky-CSS approach (FMN-80 v1) made it worse because each
-  // grid stuck inside its own scroll context.
+  // FMN-81: in DataTables fixed-header layouts the scroll-head TH and body
+  // TD live in different scroll containers and have a constant ~10px offset
+  // (cell-position delta + paddingLeft mismatch). Measure the actual delta
+  // between the header grid and body's first-row grid, apply translateX to
+  // the header grid so they line up.
   //
-  // Measure the actual offset between the header grid and the body's first-
-  // row grid, and apply translateX to the header grid so they line up. Run
-  // on every applyColumnOrderToDom (which is also where scroll-induced
-  // re-augmentation passes through) plus on horizontal scroll of the body.
+  // Timing matters: DataTables's own scroll handler programmatically syncs
+  // scroll-head's scrollLeft to body's scrollLeft, but it may run AFTER our
+  // listener (or async). If we measure mid-scroll-sync we see the body in
+  // its post-scroll position but the header still in its pre-sync position
+  // and compute a huge wrong offset. Defer the measurement to setTimeout(0)
+  // so it runs after the macrotask queue drains - past DataTables sync,
+  // past any rAF-based work. De-bounce so rapid scroll events collapse to
+  // one alignment.
+  let alignTimeoutId = null;
   let alignScrollHooked = false;
   function alignHeaderToBody() {
-    const headerGrid = document.querySelector(
-      '.dataTables_scrollHead th.fmn-instance-merged .fmn-hdr-grid'
-    );
-    const firstRowCellGrid = document.querySelector(
-      '.dataTables_scrollBody tbody tr td.instance-column.fmn-instance-merged .fmn-cell-grid'
-    );
-    if (!headerGrid || !firstRowCellGrid) return;
-    // Reset prior transform before measuring native positions.
-    headerGrid.style.transform = '';
-    const headerLeft = headerGrid.getBoundingClientRect().left;
-    const bodyLeft = firstRowCellGrid.getBoundingClientRect().left;
-    const offset = bodyLeft - headerLeft;
-    if (Math.abs(offset) > 0.5) {
-      headerGrid.style.transform = 'translateX(' + offset + 'px)';
-    }
+    if (alignTimeoutId !== null) clearTimeout(alignTimeoutId);
+    alignTimeoutId = setTimeout(() => {
+      alignTimeoutId = null;
+      const headerGrid = document.querySelector(
+        '.dataTables_scrollHead th.fmn-instance-merged .fmn-hdr-grid'
+      );
+      const firstRowCellGrid = document.querySelector(
+        '.dataTables_scrollBody tbody tr td.instance-column.fmn-instance-merged .fmn-cell-grid'
+      );
+      if (!headerGrid || !firstRowCellGrid) return;
+      headerGrid.style.transform = '';
+      const headerLeft = headerGrid.getBoundingClientRect().left;
+      const bodyLeft = firstRowCellGrid.getBoundingClientRect().left;
+      const offset = bodyLeft - headerLeft;
+      if (Math.abs(offset) > 0.5) {
+        headerGrid.style.transform = 'translateX(' + offset + 'px)';
+      }
+    }, 0);
+
     if (!alignScrollHooked) {
       const scrollBody = document.querySelector('.dataTables_scrollBody');
       if (scrollBody) {
