@@ -196,19 +196,7 @@
       th.fmn-instance-merged, td.instance-column.fmn-instance-merged {
         min-width: 640px !important;
         padding-right: 12px !important;
-        /* FMN-80: pin the merged cell to the left edge during DataTables
-           horizontal scroll. Without this, scrolling right pushes the
-           "Instance" label off-screen but leaves the IP/DNS/Type sub-headers
-           visible at the left edge - they look like orphan columns with no
-           parent. position:sticky keeps the entire merged cell anchored
-           while the other native columns scroll behind it. */
-        position: sticky;
-        left: 0;
-        z-index: 2;
       }
-      th.fmn-instance-merged { background: #fafbfc; z-index: 3; }
-      td.instance-column.fmn-instance-merged { background: #fff; }
-      tr:hover td.instance-column.fmn-instance-merged { background: #f5f7fa; }
       .fmn-hdr-grid, .fmn-cell-grid {
         display: grid;
         gap: 14px;
