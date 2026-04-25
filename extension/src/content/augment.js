@@ -49,9 +49,14 @@
   const ENTRY_ATTR = 'data-fmn-entry';
   const SVG_NS = 'http://www.w3.org/2000/svg';
   const POPUP_URL = chrome.runtime.getURL('src/popup/popup.html');
+  // FMN-83: sidebar launcher is opt-in via popup ⚙ Settings. Mirror of the
+  // SIDEBAR_LAUNCHER_ENABLED_KEY constant in src/lib/settings.js — keep both
+  // in sync. Default false so a fresh install doesn't inject the entry.
+  const SIDEBAR_LAUNCHER_KEY = 'fm:sidebarLauncherEnabled';
 
   const augmentations = [];
   const overlayState = { el: null, outsideHandler: null, keyHandler: null };
+  let sidebarLauncherEnabled = false;
 
   function register(aug) {
     augmentations.push(aug);
@@ -70,7 +75,17 @@
   register({
     id: LAUNCHER_ID,
     mount() {
-      if (document.querySelector(`[${ENTRY_ATTR}="${LAUNCHER_ID}"]`)) return;
+      const existing = document.querySelector(`[${ENTRY_ATTR}="${LAUNCHER_ID}"]`);
+      // FMN-83: launcher is gated on the operator's setting. Remove the
+      // existing entry (and any open overlay anchored on it) when the flag
+      // flips from on to off; bail when the flag is off and nothing is
+      // mounted.
+      if (!sidebarLauncherEnabled) {
+        if (existing) existing.remove();
+        if (overlayState.el) hideOverlay();
+        return;
+      }
+      if (existing) return;
       const anyTopLevel = document.querySelector('li.pa-side-nav__top-level-item');
       if (!anyTopLevel || !anyTopLevel.parentElement) return;
       anyTopLevel.parentElement.appendChild(buildLauncherEntry());
@@ -921,12 +936,42 @@
     return svg;
   }
 
+  async function loadSidebarLauncherFlag() {
+    try {
+      const data = await chrome.storage.local.get(SIDEBAR_LAUNCHER_KEY);
+      sidebarLauncherEnabled = Boolean(data && data[SIDEBAR_LAUNCHER_KEY]);
+    } catch {
+      sidebarLauncherEnabled = false;
+    }
+  }
+
+  function subscribeSidebarLauncherFlag() {
+    if (!chrome.storage || !chrome.storage.onChanged) return;
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName && areaName !== 'local') return;
+      const change = changes && changes[SIDEBAR_LAUNCHER_KEY];
+      if (!change) return;
+      const next = Boolean(change.newValue);
+      if (next === sidebarLauncherEnabled) return;
+      sidebarLauncherEnabled = next;
+      ensureAll();
+    });
+  }
+
   function start() {
-    // Load persisted column order before the first ensureAll() so the
-    // initial mount paints in the user's preferred order rather than the
-    // default and then snapping. Also subscribe so popup changes propagate
-    // back into the page without a reload.
-    loadColumnOrder().finally(() => {
+    // Attach storage listeners synchronously, before awaiting initial
+    // loads. Otherwise a storage change that fires between content-script
+    // load and Promise.all resolving has no listener to land on, and the
+    // operator sees the change as a no-op until they reload the tab. Both
+    // subscription helpers compare against module-level state that has a
+    // safe default, so attaching before the initial load is safe.
+    subscribeColumnOrder();
+    subscribeSidebarLauncherFlag();
+
+    // Load persisted column order and the sidebar-launcher flag before the
+    // first ensureAll() so the initial mount paints in the operator's
+    // preferred state rather than the default and then snapping.
+    Promise.all([loadColumnOrder(), loadSidebarLauncherFlag()]).finally(() => {
       ensureAll();
       const observer = new MutationObserver(() => ensureAll());
       observer.observe(document.documentElement, { childList: true, subtree: true });
@@ -944,8 +989,6 @@
         return r;
       };
       window.addEventListener('popstate', ensureAll);
-
-      subscribeColumnOrder();
     });
   }
 
