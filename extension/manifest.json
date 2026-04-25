@@ -32,6 +32,15 @@
       ],
       "js": ["src/content/augment.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://fortimonitor.forticloud.com/report/Instance/*",
+        "https://*.fortimonitor.com/report/Instance/*"
+      ],
+      "js": ["src/content/template-edit-soft-refresh.js"],
+      "run_at": "document_idle",
+      "world": "MAIN"
     }
   ],
   "web_accessible_resources": [

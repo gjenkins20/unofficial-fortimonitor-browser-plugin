@@ -6,6 +6,36 @@
 // identical styling, search, settings, tool cards, and behavior.
 
 (() => {
+  // Dev-reload bridge: lets the operator (or an automation tool driving the
+  // page) trigger chrome.runtime.reload() of this extension via a DOM event,
+  // skipping the manual chrome://extensions reload step during iteration.
+  //
+  // Inert by default. Activates only when the operator has explicitly opted
+  // in by running this on a FortiMonitor tab once:
+  //
+  //   localStorage.setItem('fmn_dev_reload', '1')
+  //
+  // To trigger a reload from any context that can dispatch DOM events on the
+  // page (DevTools, browser-automation MCP, etc.):
+  //
+  //   document.dispatchEvent(new CustomEvent('fmn-dev-reload-extension'))
+  //
+  // Third-party sites cannot set FortiMonitor-origin localStorage, so an
+  // unsuspecting installer of the toolkit is unaffected: the listener never
+  // attaches without their explicit opt-in.
+  try {
+    if (localStorage.getItem('fmn_dev_reload') === '1') {
+      document.addEventListener('fmn-dev-reload-extension', () => {
+        console.log('[FMN dev] reloading extension');
+        try { chrome.runtime.reload(); } catch (err) {
+          console.warn('[FMN dev] reload failed', err);
+        }
+      });
+    }
+  } catch {
+    // localStorage inaccessible (sandboxed iframe, etc.) - silently skip.
+  }
+
   const LAUNCHER_ID = 'toolkit-launcher';
   const OVERLAY_ID = 'fmn-toolkit-overlay';
   const ENTRY_ATTR = 'data-fmn-entry';
