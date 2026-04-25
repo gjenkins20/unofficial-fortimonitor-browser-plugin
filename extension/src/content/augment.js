@@ -26,10 +26,18 @@
   try {
     if (localStorage.getItem('fmn_dev_reload') === '1') {
       document.addEventListener('fmn-dev-reload-extension', () => {
-        console.log('[FMN dev] reloading extension');
-        try { chrome.runtime.reload(); } catch (err) {
-          console.warn('[FMN dev] reload failed', err);
-        }
+        // FMN-85: chrome.runtime.reload is a privileged-context API and is
+        // not available in content scripts. Route the request through a
+        // chrome.runtime message; the service worker handles the actual
+        // reload (it has full chrome.runtime access).
+        console.log('[FMN dev] requesting extension reload');
+        chrome.runtime.sendMessage({ type: 'fm:dev-reload-extension' }).catch((err) => {
+          // Service worker tears down mid-send when it calls
+          // chrome.runtime.reload, so a "Receiving end does not exist" or
+          // similar rejection is expected and means the reload succeeded.
+          // Log at info level rather than warn.
+          console.log('[FMN dev] reload-message channel closed (expected on reload):', err && err.message);
+        });
       });
     }
   } catch {
