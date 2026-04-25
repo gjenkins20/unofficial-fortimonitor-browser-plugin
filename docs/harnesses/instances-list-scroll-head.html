@@ -80,32 +80,38 @@
     header; the body table owns the data rows but its thead is CSS-collapsed.
   </p>
 
-  <div class="dataTables_scroll">
+  <div class="dataTables_scroll" style="max-width: 900px;">
     <div class="dataTables_scrollHead">
-      <div class="dataTables_scrollHeadInner">
-        <table class="pa-table_outage" id="scroll-head-table">
+      <div class="dataTables_scrollHeadInner" style="overflow: hidden; width: 900px;">
+        <table class="pa-table_outage" id="scroll-head-table" style="min-width: 1600px;">
           <thead>
             <tr>
               <th><input type="checkbox" /></th>
               <th>Status</th>
               <th>Instance</th>
-              <th>Group</th>
+              <th>Parent Group</th>
+              <th>Alert Timeline</th>
               <th>Tags</th>
+              <th>Agent Version</th>
+              <th>Device Heartbeat</th>
             </tr>
           </thead>
           <tbody></tbody>
         </table>
       </div>
     </div>
-    <div class="dataTables_scrollBody">
-      <table class="pa-table_outage" id="scroll-body-table">
+    <div class="dataTables_scrollBody" style="overflow: auto; max-width: 900px;">
+      <table class="pa-table_outage" id="scroll-body-table" style="min-width: 1600px;">
         <thead>
           <tr>
             <th><input type="checkbox" /></th>
             <th>Status</th>
             <th>Instance</th>
-            <th>Group</th>
+            <th>Parent Group</th>
+            <th>Alert Timeline</th>
             <th>Tags</th>
+            <th>Agent Version</th>
+            <th>Device Heartbeat</th>
           </tr>
         </thead>
         <tbody id="tbody-scroll">
@@ -114,6 +120,7 @@
       </table>
     </div>
   </div>
+  <p class="small" style="margin-top:8px">Container is 900px wide; table is 1600px wide → horizontal overflow active. Scroll the body horizontally and confirm the merged Instance cell stays anchored at the left edge (FMN-80 sticky behavior).</p>
 </div>
 
 <div class="panel">
@@ -233,7 +240,10 @@
       '<td><span class="status-dot status-up"></span></td>' +
       '<td class="instance-column">' + name + '</td>' +
       '<td>Production</td>' +
-      '<td>tag-1, tag-2</td>';
+      '<td><span style="display:inline-block;width:160px;height:14px;background:#e3e6eb;border-radius:2px"></span></td>' +
+      '<td>tag-a, tag-b, tag-c</td>' +
+      '<td>2025.4.01</td>' +
+      '<td>just now</td>';
     return tr;
   }
   (function seed() {
