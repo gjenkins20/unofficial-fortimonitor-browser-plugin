@@ -55,6 +55,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     sendResponse({ ok: false, error: 'malformed message' });
     return false;
   }
+  // FMN-85: dev-reload bridge endpoint. The content-script-side bridge in
+  // augment.js can't call chrome.runtime.reload() directly (privileged API),
+  // so it asks us to do it. We acknowledge synchronously and then trigger
+  // the reload, which tears down this service worker and re-loads all
+  // extension code on next activation.
+  if (message.type === 'fm:dev-reload-extension') {
+    sendResponse({ ok: true });
+    console.log('[fm-toolkit] dev-reload requested via bridge');
+    chrome.runtime.reload();
+    return false;
+  }
   dispatch(handlers, message).then(
     (result) => sendResponse({ ok: true, result }),
     (error) => sendResponse({ ok: false, error: error?.message ?? String(error) })
