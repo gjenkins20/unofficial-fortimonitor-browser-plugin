@@ -196,6 +196,12 @@
       th.fmn-instance-merged, td.instance-column.fmn-instance-merged {
         min-width: 640px !important;
         padding-right: 12px !important;
+        /* FMN-80: TH and TD have different default paddingLeft on
+           FortiMonitor (TH ~10px, TD ~8.28px). Different inner widths
+           make grid tracks distribute extra space differently between
+           header and body, leaving 1-2px sub-cell offsets. Force the
+           same paddingLeft so the inner grid widths match. */
+        padding-left: 10px !important;
       }
       .fmn-hdr-grid, .fmn-cell-grid {
         display: grid;
@@ -423,6 +429,46 @@
         // iterating in desired order yields the desired order.
         grid.appendChild(slot);
       }
+    }
+    alignHeaderToBody();
+  }
+
+  // FMN-80 (v2): in DataTables fixed-header layouts the scroll-head TH and
+  // body TD live in different scroll containers and have different paddings
+  // (TH ~10px paddingLeft, TD ~8.28px), plus a parent-container offsetLeft
+  // delta of ~9px. Net effect: header sub-cells are constantly ~10px to the
+  // right of body sub-cells - "Instance" sits over "yahoo.com"+10px, etc.
+  // The first sticky-CSS approach (FMN-80 v1) made it worse because each
+  // grid stuck inside its own scroll context.
+  //
+  // Measure the actual offset between the header grid and the body's first-
+  // row grid, and apply translateX to the header grid so they line up. Run
+  // on every applyColumnOrderToDom (which is also where scroll-induced
+  // re-augmentation passes through) plus on horizontal scroll of the body.
+  let alignScrollHooked = false;
+  function alignHeaderToBody() {
+    const headerGrid = document.querySelector(
+      '.dataTables_scrollHead th.fmn-instance-merged .fmn-hdr-grid'
+    );
+    const firstRowCellGrid = document.querySelector(
+      '.dataTables_scrollBody tbody tr td.instance-column.fmn-instance-merged .fmn-cell-grid'
+    );
+    if (!headerGrid || !firstRowCellGrid) return;
+    // Reset prior transform before measuring native positions.
+    headerGrid.style.transform = '';
+    const headerLeft = headerGrid.getBoundingClientRect().left;
+    const bodyLeft = firstRowCellGrid.getBoundingClientRect().left;
+    const offset = bodyLeft - headerLeft;
+    if (Math.abs(offset) > 0.5) {
+      headerGrid.style.transform = 'translateX(' + offset + 'px)';
+    }
+    if (!alignScrollHooked) {
+      const scrollBody = document.querySelector('.dataTables_scrollBody');
+      if (scrollBody) {
+        scrollBody.addEventListener('scroll', alignHeaderToBody, { passive: true });
+        alignScrollHooked = true;
+      }
+      window.addEventListener('resize', alignHeaderToBody, { passive: true });
     }
   }
 
