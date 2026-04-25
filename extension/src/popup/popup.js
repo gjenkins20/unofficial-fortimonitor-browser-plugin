@@ -5,7 +5,9 @@ import {
   isAskClaudeEnabled,
   setAskClaudeEnabled,
   isServerSearchEnabled,
-  setServerSearchEnabled
+  setServerSearchEnabled,
+  isSidebarLauncherEnabled,
+  setSidebarLauncherEnabled
 } from '../lib/settings.js';
 import {
   listAugmentations,
@@ -180,6 +182,11 @@ async function loadAskClaudeIntoToggle() {
 async function loadServerSearchIntoToggle() {
   const toggle = document.getElementById('server-search-toggle');
   toggle.checked = await isServerSearchEnabled();
+}
+
+async function loadSidebarLauncherIntoToggle() {
+  const toggle = document.getElementById('sidebar-launcher-toggle');
+  toggle.checked = await isSidebarLauncherEnabled();
 }
 
 async function applyExperimentalVisibility() {
@@ -532,6 +539,7 @@ function init() {
     await loadDevModeIntoToggle();
     await loadAskClaudeIntoToggle();
     await loadServerSearchIntoToggle();
+    await loadSidebarLauncherIntoToggle();
     await loadWebguiColumnsIntoSettings();
     showSettings();
   });
@@ -545,6 +553,10 @@ function init() {
 
   document.getElementById('dev-mode-toggle').addEventListener('change', async (e) => {
     await setDevModeEnabled(e.target.checked);
+  });
+
+  document.getElementById('sidebar-launcher-toggle').addEventListener('change', async (e) => {
+    await setSidebarLauncherEnabled(e.target.checked);
   });
 
   document.getElementById('ask-claude-toggle').addEventListener('change', async (e) => {
