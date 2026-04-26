@@ -7,7 +7,9 @@ import {
   isServerSearchEnabled,
   setServerSearchEnabled,
   isSidebarLauncherEnabled,
-  setSidebarLauncherEnabled
+  setSidebarLauncherEnabled,
+  isShowFeatureBadgesEnabled,
+  setShowFeatureBadgesEnabled
 } from '../lib/settings.js';
 import {
   listAugmentations,
@@ -187,6 +189,11 @@ async function loadServerSearchIntoToggle() {
 async function loadSidebarLauncherIntoToggle() {
   const toggle = document.getElementById('sidebar-launcher-toggle');
   toggle.checked = await isSidebarLauncherEnabled();
+}
+
+async function loadShowFeatureBadgesIntoToggle() {
+  const toggle = document.getElementById('feature-badges-toggle');
+  toggle.checked = await isShowFeatureBadgesEnabled();
 }
 
 async function applyExperimentalVisibility() {
@@ -540,6 +547,7 @@ function init() {
     await loadAskClaudeIntoToggle();
     await loadServerSearchIntoToggle();
     await loadSidebarLauncherIntoToggle();
+    await loadShowFeatureBadgesIntoToggle();
     await loadWebguiColumnsIntoSettings();
     showSettings();
   });
@@ -557,6 +565,10 @@ function init() {
 
   document.getElementById('sidebar-launcher-toggle').addEventListener('change', async (e) => {
     await setSidebarLauncherEnabled(e.target.checked);
+  });
+
+  document.getElementById('feature-badges-toggle').addEventListener('change', async (e) => {
+    await setShowFeatureBadgesEnabled(e.target.checked);
   });
 
   document.getElementById('ask-claude-toggle').addEventListener('change', async (e) => {
