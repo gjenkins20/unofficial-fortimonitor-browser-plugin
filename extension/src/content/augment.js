@@ -53,10 +53,19 @@
   // SIDEBAR_LAUNCHER_ENABLED_KEY constant in src/lib/settings.js — keep both
   // in sync. Default false so a fresh install doesn't inject the entry.
   const SIDEBAR_LAUNCHER_KEY = 'fm:sidebarLauncherEnabled';
+  // FMN-86: per-feature "FM Toolkit" attribution ribbon. Mirror of
+  // SHOW_FEATURE_BADGES_KEY in src/lib/settings.js. Default true so a
+  // fresh install attributes each visible UI feature this extension adds
+  // to FortiMonitor pages. Toggle change takes effect on the next page
+  // load (no in-flight hot-update — augmentations only run once per page).
+  const SHOW_FEATURE_BADGES_KEY = 'fm:showFeatureBadges';
+  const FEATURE_BADGE_STYLE_ID = 'fmn-feature-badge-styles';
+  const FEATURE_BADGE_HOST_ATTR = 'data-fmn-badge-host';
 
   const augmentations = [];
   const overlayState = { el: null, outsideHandler: null, keyHandler: null };
   let sidebarLauncherEnabled = false;
+  let showFeatureBadgesEnabled = true;
 
   function register(aug) {
     augmentations.push(aug);
@@ -384,6 +393,11 @@
         }
       } else {
         slot = buildSortableSubHeader(COLUMNS[id].label, id);
+        // FMN-86: per-sub-header attribution ribbon. Only the toolkit-added
+        // sub-headers (ip, dns, type) get a ribbon; the native "Instance"
+        // sub-header above is FortiMonitor's own column and stays unbadged.
+        // xs variant because sub-headers are ~18-22 px tall in live use.
+        attachFeatureBadge(slot, 'xs');
       }
       slot.setAttribute(COL_ATTR, id);
       slot.setAttribute('draggable', 'true');
@@ -945,6 +959,132 @@
     }
   }
 
+  async function loadShowFeatureBadgesFlag() {
+    try {
+      const data = await chrome.storage.local.get(SHOW_FEATURE_BADGES_KEY);
+      const value = data && data[SHOW_FEATURE_BADGES_KEY];
+      // Undefined → default true; explicit false from operator → false.
+      showFeatureBadgesEnabled = value === undefined ? true : Boolean(value);
+    } catch {
+      showFeatureBadgesEnabled = true;
+    }
+  }
+
+  // FMN-86: per-feature "FM Toolkit" attribution ribbon. Operator-confirmed
+  // design from docs/mockups/fortimonitor-fm-toolkit-ribbons.html — geometry
+  // numbers below were dialed in by the operator via the mockup's live
+  // tuner and must not drift without a new round of approval.
+  //
+  // Three variants:
+  //   default — for net-new visible UI elements with their own DOM
+  //             (currently no shipping surface; reserved for future use)
+  //   --sm    — for ~40 px-or-larger hosts that aren't part of a
+  //             DataTables sub-header structure (no shipping surface today)
+  //   --xs    — for cramped table sub-headers (~18-22 px tall). Currently
+  //             attached to each toolkit-added sub-header on the merged
+  //             Instance cell on /report/ListServers (FMN-71/75): IP
+  //             Address, DNS Name, Type. The native "Instance" sub-header
+  //             stays unbadged.
+  //
+  // The host attribute adds position:relative + overflow:hidden so the
+  // rotated strip clips at the host's bounding box rather than spilling
+  // onto adjacent FortiMonitor UI.
+  function ensureFeatureBadgeStyles() {
+    if (document.getElementById(FEATURE_BADGE_STYLE_ID)) return;
+    const style = document.createElement('style');
+    style.id = FEATURE_BADGE_STYLE_ID;
+    style.textContent = `
+      [${FEATURE_BADGE_HOST_ATTR}] {
+        position: relative !important;
+        overflow: hidden !important;
+      }
+      .fmn-feature-badge {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 60px;
+        height: 60px;
+        pointer-events: none;
+        overflow: hidden;
+        z-index: 50;
+      }
+      .fmn-feature-badge::before {
+        content: "FM Toolkit";
+        position: absolute;
+        display: block;
+        width: 90px;
+        padding: 2px 0;
+        top: 10.5px;
+        right: -25px;
+        background: #1f6feb;
+        color: #fff;
+        font-size: 7.5px;
+        font-weight: 600;
+        letter-spacing: 0.03em;
+        text-align: center;
+        text-indent: 5.5px;
+        text-transform: none;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
+        transform: rotate(45deg);
+        transform-origin: center;
+      }
+      .fmn-feature-badge--sm {
+        width: 40px;
+        height: 40px;
+      }
+      .fmn-feature-badge--sm::before {
+        width: 60px;
+        padding: 1px 0;
+        top: 7px;
+        right: -16.5px;
+        text-indent: 3.5px;
+        font-size: 6px;
+        letter-spacing: 0.02em;
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.22);
+      }
+      .fmn-feature-badge--xs {
+        width: 28px;
+        height: 28px;
+      }
+      .fmn-feature-badge--xs::before {
+        /* Operator-confirmed: at xs scale, "FM Toolkit" doesn't read; the
+           abbreviation "FM TK" is used instead. Default and compact
+           variants keep the full text. */
+        content: "FM TK";
+        width: 42px;
+        padding: 0;
+        top: 5px;
+        right: -10px;
+        text-indent: 2.5px;
+        font-size: 5.5px;
+        letter-spacing: 0.01em;
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.22);
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  // Idempotent: bails when the badge already exists on the host. Bails
+  // when the operator has toggled badges off (read once at start; takes
+  // effect on next page load, per the operator-confirmed spec).
+  function attachFeatureBadge(host, variant) {
+    if (!showFeatureBadgesEnabled) return;
+    if (!host) return;
+    if (host.querySelector(':scope > .fmn-feature-badge')) return;
+    ensureFeatureBadgeStyles();
+    let variantClass = '';
+    let variantAttr = 'default';
+    if (variant === 'sm') { variantClass = ' fmn-feature-badge--sm'; variantAttr = 'sm'; }
+    else if (variant === 'xs') { variantClass = ' fmn-feature-badge--xs'; variantAttr = 'xs'; }
+    host.setAttribute(FEATURE_BADGE_HOST_ATTR, variantAttr);
+    const badge = document.createElement('span');
+    badge.className = 'fmn-feature-badge' + variantClass;
+    badge.setAttribute('aria-hidden', 'true');
+    badge.title = 'Added by the Unofficial FortiMonitor Toolkit. Toggle off in popup → Settings to hide these badges.';
+    host.appendChild(badge);
+  }
+
   function subscribeSidebarLauncherFlag() {
     if (!chrome.storage || !chrome.storage.onChanged) return;
     chrome.storage.onChanged.addListener((changes, areaName) => {
@@ -970,8 +1110,14 @@
 
     // Load persisted column order and the sidebar-launcher flag before the
     // first ensureAll() so the initial mount paints in the operator's
-    // preferred state rather than the default and then snapping.
-    Promise.all([loadColumnOrder(), loadSidebarLauncherFlag()]).finally(() => {
+    // preferred state rather than the default and then snapping. The
+    // feature-badges flag is read here too so the FMN-86 attribution
+    // ribbons respect the operator's setting on the very first paint.
+    Promise.all([
+      loadColumnOrder(),
+      loadSidebarLauncherFlag(),
+      loadShowFeatureBadgesFlag(),
+    ]).finally(() => {
       ensureAll();
       const observer = new MutationObserver(() => ensureAll());
       observer.observe(document.documentElement, { childList: true, subtree: true });

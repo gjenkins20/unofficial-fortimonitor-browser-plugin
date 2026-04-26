@@ -7,6 +7,7 @@ export const DEV_MODE_KEY = 'fm:devMode';
 export const ASK_CLAUDE_ENABLED_KEY = 'fm:askClaudeEnabled';
 export const SERVER_SEARCH_ENABLED_KEY = 'fm:serverSearchEnabled';
 export const SIDEBAR_LAUNCHER_ENABLED_KEY = 'fm:sidebarLauncherEnabled';
+export const SHOW_FEATURE_BADGES_KEY = 'fm:showFeatureBadges';
 
 /**
  * Read the developer-mode flag. Returns false on any storage error so
@@ -113,6 +114,35 @@ export async function isSidebarLauncherEnabled(storage = defaultStorage()) {
  */
 export async function setSidebarLauncherEnabled(enabled, storage = defaultStorage()) {
   await storage.set({ [SIDEBAR_LAUNCHER_ENABLED_KEY]: Boolean(enabled) });
+}
+
+/**
+ * Read the show-feature-badges flag. Defaults true (a fresh install shows the
+ * "FM Toolkit" attribution ribbon on each visible UI feature this extension
+ * adds to FortiMonitor pages); only false when the operator has explicitly
+ * toggled it off. Storage errors fail open (return true) so a transient
+ * storage blip never silently suppresses attribution.
+ *
+ * @param {{ get: (key: string) => Promise<Record<string, any>> }} [storage]
+ */
+export async function isShowFeatureBadgesEnabled(storage = defaultStorage()) {
+  try {
+    const data = await storage.get(SHOW_FEATURE_BADGES_KEY);
+    const value = data?.[SHOW_FEATURE_BADGES_KEY];
+    return value === undefined ? true : Boolean(value);
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Persist the show-feature-badges flag.
+ *
+ * @param {boolean} enabled
+ * @param {{ set: (obj: Record<string, any>) => Promise<void> }} [storage]
+ */
+export async function setShowFeatureBadgesEnabled(enabled, storage = defaultStorage()) {
+  await storage.set({ [SHOW_FEATURE_BADGES_KEY]: Boolean(enabled) });
 }
 
 function defaultStorage() {
