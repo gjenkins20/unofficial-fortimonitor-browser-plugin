@@ -150,6 +150,47 @@ test('createFabricConnection throws PanoptaError with phase=write on 500', async
   );
 });
 
+// FMN-90: friendly RO-key hint on auth-like write failures.
+
+test('write-method 403 surfaces RO-key hint and phase=auth', async () => {
+  const fetchMock = createFetchMock(async () => errorResponse(403, { message: 'forbidden' }));
+  const client = new PanoptaClient({ apiKey: 'ro', fetch: fetchMock });
+  await assert.rejects(
+    () => client.createFabricConnection({
+      serial: 'X', ip: '1.1.1.1', port: 1,
+      onsightUrl: 'A', serverGroupUrl: 'B'
+    }),
+    (err) => err instanceof PanoptaError
+      && err.status === 403
+      && err.phase === 'auth'
+      && err.message.startsWith('Your API key may be read-only')
+  );
+});
+
+test('write-method 405 surfaces RO-key hint and phase=auth', async () => {
+  const fetchMock = createFetchMock(async () => errorResponse(405, {}));
+  const client = new PanoptaClient({ apiKey: 'ro', fetch: fetchMock });
+  await assert.rejects(
+    () => client.deleteServerAttribute('https://api2.panopta.com/v2/server/1/server_attribute/2'),
+    (err) => err instanceof PanoptaError
+      && err.status === 405
+      && err.phase === 'auth'
+      && err.message.startsWith('Your API key may be read-only')
+  );
+});
+
+test('GET 403 is not translated as RO-key hint (read endpoints stay untouched)', async () => {
+  const fetchMock = createFetchMock(async () => errorResponse(403, { message: 'forbidden read' }));
+  const client = new PanoptaClient({ apiKey: 'k', fetch: fetchMock });
+  await assert.rejects(
+    () => client.listOnsight(),
+    (err) => err instanceof PanoptaError
+      && err.status === 403
+      && err.phase === 'write'
+      && !err.message.startsWith('Your API key may be read-only')
+  );
+});
+
 test('createFabricConnection wraps fetch network errors', async () => {
   const fetchMock = createFetchMock(async () => { throw new Error('ENOTFOUND'); });
   const client = new PanoptaClient({ apiKey: 'k', fetch: fetchMock });

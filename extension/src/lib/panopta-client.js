@@ -17,6 +17,12 @@
 
 export const PANOPTA_BASE = 'https://api2.panopta.com/v2';
 
+const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+// 401 Unauthorized and 403 Forbidden are the textbook auth failures. 405
+// Method Not Allowed shows up too because FortiMonitor's RO keys reject
+// write methods at the routing layer rather than returning 403.
+const AUTH_LIKE_STATUSES = new Set([401, 403, 405]);
+
 export class PanoptaError extends Error {
   constructor(message, {
     status = null,
@@ -198,11 +204,16 @@ export class PanoptaClient {
       try { parsed = await res.text(); } catch { parsed = null; }
     }
     if (!res.ok) {
-      const message = (parsed && typeof parsed === 'object' && parsed.message)
+      const baseMessage = (parsed && typeof parsed === 'object' && parsed.message)
         || `${method} ${path} failed: HTTP ${res.status}`;
+      const isWriteMethod = WRITE_METHODS.has(method);
+      const isAuthLikeWriteFailure = isWriteMethod && AUTH_LIKE_STATUSES.has(res.status);
+      const message = isAuthLikeWriteFailure
+        ? `Your API key may be read-only - verify in popup → ⚙ Settings. (${baseMessage})`
+        : baseMessage;
       throw new PanoptaError(message, {
         status: res.status,
-        phase: res.status === 401 ? 'auth' : 'write',
+        phase: (res.status === 401 || isAuthLikeWriteFailure) ? 'auth' : 'write',
         responseBody: typeof parsed === 'string' ? redactSensitive(parsed.slice(0, 200)) : parsed,
         responseUrl: redactSensitive(res.url ?? url),
         contentType: ct
