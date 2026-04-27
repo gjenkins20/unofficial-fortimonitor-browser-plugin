@@ -72,6 +72,8 @@ export function render({ container, store, navigate }) {
       : (r.input || '-');
     const detail = r.status === 'failed'
       ? (r.error || '')
+      : r.status === 'error'
+      ? (r.error || 'Resolution error')
       : r.status === 'skipped'
       ? (r.plan === 'error' ? (r.error || 'resolution error') : 'already matched target state')
       : r.plan === 'add' && r.created != null
