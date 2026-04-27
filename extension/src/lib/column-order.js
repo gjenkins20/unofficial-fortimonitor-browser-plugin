@@ -18,10 +18,13 @@ export const COLUMN_REGISTRY = {
     label: 'Instances list',
     context: '/report/ListServers',
     columns: [
-      { id: 'instance', label: 'Instance',   lockedVisible: true  },
-      { id: 'ip',       label: 'IP Address', lockedVisible: false },
-      { id: 'dns',      label: 'DNS Name',   lockedVisible: false },
-      { id: 'type',     label: 'Type',       lockedVisible: false },
+      { id: 'instance',    label: 'Instance',   lockedVisible: true  },
+      { id: 'ip',          label: 'IP Address', lockedVisible: false },
+      { id: 'dns',         label: 'DNS Name',   lockedVisible: false },
+      { id: 'type',        label: 'Type',       lockedVisible: false },
+      { id: 'model',       label: 'Model',      lockedVisible: false },
+      { id: 'modelNumber', label: 'Model #',    lockedVisible: false },
+      { id: 'os',          label: 'OS',         lockedVisible: false },
     ],
   },
 };

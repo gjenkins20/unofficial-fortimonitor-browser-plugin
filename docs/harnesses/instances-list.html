@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Harness: Instances list augmentation (FMN-71/72/73)</title>
+<title>Harness: Instances list augmentation (FMN-71/72/73/75/76)</title>
 <!--
   Synthetic harness for src/content/augment.js (Instances list slice).
 
@@ -25,7 +25,18 @@
 
   What's NOT stubbed:
     - The /report/get_idp_data fetch is intercepted to return canned IP/DNS
-      data so cells render content instead of "not captured" forever.
+      and Model/Model #/OS data so cells render content instead of "not
+      captured" / "n/a" forever. The mock includes the placeholder
+      pageData.instance.deviceModel and operatingSystem fields known to be
+      traps on the real endpoint (FMN-76 finding) so a regression that reads
+      them would surface as wrong column values.
+
+  Expected render with all four FMN-76 columns visible (after augment.js
+  normalizes the persisted order against the registry):
+    - s-101 / edge-fw-01 (Fortinet)     -> Model: FortiGate    Model #: VM64-AWS  OS: v7.6.3 build3510
+    - s-102 / edge-fw-02 (Fortinet)     -> Model: FortiGate    Model #: 60F       OS: v7.4.5 build2741
+    - s-103 / core-sw-01 (non-Fortinet) -> Model: n/a (italic) Model #: n/a       OS: n/a
+    - s-104 / core-sw-02 (non-Fortinet) -> Model: n/a (italic) Model #: n/a       OS: n/a
 
   Controls below the table let you exercise the storage-driven reorder/hide
   paths without needing the popup, and inject new rows to confirm the
@@ -234,11 +245,29 @@
         // Alternate IP and DNS so the regex classification covers both paths.
         const useIp = (Number(id) % 2) === 0;
         const fqdn = useIp ? ('10.0.0.' + (Number(id) % 200)) : ('host-' + id + '.example.com');
+        // FMN-76: only Fortinet/fabric rows populate fabricSystemData on the
+        // real endpoint. Mock IDs 101 and 102 as Fortinet; 103+ as non-Fortinet
+        // (no fabricSystemData) so the n/a empty-state path is exercised.
+        const fortinetIds = new Set(['101', '102']);
+        const isFortinet = fortinetIds.has(id);
+        const fabricSystemData = isFortinet ? {
+          model_name: 'FortiGate',
+          model_number: id === '101' ? 'VM64-AWS' : '60F',
+          os_version: id === '101' ? 'v7.6.3 build3510' : 'v7.4.5 build2741',
+        } : null;
         const body = JSON.stringify({
           pageData: {
             instance: {
               name: 'instance-' + id,
               fqdn: fqdn,
+              // FMN-76: deviceModel and operatingSystem are placeholder/stale
+              // on the real endpoint. Included here so a regression that reads
+              // them instead of fabricSystemData would surface visibly as
+              // every Model column showing "server_id" and every OS showing
+              // "linux".
+              deviceModel: 'server_id',
+              operatingSystem: 'linux',
+              fabricSystemData: fabricSystemData,
             },
           },
         });

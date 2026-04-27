@@ -120,6 +120,9 @@
   const ROW_AUG_ATTR = 'data-fmn-ip-row-augmented';
   const IP_CELL_ATTR = 'data-fmn-ip-cell';
   const DNS_CELL_ATTR = 'data-fmn-dns-cell';
+  const MODEL_CELL_ATTR = 'data-fmn-model-cell';
+  const MODEL_NUMBER_CELL_ATTR = 'data-fmn-model-number-cell';
+  const OS_CELL_ATTR = 'data-fmn-os-cell';
   const COL_ATTR = 'data-fmn-col';
   const WEBGUI_COLUMNS_KEY = 'fm:webguiColumns';
   const AUG_ID = 'instances-ip-dns-columns';
@@ -127,12 +130,15 @@
   // Column metadata for the Instances list augmentation. Mirror of the
   // 'instances-ip-dns-columns' entry in src/lib/column-order.js.
   const COLUMNS = {
-    instance: { label: 'Instance',   lockedVisible: true,  width: 'minmax(120px, 1fr)' },
-    ip:       { label: 'IP Address', lockedVisible: false, width: 'minmax(110px, 130px)' },
-    dns:      { label: 'DNS Name',   lockedVisible: false, width: 'minmax(140px, 200px)' },
-    type:     { label: 'Type',       lockedVisible: false, width: 'minmax(110px, 150px)' },
+    instance:    { label: 'Instance',   lockedVisible: true,  width: 'minmax(120px, 1fr)' },
+    ip:          { label: 'IP Address', lockedVisible: false, width: 'minmax(110px, 130px)' },
+    dns:         { label: 'DNS Name',   lockedVisible: false, width: 'minmax(140px, 200px)' },
+    type:        { label: 'Type',       lockedVisible: false, width: 'minmax(110px, 150px)' },
+    model:       { label: 'Model',      lockedVisible: false, width: 'minmax(110px, 150px)' },
+    modelNumber: { label: 'Model #',    lockedVisible: false, width: 'minmax(100px, 140px)' },
+    os:          { label: 'OS',         lockedVisible: false, width: 'minmax(110px, 180px)' },
   };
-  const DEFAULT_COL_IDS = ['instance', 'ip', 'dns', 'type'];
+  const DEFAULT_COL_IDS = ['instance', 'ip', 'dns', 'type', 'model', 'modelNumber', 'os'];
 
   // FMN-75: classify the row by its checkbox-value prefix (per FMN-71 capture).
   // Returns a display label or null if the value doesn't match a known prefix.
@@ -256,7 +262,7 @@
          halts pagination/native sort, so we stay inside the cell DataTables
          already manages. */
       th.fmn-instance-merged, td.instance-column.fmn-instance-merged {
-        min-width: 640px !important;
+        min-width: 1080px !important;
         padding-right: 12px !important;
         /* FMN-80: TH and TD have different default paddingLeft on
            FortiMonitor (TH ~10px, TD ~8.28px). Different inner widths
@@ -276,8 +282,13 @@
       .fmn-cell-ip { font-variant-numeric: tabular-nums; color: #394449; }
       .fmn-cell-dns { color: #394449; }
       .fmn-cell-type { color: #394449; }
+      .fmn-cell-model { color: #394449; }
+      .fmn-cell-model-number { color: #394449; }
+      .fmn-cell-os { color: #394449; }
       .fmn-cell-ip.fmn-unresolved, .fmn-cell-dns.fmn-unresolved,
-      .fmn-cell-type.fmn-unresolved {
+      .fmn-cell-type.fmn-unresolved,
+      .fmn-cell-model.fmn-unresolved, .fmn-cell-model-number.fmn-unresolved,
+      .fmn-cell-os.fmn-unresolved {
         color: #9AA4BC; font-style: italic; font-weight: 400;
       }
       .fmn-skel {
@@ -443,8 +454,8 @@
       } else if (id === 'dns') {
         slot.className = 'fmn-cell-dns';
         if (serverId) slot.setAttribute(DNS_CELL_ATTR, serverId);
-      } else {
-        // id === 'type'. Populated synchronously from the checkbox-value prefix;
+      } else if (id === 'type') {
+        // Populated synchronously from the checkbox-value prefix;
         // no fetch, no skeleton, no async state.
         slot.className = 'fmn-cell-type';
         if (typeLabel) {
@@ -455,6 +466,15 @@
           slot.textContent = 'unknown';
           slot.title = 'Unrecognized row checkbox prefix: ' + rawValue;
         }
+      } else if (id === 'model') {
+        slot.className = 'fmn-cell-model';
+        if (serverId) slot.setAttribute(MODEL_CELL_ATTR, serverId);
+      } else if (id === 'modelNumber') {
+        slot.className = 'fmn-cell-model-number';
+        if (serverId) slot.setAttribute(MODEL_NUMBER_CELL_ATTR, serverId);
+      } else if (id === 'os') {
+        slot.className = 'fmn-cell-os';
+        if (serverId) slot.setAttribute(OS_CELL_ATTR, serverId);
       }
       grid.appendChild(slot);
     }
@@ -463,12 +483,19 @@
     row.setAttribute(ROW_AUG_ATTR, '1');
 
     if (serverId) {
-      renderCell(grid.querySelector('[' + IP_CELL_ATTR + ']'), fetchCache.get(serverId));
-      renderCell(grid.querySelector('[' + DNS_CELL_ATTR + ']'), fetchCache.get(serverId));
+      const cached = fetchCache.get(serverId);
+      renderCell(grid.querySelector('[' + IP_CELL_ATTR + ']'), cached);
+      renderCell(grid.querySelector('[' + DNS_CELL_ATTR + ']'), cached);
+      renderCell(grid.querySelector('[' + MODEL_CELL_ATTR + ']'), cached);
+      renderCell(grid.querySelector('[' + MODEL_NUMBER_CELL_ATTR + ']'), cached);
+      renderCell(grid.querySelector('[' + OS_CELL_ATTR + ']'), cached);
       enqueueFetch(serverId);
     } else {
       renderUnavailableCell(grid.querySelector('.fmn-cell-ip'), 'ip');
       renderUnavailableCell(grid.querySelector('.fmn-cell-dns'), 'dns');
+      renderUnavailableCell(grid.querySelector('.fmn-cell-model'), 'model');
+      renderUnavailableCell(grid.querySelector('.fmn-cell-model-number'), 'modelNumber');
+      renderUnavailableCell(grid.querySelector('.fmn-cell-os'), 'os');
     }
     return true;
   }
@@ -549,10 +576,21 @@
   function renderUnavailableCell(cell, kind) {
     if (!cell) return;
     cell.classList.add('fmn-unresolved');
-    cell.textContent = 'not captured';
-    cell.title = kind === 'ip'
-      ? 'IP address not captured for this row type'
-      : 'DNS name not captured for this row type';
+    if (kind === 'ip' || kind === 'dns') {
+      cell.textContent = 'not captured';
+      cell.title = kind === 'ip'
+        ? 'IP address not captured for this row type'
+        : 'DNS name not captured for this row type';
+      return;
+    }
+    // FMN-76: model / modelNumber / os render n/a for non-server rows since
+    // those fields are not exposed for OnSight (a-) or other (cs-) entities.
+    cell.textContent = 'n/a';
+    cell.title = kind === 'model'
+      ? 'Model not available for this row type'
+      : kind === 'modelNumber'
+        ? 'Model number not available for this row type'
+        : 'OS not available for this row type';
   }
 
   function buildSortableSubHeader(label, col) {
@@ -700,8 +738,7 @@
     if (!m) return null;
     const cached = fetchCache.get(m[1]);
     if (!cached || cached.state !== 'resolved') return null;
-    const v = col === 'ip' ? cached.ip : cached.dns;
-    return v || null;
+    return cached[col] || null;
   }
 
   function compareIps(a, b) {
@@ -740,7 +777,7 @@
     while (activeFetches < FETCH_CONCURRENCY && fetchQueue.length > 0) {
       const id = fetchQueue.shift();
       activeFetches++;
-      fetchServerAddress(id)
+      fetchServerInstance(id)
         .then((result) => {
           fetchCache.set(id, result);
           paintCellsForServer(id);
@@ -757,7 +794,7 @@
     }
   }
 
-  async function fetchServerAddress(serverId) {
+  async function fetchServerInstance(serverId) {
     const res = await fetch('/report/get_idp_data?server_id=' + encodeURIComponent(serverId), {
       credentials: 'include',
       headers: { Accept: 'application/json' },
@@ -766,46 +803,74 @@
     if (!ct.includes('json')) return { state: 'failed' };
     let body;
     try { body = await res.json(); } catch { return { state: 'failed' }; }
-    const fqdn = body && body.pageData && body.pageData.instance && body.pageData.instance.fqdn;
-    const { ip, dns } = classifyFqdn(fqdn);
-    return { state: 'resolved', ip, dns };
+    const inst = body && body.pageData && body.pageData.instance;
+    const { ip, dns } = classifyFqdn(inst && inst.fqdn);
+    // FMN-76: Model / Model # / OS pulled from fabricSystemData. Populated only
+    // on Fortinet/fabric devices; non-fabric rows resolve as null and render
+    // 'n/a' per the ticket's accepted empty state. pageData.instance.deviceModel
+    // and pageData.instance.operatingSystem are unreliable on this endpoint
+    // (placeholder + stale; verified in live capture 2026-04-26) and not used.
+    const fsd = inst && inst.fabricSystemData;
+    const model = (fsd && typeof fsd.model_name === 'string' && fsd.model_name) || null;
+    const modelNumber = (fsd && typeof fsd.model_number === 'string' && fsd.model_number) || null;
+    const os = (fsd && typeof fsd.os_version === 'string' && fsd.os_version) || null;
+    return { state: 'resolved', ip, dns, model, modelNumber, os };
   }
 
   function paintCellsForServer(serverId) {
     const cached = fetchCache.get(serverId);
-    for (const cell of document.querySelectorAll(
-      '[' + IP_CELL_ATTR + '="' + serverId + '"], [' + DNS_CELL_ATTR + '="' + serverId + '"]'
-    )) {
+    const sel = [IP_CELL_ATTR, DNS_CELL_ATTR, MODEL_CELL_ATTR, MODEL_NUMBER_CELL_ATTR, OS_CELL_ATTR]
+      .map((a) => '[' + a + '="' + serverId + '"]')
+      .join(', ');
+    for (const cell of document.querySelectorAll(sel)) {
       renderCell(cell, cached);
     }
   }
 
+  // Per-kind metadata for renderCell: which cache field to read, the skeleton
+  // width, and the empty-state copy. Order matters only for cellKind() lookup.
+  // emptyText differs by kind: FMN-71's ip/dns columns render "not captured"
+  // when the FQDN is missing; FMN-76's model/modelNumber/os render "n/a"
+  // because the underlying fields are populated only on Fortinet/fabric rows
+  // by design - "not captured" would imply a capture failure that didn't occur.
+  const CELL_KINDS = [
+    { attr: IP_CELL_ATTR,           field: 'ip',          skelWidth: '90px',  emptyText: 'not captured', emptyTitle: 'No IP address captured for this instance',     failTitle: 'Unable to resolve address for this instance' },
+    { attr: DNS_CELL_ATTR,          field: 'dns',         skelWidth: '140px', emptyText: 'not captured', emptyTitle: 'No DNS name captured for this instance',       failTitle: 'Unable to resolve address for this instance' },
+    { attr: MODEL_CELL_ATTR,        field: 'model',       skelWidth: '110px', emptyText: 'n/a',          emptyTitle: 'No model reported for this instance',          failTitle: 'Unable to resolve model for this instance' },
+    { attr: MODEL_NUMBER_CELL_ATTR, field: 'modelNumber', skelWidth: '100px', emptyText: 'n/a',          emptyTitle: 'No model number reported for this instance',  failTitle: 'Unable to resolve model number for this instance' },
+    { attr: OS_CELL_ATTR,           field: 'os',          skelWidth: '120px', emptyText: 'n/a',          emptyTitle: 'No OS reported for this instance',             failTitle: 'Unable to resolve OS for this instance' },
+  ];
+
+  function cellKind(cell) {
+    for (const k of CELL_KINDS) {
+      if (cell.hasAttribute(k.attr)) return k;
+    }
+    return null;
+  }
+
   function renderCell(cell, cached) {
     if (!cell) return;
-    const isIp = cell.hasAttribute(IP_CELL_ATTR);
+    const kind = cellKind(cell);
+    if (!kind) return;
     cell.textContent = '';
     cell.classList.remove('fmn-unresolved');
     cell.removeAttribute('title');
     if (!cached || cached.state === 'loading') {
       const skel = document.createElement('span');
       skel.className = 'fmn-skel';
-      skel.style.width = isIp ? '90px' : '140px';
+      skel.style.width = kind.skelWidth;
       cell.appendChild(skel);
       return;
     }
-    const value = isIp ? cached.ip : cached.dns;
+    const value = cached[kind.field];
     if (value) {
       cell.textContent = value;
       cell.title = value;
       return;
     }
     cell.classList.add('fmn-unresolved');
-    cell.textContent = 'not captured';
-    cell.title = cached.state === 'failed'
-      ? 'Unable to resolve address for this instance'
-      : (isIp
-        ? 'No IP address captured for this instance'
-        : 'No DNS name captured for this instance');
+    cell.textContent = kind.emptyText;
+    cell.title = cached.state === 'failed' ? kind.failTitle : kind.emptyTitle;
   }
 
   function buildLauncherEntry() {
