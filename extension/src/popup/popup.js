@@ -113,6 +113,66 @@ function openExternal(url) {
   window.close();
 }
 
+// FMN-91: sort tool cards alphabetically within each group at popup load.
+// Group order itself is preserved (the operator does not customize that).
+// Empty groups remain in DOM order; their labels stay where authored.
+function sortToolCardsAlphabetically() {
+  const list = document.getElementById('tool-list');
+  if (!list) return;
+  const children = Array.from(list.children);
+  const groups = [];
+  let current = null;
+  for (const child of children) {
+    if (child.classList.contains('tool-group-label')) {
+      current = { label: child, cards: [] };
+      groups.push(current);
+    } else if (child.classList.contains('tool-card') && current) {
+      current.cards.push(child);
+    }
+  }
+  for (const group of groups) {
+    group.cards.sort((a, b) => toolCardSortKey(a).localeCompare(toolCardSortKey(b)));
+  }
+  // appendChild on an already-attached node MOVES it to the end of children;
+  // appending in sorted order yields the desired order. No node is created or
+  // destroyed, so existing event listeners survive.
+  for (const group of groups) {
+    list.appendChild(group.label);
+    for (const card of group.cards) list.appendChild(card);
+  }
+}
+
+function toolCardSortKey(card) {
+  const nameEl = card.querySelector('.tool-name');
+  if (!nameEl) return '';
+  // Strip .badge children (Beta, Beta - Prototype) so they don't affect order.
+  const clone = nameEl.cloneNode(true);
+  clone.querySelectorAll('.badge').forEach((b) => b.remove());
+  return clone.textContent.trim().toLowerCase();
+}
+
+// FMN-91: sort experimental toggles alphabetically by their visible label.
+// Each toggle in the Experimental tools section is preceded by a
+// <p class="settings-help"> describing it; reorder the (description, toggle)
+// pair as a unit so help text follows its toggle.
+function sortExperimentalTogglesAlphabetically() {
+  const askToggle = document.getElementById('ask-claude-toggle');
+  const section = askToggle && askToggle.closest('.settings-section');
+  if (!section) return;
+  const toggles = Array.from(section.querySelectorAll('.toggle-row'));
+  const pairs = toggles.map((toggle) => {
+    const prev = toggle.previousElementSibling;
+    const desc = prev && prev.classList.contains('settings-help') ? prev : null;
+    const labelText = (toggle.querySelector('span')?.textContent || '').trim().toLowerCase();
+    return { toggle, desc, labelText };
+  });
+  pairs.sort((a, b) => a.labelText.localeCompare(b.labelText));
+  for (const pair of pairs) {
+    if (pair.desc) section.appendChild(pair.desc);
+    section.appendChild(pair.toggle);
+  }
+}
+
 function filterTools(query) {
   const q = query.trim().toLowerCase();
   const cards = document.querySelectorAll('.tool-card');
@@ -511,6 +571,12 @@ async function refreshGuards() {
 }
 
 function init() {
+  // FMN-91: sort first, before any visibility / guard logic operates on the
+  // tool list. Experimental toggles section is also sorted at popup load,
+  // independent of whether the operator opens Settings this session.
+  sortToolCardsAlphabetically();
+  sortExperimentalTogglesAlphabetically();
+
   applyExperimentalVisibility();
   refreshGuards();
 
