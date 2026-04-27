@@ -113,33 +113,20 @@ function openExternal(url) {
   window.close();
 }
 
-// FMN-91: sort tool cards alphabetically within each group at popup load.
-// Group order itself is preserved (the operator does not customize that).
-// Empty groups remain in DOM order; their labels stay where authored.
+// FMN-91: sort tool cards alphabetically as a single flat list at popup
+// load. Group labels were removed in the same change - tools are now one
+// list, no categorization. data-group attributes on cards are kept as
+// metadata only (filterTools still references them but gracefully no-ops
+// since no .tool-group-label nodes remain in the DOM).
 function sortToolCardsAlphabetically() {
   const list = document.getElementById('tool-list');
   if (!list) return;
-  const children = Array.from(list.children);
-  const groups = [];
-  let current = null;
-  for (const child of children) {
-    if (child.classList.contains('tool-group-label')) {
-      current = { label: child, cards: [] };
-      groups.push(current);
-    } else if (child.classList.contains('tool-card') && current) {
-      current.cards.push(child);
-    }
-  }
-  for (const group of groups) {
-    group.cards.sort((a, b) => toolCardSortKey(a).localeCompare(toolCardSortKey(b)));
-  }
-  // appendChild on an already-attached node MOVES it to the end of children;
-  // appending in sorted order yields the desired order. No node is created or
-  // destroyed, so existing event listeners survive.
-  for (const group of groups) {
-    list.appendChild(group.label);
-    for (const card of group.cards) list.appendChild(card);
-  }
+  const cards = Array.from(list.querySelectorAll(':scope > .tool-card'));
+  cards.sort((a, b) => toolCardSortKey(a).localeCompare(toolCardSortKey(b)));
+  // appendChild on an already-attached node MOVES it to the end; appending
+  // in sorted order yields the desired order without recreating nodes, so
+  // existing event listeners survive.
+  for (const card of cards) list.appendChild(card);
 }
 
 function toolCardSortKey(card) {

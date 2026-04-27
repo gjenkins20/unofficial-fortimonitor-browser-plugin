@@ -35,12 +35,10 @@
       <input id="search" type="text" placeholder="Search tools…">
     </div>
 
-    <!-- FMN-91: tool cards within each group are sorted alphabetically at -->
+    <!-- FMN-91: tool cards are sorted alphabetically (single flat list) at -->
     <!-- runtime in popup.js (sortToolCardsAlphabetically). New cards can be -->
     <!-- inserted in any order here; they auto-slot at popup load. -->
     <div class="tool-list" id="tool-list">
-      <div class="tool-group-label" data-group="port-scope">Port scope</div>
-
       <button class="tool-card"
               data-group="port-scope"
               data-tool="remove"
@@ -73,8 +71,6 @@
         <div class="chevron">›</div>
       </button>
 
-      <div class="tool-group-label" data-group="fabric-connection">Fabric connection</div>
-
       <button class="tool-card"
               data-group="fabric-connection"
               data-tool="add-fabric-connection"
@@ -92,8 +88,6 @@
         </div>
         <div class="chevron">›</div>
       </button>
-
-      <div class="tool-group-label" data-group="lookup">Lookup</div>
 
       <button class="tool-card"
               data-group="lookup"
@@ -133,8 +127,6 @@
         <div class="chevron">›</div>
       </button>
 
-      <div class="tool-group-label" data-group="attributes">Server attributes</div>
-
       <button class="tool-card"
               data-group="attributes"
               data-tool="manage-attributes"
@@ -151,8 +143,6 @@
         </div>
         <div class="chevron">›</div>
       </button>
-
-      <div class="tool-group-label" data-group="ask-claude" data-experimental="ask-claude" hidden>AI assistant</div>
 
       <button class="tool-card"
               data-group="ask-claude"
@@ -174,8 +164,6 @@
         </div>
         <div class="chevron">›</div>
       </button>
-
-      <div class="tool-group-label" data-group="templates">Server templates</div>
 
       <button class="tool-card"
               data-group="templates"
