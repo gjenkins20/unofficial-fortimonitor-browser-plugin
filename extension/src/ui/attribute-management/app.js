@@ -59,9 +59,14 @@ function navigate(to) {
 
 function canEnter(route) {
   if (route === '/start') return true;
-  if (route === '/preview') return !!store.typeUrl
-    && (store.operation === 'remove' || store.value !== '')
-    && store.entries.length > 0;
+  if (route === '/preview') {
+    const attrs = Array.isArray(store.attributes) ? store.attributes : [];
+    if (attrs.length === 0) return false;
+    const allReady = attrs.every((a) =>
+      !!a.typeUrl && (a.operation === 'remove' || String(a.value ?? '').trim() !== '')
+    );
+    return allReady && Array.isArray(store.entries) && store.entries.length > 0;
+  }
   if (route === '/execute') return Array.isArray(store.plan) && store.plan.length > 0;
   if (route === '/results') return !!store.runResult;
   return false;
