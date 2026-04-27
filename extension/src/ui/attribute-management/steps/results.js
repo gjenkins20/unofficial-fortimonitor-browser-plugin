@@ -1,6 +1,7 @@
 // Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Manage Server Attributes - Step 4 (Results).
-// Final grid with per-server outcome. Download CSV or start over.
+// Final grid with per-(server, attribute) outcome. Download CSV or
+// start over.
 
 import { h, titleBar, downloadBlob } from '../../../lib/dom.js';
 import { attrBreadcrumbs } from './start.js';
@@ -14,14 +15,26 @@ const STATUS_CLASS = {
   error: 'plan-pill error'
 };
 
+function attrLabel(row) {
+  return row.typeName || row.typeUrl?.split('/').filter(Boolean).pop() || '?';
+}
+
 function toCsv(rows) {
-  const header = ['input', 'server_id', 'display_name', 'plan', 'status', 'current_value', 'new_value', 'created_id', 'deleted_id', 'error'];
+  const header = [
+    'input', 'server_id', 'display_name',
+    'attribute_key', 'attribute_url',
+    'plan', 'status',
+    'current_value', 'new_value',
+    'created_id', 'deleted_id', 'error'
+  ];
   const lines = [header.join(',')];
   for (const r of rows) {
     const cells = [
       r.input ?? '',
       r.serverId ?? '',
       r.displayName ?? '',
+      attrLabel(r),
+      r.typeUrl ?? '',
       r.plan ?? '',
       r.status ?? '',
       r.existing?.value ?? '',
@@ -59,6 +72,7 @@ export function render({ container, store, navigate }) {
     h('thead', {}, h('tr', {},
       h('th', { class: 'col-n' }, '#'),
       h('th', {}, 'Server'),
+      h('th', {}, 'Attribute'),
       h('th', {}, 'Plan'),
       h('th', {}, 'Status'),
       h('th', {}, 'Detail')
@@ -88,6 +102,7 @@ export function render({ container, store, navigate }) {
     },
       h('td', { class: 'col-n' }, String(i + 1)),
       h('td', { class: 'col-server' }, label),
+      h('td', { class: 'col-attr' }, attrLabel(r)),
       h('td', {}, r.plan || '-'),
       h('td', {}, h('span', { class: STATUS_CLASS[r.status] || 'plan-pill skip' }, r.status)),
       h('td', { class: 'col-before' }, detail)

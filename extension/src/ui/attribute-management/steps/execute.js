@@ -1,12 +1,20 @@
 // Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Manage Server Attributes - Step 3 (Execute).
-// Apply the plan; stream per-row progress via events.
+// Apply the cross-product plan; stream per-row progress via events.
 
 import { h, titleBar } from '../../../lib/dom.js';
 import { call } from '../../../lib/messaging.js';
 import { attrBreadcrumbs } from './start.js';
 
 const TOOL_NAME = 'Manage Server Attributes (Bulk)';
+
+function attrLabel(row) {
+  return row.typeName || row.typeUrl?.split('/').filter(Boolean).pop() || '?';
+}
+
+function rowKey(input, attrIndex) {
+  return `${input} ${attrIndex ?? 0}`;
+}
 
 export function render({ container, store, navigate, events }) {
   const frame = h('div', { class: 'mockup-frame' });
@@ -24,10 +32,10 @@ export function render({ container, store, navigate, events }) {
   const progressList = h('div', { class: 'progress-list' });
   body.appendChild(progressList);
 
-  const rowByInput = new Map();
+  const rowByKey = new Map();
   for (const row of store.plan) {
-    const label = row.displayName || row.input || '-';
-    const detail = row.plan === 'add' ? `add "${row.newValue}"`
+    const serverLabel = row.displayName || row.input || '-';
+    const detailText = row.plan === 'add' ? `add "${row.newValue}"`
       : row.plan === 'replace' ? `replace "${row.existing?.value ?? ''}" → "${row.newValue}"`
       : row.plan === 'remove' ? `remove "${row.existing?.value ?? ''}"`
       : row.plan === 'skip' ? 'skip (already matches)'
@@ -35,14 +43,14 @@ export function render({ container, store, navigate, events }) {
       : row.plan;
     const initial = row.plan === 'skip' ? 'skipped' : row.plan === 'error' ? 'error' : 'pending';
     const statusEl = h('span', { class: `status ${initial}` }, initial);
-    const detailEl = h('span', { class: 'detail muted' }, detail);
+    const detailEl = h('span', { class: 'detail muted' }, detailText);
     const rowEl = h('div', { class: 'progress-row' },
-      h('span', { class: 'serial' }, label),
-      h('span', { class: 'ip' }, ''),
+      h('span', { class: 'serial' }, serverLabel),
+      h('span', { class: 'attr-tag' }, attrLabel(row)),
       statusEl,
       detailEl
     );
-    rowByInput.set(row.input, { statusEl, detailEl });
+    rowByKey.set(rowKey(row.input, row.attrIndex), { statusEl, detailEl });
     progressList.appendChild(rowEl);
   }
 
@@ -63,13 +71,13 @@ export function render({ container, store, navigate, events }) {
 
   const unsubscribe = events.on((event, payload) => {
     if (event === 'attr:exec-start') {
-      const r = rowByInput.get(payload.input);
+      const r = rowByKey.get(rowKey(payload.input, payload.attrIndex));
       if (r && r.statusEl.textContent === 'pending') {
         r.statusEl.textContent = 'running';
         r.statusEl.className = 'status running';
       }
     } else if (event === 'attr:exec-done') {
-      const r = rowByInput.get(payload.input);
+      const r = rowByKey.get(rowKey(payload.input, payload.attrIndex));
       if (r) {
         r.statusEl.textContent = payload.status;
         r.statusEl.className = `status ${payload.status}`;
@@ -93,7 +101,6 @@ export function render({ container, store, navigate, events }) {
 
   call('attr:execute-batch', {
     plan: store.plan,
-    typeUrl: store.typeUrl,
     concurrency: 2
   }).then((result) => {
     store.runResult = result;

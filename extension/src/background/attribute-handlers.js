@@ -82,67 +82,118 @@ export async function resolveTargets({ entries, client, concurrency = 4, signal 
 }
 
 /**
- * Build the per-row plan. For each resolved target, fetch its current
- * attributes (filtered to the chosen type) and decide add / replace /
- * skip. Unresolved targets are passed through as error rows.
+ * Build the per-row plan as the cross-product of (target × attribute).
+ * For each resolved target, fetch its current attributes once, then
+ * iterate the requested attributes locally and decide add / replace /
+ * remove / skip per (server, attribute). Unresolved targets pass through
+ * as error rows for every attribute.
  *
- * Operation:
- *   - 'set'    : ensure the chosen type has `value` on the server
- *   - 'remove' : drop the chosen type from the server (value ignored)
+ * Each input attribute is { operation, typeUrl, typeName?, value? } where
+ *   - operation = 'set'    : ensure typeUrl has `value` on the server
+ *   - operation = 'remove' : drop typeUrl from the server (value ignored)
+ *
+ * Each output row carries `attrIndex` (its index in the input array) and
+ * `typeUrl` so executeBatch and the UI can disambiguate when one server
+ * appears multiple times in the plan.
  */
 export async function planBatch({
   targets,
-  operation,
-  typeUrl,
-  value,
+  attributes,
   client,
   concurrency = 4,
   signal,
   onEntryStart,
   onEntryDone
 } = {}) {
-  if (operation !== 'set' && operation !== 'remove') {
-    throw new TypeError(`planBatch: operation must be 'set' or 'remove'`);
+  if (!Array.isArray(attributes) || attributes.length === 0) {
+    throw new TypeError('planBatch: attributes must be a non-empty array');
   }
-  if (!typeUrl) throw new TypeError('planBatch: typeUrl is required');
-  if (operation === 'set' && (value === undefined || value === null)) {
-    throw new TypeError(`planBatch: value is required for operation='set'`);
+  for (let ai = 0; ai < attributes.length; ai++) {
+    const a = attributes[ai];
+    if (a.operation !== 'set' && a.operation !== 'remove') {
+      throw new TypeError(`planBatch: attributes[${ai}].operation must be 'set' or 'remove'`);
+    }
+    if (!a.typeUrl) {
+      throw new TypeError(`planBatch: attributes[${ai}].typeUrl is required`);
+    }
+    if (a.operation === 'set' && (a.value === undefined || a.value === null)) {
+      throw new TypeError(`planBatch: attributes[${ai}].value is required when operation='set'`);
+    }
   }
 
-  const results = await mapConcurrent(targets, async (t, i) => {
-    onEntryStart?.(i, t);
-    if (t.status !== 'resolved') {
-      const row = { ...t, plan: 'error' };
-      onEntryDone?.(i, row);
-      return row;
-    }
+  // One snapshot fetch per resolved target, regardless of how many
+  // attributes we are mutating on it.
+  const snapshots = await mapConcurrent(targets, async (t) => {
+    if (t.status !== 'resolved') return { target: t, attrs: null, snapshotError: null };
     try {
       const attrs = await client.listServerAttributes(t.serverId);
-      const existing = attrs.find((a) => a.typeUrl === typeUrl) ?? null;
-      const row = { ...t, existing, plan: 'pending', newValue: operation === 'set' ? String(value) : null };
-
-      if (operation === 'set') {
-        if (!existing) row.plan = 'add';
-        else if (existing.value === String(value)) row.plan = 'skip';
-        else row.plan = 'replace';
-      } else if (operation === 'remove') {
-        row.plan = existing ? 'remove' : 'skip';
-      }
-      onEntryDone?.(i, row);
-      return row;
+      return { target: t, attrs, snapshotError: null };
     } catch (reason) {
-      const row = {
-        ...t,
-        plan: 'error',
-        error: reason?.message ?? String(reason),
-        errorStatus: reason?.status ?? null
+      return {
+        target: t,
+        attrs: null,
+        snapshotError: {
+          message: reason?.message ?? String(reason),
+          status: reason?.status ?? null
+        }
       };
-      onEntryDone?.(i, row);
-      return row;
     }
   }, { concurrency, signal });
 
-  return results.map((r) => r.value);
+  const out = [];
+  let rowIndex = 0;
+  for (let ti = 0; ti < targets.length; ti++) {
+    const snap = snapshots[ti].value;
+    const t = snap.target;
+    for (let ai = 0; ai < attributes.length; ai++) {
+      const a = attributes[ai];
+      onEntryStart?.(rowIndex, t, ai);
+
+      const base = {
+        ...t,
+        attrIndex: ai,
+        typeUrl: a.typeUrl,
+        typeName: a.typeName ?? null,
+        operation: a.operation,
+        newValue: a.operation === 'set' ? String(a.value) : null
+      };
+
+      if (t.status !== 'resolved') {
+        const row = { ...base, plan: 'error' };
+        onEntryDone?.(rowIndex, row);
+        out.push(row);
+        rowIndex++;
+        continue;
+      }
+      if (snap.snapshotError) {
+        const row = {
+          ...base,
+          plan: 'error',
+          error: snap.snapshotError.message,
+          errorStatus: snap.snapshotError.status
+        };
+        onEntryDone?.(rowIndex, row);
+        out.push(row);
+        rowIndex++;
+        continue;
+      }
+
+      const existing = snap.attrs.find((x) => x.typeUrl === a.typeUrl) ?? null;
+      const row = { ...base, existing, plan: 'pending' };
+      if (a.operation === 'set') {
+        if (!existing) row.plan = 'add';
+        else if (existing.value === String(a.value)) row.plan = 'skip';
+        else row.plan = 'replace';
+      } else if (a.operation === 'remove') {
+        row.plan = existing ? 'remove' : 'skip';
+      }
+      onEntryDone?.(rowIndex, row);
+      out.push(row);
+      rowIndex++;
+    }
+  }
+
+  return out;
 }
 
 /**
@@ -152,11 +203,14 @@ export async function planBatch({
  *   * 'remove'  → DELETE existing
  *   * 'skip' / 'error' → no-op, surfaced in results
  *
+ * Each row carries its own `typeUrl` (set by planBatch) so a multi-
+ * attribute plan can target different attribute types per row without
+ * the caller plumbing them through.
+ *
  * Retry on transient 5xx / rate limits. Abort aware.
  */
 export async function executeBatch({
   plan,
-  typeUrl,
   client,
   concurrency = 2,
   maxAttempts = 3,
@@ -178,16 +232,26 @@ export async function executeBatch({
       return res;
     }
 
+    if (!row.typeUrl) {
+      const res = {
+        ...row,
+        status: 'failed',
+        error: 'plan row missing typeUrl'
+      };
+      onEntryDone?.(i, res);
+      return res;
+    }
+
     try {
       const result = await withRetry(async () => {
         if (row.plan === 'add') {
-          const out = await client.createServerAttribute(row.serverId, { typeUrl, value: row.newValue });
+          const out = await client.createServerAttribute(row.serverId, { typeUrl: row.typeUrl, value: row.newValue });
           return { created: out.resourceId ?? null, deleted: null };
         }
         if (row.plan === 'replace') {
           if (!row.existing?.resourceUrl) throw new Error('Replace row missing existing resourceUrl');
           await client.deleteServerAttribute(row.existing.resourceUrl);
-          const out = await client.createServerAttribute(row.serverId, { typeUrl, value: row.newValue });
+          const out = await client.createServerAttribute(row.serverId, { typeUrl: row.typeUrl, value: row.newValue });
           return { created: out.resourceId ?? null, deleted: row.existing.id };
         }
         if (row.plan === 'remove') {
@@ -236,6 +300,16 @@ export function createAttributeHandlers({ events = {}, getClient } = {}) {
     'attr:plan-batch': async (payload = {}) => {
       const client = await factory();
       const ac = new AbortController();
+      // Backward-compatible: accept either `attributes` (array) or the
+      // legacy single-attribute shape (operation/typeUrl/value/typeName).
+      const attributes = Array.isArray(payload.attributes) && payload.attributes.length > 0
+        ? payload.attributes
+        : [{
+            operation: payload.operation,
+            typeUrl: payload.typeUrl,
+            typeName: payload.typeName ?? null,
+            value: payload.value
+          }];
       const targets = await resolveTargets({
         entries: payload.entries ?? [],
         client,
@@ -244,21 +318,22 @@ export function createAttributeHandlers({ events = {}, getClient } = {}) {
       });
       const plan = await planBatch({
         targets,
-        operation: payload.operation,
-        typeUrl: payload.typeUrl,
-        value: payload.value,
+        attributes,
         client,
         concurrency: payload.planConcurrency ?? 4,
         signal: ac.signal,
-        onEntryStart: (i, t) => emit('attr:plan-start', { index: i, input: t.input }),
+        onEntryStart: (i, t, ai) => emit('attr:plan-start', { index: i, input: t.input, attrIndex: ai }),
         onEntryDone: (i, row) => emit('attr:plan-done', {
           index: i,
           input: row.input,
+          attrIndex: row.attrIndex,
           plan: row.plan,
           serverId: row.serverId ?? null,
           displayName: row.displayName ?? null,
           currentValue: row.existing?.value ?? null,
           newValue: row.newValue ?? null,
+          typeUrl: row.typeUrl ?? null,
+          typeName: row.typeName ?? null,
           error: row.error ?? null
         })
       });
@@ -273,15 +348,19 @@ export function createAttributeHandlers({ events = {}, getClient } = {}) {
         const client = await factory();
         const results = await executeBatch({
           plan: payload.plan ?? [],
-          typeUrl: payload.typeUrl,
           client,
           concurrency: payload.concurrency ?? 2,
           maxAttempts: payload.maxAttempts ?? 3,
           signal: ac.signal,
-          onEntryStart: (i, row) => emit('attr:exec-start', { index: i, input: row.input }),
+          onEntryStart: (i, row) => emit('attr:exec-start', {
+            index: i,
+            input: row.input,
+            attrIndex: row.attrIndex ?? 0
+          }),
           onEntryDone: (i, res) => emit('attr:exec-done', {
             index: i,
             input: res.input,
+            attrIndex: res.attrIndex ?? 0,
             status: res.status,
             plan: res.plan,
             createdId: res.created ?? null,
