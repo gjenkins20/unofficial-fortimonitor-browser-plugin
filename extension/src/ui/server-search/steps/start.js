@@ -7,6 +7,7 @@
 
 import { h, titleBar } from '../../../lib/dom.js';
 import { call } from '../../../lib/messaging.js';
+import { createCombobox } from '../../../lib/combobox.js';
 
 const TOOL_NAME = 'Search Servers';
 
@@ -39,25 +40,19 @@ export function render({ container, store, navigate, events }) {
   const body = h('div', { class: 'body-section' });
   frame.appendChild(body);
 
-  // ---- Attribute name (free-text with datalist suggestions) ----
+  // ---- Attribute name (free-text combobox with suggestions) ----
   body.appendChild(h('h3', { class: 'subhead' }, 'Attribute'));
 
-  const datalistId = 'server-search-attr-suggestions';
-  const attrInput = h('input', {
-    type: 'text',
-    class: 'paste-area',
+  let attrComboLoading = true;
+  const attrCombo = createCombobox({
+    items: [],
+    initialText: store.attributeName ?? '',
     placeholder: 'Loading suggestions…',
-    list: datalistId,
-    autocomplete: 'off',
-    spellcheck: 'false',
-    style: 'min-height:0;height:auto;padding:0.6rem 0.8rem;font-family:inherit;'
+    allowFreeText: true,
+    onChange: () => refreshRunDisabled()
   });
-  attrInput.value = store.attributeName ?? '';
-  attrInput.disabled = true;
-  body.appendChild(attrInput);
-
-  const attrDatalist = h('datalist', { id: datalistId });
-  body.appendChild(attrDatalist);
+  attrCombo.setDisabled(true);
+  body.appendChild(attrCombo.element);
 
   const attrHint = h('div', { class: 'muted', style: 'font-size:0.85rem;margin-top:0.25rem;' },
     'Type or pick an attribute name (e.g., Model). Suggestions come from your tenant\'s attribute catalog plus attributes seen on a sample of servers.'
@@ -112,10 +107,10 @@ export function render({ container, store, navigate, events }) {
   const stateLabel = actionBar.querySelector('.execute-state');
 
   function refreshRunDisabled() {
-    runBtn.disabled = !attrInput.value.trim() || !valueInput.value.trim() || attrInput.disabled;
+    const attrText = attrCombo.getText().trim();
+    runBtn.disabled = !attrText || !valueInput.value.trim() || attrComboLoading;
   }
 
-  attrInput.addEventListener('input', refreshRunDisabled);
   valueInput.addEventListener('input', refreshRunDisabled);
 
   // Subscribe to per-page progress events from the service worker.
@@ -126,24 +121,27 @@ export function render({ container, store, navigate, events }) {
     stateLabel.className = 'execute-state';
   });
 
-  // Populate the datalist suggestions. The handler unions the
+  // Populate the combobox suggestions. The handler unions the
   // /server_attribute_type catalog with attributes seen on a sample of
   // servers - necessary because built-in types (Model, Operating System)
   // are absent from the catalog but appear on server records.
   (async () => {
     try {
       const types = await call('search:list-attribute-types', {});
-      attrDatalist.innerHTML = '';
-      for (const t of types) {
-        const label = t.textkey && t.textkey !== t.name ? `${t.name} - ${t.textkey}` : t.name;
-        attrDatalist.appendChild(h('option', { value: t.name }, label));
-      }
-      attrInput.disabled = false;
-      attrInput.placeholder = 'Model';
+      const items = types.map((t) => ({
+        value: t.name,
+        label: t.name,
+        hint: t.textkey && t.textkey !== t.name ? t.textkey : null
+      }));
+      attrCombo.setItems(items);
+      attrCombo.setDisabled(false);
+      attrCombo.setPlaceholder('Model');
+      attrComboLoading = false;
       refreshRunDisabled();
     } catch (err) {
-      attrInput.disabled = false;
-      attrInput.placeholder = 'Attribute name (suggestions unavailable)';
+      attrCombo.setDisabled(false);
+      attrCombo.setPlaceholder('Attribute name (suggestions unavailable)');
+      attrComboLoading = false;
       stateLabel.textContent = `Could not load attribute suggestions: ${err?.message ?? err}`;
       stateLabel.className = 'execute-state error';
       refreshRunDisabled();
@@ -151,7 +149,7 @@ export function render({ container, store, navigate, events }) {
   })();
 
   runBtn.addEventListener('click', async () => {
-    const attributeName = attrInput.value.trim();
+    const attributeName = attrCombo.getText().trim();
     const value = valueInput.value.trim();
     if (!attributeName || !value) return;
     store.attributeName = attributeName;
@@ -160,7 +158,7 @@ export function render({ container, store, navigate, events }) {
     store.caseInsensitive = caseToggle.checked;
 
     runBtn.disabled = true;
-    attrInput.disabled = true;
+    attrCombo.setDisabled(true);
     valueInput.disabled = true;
     exactToggle.disabled = true;
     caseToggle.disabled = true;
@@ -186,7 +184,7 @@ export function render({ container, store, navigate, events }) {
       stateLabel.textContent = `Error: ${err?.message ?? err}`;
       stateLabel.className = 'execute-state error';
       runBtn.disabled = false;
-      attrInput.disabled = false;
+      attrCombo.setDisabled(false);
       valueInput.disabled = false;
       exactToggle.disabled = false;
       caseToggle.disabled = false;

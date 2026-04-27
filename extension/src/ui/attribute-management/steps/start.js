@@ -5,6 +5,7 @@
 
 import { h, titleBar } from '../../../lib/dom.js';
 import { call } from '../../../lib/messaging.js';
+import { createCombobox } from '../../../lib/combobox.js';
 
 const TOOL_NAME = 'Manage Server Attributes (Bulk)';
 
@@ -57,11 +58,16 @@ export function render({ container, store, navigate }) {
 
   // ---- Type + Value ----
   body.appendChild(h('h3', { class: 'subhead' }, 'Attribute'));
-  const typeSelect = h('select', { class: 'select' }, h('option', { value: '' }, 'Loading types…'));
+  const typeCombo = createCombobox({
+    items: [],
+    placeholder: 'Loading types…',
+    onChange: () => updateContinue()
+  });
+  typeCombo.setDisabled(true);
   const valueInput = h('input', { type: 'text', class: 'select', placeholder: 'Value', value: store.value ?? '' });
 
   const attrGrid = h('div', { class: 'targets-grid' },
-    h('label', {}, h('span', { class: 'label-text' }, 'Type'), typeSelect),
+    h('label', {}, h('span', { class: 'label-text' }, 'Type'), typeCombo.element),
     h('label', {}, h('span', { class: 'label-text' }, 'Value'), valueInput)
   );
   body.appendChild(attrGrid);
@@ -108,17 +114,19 @@ export function render({ container, store, navigate }) {
         ? store.attributeTypes
         : await call('attr:list-types', {});
       store.attributeTypes = types;
-      while (typeSelect.firstChild) typeSelect.removeChild(typeSelect.firstChild);
-      typeSelect.appendChild(h('option', { value: '' }, `- Choose type (${types.length}) -`));
-      for (const t of types) {
-        const label = t.textkey && t.textkey !== t.name ? `${t.name}  (${t.textkey})` : t.name;
-        typeSelect.appendChild(h('option', { value: t.resourceUrl }, label));
-      }
-      if (store.typeUrl) typeSelect.value = store.typeUrl;
+      const items = types.map((t) => ({
+        value: t.resourceUrl,
+        label: t.name,
+        hint: t.textkey && t.textkey !== t.name ? t.textkey : null
+      }));
+      typeCombo.setItems(items);
+      typeCombo.setDisabled(false);
+      typeCombo.setPlaceholder(`Search ${types.length} attribute types`);
+      if (store.typeUrl) typeCombo.setValue(store.typeUrl, { silent: true });
       updateContinue();
     } catch (err) {
-      while (typeSelect.firstChild) typeSelect.removeChild(typeSelect.firstChild);
-      typeSelect.appendChild(h('option', { value: '' }, `Error: ${err?.message ?? err}`));
+      typeCombo.setDisabled(false);
+      typeCombo.setPlaceholder(`Error: ${err?.message ?? err}`);
       statusRow.className = 'parse-result error';
       statusRow.textContent = err?.message
         ? `Could not load attribute types: ${err.message}. Check your API key in Settings (⚙).`
@@ -128,7 +136,7 @@ export function render({ container, store, navigate }) {
 
   // ---- Wiring ----
   function updateContinue() {
-    const hasType = !!typeSelect.value;
+    const hasType = !!typeCombo.getValue();
     const hasValue = opRemove.checked || valueInput.value.trim().length > 0;
     const entries = parseEntries(textarea.value);
     const hasTargets = entries.length > 0;
@@ -143,7 +151,6 @@ export function render({ container, store, navigate }) {
     }
   }
 
-  typeSelect.addEventListener('change', updateContinue);
   valueInput.addEventListener('input', updateContinue);
   textarea.addEventListener('input', updateContinue);
   opSet.addEventListener('change', updateContinue);
@@ -152,15 +159,14 @@ export function render({ container, store, navigate }) {
   clearBtn.addEventListener('click', () => {
     textarea.value = '';
     valueInput.value = '';
-    typeSelect.value = '';
+    typeCombo.setValue(null, { silent: true });
     updateContinue();
   });
 
   continueBtn.addEventListener('click', () => {
     store.operation = opRemove.checked ? 'remove' : 'set';
-    store.typeUrl = typeSelect.value;
-    const selectedOpt = typeSelect.options[typeSelect.selectedIndex];
-    store.typeName = selectedOpt ? selectedOpt.textContent : null;
+    store.typeUrl = typeCombo.getValue();
+    store.typeName = typeCombo.getItem()?.label ?? null;
     store.value = valueInput.value.trim();
     store.entries = parseEntries(textarea.value);
     store.plan = null;
