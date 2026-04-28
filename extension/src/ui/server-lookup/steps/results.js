@@ -1,29 +1,34 @@
 // Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// Server Name → ID Lookup - Step 2 (Results).
-// Renders the resolved table and exports a minimal two-column
-// name,server_id CSV that drops cleanly into other tools.
+// Server Lookup - Step 2 (Results) - FMN-113.
+// Renders the resolved table and exports a CSV with input/source columns
+// so downstream tooling can audit where each server_id came from.
 
 import { h, titleBar, downloadBlob } from '../../../lib/dom.js';
 import { lookupBreadcrumbs } from './start.js';
 
-const TOOL_NAME = 'Server Name → ID Lookup';
+const TOOL_NAME = 'Server Lookup';
 
 function csvEscape(v) {
   const s = v == null ? '' : String(v);
   return `"${s.replace(/"/g, '""')}"`;
 }
 
+function inputLabel(r) {
+  if (r.kind === 'name') return r.name ?? '';
+  return r.raw ?? '';
+}
+
 /**
- * Build the CSV the user asked for: one row per input name, with the
- * server_id if there was exactly one match. Ambiguous/not_found/error
- * rows have an empty server_id so the file is a safe drop-in for other
- * tools - the status column preserves the distinction for humans.
+ * One row per input. The `source` column carries the parser's classification
+ * (url / id / name) so consumers can tell whether the server_id came from a
+ * URL extraction, a raw ID pass-through, or a name resolution.
  */
 function buildCsv(results) {
-  const header = ['name', 'server_id', 'status', 'match_count', 'detail'];
+  const header = ['input', 'source', 'server_id', 'status', 'match_count', 'detail'];
   const rows = results.map((r) => [
-    r.name,
-    r.status === 'found' ? String(r.serverId) : '',
+    inputLabel(r),
+    r.kind ?? 'name',
+    (r.status === 'found' || r.status === 'resolved') ? String(r.serverId ?? '') : '',
     r.status,
     String(r.matches?.length ?? 0),
     r.status === 'error' ? (r.error ?? '') : ''
@@ -32,8 +37,6 @@ function buildCsv(results) {
 }
 
 function copyToClipboard(text) {
-  // Prefer the async clipboard API - extension pages have permission by
-  // default when triggered by a user gesture.
   if (navigator.clipboard?.writeText) {
     return navigator.clipboard.writeText(text);
   }
@@ -51,25 +54,27 @@ export function render({ container, store, navigate }) {
   }, {});
 
   const summaryParts = [];
-  if (counts.found) summaryParts.push(`${counts.found} found`);
+  if (counts.found) summaryParts.push(`${counts.found} found (by name)`);
+  if (counts.resolved) summaryParts.push(`${counts.resolved} resolved (URL/ID)`);
   if (counts.ambiguous) summaryParts.push(`${counts.ambiguous} ambiguous`);
   if (counts.not_found) summaryParts.push(`${counts.not_found} not found`);
   if (counts.error) summaryParts.push(`${counts.error} error${counts.error === 1 ? '' : 's'}`);
 
   frame.appendChild(h('div', { class: 'step-header' },
     lookupBreadcrumbs('results'),
-    h('h2', {}, `${results.length} name${results.length === 1 ? '' : 's'} resolved`),
+    h('h2', {}, `${results.length} entr${results.length === 1 ? 'y' : 'ies'} resolved`),
     h('p', {}, summaryParts.join(' · ') || '-')
   ));
 
   const body = h('div', { class: 'body-section' });
   frame.appendChild(body);
 
-  // ---- Per-name table ----
+  // ---- Per-entry table ----
   const table = h('table', { class: 'review-table' });
   const thead = h('thead', {}, h('tr', {},
     h('th', {}, '#'),
-    h('th', {}, 'Name'),
+    h('th', {}, 'Input'),
+    h('th', {}, 'Source'),
     h('th', {}, 'Status'),
     h('th', {}, 'Server ID'),
     h('th', {}, 'Candidates')
@@ -78,9 +83,9 @@ export function render({ container, store, navigate }) {
   results.forEach((r, i) => {
     let idCell = '-';
     let candidatesCell = '-';
-    if (r.status === 'found') {
+    if (r.status === 'found' || r.status === 'resolved') {
       idCell = String(r.serverId);
-      candidatesCell = '1';
+      candidatesCell = r.status === 'resolved' ? '-' : '1';
     } else if (r.status === 'ambiguous') {
       const list = (r.matches ?? []).map((m) => `${m.id}`).join(', ');
       candidatesCell = `${r.matches?.length ?? 0}: ${list}`;
@@ -91,7 +96,8 @@ export function render({ container, store, navigate }) {
     }
     tbody.appendChild(h('tr', {},
       h('td', {}, String(i + 1)),
-      h('td', {}, r.name),
+      h('td', {}, inputLabel(r) || '-'),
+      h('td', {}, h('span', { class: `source-tag ${r.kind ?? 'name'}` }, r.kind ?? 'name')),
       h('td', {}, h('span', { class: `status ${r.status}` }, r.status)),
       h('td', {}, idCell),
       h('td', {}, candidatesCell)
@@ -122,7 +128,7 @@ export function render({ container, store, navigate }) {
   });
   newBatchBtn.addEventListener('click', () => {
     store.runResult = null;
-    store.names = [];
+    store.entries = [];
     store.warnings = [];
     store.executeProgress = new Map();
     navigate('/start');

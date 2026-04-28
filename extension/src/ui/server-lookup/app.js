@@ -9,12 +9,13 @@ import { onEvent } from '../../lib/messaging.js';
 document.documentElement.dataset.toolMode = 'server-lookup';
 
 const store = {
-  // From the Start step:
-  names: [],              // string[] - the deduped input list
+  // From the Start step (FMN-113):
+  entries: [],            // {kind:'url'|'id'|'name', raw, serverId?, name?}[]
   warnings: [],
+  confirm: false,         // when true, URL/ID entries hit GET /server/{id} to verify
 
   // From the Execute/fan-out call:
-  executeProgress: new Map(), // name -> { status, serverId, matchCount, error }
+  executeProgress: new Map(), // label -> { status, serverId, matchCount, error }
   runResult: null         // { results, startedAt, finishedAt }
 };
 

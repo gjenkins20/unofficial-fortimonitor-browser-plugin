@@ -1,18 +1,20 @@
 // Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// Server Name → ID Lookup - Step 1 (Start).
-// Operator pastes/uploads a list of server names. "Run lookup" fires the
-// lookup:server-ids call, shows per-name progress inline, then transitions
-// to /results when the batch finishes.
+// Server Lookup - Step 1 (Start) - FMN-113.
+// Operator pastes/uploads a list of server names, FortiMonitor frontend
+// URLs (/instance/N/...), or raw numeric server IDs - mixed freely.
+// "Run lookup" fires the lookup:server-ids call with the structured
+// entries, shows per-entry progress inline, then transitions to /results
+// when the batch finishes.
 
 import { h, titleBar } from '../../../lib/dom.js';
 import { call } from '../../../lib/messaging.js';
-import { parseNameList } from '../parse-names.js';
+import { parseInput } from '../parse-input.js';
 
-const TOOL_NAME = 'Server Name → ID Lookup';
+const TOOL_NAME = 'Server Lookup';
 
 export function lookupBreadcrumbs(active) {
   const steps = [
-    { id: 'start', label: '1. Load names' },
+    { id: 'start', label: '1. Load input' },
     { id: 'results', label: '2. Results' }
   ];
   const order = steps.findIndex((s) => s.id === active);
@@ -26,26 +28,32 @@ export function lookupBreadcrumbs(active) {
   );
 }
 
-function rebuildPasteValue(names) {
-  if (!names.length) return '';
-  return names.join('\n');
+function rebuildPasteValue(entries) {
+  if (!entries || !entries.length) return '';
+  return entries.map((e) => e.raw).join('\n');
+}
+
+function entryLabel(entry) {
+  if (entry.kind === 'name') return entry.name;
+  if (entry.kind === 'id') return `id ${entry.serverId}`;
+  return `URL → id ${entry.serverId}`;
 }
 
 export function render({ container, store, navigate, events }) {
   const frame = h('div', { class: 'mockup-frame' });
-  frame.appendChild(titleBar('Load Names', { toolName: TOOL_NAME }));
+  frame.appendChild(titleBar('Load input', { toolName: TOOL_NAME }));
 
   frame.appendChild(h('div', { class: 'step-header' },
     lookupBreadcrumbs('start'),
-    h('h2', {}, 'Paste server names to resolve to IDs'),
-    h('p', {}, 'One name per line. Exact, case-sensitive match against the FortiMonitor v2 /server endpoint. Names with multiple matches are reported as ambiguous and list all candidates.')
+    h('h2', {}, 'Resolve server names, URLs, or IDs to server IDs'),
+    h('p', {}, 'One entry per line. Names are exact-matched (case-sensitive) against the FortiMonitor v2 /server endpoint. Frontend URLs (e.g. /instance/12345/...) and raw numeric IDs pass through directly. Names with multiple matches are reported as ambiguous and list all candidates.')
   ));
 
   const body = h('div', { class: 'body-section' });
   frame.appendChild(body);
 
   // ---- File / paste input ----
-  body.appendChild(h('h3', { class: 'subhead' }, 'Server names'));
+  body.appendChild(h('h3', { class: 'subhead' }, 'Inputs'));
 
   const fileInput = h('input', { type: 'file', accept: '.csv,.txt', hidden: true });
   const dropZone = h('label', { class: 'drop-zone' },
@@ -54,7 +62,7 @@ export function render({ container, store, navigate, events }) {
       'Drop CSV/TXT here, or ',
       h('span', { class: 'dz-link' }, 'click to browse')
     ),
-    h('div', { class: 'dz-secondary' }, 'Accepts .csv or plain text · one name per line'),
+    h('div', { class: 'dz-secondary' }, 'Accepts .csv or plain text · one entry per line · names, /instance/N URLs, or raw IDs'),
     fileInput
   );
   body.appendChild(dropZone);
@@ -63,18 +71,40 @@ export function render({ container, store, navigate, events }) {
 
   const paste = h('textarea', {
     class: 'paste-area',
-    placeholder: 'FGVM01TM24006844\nFGVM01TM24006845\nFGVM01TM24006846'
+    placeholder: 'FGVM01TM24006844\nhttps://fortimonitor.forticloud.com/instance/42024060/details\n42024061'
   });
-  paste.value = rebuildPasteValue(store.names);
+  paste.value = rebuildPasteValue(store.entries);
   body.appendChild(paste);
 
   body.appendChild(h('div', { class: 'format-hint', html:
-    '<strong>Format:</strong> one server name per line. First line may be the literal header <code>name</code> (optional). Duplicates are deduplicated.' +
-    '<pre># header optional\nname\nFGVM01TM24006844\nFGVM01TM24006845\n\n# or positional\nFGVM01TM24006844\nFGVM01TM24006845</pre>'
+    '<strong>Format:</strong> one entry per line. Each line is dispatched as:' +
+    '<ul style="margin:0.4rem 0 0.4rem 1rem;">' +
+    '<li><strong>URL</strong> - matches <code>/instance/N/...</code>; the server ID is extracted from the path.</li>' +
+    '<li><strong>ID</strong> - bare numeric line (e.g. <code>42024060</code>) passes through as that server_id.</li>' +
+    '<li><strong>Name</strong> - anything else; resolved by exact-match against <code>/server</code>.</li>' +
+    '</ul>' +
+    'First line may be the literal header <code>name</code> (optional). Duplicate IDs and names are deduplicated.' +
+    '<pre># mixed input\nFGVM01TM24006844\nhttps://fortimonitor.forticloud.com/instance/42024060/details\n42024061</pre>'
   }));
 
   const parseResult = h('div', { class: 'parse-result empty' });
   body.appendChild(parseResult);
+
+  // ---- Tenant-confirmation toggle (URL/ID entries only) ----
+  const confirmToggle = h('input', { type: 'checkbox' });
+  confirmToggle.checked = !!store.confirm;
+  body.appendChild(h('label', {
+    class: 'toggle-row',
+    style: 'display:flex;gap:0.5rem;align-items:flex-start;margin:0.5rem 0 0.25rem;'
+  },
+    confirmToggle,
+    h('span', {},
+      h('strong', {}, 'Confirm URL/ID entries against the tenant'),
+      h('span', { class: 'muted', style: 'display:block;font-size:0.85rem;' },
+        'Off (default): URL/ID entries pass through without an extra API call. On: each URL/ID fires a single GET /server/{id}; the entry is reported as not_found if the ID does not exist in your tenant.'
+      )
+    )
+  ));
 
   // ---- Progress (shown while a run is in flight) ----
   const progressBox = h('div', { class: 'progress-list', hidden: true });
@@ -94,14 +124,19 @@ export function render({ container, store, navigate, events }) {
   function refreshParseDisplay(result) {
     parseResult.innerHTML = '';
     parseResult.className = 'parse-result';
-    if (!result || result.names.length === 0) {
+    if (!result || result.entries.length === 0) {
       parseResult.classList.add('empty');
-      parseResult.textContent = 'No names parsed yet.';
+      parseResult.textContent = 'No input parsed yet.';
       runBtn.disabled = true;
       return;
     }
+    const counts = result.entries.reduce((acc, e) => { acc[e.kind] = (acc[e.kind] ?? 0) + 1; return acc; }, {});
+    const parts = [];
+    if (counts.name) parts.push(`${counts.name} name${counts.name === 1 ? '' : 's'}`);
+    if (counts.url)  parts.push(`${counts.url} URL${counts.url === 1 ? '' : 's'}`);
+    if (counts.id)   parts.push(`${counts.id} ID${counts.id === 1 ? '' : 's'}`);
     parseResult.appendChild(h('div', { class: 'parse-summary' },
-      `${result.names.length} unique name${result.names.length === 1 ? '' : 's'} ready`
+      `${result.entries.length} unique entr${result.entries.length === 1 ? 'y' : 'ies'} ready (${parts.join(' · ') || '-'})`
     ));
     if (result.warnings.length) {
       const warnList = h('ul', { class: 'warning-list' },
@@ -118,17 +153,17 @@ export function render({ container, store, navigate, events }) {
   }
 
   function reparse() {
-    const parsed = parseNameList(paste.value);
-    store.names = parsed.names;
+    const parsed = parseInput(paste.value);
+    store.entries = parsed.entries;
     store.warnings = parsed.warnings;
     refreshParseDisplay(parsed);
   }
 
   paste.addEventListener('input', reparse);
+  confirmToggle.addEventListener('change', () => { store.confirm = confirmToggle.checked; });
 
   // ---- File upload handling ----
   dropZone.addEventListener('click', (e) => {
-    // Clicking the label triggers the input; no manual dispatch needed.
     if (e.target === fileInput) e.stopPropagation();
   });
   fileInput.addEventListener('change', async () => {
@@ -138,7 +173,6 @@ export function render({ container, store, navigate, events }) {
     paste.value = text;
     reparse();
   });
-  // Drag-and-drop
   ['dragover', 'dragenter'].forEach((ev) => {
     dropZone.addEventListener(ev, (e) => {
       e.preventDefault();
@@ -157,24 +191,23 @@ export function render({ container, store, navigate, events }) {
     reparse();
   });
 
-  // Initial parse if the store has names from a previous mount.
   if (paste.value) reparse();
 
   // ---- Event subscription for inline progress ----
-  const rowByName = new Map();
+  const rowByLabel = new Map();
   const unsubscribe = events.on((event, payload) => {
     if (event === 'lookup:entry-start') {
-      const row = rowByName.get(payload.name);
+      const row = rowByLabel.get(payload.name);
       if (row) {
         row.statusEl.textContent = 'running';
         row.statusEl.className = 'status running';
       }
     } else if (event === 'lookup:entry-done') {
-      const row = rowByName.get(payload.name);
+      const row = rowByLabel.get(payload.name);
       if (row) {
         row.statusEl.textContent = payload.status;
         row.statusEl.className = `status ${payload.status}`;
-        if (payload.status === 'found') {
+        if (payload.status === 'found' || payload.status === 'resolved') {
           row.detailEl.textContent = `id ${payload.serverId}`;
           row.detailEl.className = 'detail muted';
         } else if (payload.status === 'ambiguous') {
@@ -192,31 +225,36 @@ export function render({ container, store, navigate, events }) {
   });
 
   runBtn.addEventListener('click', async () => {
-    if (!store.names.length) return;
+    if (!store.entries.length) return;
     runBtn.disabled = true;
     paste.disabled = true;
+    confirmToggle.disabled = true;
     stateLabel.textContent = 'Looking up…';
     stateLabel.className = 'execute-state';
 
-    // Render a pending row per unique name so the user sees progress.
     progressBox.hidden = false;
     progressBox.innerHTML = '';
-    rowByName.clear();
-    for (const name of store.names) {
+    rowByLabel.clear();
+    for (const entry of store.entries) {
+      const label = entryLabel(entry);
       const statusEl = h('span', { class: 'status pending' }, 'pending');
       const detailEl = h('span', { class: 'detail muted' }, '');
       const row = h('div', { class: 'progress-row' },
-        h('span', { class: 'serial' }, name),
+        h('span', { class: 'serial' }, label),
         statusEl,
         detailEl
       );
-      rowByName.set(name, { statusEl, detailEl });
+      // Key: the handler emits with the entry's *label* for name entries
+      // and `raw` for url/id entries. Cover both lookups so events from
+      // both kinds find their row.
+      rowByLabel.set(entry.kind === 'name' ? entry.name : entry.raw, { statusEl, detailEl });
       progressBox.appendChild(row);
     }
 
     try {
       const result = await call('lookup:server-ids', {
-        names: store.names,
+        entries: store.entries,
+        confirm: !!store.confirm,
         concurrency: 4
       });
       store.runResult = result;
@@ -227,6 +265,7 @@ export function render({ container, store, navigate, events }) {
       stateLabel.className = 'execute-state error';
       runBtn.disabled = false;
       paste.disabled = false;
+      confirmToggle.disabled = false;
     }
   });
 
