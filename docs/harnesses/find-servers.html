@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Harness: Find Servers (FMN-114 unified)</title>
+<!--
+  Synthetic harness for src/ui/server-search/app.html (Find Servers tool).
+
+  Stubs chrome.runtime.sendMessage to handle:
+    - search:list-attribute-types -> canned attribute name suggestions
+    - search:list-device-types    -> canned device-type list
+    - search:servers              -> applies the same field-type matchers
+                                     against a canned server fleet, plus a
+                                     canned active-outage server-id set
+    - search:abort                -> no-op {aborted:false}
+
+  Run:
+    1. From repo root: python3 -m http.server 8766 --bind 127.0.0.1
+    2. http://127.0.0.1:8766/docs/harnesses/find-servers.html
+-->
+<style>
+  body { font: 13px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    margin: 0; padding: 16px; background: #f4f5f7; color: #222; }
+  h1 { font-size: 16px; margin: 0 0 12px; }
+  .grid { display: grid; grid-template-columns: 520px 1fr; gap: 16px; align-items: flex-start; }
+  iframe { width: 520px; height: 880px; border: 1px solid #c4c8cf; border-radius: 6px;
+    background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+  .panel { background: #fff; border: 1px solid #d4d7dc; border-radius: 6px; padding: 12px; }
+  .panel h2 { font-size: 12px; margin: 0 0 8px; color: #555; text-transform: uppercase; letter-spacing: 0.04em; }
+  pre { font: 11.5px ui-monospace, Menlo, monospace; background: #f7f8fa;
+    border: 1px solid #e3e6eb; padding: 6px 8px; border-radius: 4px; white-space: pre-wrap;
+    word-break: break-all; max-height: 380px; overflow: auto; }
+  button { font: inherit; padding: 4px 10px; margin: 0 4px 4px 0; cursor: pointer;
+    background: #fff; border: 1px solid #c4c8cf; border-radius: 4px; }
+  button:hover { background: #f0f2f5; }
+  .small { color: #666; font-size: 11.5px; }
+  .heartbeat { display: inline-block; padding: 2px 6px; background: #e8f4ff; color: #134e89; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>Find Servers harness <span class="small">(FMN-114 unified)</span> · heartbeat <span id="heartbeat" class="heartbeat">0</span></h1>
+
+<div class="grid">
+  <iframe id="frame"></iframe>
+  <div>
+    <div class="panel">
+      <h2>Drive the iframe</h2>
+      <button id="reload-frame">Reload iframe</button>
+      <button id="seed-criteria-only">Seed: tag=production AND OS contains Windows</button>
+      <button id="seed-or">Seed: tag=production OR has-active-outage</button>
+      <button id="seed-ids-only">Seed: identifiers only (1001, 1002)</button>
+      <button id="seed-combined">Seed: ids + tag=production filter</button>
+      <button id="run">Click Run search</button>
+      <button id="dump-results">Dump results table</button>
+      <pre id="probe-output">(probe output)</pre>
+    </div>
+  </div>
+</div>
+
+<script>
+  let hb = 0;
+  setInterval(function () { hb++; document.getElementById('heartbeat').textContent = String(hb); }, 500);
+
+  const STUBS = `
+    <script>
+      (function () {
+        const SUGGESTIONS = [
+          { name: 'Environment', textkey: 'Environment', sources: ['catalog'] },
+          { name: 'Model', textkey: 'dem.model', sources: ['server'] },
+          { name: 'Operating System', textkey: 'server.os', sources: ['server'] }
+        ];
+        const DEVICE_TYPES = ['fortigate', 'network_device', 'server'];
+
+        // Canned tenant.
+        const SERVERS = [
+          { id: 1001, url: '/server/1001', name: 'edge-win-01', fqdn: 'edge-win-01.local', additional_fqdns: [], status: 'active', tags: ['production', 'edge'], device_type: 'server', device_sub_type: null,
+            attributes: [
+              { name: 'Operating System', textkey: 'server.os', value: 'Windows Server 2022' },
+              { name: 'Model', textkey: 'dem.model', value: 'PowerEdge R750' }
+            ]
+          },
+          { id: 1002, url: '/server/1002', name: 'edge-win-02', fqdn: 'edge-win-02.local', additional_fqdns: [], status: 'active', tags: ['production'], device_type: 'server', device_sub_type: null,
+            attributes: [
+              { name: 'Operating System', textkey: 'server.os', value: 'Windows Server 2019' }
+            ]
+          },
+          { id: 1003, url: '/server/1003', name: 'staging-lnx-01', fqdn: 'staging-lnx.local', additional_fqdns: [], status: 'paused', tags: ['staging'], device_type: 'server', device_sub_type: null,
+            attributes: [{ name: 'Operating System', textkey: 'server.os', value: 'Ubuntu 22.04' }]
+          },
+          { id: 1004, url: '/server/1004', name: 'edge-fgt-01', fqdn: 'edge-fgt-01.local', additional_fqdns: [], status: 'active', tags: ['production', 'wan'], device_type: 'network_device', device_sub_type: 'fortigate',
+            attributes: [{ name: 'Model', textkey: 'dem.model', value: 'FGT60F' }]
+          }
+        ];
+        // Active outages: server 1003 has one.
+        const ACTIVE_OUTAGE_IDS = new Set([1003]);
+
+        // Field-type matchers (mirrors background handlers; minimal copy).
+        function eq(a, b, ci) {
+          if (a == null || b == null) return false;
+          return ci ? String(a).toLowerCase() === String(b).toLowerCase() : String(a) === String(b);
+        }
+        function inc(a, b, ci) {
+          if (a == null || b == null) return false;
+          return ci ? String(a).toLowerCase().includes(String(b).toLowerCase()) : String(a).includes(String(b));
+        }
+        function valMatch(a, b, exact, ci) { return exact ? eq(a, b, ci) : inc(a, b, ci); }
+
+        function matchOne(server, c) {
+          const ci = c.caseInsensitive !== false;
+          const ex = c.exactMatch !== false;
+          if (c.fieldType === 'attribute') {
+            for (const a of (server.attributes || [])) {
+              if ((eq(a.name, c.attributeName, ci) || eq(a.textkey, c.attributeName, ci))
+                  && valMatch(a.value, c.value, ex, ci)) return { value: a.value, attributeName: a.name };
+            }
+            return null;
+          }
+          if (c.fieldType === 'name') return valMatch(server.name, c.value, ex, ci) ? { value: server.name } : null;
+          if (c.fieldType === 'fqdn') {
+            if (valMatch(server.fqdn, c.value, ex, ci)) return { value: server.fqdn };
+            for (const f of (server.additional_fqdns || [])) if (valMatch(f, c.value, ex, ci)) return { value: f };
+            return null;
+          }
+          if (c.fieldType === 'tag') {
+            for (const t of (server.tags || [])) if (valMatch(t, c.value, ex, ci)) return { value: t };
+            return null;
+          }
+          if (c.fieldType === 'status') return eq(server.status, c.value, true) ? { value: server.status } : null;
+          if (c.fieldType === 'device_type') {
+            if (valMatch(server.device_type, c.value, ex, ci)) return { value: server.device_type };
+            if (valMatch(server.device_sub_type, c.value, ex, ci)) return { value: server.device_sub_type };
+            return null;
+          }
+          if (c.fieldType === 'has_active_outage') {
+            const has = ACTIVE_OUTAGE_IDS.has(server.id);
+            return Boolean(c.value) === has ? { value: has } : null;
+          }
+          return null;
+        }
+        function matchesByCriteria(server, criteria, mode) {
+          if (!criteria.length) return { matched: false, info: [] };
+          const info = [];
+          let any = false;
+          for (let i = 0; i < criteria.length; i++) {
+            const r = matchOne(server, criteria[i]);
+            if (r) { any = true; info.push({ index: i, fieldType: criteria[i].fieldType, ...r }); }
+            else if (mode === 'all') return { matched: false, info: [] };
+          }
+          return { matched: mode === 'all' ? true : any, info };
+        }
+        function shape(server, info, source) {
+          return {
+            id: server.id, name: server.name, fqdn: server.fqdn,
+            additionalFqdns: server.additional_fqdns || [],
+            deviceType: server.device_type, deviceSubType: server.device_sub_type,
+            status: server.status, tags: server.tags || [], attributes: server.attributes || [],
+            matchedCriteria: info, source: source || null
+          };
+        }
+
+        function classifyId(raw) {
+          const m = raw.match(/\\/instance\\/(\\d+)\\b/i);
+          if (m) return { kind: 'url', raw, serverId: Number(m[1]) };
+          if (/^\\d+$/.test(raw)) return { kind: 'id', raw, serverId: Number(raw) };
+          return { kind: 'name', raw, name: raw };
+        }
+        function getById(id) { return SERVERS.find(s => s.id === id) || null; }
+        function getByName(name) { return SERVERS.filter(s => s.name === name); }
+
+        const messageListeners = new Set();
+        function emit(event, payload) {
+          const msg = { type: '__event__', event, payload };
+          for (const fn of messageListeners) { try { fn(msg, {}, function(){}); } catch(e){} }
+        }
+
+        window.chrome = {
+          runtime: {
+            id: 'harness-extension-id',
+            getURL: function (p) { return p; },
+            lastError: null,
+            sendMessage: function (message, callback) {
+              const type = message && message.type;
+              const payload = (message && message.payload) || {};
+              setTimeout(function () {
+                try {
+                  if (type === 'search:list-attribute-types') return callback({ ok: true, result: SUGGESTIONS });
+                  if (type === 'search:list-device-types') return callback({ ok: true, result: DEVICE_TYPES });
+                  if (type === 'search:servers') {
+                    const ids = Array.isArray(payload.identifiers) ? payload.identifiers : [];
+                    const criteria = (Array.isArray(payload.criteria) ? payload.criteria : []).map(function(c){
+                      const out = { ...c };
+                      if (out.caseInsensitive == null) out.caseInsensitive = payload.caseInsensitive !== false;
+                      return out;
+                    });
+                    const mode = payload.mode === 'any' ? 'any' : 'all';
+                    const matches = [];
+                    if (ids.length > 0) {
+                      // Resolve identifiers, then optionally apply filter.
+                      for (const raw of ids) {
+                        const cls = classifyId(raw);
+                        let server = null;
+                        if (cls.kind === 'name') {
+                          const ms = getByName(cls.name);
+                          if (ms.length === 1) server = ms[0];
+                        } else {
+                          server = getById(cls.serverId);
+                        }
+                        if (!server) continue;
+                        if (criteria.length === 0) { matches.push(shape(server, [], cls)); continue; }
+                        const r = matchesByCriteria(server, criteria, mode);
+                        if (r.matched) matches.push(shape(server, r.info, cls));
+                      }
+                      emit('search:page', { fetched: ids.length, total: ids.length, matches: matches.length });
+                    } else {
+                      // criteria-only: scan canned fleet
+                      for (const s of SERVERS) {
+                        const r = matchesByCriteria(s, criteria, mode);
+                        if (r.matched) matches.push(shape(s, r.info, null));
+                      }
+                      emit('search:page', { fetched: SERVERS.length, total: SERVERS.length, matches: matches.length });
+                    }
+                    return callback({ ok: true, result: {
+                      identifiers: ids, criteria, mode,
+                      caseInsensitive: payload.caseInsensitive !== false,
+                      matches,
+                      totalScanned: ids.length > 0 ? ids.length : SERVERS.length,
+                      totalAvailable: ids.length > 0 ? ids.length : SERVERS.length,
+                      startedAt: new Date().toISOString(),
+                      finishedAt: new Date().toISOString()
+                    }});
+                  }
+                  if (type === 'search:abort') return callback({ ok: true, result: { aborted: false, reason: 'harness' } });
+                  callback({ ok: false, error: 'harness: unknown message type ' + type });
+                } catch (err) {
+                  callback({ ok: false, error: String(err && err.message || err) });
+                }
+              }, 0);
+            },
+            onMessage: {
+              addListener: function (fn) { messageListeners.add(fn); },
+              removeListener: function (fn) { messageListeners.delete(fn); }
+            }
+          }
+        };
+      })();
+    <\/script>
+  `;
+
+  async function loadFrame() {
+    const html = await fetch('/extension/src/ui/server-search/app.html').then(function (r) { return r.text(); });
+    const patched = html.replace(/<head>/i, '<head><base href="/extension/src/ui/server-search/">' + STUBS);
+    document.getElementById('frame').srcdoc = patched;
+  }
+  function frameWin() { const f = document.getElementById('frame'); return f && f.contentWindow; }
+  function setOutput(label, val) {
+    const out = document.getElementById('probe-output');
+    out.textContent = '[' + label + ']\n' + (typeof val === 'string' ? val : JSON.stringify(val, null, 2));
+  }
+  function pause(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  document.getElementById('reload-frame').addEventListener('click', loadFrame);
+
+  function setIds(text) {
+    const win = frameWin(); if (!win) return;
+    const ta = win.document.querySelector('textarea.paste-area');
+    ta.value = text;
+    ta.dispatchEvent(new win.Event('input', { bubbles: true }));
+  }
+  function setMode(mode) {
+    const win = frameWin(); if (!win) return;
+    const sel = win.document.querySelector('.mode-row select');
+    sel.value = mode;
+    sel.dispatchEvent(new win.Event('change', { bubbles: true }));
+  }
+  function fillCriterion(rowIdx, fieldType, opts) {
+    const win = frameWin(); if (!win) return;
+    const rows = win.document.querySelectorAll('.criterion-row');
+    const row = rows[rowIdx];
+    if (!row) return;
+    const fieldSelect = row.querySelector('select');
+    fieldSelect.value = fieldType;
+    fieldSelect.dispatchEvent(new win.Event('change', { bubbles: true }));
+    // After change, the row's fieldHost has been rebuilt with the new editor.
+    if (fieldType === 'has_active_outage') {
+      const sel = row.querySelectorAll('select')[1];
+      sel.value = opts.value ? 'true' : 'false';
+      sel.dispatchEvent(new win.Event('change', { bubbles: true }));
+      return;
+    }
+    if (fieldType === 'status') {
+      const sel = row.querySelectorAll('select')[1];
+      sel.value = opts.value;
+      sel.dispatchEvent(new win.Event('change', { bubbles: true }));
+      return;
+    }
+    if (fieldType === 'attribute') {
+      const inputs = row.querySelectorAll('input[type="text"]');
+      // First input is the combobox text input, second is the value
+      inputs[0].value = opts.attributeName;
+      inputs[0].dispatchEvent(new win.Event('input', { bubbles: true }));
+      inputs[0].dispatchEvent(new win.Event('change', { bubbles: true }));
+      inputs[1].value = opts.value;
+      inputs[1].dispatchEvent(new win.Event('input', { bubbles: true }));
+      const exact = row.querySelector('input[type="checkbox"]');
+      exact.checked = opts.exactMatch !== false;
+      exact.dispatchEvent(new win.Event('change', { bubbles: true }));
+      return;
+    }
+    // string fields
+    const inputs = row.querySelectorAll('input[type="text"]');
+    const valInput = inputs[inputs.length - 1];
+    valInput.value = opts.value;
+    valInput.dispatchEvent(new win.Event('input', { bubbles: true }));
+    if (opts.exactMatch != null) {
+      const exact = row.querySelector('input[type="checkbox"]');
+      exact.checked = !!opts.exactMatch;
+      exact.dispatchEvent(new win.Event('change', { bubbles: true }));
+    }
+  }
+  async function ensureCriterionRows(n) {
+    const win = frameWin(); if (!win) return;
+    let rows = win.document.querySelectorAll('.criterion-row');
+    while (rows.length < n) {
+      const buttons = Array.from(win.document.querySelectorAll('button'));
+      const addBtn = buttons.find(b => b.textContent.trim().startsWith('+ Add criterion'));
+      addBtn.click();
+      await pause(20);
+      rows = win.document.querySelectorAll('.criterion-row');
+    }
+  }
+  async function clearCriteria() {
+    const win = frameWin(); if (!win) return;
+    let rows = win.document.querySelectorAll('.criterion-row');
+    while (rows.length > 1) {
+      rows[rows.length - 1].querySelector('.btn.btn-icon').click();
+      await pause(20);
+      rows = win.document.querySelectorAll('.criterion-row');
+    }
+    // Clear the remaining row's fields by switching its field type then back
+    if (rows[0]) {
+      const sel = rows[0].querySelector('select');
+      sel.value = 'attribute';
+      sel.dispatchEvent(new win.Event('change', { bubbles: true }));
+    }
+  }
+  function tickColumn(key) {
+    const win = frameWin(); if (!win) return;
+    const cols = Array.from(win.document.querySelectorAll('.cols-box label input[type="checkbox"]'));
+    // Index in colDefs order: status, tags, deviceType, deviceSubType, source
+    const map = { status: 0, tags: 1, deviceType: 2, deviceSubType: 3, source: 4 };
+    const idx = map[key];
+    if (idx == null || !cols[idx]) return;
+    cols[idx].checked = true;
+    cols[idx].dispatchEvent(new win.Event('change', { bubbles: true }));
+  }
+
+  document.getElementById('seed-criteria-only').addEventListener('click', async () => {
+    setIds('');
+    await clearCriteria();
+    await ensureCriterionRows(2);
+    fillCriterion(0, 'tag', { value: 'production', exactMatch: true });
+    fillCriterion(1, 'attribute', { attributeName: 'Operating System', value: 'Windows', exactMatch: false });
+    setMode('all');
+    tickColumn('status'); tickColumn('tags');
+    setOutput('seed', 'Tag=production (exact) AND OS contains Windows. Status + Tags ticked.');
+  });
+
+  document.getElementById('seed-or').addEventListener('click', async () => {
+    setIds('');
+    await clearCriteria();
+    await ensureCriterionRows(2);
+    fillCriterion(0, 'tag', { value: 'production', exactMatch: true });
+    fillCriterion(1, 'has_active_outage', { value: true });
+    setMode('any');
+    tickColumn('tags'); tickColumn('source');
+    setOutput('seed-or', 'tag=production OR has_active_outage. Tags + Source ticked.');
+  });
+
+  document.getElementById('seed-ids-only').addEventListener('click', async () => {
+    setIds('1001\n1002');
+    await clearCriteria();
+    setOutput('seed-ids', 'Identifiers 1001 + 1002 only.');
+  });
+
+  document.getElementById('seed-combined').addEventListener('click', async () => {
+    setIds('1001\n1002\n1003');
+    await clearCriteria();
+    fillCriterion(0, 'tag', { value: 'production', exactMatch: true });
+    setMode('all');
+    setOutput('seed-combined', '3 ids + tag=production filter. Expect intersection.');
+  });
+
+  document.getElementById('run').addEventListener('click', async () => {
+    const win = frameWin(); if (!win) return;
+    const buttons = Array.from(win.document.querySelectorAll('button'));
+    const runBtn = buttons.find(b => b.textContent.trim() === 'Run search');
+    if (!runBtn || runBtn.disabled) { setOutput('run', 'Run disabled or not found'); return; }
+    runBtn.click();
+    setOutput('run', 'clicked. Wait ~600ms then Dump.');
+  });
+
+  document.getElementById('dump-results').addEventListener('click', () => {
+    const win = frameWin(); if (!win) return;
+    const tbody = win.document.querySelector('.body-section table tbody');
+    const ths = Array.from(win.document.querySelectorAll('.body-section table thead th')).map(th => th.textContent);
+    const rows = tbody ? Array.from(tbody.querySelectorAll('tr')).map(tr => Array.from(tr.querySelectorAll('td')).map(td => td.textContent.trim())) : null;
+    setOutput('results', {
+      hash: win.location.hash,
+      h2: win.document.querySelector('.step-header h2')?.textContent,
+      summary: win.document.querySelector('.step-header p')?.textContent,
+      columns: ths, rows
+    });
+  });
+
+  loadFrame();
+</script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 // Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// Top-level UI controller for the Search Servers tool.
-// 2-step flow: /start (enter term, fire search) → /results (table + CSV).
+// Top-level UI controller for the unified Find Servers tool.
+// 2-step flow: /start (identifiers + filter + columns) -> /results.
 
 import * as start from './steps/start.js';
 import * as results from './steps/results.js';
@@ -9,10 +9,26 @@ import { onEvent } from '../../lib/messaging.js';
 document.documentElement.dataset.toolMode = 'server-search';
 
 const store = {
-  attributeName: '',
-  value: '',
-  exactMatch: true,
+  // Section 1: identifiers paste box
+  identifiersText: '',
+
+  // Section 2: filter criteria
+  criteria: [],     // {fieldType, ...field-specific}[]
+  mode: 'all',      // 'all' | 'any'
   caseInsensitive: true,
+
+  // Section 3: output columns
+  columns: {
+    // Always-on columns are not in this object; the renderer enforces them.
+    status: false,
+    tags: false,
+    deviceType: false,
+    deviceSubType: false,
+    source: false,
+    attributes: []   // array of attribute names selected for per-attribute columns
+  },
+
+  // Run output
   runResult: null
 };
 

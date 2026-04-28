@@ -1,39 +1,99 @@
 // Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// Search Servers - Step 2 (Results).
-// Renders the matched server table and exports a CSV: server_id, name,
-// fqdn - the report the operator asked for, plus extra columns for
-// verification (matched attribute name/value).
+// Find Servers - Step 2 (Results) - FMN-114 unified scope.
+// Renders the matched server table with operator-chosen columns and exports
+// a matching CSV.
 
 import { h, titleBar, downloadBlob } from '../../../lib/dom.js';
-import { searchBreadcrumbs } from './start.js';
+import { findBreadcrumbs } from './start.js';
 
-const TOOL_NAME = 'Search Servers';
+const TOOL_NAME = 'Find Servers';
 
 function csvEscape(v) {
   const s = v == null ? '' : String(v);
   return `"${s.replace(/"/g, '""')}"`;
 }
 
-function buildCsv(result) {
+const FIELD_LABEL = {
+  attribute: 'Attribute',
+  name: 'Name',
+  fqdn: 'FQDN',
+  tag: 'Tag',
+  status: 'Status',
+  device_type: 'Device type',
+  has_active_outage: 'Active outage'
+};
+
+function describeCriteria(criteria, mode) {
+  if (!Array.isArray(criteria) || criteria.length === 0) return null;
+  const joiner = mode === 'any' ? ' OR ' : ' AND ';
+  return criteria
+    .map((c) => {
+      const label = FIELD_LABEL[c.fieldType] ?? c.fieldType;
+      if (c.fieldType === 'has_active_outage') return `${label} ${c.value ? '= true' : '= false'}`;
+      if (c.fieldType === 'status') return `${label} = "${c.value}"`;
+      const op = c.exactMatch ? '=' : '~';
+      if (c.fieldType === 'attribute') return `${c.attributeName} ${op} "${c.value}"`;
+      return `${label} ${op} "${c.value}"`;
+    })
+    .join(joiner);
+}
+
+function describeSource(source) {
+  if (!source) return '';
+  if (source.kind === 'name') return `name: ${source.name ?? source.raw ?? ''}`;
+  if (source.kind === 'url') return `URL: ${source.raw ?? ''}`;
+  if (source.kind === 'id') return `ID: ${source.raw ?? source.serverId ?? ''}`;
+  return '';
+}
+
+function findAttributeValue(server, name) {
+  if (!server || !Array.isArray(server.attributes)) return null;
+  const lc = String(name).toLowerCase();
+  for (const a of server.attributes) {
+    if (String(a?.name ?? '').toLowerCase() === lc) return a.value ?? '';
+    if (String(a?.textkey ?? '').toLowerCase() === lc) return a.value ?? '';
+  }
+  return null;
+}
+
+function buildColumnList(columns) {
+  // Build the ordered list of {key, label, getter} based on operator
+  // selections. ID / Name / FQDN are always present.
+  const list = [
+    { key: 'id',   label: 'Server ID', getter: (m) => m.id ?? '' },
+    { key: 'name', label: 'Name',      getter: (m) => m.name ?? '' },
+    { key: 'fqdn', label: 'FQDN',      getter: (m) => m.fqdn ?? '' }
+  ];
+  if (columns.status)        list.push({ key: 'status',        label: 'Status',          getter: (m) => m.status ?? '' });
+  if (columns.tags)          list.push({ key: 'tags',          label: 'Tags',            getter: (m) => Array.isArray(m.tags) ? m.tags.join('|') : '' });
+  if (columns.deviceType)    list.push({ key: 'deviceType',    label: 'Device type',     getter: (m) => m.deviceType ?? '' });
+  if (columns.deviceSubType) list.push({ key: 'deviceSubType', label: 'Device sub-type', getter: (m) => m.deviceSubType ?? '' });
+  if (columns.source)        list.push({ key: 'source',        label: 'Source',          getter: (m) => describeSource(m.source) });
+  for (const attrName of (columns.attributes ?? [])) {
+    list.push({
+      key: `attr:${attrName}`,
+      label: attrName,
+      getter: (m) => findAttributeValue(m, attrName) ?? ''
+    });
+  }
+  return list;
+}
+
+function buildCsv(result, columns) {
+  const cols = buildColumnList(columns);
   const lines = [];
-  lines.push(`# Unofficial FortiMonitor Toolkit - Search Servers report`);
+  lines.push(`# Unofficial FortiMonitor Toolkit - Find Servers report`);
   lines.push(`# Author: Gregori Jenkins - https://www.linkedin.com/in/gregorijenkins`);
   lines.push(`# Generated: ${new Date().toISOString()}`);
-  lines.push(`# Filter: attribute="${result.attributeName}" value${result.exactMatch ? '=' : '~'}"${result.value}" caseInsensitive=${result.caseInsensitive}`);
+  const filt = describeCriteria(result.criteria, result.mode);
+  if (filt) lines.push(`# Filter (${result.mode === 'any' ? 'OR' : 'AND'}): ${filt}`);
+  if (Array.isArray(result.identifiers) && result.identifiers.length > 0) {
+    lines.push(`# Identifiers: ${result.identifiers.length} input${result.identifiers.length === 1 ? '' : 's'}`);
+  }
   lines.push(`# ${result.matches.length} match${result.matches.length === 1 ? '' : 'es'} out of ${result.totalScanned} scanned`);
-  lines.push(['server_id', 'name', 'fqdn', 'additional_fqdns', 'device_type', 'device_sub_type', 'matched_attribute', 'matched_value']
-    .map(csvEscape).join(','));
+  lines.push(cols.map((c) => c.label).map(csvEscape).join(','));
   for (const m of result.matches) {
-    lines.push([
-      m.id ?? '',
-      m.name ?? '',
-      m.fqdn ?? '',
-      (m.additionalFqdns ?? []).join('|'),
-      m.deviceType ?? '',
-      m.deviceSubType ?? '',
-      m.matchedAttributeName ?? '',
-      m.matchedValue ?? ''
-    ].map(csvEscape).join(','));
+    lines.push(cols.map((c) => csvEscape(c.getter(m))).join(','));
   }
   return lines.join('\n');
 }
@@ -47,17 +107,21 @@ export function render({ container, store, navigate }) {
   const frame = h('div', { class: 'mockup-frame' });
   frame.appendChild(titleBar('Results', { toolName: TOOL_NAME }));
 
-  const result = store.runResult ?? {
-    attributeName: '', value: '', exactMatch: true, caseInsensitive: true,
-    matches: [], totalScanned: 0
-  };
+  const result = store.runResult ?? { matches: [], totalScanned: 0, criteria: [], identifiers: [], mode: 'all' };
   const matchCount = result.matches.length;
-  const op = result.exactMatch ? '=' : '~';
+  const cols = buildColumnList(store.columns ?? {});
+
+  const filt = describeCriteria(result.criteria, result.mode);
+  const idCount = Array.isArray(result.identifiers) ? result.identifiers.length : 0;
+  const subtitleParts = [];
+  if (idCount > 0) subtitleParts.push(`${idCount} identifier${idCount === 1 ? '' : 's'}`);
+  if (filt) subtitleParts.push(`filter (${result.mode === 'any' ? 'OR' : 'AND'}): ${filt}`);
 
   frame.appendChild(h('div', { class: 'step-header' },
-    searchBreadcrumbs('results'),
-    h('h2', {}, `${matchCount} server${matchCount === 1 ? '' : 's'} with ${result.attributeName} ${op} "${result.value}"`),
-    h('p', {}, `Scanned ${result.totalScanned} server record${result.totalScanned === 1 ? '' : 's'}.`)
+    findBreadcrumbs('results'),
+    h('h2', {}, `${matchCount} server${matchCount === 1 ? '' : 's'} matched`),
+    h('p', {}, subtitleParts.join(' · ') || '-'),
+    h('p', { class: 'muted' }, `Scanned ${result.totalScanned} server record${result.totalScanned === 1 ? '' : 's'}.`)
   ));
 
   const body = h('div', { class: 'body-section' });
@@ -67,22 +131,19 @@ export function render({ container, store, navigate }) {
     body.appendChild(h('div', { class: 'parse-result empty' }, 'No servers matched.'));
   } else {
     const table = h('table', { class: 'review-table' });
-    const thead = h('thead', {}, h('tr', {},
+    const headerRow = h('tr', {},
       h('th', {}, '#'),
-      h('th', {}, 'Server ID'),
-      h('th', {}, 'Name'),
-      h('th', {}, 'FQDN'),
-      h('th', {}, 'Matched value')
-    ));
+      ...cols.map((c) => h('th', {}, c.label))
+    );
+    const thead = h('thead', {}, headerRow);
     const tbody = h('tbody', {});
     result.matches.forEach((m, i) => {
-      tbody.appendChild(h('tr', {},
-        h('td', {}, String(i + 1)),
-        h('td', {}, m.id != null ? String(m.id) : '-'),
-        h('td', {}, m.name ?? '-'),
-        h('td', {}, m.fqdn ?? '-'),
-        h('td', {}, m.matchedValue ?? '-')
-      ));
+      const cells = [h('td', {}, String(i + 1))];
+      for (const c of cols) {
+        const v = c.getter(m);
+        cells.push(h('td', {}, v == null || v === '' ? '-' : String(v)));
+      }
+      tbody.appendChild(h('tr', {}, ...cells));
     });
     table.appendChild(thead);
     table.appendChild(tbody);
@@ -91,12 +152,13 @@ export function render({ container, store, navigate }) {
 
   const copyCsvBtn = h('button', { class: 'btn btn-secondary', disabled: matchCount === 0 }, 'Copy CSV');
   const exportCsvBtn = h('button', { class: 'btn btn-secondary', disabled: matchCount === 0 }, 'Download CSV');
+  const refineBtn = h('button', { class: 'btn btn-secondary' }, 'Refine query');
   const newBatchBtn = h('button', { class: 'btn btn-primary' }, 'New search');
   const copyStatus = h('span', { class: 'muted' }, '');
 
   copyCsvBtn.addEventListener('click', async () => {
     try {
-      await copyToClipboard(buildCsv(result));
+      await copyToClipboard(buildCsv(result, store.columns ?? {}));
       copyStatus.textContent = 'Copied.';
       setTimeout(() => { copyStatus.textContent = ''; }, 2000);
     } catch (err) {
@@ -105,18 +167,24 @@ export function render({ container, store, navigate }) {
   });
   exportCsvBtn.addEventListener('click', () => {
     const ts = new Date().toISOString().replace(/[:.]/g, '-');
-    const safeAttr = (result.attributeName || 'attr').replace(/[^A-Za-z0-9._-]+/g, '_').slice(0, 24);
-    const safeVal = (result.value || 'value').replace(/[^A-Za-z0-9._-]+/g, '_').slice(0, 24);
-    downloadBlob(`server-search-${safeAttr}-${safeVal}-${ts}.csv`, 'text/csv', buildCsv(result));
+    downloadBlob(`find-servers-${ts}.csv`, 'text/csv', buildCsv(result, store.columns ?? {}));
+  });
+  refineBtn.addEventListener('click', () => {
+    // Keep query intact; just navigate back so the operator can adjust.
+    store.runResult = null;
+    navigate('/start');
   });
   newBatchBtn.addEventListener('click', () => {
     store.runResult = null;
+    store.identifiersText = '';
+    store.criteria = [];
+    store.columns = { status: false, tags: false, deviceType: false, deviceSubType: false, source: false, attributes: [] };
     navigate('/start');
   });
 
   const actionBar = h('div', { class: 'action-bar' },
     h('div', { class: 'left' }, copyCsvBtn, exportCsvBtn, copyStatus),
-    h('div', { class: 'right' }, newBatchBtn)
+    h('div', { class: 'right' }, refineBtn, newBatchBtn)
   );
   frame.appendChild(actionBar);
   container.appendChild(frame);
