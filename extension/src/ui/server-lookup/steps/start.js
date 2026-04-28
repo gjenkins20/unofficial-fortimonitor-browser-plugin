@@ -90,22 +90,6 @@ export function render({ container, store, navigate, events }) {
   const parseResult = h('div', { class: 'parse-result empty' });
   body.appendChild(parseResult);
 
-  // ---- Tenant-confirmation toggle (URL/ID entries only) ----
-  const confirmToggle = h('input', { type: 'checkbox' });
-  confirmToggle.checked = !!store.confirm;
-  body.appendChild(h('label', {
-    class: 'toggle-row',
-    style: 'display:flex;gap:0.5rem;align-items:flex-start;margin:0.5rem 0 0.25rem;'
-  },
-    confirmToggle,
-    h('span', {},
-      h('strong', {}, 'Confirm URLs and IDs against the tenant'),
-      h('span', { class: 'muted', style: 'display:block;font-size:0.85rem;' },
-        'Off (default): URLs and IDs are accepted as-is. On: each URL or ID is verified against your tenant; missing IDs are reported as not_found.'
-      )
-    )
-  ));
-
   // ---- Progress (shown while a run is in flight) ----
   const progressBox = h('div', { class: 'progress-list', hidden: true });
   body.appendChild(progressBox);
@@ -160,7 +144,6 @@ export function render({ container, store, navigate, events }) {
   }
 
   paste.addEventListener('input', reparse);
-  confirmToggle.addEventListener('change', () => { store.confirm = confirmToggle.checked; });
 
   // ---- File upload handling ----
   dropZone.addEventListener('click', (e) => {
@@ -228,7 +211,6 @@ export function render({ container, store, navigate, events }) {
     if (!store.entries.length) return;
     runBtn.disabled = true;
     paste.disabled = true;
-    confirmToggle.disabled = true;
     stateLabel.textContent = 'Looking up…';
     stateLabel.className = 'execute-state';
 
@@ -254,7 +236,6 @@ export function render({ container, store, navigate, events }) {
     try {
       const result = await call('lookup:server-ids', {
         entries: store.entries,
-        confirm: !!store.confirm,
         concurrency: 4
       });
       store.runResult = result;
@@ -265,7 +246,6 @@ export function render({ container, store, navigate, events }) {
       stateLabel.className = 'execute-state error';
       runBtn.disabled = false;
       paste.disabled = false;
-      confirmToggle.disabled = false;
     }
   });
 

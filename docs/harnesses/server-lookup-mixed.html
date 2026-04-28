@@ -47,7 +47,7 @@
       <h2>Drive the iframe</h2>
       <button id="seed-mixed">Seed: name + URL + raw ID</button>
       <button id="seed-dup">Seed: URL + same raw ID (dedup test)</button>
-      <button id="seed-unknown-confirm">Seed: unknown ID + confirm=on</button>
+      <button id="seed-unknown">Seed: unknown ID (now always confirmed)</button>
       <button id="dump-parse">Dump parsed entries</button>
       <button id="run-lookup">Click Run lookup</button>
       <button id="dump-results">Dump results table</button>
@@ -93,10 +93,9 @@
           if (m.length === 1) return { name, kind:'name', raw:name, status: 'found', serverId: m[0].id, matches: m };
           return { name, kind:'name', raw:name, status: 'ambiguous', matches: m };
         }
-        function shapeUrlOrId(entry, confirm) {
-          if (!confirm) {
-            return { kind: entry.kind, raw: entry.raw, status: 'found', serverId: entry.serverId, matches: [{id:entry.serverId}] };
-          }
+        function shapeUrlOrId(entry) {
+          // FMN-113 QA: confirmation is unconditional (no toggle). Unknown
+          // ids surface as not_found here just like the production handler.
           if (CANNED_SERVERS.has(entry.serverId)) {
             return { kind: entry.kind, raw: entry.raw, status: 'found', serverId: entry.serverId, matches: [{id:entry.serverId}] };
           }
@@ -116,11 +115,10 @@
                   if (type === 'lookup:server-ids') {
                     const entries = Array.isArray(payload.entries) ? payload.entries
                       : (Array.isArray(payload.names) ? payload.names.map(function(n){return {kind:'name', raw:n, name:n};}) : []);
-                    const confirm = payload.confirm === true;
                     const results = entries.map(function (e, i) {
                       // Fire entry-start / entry-done so the UI exercises the live progress path.
                       emit('lookup:entry-start', { index: i, name: e.kind === 'name' ? e.name : e.raw, kind: e.kind });
-                      const r = e.kind === 'name' ? shapeName(e.name) : shapeUrlOrId(e, confirm);
+                      const r = e.kind === 'name' ? shapeName(e.name) : shapeUrlOrId(e);
                       emit('lookup:entry-done', {
                         index: i,
                         name: e.kind === 'name' ? e.name : e.raw,
@@ -185,44 +183,33 @@
     ta.value = text;
     ta.dispatchEvent(new win.Event('input', { bubbles: true }));
   }
-  function setConfirm(checked) {
-    const win = frameWin(); if (!win) return;
-    const cb = win.document.querySelector('.toggle-row input[type="checkbox"]');
-    if (cb && cb.checked !== checked) {
-      cb.checked = checked;
-      cb.dispatchEvent(new win.Event('change', { bubbles: true }));
-    }
-  }
 
   document.getElementById('reload-frame').addEventListener('click', loadFrame);
 
   document.getElementById('seed-mixed').addEventListener('click', function () {
     setPaste([
       'FGVM01TM24006844',
-      'https://fortimonitor.forticloud.com/instance/42024060/details',
+      'https://fortimonitor.forticloud.com/report/Instance/42024060/details',
       '42024061'
     ].join('\n'));
-    setConfirm(false);
     setOutput('seed-mixed', 'Pasted name + URL + raw ID.');
   });
 
   document.getElementById('seed-dup').addEventListener('click', function () {
     setPaste([
-      'https://fortimonitor.forticloud.com/instance/42024060/details',
+      'https://fortimonitor.forticloud.com/report/Instance/42024060/details',
       '42024060',
       'AmbiguousName'
     ].join('\n'));
-    setConfirm(false);
     setOutput('seed-dup', 'Pasted URL + same raw ID + ambiguous name.');
   });
 
-  document.getElementById('seed-unknown-confirm').addEventListener('click', function () {
+  document.getElementById('seed-unknown').addEventListener('click', function () {
     setPaste([
       '42024060',
       '99999999'
     ].join('\n'));
-    setConfirm(true);
-    setOutput('seed-unknown-confirm', 'Pasted known ID + unknown ID with confirm=on.');
+    setOutput('seed-unknown', 'Pasted known ID + unknown ID; both will be confirmed.');
   });
 
   document.getElementById('dump-parse').addEventListener('click', function () {

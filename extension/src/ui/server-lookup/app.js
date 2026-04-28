@@ -12,7 +12,6 @@ const store = {
   // From the Start step (FMN-113):
   entries: [],            // {kind:'url'|'id'|'name', raw, serverId?, name?}[]
   warnings: [],
-  confirm: false,         // when true, URL/ID entries hit GET /server/{id} to verify
 
   // From the Execute/fan-out call:
   executeProgress: new Map(), // label -> { status, serverId, matchCount, error }

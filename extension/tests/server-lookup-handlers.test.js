@@ -100,13 +100,15 @@ test('confirmServerId: non-404 errors propagate', async () => {
 
 // ----- lookupBatch (FMN-113 entries shape) ---------------------------
 
-test('lookupBatch: name entries hit lookupServersByName, URL/ID entries skip the lookup; all hits use status=found', async () => {
+test('lookupBatch: name entries hit lookupServersByName; URL/ID entries always confirm via getServer; all hits use status=found', async () => {
   let nameCalls = 0;
+  let getServerCalls = 0;
   const client = makeClient({
     lookupServersByName: async (name) => {
       nameCalls++;
       return name === 'a' ? [{ id: 1, name: 'a', resourceUrl: 'ua' }] : [];
-    }
+    },
+    getServer: async (id) => { getServerCalls++; return { id, name: `srv-${id}` }; }
   });
   const entries = [
     { kind: 'name', raw: 'a', name: 'a' },
@@ -115,6 +117,7 @@ test('lookupBatch: name entries hit lookupServersByName, URL/ID entries skip the
   ];
   const results = await lookupBatch({ entries, client, concurrency: 2 });
   assert.equal(nameCalls, 1, 'one call for the one name entry');
+  assert.equal(getServerCalls, 2, 'one getServer call per URL/ID entry');
   assert.equal(results.length, 3);
   // All three are status=found; the kind field carries the input source.
   assert.equal(results[0].status, 'found');
@@ -127,7 +130,22 @@ test('lookupBatch: name entries hit lookupServersByName, URL/ID entries skip the
   assert.equal(results[2].kind, 'id');
 });
 
-test('lookupBatch: with confirm=true, URL/ID entries fire getServer; 404 -> not_found', async () => {
+test('lookupBatch: skipConfirm bypasses getServer (test-only escape hatch)', async () => {
+  let getServerCalls = 0;
+  const client = makeClient({
+    getServer: async () => { getServerCalls++; return { id: 1 }; }
+  });
+  const entries = [
+    { kind: 'url', raw: '/instance/42/x', serverId: 42 },
+    { kind: 'id', raw: '99', serverId: 99 }
+  ];
+  const results = await lookupBatch({ entries, client, skipConfirm: true });
+  assert.equal(getServerCalls, 0);
+  assert.equal(results[0].status, 'found');
+  assert.equal(results[1].status, 'found');
+});
+
+test('lookupBatch: URL/ID entries fire getServer; 404 surfaces as not_found', async () => {
   let getServerCalls = 0;
   const client = makeClient({
     getServer: async (id) => {
@@ -140,13 +158,13 @@ test('lookupBatch: with confirm=true, URL/ID entries fire getServer; 404 -> not_
     { kind: 'url', raw: '/instance/42/x', serverId: 42 },
     { kind: 'id', raw: '99', serverId: 99 }
   ];
-  const results = await lookupBatch({ entries, client, confirm: true });
+  const results = await lookupBatch({ entries, client });
   assert.equal(getServerCalls, 2);
   assert.equal(results[0].status, 'found');
   assert.equal(results[1].status, 'not_found');
 });
 
-test('lookupBatch: dedupes URL+ID for the same server (one resolve, fans out)', async () => {
+test('lookupBatch: dedupes URL+ID for the same server (one confirm, fans out)', async () => {
   let getServerCalls = 0;
   const client = makeClient({ getServer: async (id) => { getServerCalls++; return { id }; } });
   const entries = [
@@ -154,7 +172,7 @@ test('lookupBatch: dedupes URL+ID for the same server (one resolve, fans out)', 
     { kind: 'id', raw: '42', serverId: 42 },
     { kind: 'id', raw: '99', serverId: 99 }
   ];
-  const results = await lookupBatch({ entries, client, confirm: true });
+  const results = await lookupBatch({ entries, client });
   // Both 42 entries share one resolve; 99 gets its own. Output preserves
   // the original input order, with the shared result fanning out.
   assert.equal(getServerCalls, 2);
@@ -229,7 +247,9 @@ test('lookup:server-ids end-to-end with structured entries', async () => {
   const handlers = createServerLookupHandlers({
     getClient: async () => makeClient({
       lookupServersByName: async (name) =>
-        name === 'a' ? [{ id: 7, name: 'a', resourceUrl: 'u' }] : []
+        name === 'a' ? [{ id: 7, name: 'a', resourceUrl: 'u' }] : [],
+      // ID entries always confirm; provide a getServer stub.
+      getServer: async (id) => ({ id, name: `srv-${id}` })
     })
   });
   const out = await handlers['lookup:server-ids']({
@@ -262,7 +282,7 @@ test('lookup:server-ids legacy {names} payload still works (string-list shim)', 
   assert.equal(out.results[1].status, 'not_found');
 });
 
-test('lookup:server-ids with confirm=true fires getServer for URL/ID entries', async () => {
+test('lookup:server-ids unconditionally fires getServer for URL/ID entries', async () => {
   let getServerCalls = 0;
   const handlers = createServerLookupHandlers({
     getClient: async () => makeClient({
@@ -273,8 +293,7 @@ test('lookup:server-ids with confirm=true fires getServer for URL/ID entries', a
     entries: [
       { kind: 'url', raw: '/instance/42/x', serverId: 42 },
       { kind: 'id', raw: '99', serverId: 99 }
-    ],
-    confirm: true
+    ]
   });
   assert.equal(getServerCalls, 2);
   assert.equal(out.results[0].status, 'found');

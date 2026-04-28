@@ -21,8 +21,12 @@
 // string is wrapped into a name-kind entry. This keeps the message type
 // stable for the popup-via-bare-strings path during the FMN-113 rollout.
 //
-// When confirm=true, URL/ID entries also fire GET /server/{id} to verify
-// the ID exists in the tenant. A 404 surfaces as 'not_found'.
+// URL/ID entries fire GET /server/{id} to verify the ID exists in the
+// tenant. A 404 surfaces as 'not_found'. The verification is unconditional
+// (no opt-out) because there is no API cost to FortiMonitor and the tool's
+// promise is "give me valid server IDs" - a typoed ID surfacing as
+// not_found here is much better than failing inside a downstream
+// destructive bulk operation.
 
 import {
   createProductionPanoptaClient,
@@ -107,11 +111,15 @@ function dedupKey(entry) {
 /**
  * Resolve a list of structured entries. Names are deduplicated so one API
  * call covers every input that asked for the same name; same goes for IDs.
+ * URL and ID entries fire GET /server/{id} to confirm the ID exists in the
+ * tenant; 404 surfaces as 'not_found'.
  *
  * @param {object} params
  * @param {Array<object>} params.entries
  * @param {object} params.client
- * @param {boolean} [params.confirm=false]    - GET /server/{id} for url/id entries
+ * @param {boolean} [params.skipConfirm=false] - test-only: skip GET /server/{id}
+ *   and trust URL/ID entries blindly. Production callers should never set
+ *   this; the toggle was removed from the UI in FMN-113 QA.
  * @param {number} [params.concurrency=4]
  * @param {number} [params.maxAttempts=3]
  * @param {AbortSignal} [params.signal]
@@ -121,7 +129,7 @@ function dedupKey(entry) {
 export async function lookupBatch({
   entries,
   client,
-  confirm = false,
+  skipConfirm = false,
   concurrency = 4,
   maxAttempts = 3,
   signal,
@@ -158,9 +166,10 @@ export async function lookupBatch({
             return await lookupOne(client, entry.name);
           }
           // url or id - the serverId is the answer; status='found' regardless
-          // of the source. No 'resolved' distinction: a server ID input is
-          // already a server ID, nothing got translated.
-          if (!confirm) {
+          // of the source. We always confirm against /server/{id} so a typoed
+          // or stale ID surfaces here rather than inside a downstream bulk
+          // operation. skipConfirm is test-only.
+          if (skipConfirm) {
             return { raw: entry.raw, kind: entry.kind, status: 'found', serverId: entry.serverId, matches: [{ id: entry.serverId }] };
           }
           const r = await confirmServerId(client, entry.serverId);
@@ -218,7 +227,6 @@ export function createServerLookupHandlers({ events = {}, getClient } = {}) {
         const results = await lookupBatch({
           entries,
           client,
-          confirm: payload?.confirm === true,
           concurrency: payload?.concurrency ?? 4,
           maxAttempts: payload?.maxAttempts ?? 3,
           signal: ac.signal,
