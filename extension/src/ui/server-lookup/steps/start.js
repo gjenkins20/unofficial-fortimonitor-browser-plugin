@@ -45,8 +45,8 @@ export function render({ container, store, navigate, events }) {
 
   frame.appendChild(h('div', { class: 'step-header' },
     lookupBreadcrumbs('start'),
-    h('h2', {}, 'Resolve server names, URLs, or IDs to server IDs'),
-    h('p', {}, 'One entry per line. Names are exact-matched (case-sensitive) against the FortiMonitor v2 /server endpoint. Frontend URLs (e.g. /instance/12345/...) and raw numeric IDs pass through directly. Names with multiple matches are reported as ambiguous and list all candidates.')
+    h('h2', {}, 'Look up server IDs in bulk'),
+    h('p', {}, 'One entry per line. Server names are exact-matched (case-sensitive) against the FortiMonitor v2 API. FortiMonitor instance URLs and server IDs are accepted directly. Names with multiple matches are reported as ambiguous and list all candidates.')
   ));
 
   const body = h('div', { class: 'body-section' });
@@ -62,7 +62,7 @@ export function render({ container, store, navigate, events }) {
       'Drop CSV/TXT here, or ',
       h('span', { class: 'dz-link' }, 'click to browse')
     ),
-    h('div', { class: 'dz-secondary' }, 'Accepts .csv or plain text · one entry per line · names, /instance/N URLs, or raw IDs'),
+    h('div', { class: 'dz-secondary' }, 'Accepts .csv or plain text · one entry per line · names, FortiMonitor URLs, or server IDs'),
     fileInput
   );
   body.appendChild(dropZone);
@@ -77,14 +77,14 @@ export function render({ container, store, navigate, events }) {
   body.appendChild(paste);
 
   body.appendChild(h('div', { class: 'format-hint', html:
-    '<strong>Format:</strong> one entry per line. Each line is dispatched as:' +
+    '<strong>Format:</strong> one entry per line. Each line is treated as:' +
     '<ul style="margin:0.4rem 0 0.4rem 1rem;">' +
-    '<li><strong>URL</strong> - matches <code>/instance/N/...</code>; the server ID is extracted from the path.</li>' +
-    '<li><strong>ID</strong> - bare numeric line (e.g. <code>42024060</code>) passes through as that server_id.</li>' +
-    '<li><strong>Name</strong> - anything else; resolved by exact-match against <code>/server</code>.</li>' +
+    '<li><strong>FortiMonitor URL</strong> - the address-bar URL of an instance page.</li>' +
+    '<li><strong>Server ID</strong> - a numeric server ID.</li>' +
+    '<li><strong>Name</strong> - the server name (resolved by exact match).</li>' +
     '</ul>' +
-    'First line may be the literal header <code>name</code> (optional). Duplicate IDs and names are deduplicated.' +
-    '<pre># mixed input\nFGVM01TM24006844\nhttps://fortimonitor.forticloud.com/instance/42024060/details\n42024061</pre>'
+    'First line may be the literal header <code>name</code> (optional). Duplicates are deduplicated.' +
+    '<pre># mixed input\nFGVM01TM24006844\nhttps://fortimonitor.forticloud.com/report/Instance/42024060/details\n42024061</pre>'
   }));
 
   const parseResult = h('div', { class: 'parse-result empty' });
@@ -99,9 +99,9 @@ export function render({ container, store, navigate, events }) {
   },
     confirmToggle,
     h('span', {},
-      h('strong', {}, 'Confirm URL/ID entries against the tenant'),
+      h('strong', {}, 'Confirm URLs and IDs against the tenant'),
       h('span', { class: 'muted', style: 'display:block;font-size:0.85rem;' },
-        'Off (default): URL/ID entries pass through without an extra API call. On: each URL/ID fires a single GET /server/{id}; the entry is reported as not_found if the ID does not exist in your tenant.'
+        'Off (default): URLs and IDs are accepted as-is. On: each URL or ID is verified against your tenant; missing IDs are reported as not_found.'
       )
     )
   ));
@@ -207,7 +207,7 @@ export function render({ container, store, navigate, events }) {
       if (row) {
         row.statusEl.textContent = payload.status;
         row.statusEl.className = `status ${payload.status}`;
-        if (payload.status === 'found' || payload.status === 'resolved') {
+        if (payload.status === 'found') {
           row.detailEl.textContent = `id ${payload.serverId}`;
           row.detailEl.className = 'detail muted';
         } else if (payload.status === 'ambiguous') {

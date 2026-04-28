@@ -15,6 +15,11 @@ test('extractServerIdFromUrl: /instance/N path with trailing segments', () => {
   assert.equal(extractServerIdFromUrl('/instance/9'), 9);
 });
 
+test('extractServerIdFromUrl: case-insensitive (FMN-113 QA: real URL is /report/Instance/N/details)', () => {
+  assert.equal(extractServerIdFromUrl('https://fortimonitor.forticloud.com/report/Instance/42024060/details'), 42024060);
+  assert.equal(extractServerIdFromUrl('https://fortimonitor.forticloud.com/REPORT/INSTANCE/12345'), 12345);
+});
+
 test('extractServerIdFromUrl: rejects non-/instance paths', () => {
   assert.equal(extractServerIdFromUrl('https://fortimonitor.forticloud.com/server/12345'), null);
   assert.equal(extractServerIdFromUrl('https://example.com/'), null);
@@ -63,7 +68,7 @@ test('URL_PATTERNS: stable initial set is exactly the operator-confirmed format'
   // change is reviewed. /instance/N is the format the operator confirmed
   // pasting; other formats need their own ticket.
   assert.equal(URL_PATTERNS.length, 1);
-  assert.equal(URL_PATTERNS[0].label, '/instance/N/...');
+  assert.equal(URL_PATTERNS[0].label, '/instance/N (case-insensitive)');
 });
 
 // ---- parseInput ---------------------------------------------------

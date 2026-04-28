@@ -27,9 +27,14 @@
  * URL patterns that yield a server ID. Each entry pairs a regex (with the
  * server ID in capture group 1) and a label for diagnostics. Keep the most
  * specific patterns first if they ever overlap.
+ *
+ * The regex is case-insensitive because FortiMonitor's actual instance URL
+ * is /report/Instance/N/details with a capital I (FMN-113 QA). Lowercase
+ * /instance/N is also accepted; the regex matches either anywhere in the
+ * pasted line.
  */
 export const URL_PATTERNS = [
-  { regex: /\/instance\/(\d+)\b/, label: '/instance/N/...' }
+  { regex: /\/instance\/(\d+)\b/i, label: '/instance/N (case-insensitive)' }
 ];
 
 const ID_PATTERN = /^\d+$/;

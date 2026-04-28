@@ -95,10 +95,10 @@
         }
         function shapeUrlOrId(entry, confirm) {
           if (!confirm) {
-            return { kind: entry.kind, raw: entry.raw, status: 'resolved', serverId: entry.serverId, matches: [] };
+            return { kind: entry.kind, raw: entry.raw, status: 'found', serverId: entry.serverId, matches: [{id:entry.serverId}] };
           }
           if (CANNED_SERVERS.has(entry.serverId)) {
-            return { kind: entry.kind, raw: entry.raw, status: 'resolved', serverId: entry.serverId, matches: [{id:entry.serverId}] };
+            return { kind: entry.kind, raw: entry.raw, status: 'found', serverId: entry.serverId, matches: [{id:entry.serverId}] };
           }
           return { kind: entry.kind, raw: entry.raw, status: 'not_found', serverId: entry.serverId, matches: [] };
         }

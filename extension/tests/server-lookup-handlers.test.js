@@ -74,10 +74,10 @@ test('lookupOne: 2+ matches -> status=ambiguous with all candidates', async () =
 
 // ----- confirmServerId (FMN-113) -------------------------------------
 
-test('confirmServerId: 200 -> resolved with server payload', async () => {
+test('confirmServerId: 200 -> found with server payload', async () => {
   const client = makeClient({ getServer: async (id) => ({ id, name: `srv-${id}` }) });
   const r = await confirmServerId(client, 7);
-  assert.equal(r.status, 'resolved');
+  assert.equal(r.status, 'found');
   assert.equal(r.serverId, 7);
   assert.equal(r.server.name, 'srv-7');
 });
@@ -100,7 +100,7 @@ test('confirmServerId: non-404 errors propagate', async () => {
 
 // ----- lookupBatch (FMN-113 entries shape) ---------------------------
 
-test('lookupBatch: name entries hit lookupServersByName, URL/ID entries skip the lookup', async () => {
+test('lookupBatch: name entries hit lookupServersByName, URL/ID entries skip the lookup; all hits use status=found', async () => {
   let nameCalls = 0;
   const client = makeClient({
     lookupServersByName: async (name) => {
@@ -116,12 +116,13 @@ test('lookupBatch: name entries hit lookupServersByName, URL/ID entries skip the
   const results = await lookupBatch({ entries, client, concurrency: 2 });
   assert.equal(nameCalls, 1, 'one call for the one name entry');
   assert.equal(results.length, 3);
+  // All three are status=found; the kind field carries the input source.
   assert.equal(results[0].status, 'found');
   assert.equal(results[0].serverId, 1);
-  assert.equal(results[1].status, 'resolved');
+  assert.equal(results[1].status, 'found');
   assert.equal(results[1].serverId, 42);
   assert.equal(results[1].kind, 'url');
-  assert.equal(results[2].status, 'resolved');
+  assert.equal(results[2].status, 'found');
   assert.equal(results[2].serverId, 99);
   assert.equal(results[2].kind, 'id');
 });
@@ -141,7 +142,7 @@ test('lookupBatch: with confirm=true, URL/ID entries fire getServer; 404 -> not_
   ];
   const results = await lookupBatch({ entries, client, confirm: true });
   assert.equal(getServerCalls, 2);
-  assert.equal(results[0].status, 'resolved');
+  assert.equal(results[0].status, 'found');
   assert.equal(results[1].status, 'not_found');
 });
 
@@ -242,7 +243,7 @@ test('lookup:server-ids end-to-end with structured entries', async () => {
   assert.equal(out.results[0].status, 'found');
   assert.equal(out.results[0].serverId, 7);
   assert.equal(out.results[1].status, 'not_found');
-  assert.equal(out.results[2].status, 'resolved');
+  assert.equal(out.results[2].status, 'found');
   assert.equal(out.results[2].serverId, 99);
   assert.ok(out.startedAt);
   assert.ok(out.finishedAt);
@@ -276,8 +277,8 @@ test('lookup:server-ids with confirm=true fires getServer for URL/ID entries', a
     confirm: true
   });
   assert.equal(getServerCalls, 2);
-  assert.equal(out.results[0].status, 'resolved');
-  assert.equal(out.results[1].status, 'resolved');
+  assert.equal(out.results[0].status, 'found');
+  assert.equal(out.results[1].status, 'found');
 });
 
 test('lookup:abort with no active run returns aborted=false', async () => {

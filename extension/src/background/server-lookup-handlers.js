@@ -9,9 +9,13 @@
 // All lookups are read-only - no destructive operations here.
 //
 // Entry shapes accepted by lookup:server-ids:
-//   { kind: 'url',  raw, serverId }   -> resolved without /server lookup
-//   { kind: 'id',   raw, serverId }   -> resolved without /server lookup
+//   { kind: 'url',  raw, serverId }   -> serverId already known; no name lookup
+//   { kind: 'id',   raw, serverId }   -> serverId already known; no name lookup
 //   { kind: 'name', raw, name }       -> exact-match against /server
+//
+// All successful outcomes share a single status='found' regardless of how
+// the serverId was obtained (URL extraction, ID input, or name lookup). The
+// 'kind' field carries the input-source distinction for the UI/CSV.
 //
 // Legacy shape (string array of names, old UI) is still accepted: each
 // string is wrapped into a name-kind entry. This keeps the message type
@@ -59,14 +63,14 @@ export async function lookupOne(client, name) {
 /**
  * Confirm a server ID exists in the tenant via GET /server/{id}. Returns
  * one of:
- *   - { status: 'resolved', serverId, server }
+ *   - { status: 'found', serverId, server }
  *   - { status: 'not_found' }
  *   - throws (caller decides to surface as 'error')
  */
 export async function confirmServerId(client, serverId) {
   try {
     const server = await client.getServer(serverId);
-    return { status: 'resolved', serverId, server };
+    return { status: 'found', serverId, server };
   } catch (err) {
     if ((err instanceof PanoptaError || err?.name === 'PanoptaError') && err.status === 404) {
       return { status: 'not_found', serverId };
@@ -153,13 +157,15 @@ export async function lookupBatch({
           if (entry.kind === 'name') {
             return await lookupOne(client, entry.name);
           }
-          // url or id
+          // url or id - the serverId is the answer; status='found' regardless
+          // of the source. No 'resolved' distinction: a server ID input is
+          // already a server ID, nothing got translated.
           if (!confirm) {
-            return { raw: entry.raw, kind: entry.kind, status: 'resolved', serverId: entry.serverId, matches: [] };
+            return { raw: entry.raw, kind: entry.kind, status: 'found', serverId: entry.serverId, matches: [{ id: entry.serverId }] };
           }
           const r = await confirmServerId(client, entry.serverId);
-          if (r.status === 'resolved') {
-            return { raw: entry.raw, kind: entry.kind, status: 'resolved', serverId: entry.serverId, matches: [{ id: entry.serverId }] };
+          if (r.status === 'found') {
+            return { raw: entry.raw, kind: entry.kind, status: 'found', serverId: entry.serverId, matches: [{ id: entry.serverId }] };
           }
           return { raw: entry.raw, kind: entry.kind, status: 'not_found', serverId: entry.serverId, matches: [] };
         },

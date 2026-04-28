@@ -20,15 +20,14 @@ function inputLabel(r) {
 
 /**
  * One row per input. The `source` column carries the parser's classification
- * (url / id / name) so consumers can tell whether the server_id came from a
- * URL extraction, a raw ID pass-through, or a name resolution.
+ * (url / id / name) so consumers can tell where the server_id came from.
  */
 function buildCsv(results) {
   const header = ['input', 'source', 'server_id', 'status', 'match_count', 'detail'];
   const rows = results.map((r) => [
     inputLabel(r),
     r.kind ?? 'name',
-    (r.status === 'found' || r.status === 'resolved') ? String(r.serverId ?? '') : '',
+    r.status === 'found' ? String(r.serverId ?? '') : '',
     r.status,
     String(r.matches?.length ?? 0),
     r.status === 'error' ? (r.error ?? '') : ''
@@ -54,15 +53,14 @@ export function render({ container, store, navigate }) {
   }, {});
 
   const summaryParts = [];
-  if (counts.found) summaryParts.push(`${counts.found} found (by name)`);
-  if (counts.resolved) summaryParts.push(`${counts.resolved} resolved (URL/ID)`);
+  if (counts.found) summaryParts.push(`${counts.found} found`);
   if (counts.ambiguous) summaryParts.push(`${counts.ambiguous} ambiguous`);
   if (counts.not_found) summaryParts.push(`${counts.not_found} not found`);
   if (counts.error) summaryParts.push(`${counts.error} error${counts.error === 1 ? '' : 's'}`);
 
   frame.appendChild(h('div', { class: 'step-header' },
     lookupBreadcrumbs('results'),
-    h('h2', {}, `${results.length} entr${results.length === 1 ? 'y' : 'ies'} resolved`),
+    h('h2', {}, `${results.length} entr${results.length === 1 ? 'y' : 'ies'} processed`),
     h('p', {}, summaryParts.join(' · ') || '-')
   ));
 
@@ -83,9 +81,12 @@ export function render({ container, store, navigate }) {
   results.forEach((r, i) => {
     let idCell = '-';
     let candidatesCell = '-';
-    if (r.status === 'found' || r.status === 'resolved') {
+    if (r.status === 'found') {
       idCell = String(r.serverId);
-      candidatesCell = r.status === 'resolved' ? '-' : '1';
+      // For URL/ID inputs the server ID was the input; "candidates" is not
+      // meaningful, so leave it blank. Names that found exactly one match
+      // show "1" so the operator can see the lookup hit cleanly.
+      candidatesCell = r.kind === 'name' ? '1' : '-';
     } else if (r.status === 'ambiguous') {
       const list = (r.matches ?? []).map((m) => `${m.id}`).join(', ');
       candidatesCell = `${r.matches?.length ?? 0}: ${list}`;
