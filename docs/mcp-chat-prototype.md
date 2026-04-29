@@ -1,14 +1,25 @@
-# Ask Claude in-plugin chat - prototype (FMN-53)
+# Ask Claude in-plugin chat (FMN-53 prototype, FMN-94 full-catalog port)
 
-A narrow-slice prototype that embeds a Claude chat surface directly in the
-extension popup's launcher, driven by a user-supplied Anthropic API key and
-a curated subset of FortiMonitor v2 API tools. The goal is to evaluate
-whether an in-plugin conversational UI delivers enough value to justify
-broader investment (more tools, polish, live-test) versus leaving
-conversational workflows to the standalone
-[`fortimonitor-mcp-server`](https://github.com/gjenkins20/unofficial-fortimonitor-mcp-server).
+A Claude chat surface embedded in the extension popup's launcher, driven
+by a user-supplied Anthropic API key and the FortiMonitor v2 API tool
+catalog.
 
-Companion ticket: **FMN-53** (branch `feature/fmn-53-ask-claude-prototype`).
+**Status**: graduated from prototype. The FMN-94 epic
+([codegen audit](api-discovery/ask-claude-codegen-audit.md),
+[tier token measurement](ask-claude-tier-tokens.md)) ported the tool
+surface from 11 hand-written tools to 276 total entries
+(11 hand-written + 10 hand-port workflow modules + 255 codegen tools
+after FMN-108 collision resolution). The hand-written prototype tools
+below are the reduced-token "default" core; the rest are gated behind
+the Settings tier toggle (`Read-only` / `Read+write` / `All tools`).
+See FMN-95 / FMN-96 / FMN-97 / FMN-98-107 / FMN-108 / FMN-109 / FMN-110 /
+FMN-111 / FMN-112 for the per-phase deliverables.
+
+The legacy prototype scope below remains accurate as the description of
+the **read-only tier**'s 10 hand-written tools.
+
+Companion ticket (prototype): **FMN-53** (branch `feature/fmn-53-ask-claude-prototype`).
+Tracker (graduation): **FMN-94**.
 
 ---
 
