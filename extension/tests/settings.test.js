@@ -6,7 +6,12 @@ import {
   DEV_MODE_KEY,
   isShowFeatureBadgesEnabled,
   setShowFeatureBadgesEnabled,
-  SHOW_FEATURE_BADGES_KEY
+  SHOW_FEATURE_BADGES_KEY,
+  getAskClaudeToolTier,
+  setAskClaudeToolTier,
+  ASK_CLAUDE_TOOL_TIER_KEY,
+  ASK_CLAUDE_TOOL_TIERS,
+  DEFAULT_ASK_CLAUDE_TOOL_TIER
 } from '../src/lib/settings.js';
 import { createStorageMock } from './fixtures/chrome-mocks.js';
 
@@ -75,4 +80,39 @@ test('setShowFeatureBadgesEnabled coerces non-boolean values to strict booleans'
 
 test('SHOW_FEATURE_BADGES_KEY uses the new storage key name', () => {
   assert.equal(SHOW_FEATURE_BADGES_KEY, 'fm:showFeatureBadges');
+});
+
+test('getAskClaudeToolTier defaults to readonly on empty storage (FMN-97)', async () => {
+  const storage = createStorageMock();
+  assert.equal(await getAskClaudeToolTier(storage), 'readonly');
+  assert.equal(DEFAULT_ASK_CLAUDE_TOOL_TIER, 'readonly');
+});
+
+test('setAskClaudeToolTier round-trips each valid tier (FMN-97)', async () => {
+  const storage = createStorageMock();
+  for (const t of ASK_CLAUDE_TOOL_TIERS) {
+    await setAskClaudeToolTier(t, storage);
+    assert.equal(await getAskClaudeToolTier(storage), t);
+    assert.equal(storage.__raw()[ASK_CLAUDE_TOOL_TIER_KEY], t);
+  }
+});
+
+test('setAskClaudeToolTier coerces unknown values to default (FMN-97)', async () => {
+  const storage = createStorageMock();
+  await setAskClaudeToolTier('bogus', storage);
+  assert.equal(storage.__raw()[ASK_CLAUDE_TOOL_TIER_KEY], 'readonly');
+});
+
+test('getAskClaudeToolTier ignores stored garbage and falls back to default (FMN-97)', async () => {
+  const storage = createStorageMock();
+  await storage.set({ [ASK_CLAUDE_TOOL_TIER_KEY]: 'something-else' });
+  assert.equal(await getAskClaudeToolTier(storage), 'readonly');
+});
+
+test('getAskClaudeToolTier fails closed (returns readonly) on storage error (FMN-97)', async () => {
+  const storage = {
+    get: async () => { throw new Error('boom'); },
+    set: async () => {}
+  };
+  assert.equal(await getAskClaudeToolTier(storage), 'readonly');
 });

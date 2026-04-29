@@ -8,6 +8,7 @@
 import { createProductionPanoptaClient } from '../lib/panopta-client.js';
 import { runToolLoop, DEFAULT_MODEL } from '../lib/claude-client.js';
 import { buildToolDefinitions, buildToolHandlers, SYSTEM_PROMPT } from '../lib/claude-tools.js';
+import { getAskClaudeToolTier } from '../lib/settings.js';
 
 const CLAUDE_KEY_STORAGE_KEY = 'claude.apiKey';
 
@@ -35,8 +36,12 @@ export function createClaudeChatHandlers({ events = {}, getPanoptaClient, getApi
         if (!Array.isArray(messages) || messages.length === 0) {
           throw new TypeError('chat:send: messages is required');
         }
-        const [apiKey, client] = await Promise.all([keyFactory(), panoptaFactory()]);
-        const tools = buildToolDefinitions();
+        const [apiKey, client, tier] = await Promise.all([
+          keyFactory(),
+          panoptaFactory(),
+          getAskClaudeToolTier()
+        ]);
+        const tools = buildToolDefinitions(tier);
         const handlers = buildToolHandlers(client);
 
         const result = await runToolLoop({

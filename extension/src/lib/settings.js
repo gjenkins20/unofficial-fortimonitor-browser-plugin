@@ -5,9 +5,13 @@
 
 export const DEV_MODE_KEY = 'fm:devMode';
 export const ASK_CLAUDE_ENABLED_KEY = 'fm:askClaudeEnabled';
+export const ASK_CLAUDE_TOOL_TIER_KEY = 'fm:askClaudeToolTier';
 export const SERVER_SEARCH_ENABLED_KEY = 'fm:serverSearchEnabled';
 export const SIDEBAR_LAUNCHER_ENABLED_KEY = 'fm:sidebarLauncherEnabled';
 export const SHOW_FEATURE_BADGES_KEY = 'fm:showFeatureBadges';
+
+export const ASK_CLAUDE_TOOL_TIERS = ['readonly', 'readwrite', 'all'];
+export const DEFAULT_ASK_CLAUDE_TOOL_TIER = 'readonly';
 
 /**
  * Read the developer-mode flag. Returns false on any storage error so
@@ -62,6 +66,43 @@ export async function isAskClaudeEnabled(storage = defaultStorage()) {
  */
 export async function setAskClaudeEnabled(enabled, storage = defaultStorage()) {
   await storage.set({ [ASK_CLAUDE_ENABLED_KEY]: Boolean(enabled) });
+}
+
+/**
+ * Read the Ask-Claude tool-tier setting. Three positions:
+ *   'readonly'  - default. Only GET tools are sent to Claude per turn.
+ *   'readwrite' - GET + write tools. Acknowledge_outage and other
+ *                 mutations become callable when the user explicitly asks.
+ *   'all'       - everything, including 260+ codegen tools. Bigger prompt,
+ *                 more tokens per turn.
+ *
+ * Storage errors fail closed (return 'readonly') so a transient blip
+ * never silently widens the catalog the operator hasn't opted into.
+ *
+ * @param {{ get: (key: string) => Promise<Record<string, any>> }} [storage]
+ */
+export async function getAskClaudeToolTier(storage = defaultStorage()) {
+  try {
+    const data = await storage.get(ASK_CLAUDE_TOOL_TIER_KEY);
+    const value = data?.[ASK_CLAUDE_TOOL_TIER_KEY];
+    if (ASK_CLAUDE_TOOL_TIERS.includes(value)) return value;
+    return DEFAULT_ASK_CLAUDE_TOOL_TIER;
+  } catch {
+    return DEFAULT_ASK_CLAUDE_TOOL_TIER;
+  }
+}
+
+/**
+ * Persist the Ask-Claude tool-tier setting. Validates the value against
+ * the allowed list - unknown values fall back to the default rather than
+ * being written through.
+ *
+ * @param {string} tier
+ * @param {{ set: (obj: Record<string, any>) => Promise<void> }} [storage]
+ */
+export async function setAskClaudeToolTier(tier, storage = defaultStorage()) {
+  const value = ASK_CLAUDE_TOOL_TIERS.includes(tier) ? tier : DEFAULT_ASK_CLAUDE_TOOL_TIER;
+  await storage.set({ [ASK_CLAUDE_TOOL_TIER_KEY]: value });
 }
 
 /**

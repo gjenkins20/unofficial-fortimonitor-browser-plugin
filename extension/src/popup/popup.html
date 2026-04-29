@@ -158,8 +158,8 @@
             Ask Claude
             <span class="badge beta">Beta</span>
           </div>
-          <div class="tool-desc" data-default-desc="Natural-language Q&amp;A against your FortiMonitor environment, powered by Claude with tool use. Uses your Anthropic API key.">
-            Natural-language Q&amp;A against your FortiMonitor environment, powered by Claude with tool use. Uses your Anthropic API key.
+          <div class="tool-desc" data-default-desc="Natural-language Q&amp;A against your FortiMonitor environment. Each turn calls the Anthropic API with your key; bigger tool tiers (in Settings) send more tokens per turn and cost more.">
+            Natural-language Q&amp;A against your FortiMonitor environment. Each turn calls the Anthropic API with your key; bigger tool tiers (in Settings) send more tokens per turn and cost more.
           </div>
         </div>
         <div class="chevron">›</div>
@@ -238,6 +238,27 @@
         <input id="ask-claude-toggle" type="checkbox">
         <span>Show Ask Claude</span>
       </label>
+
+      <div id="ask-claude-tier-section" class="settings-subsection" hidden>
+        <label class="settings-label">Ask Claude tool tier</label>
+        <p class="settings-help">
+          Controls how many tools are sent to Claude on each chat turn. Bigger tier means a bigger prompt, more tokens billed by Anthropic per turn, and more capability for Claude to act on its own. Read-only is the safest default; promote to read+write only when you want Claude able to call <code>create</code>/<code>update</code>/<code>delete</code> tools (still gated on you asking explicitly). The "all tools" tier loads the entire 260+ catalog and is for when you genuinely want maximum capability and accept the per-turn cost.
+        </p>
+        <div class="radio-group" role="radiogroup" aria-label="Ask Claude tool tier">
+          <label class="radio-row">
+            <input type="radio" name="ask-claude-tool-tier" value="readonly">
+            <span><strong>Read-only</strong> (default, lower cost)</span>
+          </label>
+          <label class="radio-row">
+            <input type="radio" name="ask-claude-tool-tier" value="readwrite">
+            <span><strong>Read + write</strong> (acknowledge, attach/detach, bulk ops)</span>
+          </label>
+          <label class="radio-row">
+            <input type="radio" name="ask-claude-tool-tier" value="all">
+            <span><strong>All tools</strong> (260+ codegen catalog; highest token cost per turn)</span>
+          </label>
+        </div>
+      </div>
       <p class="settings-help" style="margin-top:0.75rem;">
         <strong>Search Servers</strong> pages the full <code>/server</code> list and filters by a specific attribute (e.g., Model = FGT60F). Pick the attribute from your tenant's catalog, enter the value, exports matches as CSV. Read-only. Hidden by default.
       </p>

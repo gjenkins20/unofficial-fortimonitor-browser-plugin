@@ -4,6 +4,8 @@ import {
   setDevModeEnabled,
   isAskClaudeEnabled,
   setAskClaudeEnabled,
+  getAskClaudeToolTier,
+  setAskClaudeToolTier,
   isServerSearchEnabled,
   setServerSearchEnabled,
   isSidebarLauncherEnabled,
@@ -228,6 +230,12 @@ async function loadAskClaudeIntoToggle() {
   toggle.checked = await isAskClaudeEnabled();
 }
 
+async function loadAskClaudeTierIntoRadio() {
+  const tier = await getAskClaudeToolTier();
+  const radios = document.querySelectorAll('input[name="ask-claude-tool-tier"]');
+  for (const r of radios) r.checked = (r.value === tier);
+}
+
 async function loadServerSearchIntoToggle() {
   const toggle = document.getElementById('server-search-toggle');
   toggle.checked = await isServerSearchEnabled();
@@ -248,6 +256,8 @@ async function applyExperimentalVisibility() {
   for (const el of document.querySelectorAll('[data-experimental="ask-claude"]')) {
     el.hidden = !askClaudeOn;
   }
+  const tierSection = document.getElementById('ask-claude-tier-section');
+  if (tierSection) tierSection.hidden = !askClaudeOn;
   const serverSearchOn = await isServerSearchEnabled();
   for (const el of document.querySelectorAll('[data-experimental="server-search"]')) {
     el.hidden = !serverSearchOn;
@@ -598,6 +608,7 @@ function init() {
     await loadClaudeKeyIntoInput();
     await loadDevModeIntoToggle();
     await loadAskClaudeIntoToggle();
+    await loadAskClaudeTierIntoRadio();
     await loadServerSearchIntoToggle();
     await loadSidebarLauncherIntoToggle();
     await loadShowFeatureBadgesIntoToggle();
@@ -629,6 +640,12 @@ function init() {
     await applyExperimentalVisibility();
     await refreshGuards();
   });
+
+  for (const radio of document.querySelectorAll('input[name="ask-claude-tool-tier"]')) {
+    radio.addEventListener('change', async (e) => {
+      if (e.target.checked) await setAskClaudeToolTier(e.target.value);
+    });
+  }
 
   document.getElementById('server-search-toggle').addEventListener('change', async (e) => {
     await setServerSearchEnabled(e.target.checked);
