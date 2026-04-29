@@ -30,6 +30,23 @@ import { execSync } from 'node:child_process';
 /**
  * Build the scenario list given a tenant sample. Some prompts depend
  * on real tenant values; we substitute them at runtime.
+ *
+ * Each scenario carries:
+ *   prompt:       the user turn sent to the chat
+ *   expectedTool: tool name(s) the model should call
+ *   maxToolCalls: max number of tool calls in the loop (catches re-fetch
+ *                 storms - the model fact-finding by calling get_outage on
+ *                 every list element)
+ *   groundTruth(api): async fetch of the API state at scenario time, used
+ *                 by verify() to assert the response references real data
+ *   verify(result, gt): final pass/fail. Combines:
+ *                   1. assertFirstTool  (right tool name)
+ *                   2. assertCallBudget (no fetch storm)
+ *                   3. assertNotGibberish (hard fail, not observation)
+ *                   4. assertResponseReferencesData (the model's prose
+ *                      must surface at least one piece of real data the
+ *                      tool actually returned - kills the "the JSON
+ *                      appears to represent..." failure mode)
  */
 export function buildScenarios(tenant) {
   const sample = tenant ?? {};
@@ -42,19 +59,56 @@ export function buildScenarios(tenant) {
       id: 'active-outages-direct',
       prompt: 'What active outages are happening right now?',
       expectedTool: 'list_active_outages',
-      assert: (r) => assertFirstTool(r, 'list_active_outages')
+      maxToolCalls: 2,
+      groundTruth: async (api) => {
+        const r = await api.fetch('/outage/active?limit=100');
+        return {
+          count: r?.meta?.total_count ?? (r?.outage_list?.length ?? 0),
+          outages: r?.outage_list ?? []
+        };
+      },
+      verify: (result, gt) => combineVerdicts(
+        assertFirstTool(result, 'list_active_outages'),
+        assertCallBudget(result, 2),
+        assertNotGibberish(result),
+        assertResponseSurfacesOutages(result, gt)
+      )
     },
     {
       id: 'active-outages-paraphrase',
       prompt: 'Anything broken? Show me ongoing incidents.',
       expectedTool: 'list_active_outages',
-      assert: (r) => assertFirstTool(r, 'list_active_outages')
+      maxToolCalls: 2,
+      groundTruth: async (api) => {
+        const r = await api.fetch('/outage/active?limit=100');
+        return {
+          count: r?.meta?.total_count ?? (r?.outage_list?.length ?? 0),
+          outages: r?.outage_list ?? []
+        };
+      },
+      verify: (result, gt) => combineVerdicts(
+        assertFirstTool(result, 'list_active_outages'),
+        assertCallBudget(result, 2),
+        assertNotGibberish(result),
+        assertResponseSurfacesOutages(result, gt)
+      )
     },
     {
       id: 'server-by-name',
       prompt: `Find the server named "${serverName}".`,
       expectedTool: 'search_servers',
-      assert: (r) => assertFirstTool(r, ['search_servers', 'list_servers'])
+      maxToolCalls: 2,
+      groundTruth: async (api) => {
+        if (!serverName) return { servers: [] };
+        const r = await api.fetch(`/server?name=${encodeURIComponent(serverName)}&limit=10`);
+        return { servers: r?.server_list ?? [] };
+      },
+      verify: (result, gt) => combineVerdicts(
+        assertFirstTool(result, ['search_servers', 'list_servers']),
+        assertCallBudget(result, 2),
+        assertNotGibberish(result),
+        assertResponseContainsAny(result, [serverName].filter(Boolean), 'server name')
+      )
     },
     {
       id: 'server-details',
@@ -62,57 +116,117 @@ export function buildScenarios(tenant) {
         ? `Get details for server id ${serverId}.`
         : `Get details for server id 1.`,
       expectedTool: 'get_server',
-      assert: (r) => assertFirstTool(r, 'get_server')
+      maxToolCalls: 2,
+      groundTruth: async (api) => {
+        if (!serverId) return null;
+        return await api.fetch(`/server/${serverId}`);
+      },
+      verify: (result, gt) => combineVerdicts(
+        assertFirstTool(result, 'get_server'),
+        assertCallBudget(result, 2),
+        assertNotGibberish(result),
+        gt && gt.name
+          ? assertResponseContainsAny(result, [gt.name, String(serverId)], 'server identity')
+          : { passed: true, reason: null }
+      )
     },
     {
       id: 'fabric-connections',
       prompt: 'List all fabric connections.',
       expectedTool: 'list_fabric_connections',
-      assert: (r) => assertFirstTool(r, 'list_fabric_connections')
+      maxToolCalls: 2,
+      groundTruth: async (api) => {
+        const r = await api.fetch('/fabric_connection?limit=50');
+        return {
+          count: r?.meta?.total_count ?? (r?.fabric_connection_list?.length ?? 0),
+          fabrics: r?.fabric_connection_list ?? []
+        };
+      },
+      verify: (result, gt) => combineVerdicts(
+        assertFirstTool(result, 'list_fabric_connections'),
+        assertCallBudget(result, 2),
+        assertNotGibberish(result),
+        assertResponseSurfacesFabrics(result, gt)
+      )
     },
     {
       id: 'templates-list',
       prompt: 'List the monitoring templates.',
       expectedTool: 'list_templates',
-      assert: (r) => assertFirstTool(r, 'list_templates')
+      maxToolCalls: 2,
+      groundTruth: async (api) => {
+        const r = await api.fetch('/template?limit=50');
+        return {
+          count: r?.meta?.total_count ?? (r?.template_list?.length ?? 0),
+          templates: r?.template_list ?? []
+        };
+      },
+      verify: (result, gt) => combineVerdicts(
+        assertFirstTool(result, 'list_templates'),
+        assertCallBudget(result, 2),
+        assertNotGibberish(result),
+        assertResponseSurfacesTemplates(result, gt)
+      )
     },
     {
       id: 'ambiguous-tool',
-      // A prompt that could plausibly route to either list_server_outages
-      // (codegen, requires server_id) or list_active_outages (handwritten,
-      // no params). We do NOT assert here - this scenario records what
-      // the model picks so the matrix can show the codegen-confusion rate.
+      // A prompt that could plausibly route multiple ways. Records what
+      // the model picks so the matrix shows behavioral patterns. Not
+      // asserted because the prompt is genuinely ambiguous - asking
+      // for clarification IS an acceptable response.
       prompt: 'Show me outages on the servers.',
       expectedTool: null,
-      assert: () => ({ passed: true, reason: null, observation: true })
+      maxToolCalls: 4,
+      groundTruth: async () => null,
+      verify: (result) => ({
+        passed: true,
+        reason: null,
+        observation: true,
+        toolsCalled: result.toolsCalled
+      })
     },
     {
       id: 'multi-step',
       prompt: tag
         ? `Find any server tagged "${tag}" that is currently in an active outage.`
         : `Find any server in an active outage and tell me its name.`,
-      // Multiple legitimate paths: composite tools that fuse the query
-      // (search_servers_advanced takes tags + active filter;
-      // get_servers_with_active_outages is the specific composite), or
-      // sequential basic tools (list_active_outages then search_servers).
-      // All are correct.
       expectedTool: [
         'list_active_outages', 'search_servers', 'list_servers',
         'search_servers_advanced', 'get_servers_with_active_outages'
       ],
-      assert: (r) => assertAnyTool(r, [
-        'list_active_outages', 'search_servers', 'list_servers',
-        'search_servers_advanced', 'get_servers_with_active_outages'
-      ])
+      // Multi-step legitimately may chain: list outages, then search. So
+      // a budget of 4 is generous but still catches storms.
+      maxToolCalls: 4,
+      groundTruth: async (api) => {
+        const r = await api.fetch('/outage/active?limit=100');
+        const outages = r?.outage_list ?? [];
+        return { activeOutageCount: outages.length, outages };
+      },
+      verify: (result, gt) => combineVerdicts(
+        assertAnyTool(result, [
+          'list_active_outages', 'search_servers', 'list_servers',
+          'search_servers_advanced', 'get_servers_with_active_outages'
+        ]),
+        assertCallBudget(result, 4),
+        assertNotGibberish(result)
+      )
     }
   ];
 }
 
 /**
- * Soft assertion helpers. Result shape:
- *   { passed: bool, reason: string|null, observation: bool|undefined }
- * `observation: true` means "this scenario records data, never fails".
+ * Soft assertion helpers. Each returns `{ passed: bool, reason: string|null }`.
+ * combineVerdicts merges several into a single verdict; first failure wins.
  */
+function combineVerdicts(...verdicts) {
+  for (const v of verdicts) {
+    if (!v) continue;
+    if (v.observation) return v;
+    if (!v.passed) return v;
+  }
+  return { passed: true, reason: null };
+}
+
 function assertFirstTool(result, expected) {
   const expectedList = Array.isArray(expected) ? expected : [expected];
   const first = result.toolsCalled[0];
@@ -134,6 +248,129 @@ function assertAnyTool(result, expectedList) {
   return {
     passed: false,
     reason: `none of [${expectedList.join(', ')}] called; got [${[...calls].join(', ') || 'none'}]`
+  };
+}
+
+function assertCallBudget(result, budget) {
+  const n = result.toolsCalled.length;
+  if (n > budget) {
+    return {
+      passed: false,
+      reason: `tool-call storm: ${n} calls > budget ${budget}; the model is fact-finding instead of presenting [${result.toolsCalled.join(', ')}]`
+    };
+  }
+  return { passed: true, reason: null };
+}
+
+function assertNotGibberish(result) {
+  if (result.gibberishHeuristic) {
+    return { passed: false, reason: 'response prose tripped the gibberish heuristic (non-Latin script ratio > 0.3)' };
+  }
+  return { passed: true, reason: null };
+}
+
+/**
+ * Verify the response surfaces actual outage data, not meta-analysis.
+ * Passes if the response text contains:
+ *   - the count (as a digit substring) when count > 0, OR
+ *   - at least one server name from the outage list (when populated)
+ *   - account-empty case (count=0) passes if response acknowledges that
+ */
+function assertResponseSurfacesOutages(result, gt) {
+  const text = (result.responseText ?? '').toLowerCase();
+  if (!text) {
+    return { passed: false, reason: 'response is empty' };
+  }
+  if (gt?.count === 0) {
+    if (/no (active )?outages?|none|0 outages|nothing/.test(text)) {
+      return { passed: true, reason: null };
+    }
+    return { passed: false, reason: 'tenant has 0 active outages but response did not say so' };
+  }
+  // Count match (most robust signal across paraphrases)
+  if (gt?.count != null && text.includes(String(gt.count))) {
+    return { passed: true, reason: null };
+  }
+  // Server-name match (next most robust)
+  const serverNames = (gt?.outages ?? [])
+    .map((o) => o?.server?.name)
+    .filter((n) => typeof n === 'string' && n.length >= 4);
+  for (const n of serverNames) {
+    if (text.includes(n.toLowerCase())) return { passed: true, reason: null };
+  }
+  return {
+    passed: false,
+    reason: `response did not surface any real outage data (count=${gt?.count}, expected the count or a server name in the prose)`
+  };
+}
+
+function assertResponseSurfacesFabrics(result, gt) {
+  const text = (result.responseText ?? '').toLowerCase();
+  if (!text) return { passed: false, reason: 'response is empty' };
+  if (gt?.count === 0) {
+    if (/no fabric|none|0 (connections|fabrics)|nothing/.test(text)) {
+      return { passed: true, reason: null };
+    }
+    return { passed: false, reason: 'tenant has 0 fabric connections but response did not say so' };
+  }
+  // Count match
+  if (gt?.count != null && text.includes(String(gt.count))) {
+    return { passed: true, reason: null };
+  }
+  // Match any upstream host or serial number
+  for (const f of (gt?.fabrics ?? [])) {
+    const sn = typeof f?.fortigate_serial_number === 'string' ? f.fortigate_serial_number.toLowerCase() : null;
+    const uh = typeof f?.upstream_host === 'string' ? f.upstream_host.toLowerCase() : null;
+    if (sn && text.includes(sn)) return { passed: true, reason: null };
+    if (uh && text.includes(uh)) return { passed: true, reason: null };
+  }
+  return {
+    passed: false,
+    reason: `response did not surface any fabric-connection data (count=${gt?.count}, expected the count or a serial/host in the prose)`
+  };
+}
+
+function assertResponseSurfacesTemplates(result, gt) {
+  const text = (result.responseText ?? '').toLowerCase();
+  if (!text) return { passed: false, reason: 'response is empty' };
+  if (gt?.count === 0) {
+    if (/no templates|none|0 templates|nothing/.test(text)) {
+      return { passed: true, reason: null };
+    }
+    return { passed: false, reason: 'tenant has 0 templates but response did not say so' };
+  }
+  if (gt?.count != null && text.includes(String(gt.count))) {
+    return { passed: true, reason: null };
+  }
+  // Match at least one real template name (use names >= 4 chars to avoid spurious hits like "API")
+  const names = (gt?.templates ?? [])
+    .map((t) => typeof t?.name === 'string' ? t.name : null)
+    .filter((n) => n && n.length >= 4);
+  for (const n of names) {
+    if (text.includes(n.toLowerCase())) return { passed: true, reason: null };
+  }
+  return {
+    passed: false,
+    reason: `response did not name any real template (count=${gt?.count}, expected the count or a template name in the prose)`
+  };
+}
+
+/**
+ * Pass if any of `needles` appears in result.responseText (case-insensitive
+ * substring). Used for scenarios where the response should contain a known
+ * specific identifier (server id, server name, etc.).
+ */
+function assertResponseContainsAny(result, needles, label) {
+  const text = (result.responseText ?? '').toLowerCase();
+  if (!text) return { passed: false, reason: 'response is empty' };
+  for (const needle of needles) {
+    if (typeof needle === 'string' && needle.length > 0 && text.includes(needle.toLowerCase())) {
+      return { passed: true, reason: null };
+    }
+  }
+  return {
+    passed: false,
+    reason: `response did not include the ${label}; expected one of [${needles.join(', ')}]`
   };
 }
 

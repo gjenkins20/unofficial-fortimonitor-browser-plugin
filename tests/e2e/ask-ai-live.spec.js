@@ -122,6 +122,22 @@ test.describe('live - Ask AI [matrix]', () => {
           const scenario = liveScenarios.find((s) => s.id === placeholder.id);
           if (!scenario) throw new Error(`scenario ${placeholder.id} not built`);
 
+          // Ground truth from the v2 API at scenario time. The chat's
+          // response will be compared against this. Ground truth is
+          // captured BEFORE the chat sends so the model's tool result
+          // and our truth source see the same snapshot of the tenant
+          // (close enough for assertion purposes - outages can land
+          // between the two fetches but the volume is similar).
+          const apiClient = makeApiFetcher(API_KEY);
+          let groundTruth = null;
+          if (typeof scenario.groundTruth === 'function') {
+            try {
+              groundTruth = await scenario.groundTruth(apiClient);
+            } catch (err) {
+              groundTruth = { __error: err?.message ?? String(err) };
+            }
+          }
+
           const startMs = Date.now();
           const result = await runChatScenario(extensionContext, extensionId, scenario);
           const endMs = Date.now();
@@ -129,7 +145,10 @@ test.describe('live - Ask AI [matrix]', () => {
           result.ollamaContextTruncationLogged = ollamaLoggedTruncation(ollama.logFile, startMs, endMs);
           result.gibberishHeuristic = isGibberish(result.responseText);
 
-          const verdict = scenario.assert(result);
+          // Verify is the new outcome-level assertion. Falls back to
+          // the legacy `assert` for scenarios that haven't migrated.
+          const verifyFn = scenario.verify ?? scenario.assert;
+          const verdict = verifyFn(result, groundTruth);
           const row = {
             model,
             scenarioId: scenario.id,
@@ -138,6 +157,7 @@ test.describe('live - Ask AI [matrix]', () => {
             responseText: result.responseText,
             ollamaContextTruncationLogged: result.ollamaContextTruncationLogged,
             gibberishHeuristic: result.gibberishHeuristic,
+            groundTruth: summarizeGroundTruth(groundTruth),
             passed: verdict.passed,
             reason: verdict.reason,
             observation: verdict.observation === true,
@@ -259,4 +279,39 @@ function extractServerId(server) {
     if (m) return Number(m[1]);
   }
   return null;
+}
+
+/**
+ * Per-scenario ground-truth fetcher. Hits api2.panopta.com directly
+ * with the operator's RW key so each scenario's verify() has an
+ * authoritative snapshot to assert the chat response against.
+ */
+function makeApiFetcher(apiKey) {
+  return {
+    async fetch(pathAndQuery) {
+      const url = `${PANOPTA_BASE}${pathAndQuery}`;
+      const r = await fetch(url, { headers: { 'Authorization': `ApiKey ${apiKey}` } });
+      if (!r.ok) throw new Error(`groundTruth ${pathAndQuery}: HTTP ${r.status}`);
+      return await r.json();
+    }
+  };
+}
+
+/**
+ * Compress the per-scenario groundTruth blob into a small summary
+ * suitable for the matrix report's JSON section. We don't want the
+ * full /outage/active payload baked into the report.
+ */
+function summarizeGroundTruth(gt) {
+  if (gt == null) return null;
+  if (gt.__error) return { error: gt.__error };
+  const out = {};
+  if (typeof gt.count === 'number') out.count = gt.count;
+  if (Array.isArray(gt.outages)) out.outageCount = gt.outages.length;
+  if (Array.isArray(gt.fabrics)) out.fabricCount = gt.fabrics.length;
+  if (Array.isArray(gt.templates)) out.templateCount = gt.templates.length;
+  if (Array.isArray(gt.servers)) out.serverCount = gt.servers.length;
+  if (typeof gt.name === 'string') out.serverName = gt.name;
+  if (typeof gt.id === 'number') out.serverId = gt.id;
+  return Object.keys(out).length > 0 ? out : { _shape: typeof gt };
 }
