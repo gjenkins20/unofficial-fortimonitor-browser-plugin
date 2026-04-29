@@ -8,25 +8,25 @@
 
 | Run metadata | Value |
 |---|---|
-| Date | 2026-04-29T19:19:30.589Z |
+| Date | 2026-04-29T23:27:42.918Z |
 | Host | darwin arm64 |
 | Node | v24.13.0 |
-| Git SHA | 69cbe52 |
-| Models | qwen3:8b, qwen2.5:14b |
+| Git SHA | 159cb9a |
+| Models | qwen3:8b |
 | Toggles | filterCodegen=on, promptHints=on |
 
 ## Pass/fail matrix
 
-| Scenario | qwen3:8b | qwen2.5:14b |
-|---|---|---|
-| `active-outages-direct` | PASS 126.6s !ctx | PASS 131.8s !ctx |
-| `active-outages-paraphrase` | PASS 138.9s !ctx | PASS 120.3s !ctx |
-| `server-by-name` | PASS 33.5s | PASS 30.5s |
-| `server-details` | PASS 49.8s | PASS 62.8s |
-| `fabric-connections` | PASS 36.1s | PASS 19.0s |
-| `templates-list` | PASS 55.3s | PASS 46.4s |
-| `ambiguous-tool` | obs: `list_active_outages` | obs: `none` |
-| `multi-step` | PASS 106.6s | PASS 17.7s |
+| Scenario | qwen3:8b |
+|---|---|
+| `active-outages-direct` | PASS 82.9s |
+| `active-outages-paraphrase` | PASS 77.8s |
+| `server-by-name` | PASS 22.2s |
+| `server-details` | PASS 54.7s |
+| `fabric-connections` | PASS 32.2s |
+| `templates-list` | PASS 47.0s |
+| `ambiguous-tool` | obs: `list_active_outages` |
+| `multi-step` | PASS 51.2s |
 
 ## Per-failure detail
 
@@ -44,9 +44,13 @@ _All scenarios passed across all models._
     "toolsCalled": [
       "list_active_outages"
     ],
-    "latencyMs": 126562,
-    "ollamaContextTruncationLogged": true,
+    "latencyMs": 82851,
+    "ollamaContextTruncationLogged": false,
     "gibberishHeuristic": false,
+    "groundTruth": {
+      "count": 17,
+      "outageCount": 17
+    },
     "passed": true,
     "reason": null,
     "observation": false,
@@ -54,7 +58,7 @@ _All scenarios passed across all models._
       "filterCodegen": true,
       "promptHints": true
     },
-    "responseTextPreview": "The provided JSON appears to represent a list of alerts or events, likely from a monitoring or alerting system (possibly related to infrastructure, applications, or services). Here's a breakdown of th"
+    "responseTextPreview": "There are **17 active critical outages** currently impacting the FortiMonitor environment. All listed outages are marked as **critical severity**. Would you like me to provide details about specific o"
   },
   {
     "model": "qwen3:8b",
@@ -62,9 +66,13 @@ _All scenarios passed across all models._
     "toolsCalled": [
       "list_active_outages"
     ],
-    "latencyMs": 138870,
-    "ollamaContextTruncationLogged": true,
+    "latencyMs": 77820,
+    "ollamaContextTruncationLogged": false,
     "gibberishHeuristic": false,
+    "groundTruth": {
+      "count": 17,
+      "outageCount": 17
+    },
     "passed": true,
     "reason": null,
     "observation": false,
@@ -72,7 +80,7 @@ _All scenarios passed across all models._
       "filterCodegen": true,
       "promptHints": true
     },
-    "responseTextPreview": "The provided JSON data appears to represent a list of alerts or notifications from a monitoring system. Here's a breakdown and analysis of the key elements:\n\n---\n\n### **1. Structure Overview**\n- **Roo"
+    "responseTextPreview": "There are **17 active critical outages** currently impacting the FortiMonitor environment. However, the details for these outages are incomplete — the response includes contact information for a user "
   },
   {
     "model": "qwen3:8b",
@@ -80,9 +88,12 @@ _All scenarios passed across all models._
     "toolsCalled": [
       "search_servers"
     ],
-    "latencyMs": 33493,
+    "latencyMs": 22208,
     "ollamaContextTruncationLogged": false,
     "gibberishHeuristic": false,
+    "groundTruth": {
+      "serverCount": 1
+    },
     "passed": true,
     "reason": null,
     "observation": false,
@@ -90,7 +101,7 @@ _All scenarios passed across all models._
       "filterCodegen": true,
       "promptHints": true
     },
-    "responseTextPreview": "The server with the name **ip-172-31-9-170.us-east-2.compute.internal** was found and is currently **active**."
+    "responseTextPreview": "The server **ip-172-31-9-170.us-east-2.compute.internal** was found and is currently **active**."
   },
   {
     "model": "qwen3:8b",
@@ -98,9 +109,12 @@ _All scenarios passed across all models._
     "toolsCalled": [
       "get_server"
     ],
-    "latencyMs": 49778,
+    "latencyMs": 54718,
     "ollamaContextTruncationLogged": false,
     "gibberishHeuristic": false,
+    "groundTruth": {
+      "serverName": "ip-172-31-9-170.us-east-2.compute.internal"
+    },
     "passed": true,
     "reason": null,
     "observation": false,
@@ -108,7 +122,7 @@ _All scenarios passed across all models._
       "filterCodegen": true,
       "promptHints": true
     },
-    "responseTextPreview": "Here are the key details for server **40234446**:\n\n- **Name**: `ip-172-31-9-170.us-east-2.compute.internal`  \n- **Status**: Currently **down** (with active outage)  \n- **OS**: Linux  \n- **Location**: "
+    "responseTextPreview": "Here are the key details for server **40234446**:\n\n- **Name/FQDN**: `ip-172-31-9-170.us-east-2.compute.internal`  \n- **Status**: `down` (current state) | `active` (account status)  \n- **OS**: Linux  \n"
   },
   {
     "model": "qwen3:8b",
@@ -116,9 +130,13 @@ _All scenarios passed across all models._
     "toolsCalled": [
       "list_fabric_connections"
     ],
-    "latencyMs": 36112,
+    "latencyMs": 32200,
     "ollamaContextTruncationLogged": false,
     "gibberishHeuristic": false,
+    "groundTruth": {
+      "count": 2,
+      "fabricCount": 2
+    },
     "passed": true,
     "reason": null,
     "observation": false,
@@ -126,7 +144,7 @@ _All scenarios passed across all models._
       "filterCodegen": true,
       "promptHints": true
     },
-    "responseTextPreview": "Here are the fabric connections in your FortiMonitor account:\n\n1. **Connection 10.0.0.227**\n   - Upstream Host: 10.0.0.227\n   - FortiGate Serial: FGVM01TM24006845\n   - Type: OnSight CSF Tunnel\n\n2. **C"
+    "responseTextPreview": "Here are the fabric connections in your environment:\n\n| Label       | Upstream Host | Upstream SN  | Integration Type          |\n|-------------|---------------|--------------|-------------------------"
   },
   {
     "model": "qwen3:8b",
@@ -134,9 +152,13 @@ _All scenarios passed across all models._
     "toolsCalled": [
       "list_templates"
     ],
-    "latencyMs": 55295,
+    "latencyMs": 47049,
     "ollamaContextTruncationLogged": false,
     "gibberishHeuristic": false,
+    "groundTruth": {
+      "count": 40,
+      "templateCount": 40
+    },
     "passed": true,
     "reason": null,
     "observation": false,
@@ -144,7 +166,7 @@ _All scenarios passed across all models._
       "filterCodegen": true,
       "promptHints": true
     },
-    "responseTextPreview": "Here are the monitoring templates in your FortiMonitor account:\n\n**Total templates:** 40  \n**Templates (first 25):**\n\n1. Developers (applied to 1 server)  \n2. APIs (applied to 1 server)  \n3. Google Of"
+    "responseTextPreview": "Here are the monitoring templates in your FortiMonitor account (total of 40 templates):\n\n**Templates with active server coverage (25 shown):**\n- Developers (1 server)\n- APIs (1)\n- Google Office (1)\n- "
   },
   {
     "model": "qwen3:8b",
@@ -152,9 +174,10 @@ _All scenarios passed across all models._
     "toolsCalled": [
       "list_active_outages"
     ],
-    "latencyMs": 134245,
-    "ollamaContextTruncationLogged": true,
+    "latencyMs": 120810,
+    "ollamaContextTruncationLogged": false,
     "gibberishHeuristic": false,
+    "groundTruth": null,
     "passed": true,
     "reason": null,
     "observation": true,
@@ -162,160 +185,20 @@ _All scenarios passed across all models._
       "filterCodegen": true,
       "promptHints": true
     },
-    "responseTextPreview": "The provided JSON appears to represent a list of alerts or notifications, likely from a monitoring or alerting system, with the following key observations:\n\n---\n\n### **Key Structure and Content**\n1. *"
+    "responseTextPreview": "There are **17 active critical outages** across the FortiMonitor account. All outages are marked as acknowledged, with contact details linked to Greg Jenkins -TCSM (multiple phone/email contacts). \n\nW"
   },
   {
     "model": "qwen3:8b",
-    "scenarioId": "multi-step",
-    "toolsCalled": [
-      "search_servers_advanced",
-      "get_servers_with_active_outages"
-    ],
-    "latencyMs": 106559,
-    "ollamaContextTruncationLogged": false,
-    "gibberishHeuristic": false,
-    "passed": true,
-    "reason": null,
-    "observation": false,
-    "toggles": {
-      "filterCodegen": true,
-      "promptHints": true
-    },
-    "responseTextPreview": "Based on the current data in FortiMonitor:\n\n**No servers tagged \"Linux\" are currently experiencing active outages.**\n\nPossible next steps:\n1. Verify if the \"Linux\" tag is applied correctly to servers "
-  },
-  {
-    "model": "qwen2.5:14b",
-    "scenarioId": "active-outages-direct",
-    "toolsCalled": [
-      "list_active_outages"
-    ],
-    "latencyMs": 131774,
-    "ollamaContextTruncationLogged": true,
-    "gibberishHeuristic": false,
-    "passed": true,
-    "reason": null,
-    "observation": false,
-    "toggles": {
-      "filterCodegen": true,
-      "promptHints": true
-    },
-    "responseTextPreview": "The JSON response you've provided shows an incident report detail for a company called \"TestCompany US West\" with multiple impacted devices and acknowledgments. Here are the key points extracted from "
-  },
-  {
-    "model": "qwen2.5:14b",
-    "scenarioId": "active-outages-paraphrase",
-    "toolsCalled": [
-      "list_active_outages"
-    ],
-    "latencyMs": 120298,
-    "ollamaContextTruncationLogged": true,
-    "gibberishHeuristic": false,
-    "passed": true,
-    "reason": null,
-    "observation": false,
-    "toggles": {
-      "filterCodegen": true,
-      "promptHints": true
-    },
-    "responseTextPreview": "The response you've received is a JSON object containing an array of alert objects. Each alert seems to have been acknowledged by the same user, `Greg Jenkins -TCSM`. Since all alerts are structured s"
-  },
-  {
-    "model": "qwen2.5:14b",
-    "scenarioId": "server-by-name",
-    "toolsCalled": [
-      "search_servers"
-    ],
-    "latencyMs": 30473,
-    "ollamaContextTruncationLogged": false,
-    "gibberishHeuristic": false,
-    "passed": true,
-    "reason": null,
-    "observation": false,
-    "toggles": {
-      "filterCodegen": true,
-      "promptHints": true
-    },
-    "responseTextPreview": "The server named \"ip-172-31-9-170.us-east-2.compute.internal\" has been found, and its status is active. Would you like additional information about this server?"
-  },
-  {
-    "model": "qwen2.5:14b",
-    "scenarioId": "server-details",
-    "toolsCalled": [
-      "get_server"
-    ],
-    "latencyMs": 62753,
-    "ollamaContextTruncationLogged": false,
-    "gibberishHeuristic": false,
-    "passed": true,
-    "reason": null,
-    "observation": false,
-    "toggles": {
-      "filterCodegen": true,
-      "promptHints": true
-    },
-    "responseTextPreview": "Here are the details for server ID 40234446:\n\n- **Name**: ip-172-31-9-170.us-east-2.compute.internal\n- **Status**: active\n- **Current State**: down\n- **Description URL**: [https://api2.panopta.com/v2/"
-  },
-  {
-    "model": "qwen2.5:14b",
-    "scenarioId": "fabric-connections",
-    "toolsCalled": [
-      "list_fabric_connections"
-    ],
-    "latencyMs": 19014,
-    "ollamaContextTruncationLogged": false,
-    "gibberishHeuristic": false,
-    "passed": true,
-    "reason": null,
-    "observation": false,
-    "toggles": {
-      "filterCodegen": true,
-      "promptHints": true
-    },
-    "responseTextPreview": "Here are the fabric connections in your FortiMonitor environment:\n\n- **Connection Label:** `10.0.0.227`\n  - Upstream Host: `10.0.0.227`\n  - Device Serial Number (SN): `FGVM01TM24006845`\n  \n- **Connect"
-  },
-  {
-    "model": "qwen2.5:14b",
-    "scenarioId": "templates-list",
-    "toolsCalled": [
-      "list_templates"
-    ],
-    "latencyMs": 46387,
-    "ollamaContextTruncationLogged": false,
-    "gibberishHeuristic": false,
-    "passed": true,
-    "reason": null,
-    "observation": false,
-    "toggles": {
-      "filterCodegen": true,
-      "promptHints": true
-    },
-    "responseTextPreview": "The FortiMonitor environment includes a total of 40 monitoring templates. Here are some examples from the list:\n\n- **Developers** (ID: 40430873, Applied Servers: 1)\n- **APIs** (ID: 40430874, Applied S"
-  },
-  {
-    "model": "qwen2.5:14b",
-    "scenarioId": "ambiguous-tool",
-    "toolsCalled": [],
-    "latencyMs": 5169,
-    "ollamaContextTruncationLogged": false,
-    "gibberishHeuristic": false,
-    "passed": true,
-    "reason": null,
-    "observation": true,
-    "toggles": {
-      "filterCodegen": true,
-      "promptHints": true
-    },
-    "responseTextPreview": "Could you please specify which servers or provide a server name substring to filter by, or shall I show all outages across the account? If you want all outages, let me know and I'll fetch that for you"
-  },
-  {
-    "model": "qwen2.5:14b",
     "scenarioId": "multi-step",
     "toolsCalled": [
       "search_servers_advanced"
     ],
-    "latencyMs": 17722,
+    "latencyMs": 51171,
     "ollamaContextTruncationLogged": false,
     "gibberishHeuristic": false,
+    "groundTruth": {
+      "outageCount": 17
+    },
     "passed": true,
     "reason": null,
     "observation": false,
@@ -323,7 +206,7 @@ _All scenarios passed across all models._
       "filterCodegen": true,
       "promptHints": true
     },
-    "responseTextPreview": "There are no servers tagged \"Linux\" that currently have an active outage."
+    "responseTextPreview": "No servers tagged \"Linux\" are currently experiencing active outages in your account. \n\nPossible reasons:\n1. No servers in your account have the \"Linux\" tag\n2. Servers with the \"Linux\" tag don't have a"
   }
 ]
 ```
