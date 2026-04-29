@@ -35,9 +35,12 @@ import {
 import { BULK_OPS_TOOLS, buildBulkOpsHandlers } from './claude-tools/handwritten/bulk_operations.js';
 import { COMPOSITE_TOOLS, buildCompositeHandlers } from './claude-tools/handwritten/composite.js';
 
-export const SYSTEM_PROMPT = [
+const SYSTEM_PROMPT_BASE = [
   'You are an assistant embedded in the Unofficial FortiMonitor Toolkit browser extension.',
-  'You help the user query their FortiMonitor environment using the tools provided.',
+  'You help the user query their FortiMonitor environment using the tools provided.'
+].join('\n');
+
+const SYSTEM_PROMPT_HINT_BLOCK = [
   '',
   'Tool selection quick-reference (the user expects you to USE these without asking for clarification):',
   '- "active outages", "current outages", "what is broken right now" -> call list_active_outages (no arguments needed for the account-wide view).',
@@ -49,7 +52,10 @@ export const SYSTEM_PROMPT = [
   '- "list interfaces / agent resources / metrics for server X" -> call list_agent_resources_for_server.',
   '- "list templates" / "monitoring templates" -> call list_templates.',
   '- "list fabric connections" / "CSF tunnels" -> call list_fabric_connections.',
-  '- "list groups", "server groups" -> call list_server_groups.',
+  '- "list groups", "server groups" -> call list_server_groups.'
+].join('\n');
+
+const SYSTEM_PROMPT_GUIDELINES = [
   '',
   'General guidelines:',
   '- Always call a tool before asking the user for clarification on a question that the tool catalog can answer. For account-wide queries like "active outages", call the tool with no filters first; if the result is too large, then ask the user to narrow.',
@@ -59,6 +65,26 @@ export const SYSTEM_PROMPT = [
   '- Never call write tools (create_*, update_*, delete_*, replace_*, acknowledge_*, bulk_*) without explicit user instruction for a specific resource id.',
   '- If a tool returns an error, tell the user plainly what failed.'
 ].join('\n');
+
+/**
+ * Build the system prompt sent on every chat turn.
+ *
+ * @param {{ promptHints?: boolean }} [opts]
+ *   - promptHints (default true): include the per-query tool-selection
+ *     quick-reference block introduced in commit 841247a. The matrix test
+ *     toggles this off via storage to A/B the hint's contribution.
+ */
+export function buildSystemPrompt({ promptHints = true } = {}) {
+  if (promptHints) {
+    return [SYSTEM_PROMPT_BASE, SYSTEM_PROMPT_HINT_BLOCK, SYSTEM_PROMPT_GUIDELINES].join('\n');
+  }
+  return [SYSTEM_PROMPT_BASE, SYSTEM_PROMPT_GUIDELINES].join('\n');
+}
+
+// Back-compat: the constant export still resolves to the prompt-with-hints
+// variant, which is the production default. Callers that need the toggle
+// should switch to buildSystemPrompt({ promptHints }).
+export const SYSTEM_PROMPT = buildSystemPrompt({ promptHints: true });
 
 /**
  * Filter check: is a tool of `toolTier` included when the operator
@@ -319,7 +345,7 @@ function stripPrivateFields(tool) {
  * @param {('readonly'|'readwrite'|'all')} [tier='readonly'] operator's tier
  * @returns {Array<object>} tool definitions sans internal `_spec` / `_handler` / `tier`
  */
-export function buildToolDefinitions(tier = 'readonly', { provider = 'anthropic' } = {}) {
+export function buildToolDefinitions(tier = 'readonly', { provider = 'anthropic', filterCodegen = true } = {}) {
   const handWritten = HAND_WRITTEN_TOOLS
     .filter((t) => tierIncludes(t.tier, tier))
     .map(stripPrivateFields);
@@ -331,20 +357,13 @@ export function buildToolDefinitions(tier = 'readonly', { provider = 'anthropic'
 
   const handPortNames = new Set([...HAND_WRITTEN_NAMES, ...handPort.map((t) => t.name)]);
 
-  // FMN-120: local providers (Ollama, LM Studio) get only the curated
-  // handwritten + hand-port catalog. The codegen 260+ tools regularly
-  // break tool selection on small/medium open models:
-  //   - qwen3:8b on readonly picked codegen list_server_outages
-  //     (requires path param server_id) over handwritten
-  //     list_active_outages (no params), then asked the user for a
-  //     server id instead of just listing outages.
-  //   - qwen2.5:14b made the same mistake, even when told explicitly
-  //     "call list_active_outages with no filters", and on a third
-  //     try produced gibberish in Thai script - tokens lost to the
-  //     30-50 tool catalog.
-  // The codegen surface stays intact for cloud Anthropic, which
-  // navigates 260+ tools without difficulty.
-  if (provider !== 'anthropic') {
+  // FMN-120: local providers (Ollama, LM Studio) optionally get only
+  // the curated handwritten + hand-port catalog. The codegen 260+ tools
+  // were observed breaking tool selection on small/medium open models;
+  // the matrix test (Phase 2) toggles `filterCodegen` to measure the
+  // filter's actual contribution rather than acting on n=3 anecdote.
+  // Cloud Anthropic always gets the full catalog.
+  if (provider !== 'anthropic' && filterCodegen) {
     return [...handWritten, ...handPort];
   }
 

@@ -11,7 +11,7 @@ import {
   runToolLoop as runOpenAIToolLoop,
   testConnection as testOpenAIConnection
 } from '../lib/openai-compat-client.js';
-import { buildToolDefinitions, buildToolHandlers, SYSTEM_PROMPT } from '../lib/claude-tools.js';
+import { buildToolDefinitions, buildToolHandlers, buildSystemPrompt } from '../lib/claude-tools.js';
 import {
   getAskClaudeToolTier,
   getAskClaudeProvider,
@@ -19,6 +19,25 @@ import {
 } from '../lib/settings.js';
 
 const CLAUDE_KEY_STORAGE_KEY = 'claude.apiKey';
+
+// FMN-120 Phase 2 toggles. Default to current behavior (both on); the
+// matrix test seeds these via chrome.storage.local to A/B the codegen
+// filter and the prompt-hint block. Storage errors fail OPEN (toggles
+// stay on) so production users never see the test config bleed in.
+const ASK_AI_FILTER_CODEGEN_KEY = 'fm:askAiFilterCodegen';
+const ASK_AI_PROMPT_HINTS_KEY = 'fm:askAiPromptHints';
+
+async function readAskAiToggles(storage = chrome.storage.local) {
+  try {
+    const data = await storage.get([ASK_AI_FILTER_CODEGEN_KEY, ASK_AI_PROMPT_HINTS_KEY]);
+    return {
+      filterCodegen: data?.[ASK_AI_FILTER_CODEGEN_KEY] === false ? false : true,
+      promptHints: data?.[ASK_AI_PROMPT_HINTS_KEY] === false ? false : true
+    };
+  } catch {
+    return { filterCodegen: true, promptHints: true };
+  }
+}
 
 async function getClaudeApiKey(storage = chrome.storage.local) {
   const data = await storage.get(CLAUDE_KEY_STORAGE_KEY);
@@ -44,18 +63,24 @@ export function createClaudeChatHandlers({ events = {}, getPanoptaClient, getApi
         if (!Array.isArray(messages) || messages.length === 0) {
           throw new TypeError('chat:send: messages is required');
         }
-        const [client, tier, provider] = await Promise.all([
+        const [client, tier, provider, toggles] = await Promise.all([
           panoptaFactory(),
           getAskClaudeToolTier(),
-          getAskClaudeProvider()
+          getAskClaudeProvider(),
+          readAskAiToggles()
         ]);
-        // FMN-120: pass the provider so buildToolDefinitions can shrink
-        // the catalog for local providers (skip codegen tools that
-        // confuse small models). Tool dispatch (handlers) stays full -
-        // a tool the model never sees won't be called, and if a future
-        // provider does call a codegen tool by name, the dispatch
-        // table can still serve it.
-        const tools = buildToolDefinitions(tier, { provider });
+        // FMN-120: pass the provider + toggles so buildToolDefinitions
+        // can shrink the catalog for local providers (when filterCodegen
+        // is on; the matrix test toggles this off to measure the filter's
+        // contribution). Tool dispatch (handlers) stays full - a tool
+        // the model never sees won't be called, and if a future provider
+        // does call a codegen tool by name, the dispatch table can still
+        // serve it.
+        const tools = buildToolDefinitions(tier, {
+          provider,
+          filterCodegen: toggles.filterCodegen
+        });
+        const systemPrompt = buildSystemPrompt({ promptHints: toggles.promptHints });
         const handlers = buildToolHandlers(client);
         const runTool = async (name, input) => {
           const handler = handlers[name];
@@ -69,7 +94,7 @@ export function createClaudeChatHandlers({ events = {}, getPanoptaClient, getApi
           result = await runToolLoop({
             apiKey,
             model: requestedModel ?? DEFAULT_MODEL,
-            system: SYSTEM_PROMPT,
+            system: systemPrompt,
             tools,
             messages,
             maxIterations,
@@ -97,7 +122,7 @@ export function createClaudeChatHandlers({ events = {}, getPanoptaClient, getApi
             url: cfg.url,
             apiKey: cfg.apiKey || null,
             model: effectiveModel,
-            systemPrompt: SYSTEM_PROMPT,
+            systemPrompt,
             tools,
             messages,
             maxIterations,
