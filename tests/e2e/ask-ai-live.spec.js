@@ -34,6 +34,7 @@ import {
 } from './ask-ai-scenarios.js';
 import { seedApiKey } from './seed-api-key.js';
 import path from 'node:path';
+import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -165,31 +166,35 @@ test.describe('live - Ask AI [matrix]', () => {
           };
           matrixRows.push(row);
 
-          // Write the report after EVERY test rather than once in
-          // afterAll. The afterAll-only approach was racing with
-          // expect.soft failures - some tests' rows weren't surviving
-          // to the final write, so the report ended up with only the
-          // last two scenarios. Per-test write is idempotent: each
-          // call overwrites with the full current state of matrixRows.
+          // Persist EVERY row to a JSONL file, then re-aggregate from
+          // disk and rewrite the markdown report. Crucial detail:
+          // Playwright restarts the worker process when a test fails
+          // (observed empirically - each failed test starts a fresh
+          // ollama daemon, fresh extension context, and resets
+          // module-scoped matrixRows). So we cannot rely on the
+          // in-memory array surviving across failures. JSONL on disk
+          // does. Each row is keyed by (model, scenarioId); on
+          // aggregate, the LATEST line wins.
           try {
-            writeMatrixReport(matrixRows, REPORT_PATH);
+            persistRow(row);
+            const allRows = loadAllRowsDeduped();
+            writeMatrixReport(allRows, REPORT_PATH);
           } catch (err) {
-            console.warn(`[ask-ai-live] report write failed: ${err?.message ?? err}`);
+            console.warn(`[ask-ai-live] persist/report failed: ${err?.message ?? err}`);
           }
 
-          // We do NOT abort on scenario failure; the matrix needs every
-          // cell. The test still expects to be able to differentiate
-          // pass/fail in the runner, so we use expect.soft where useful
-          // and a final hard expect on observation scenarios only.
-          if (row.observation) {
-            // Observation: the scenario is informational; pass unconditionally.
-            return;
+          // We deliberately do NOT call expect.soft / expect.hard on
+          // scenario verdicts. Doing so causes Playwright to mark the
+          // test as failed, which triggers worker recycling, which
+          // resets module state, which breaks rev-loop reporting
+          // across mixed pass/fail runs. The matrix report (markdown
+          // table + JSONL artifact) is the authoritative source for
+          // pass/fail, not the test runner's exit code. This means
+          // `npm run test:e2e:ollama-live` always exits 0 - that is
+          // intentional. Read the report.
+          if (verdict.passed === false && !row.observation) {
+            console.log(`[ask-ai-live] FAIL ${scenario.id}: ${verdict.reason}`);
           }
-          // Soft expect lets the runner mark the test as failed but
-          // continue collecting rows for subsequent scenarios.
-          expect.soft(verdict.passed,
-            `${verdict.reason ?? 'scenario assertion failed'}; tools=[${result.toolsCalled.join(', ')}]`
-          ).toBe(true);
         });
       }
     });
@@ -314,6 +319,45 @@ function makeApiFetcher(apiKey) {
  * suitable for the matrix report's JSON section. We don't want the
  * full /outage/active payload baked into the report.
  */
+/**
+ * Cross-process row persistence. Worker recycling on test failure
+ * resets the in-memory matrixRows array (observed: each failed test
+ * spawns a fresh worker with fresh ollama daemon and fresh module
+ * state). To survive that, we append every row as a JSONL line to a
+ * file under tests/e2e/.artifacts/. The aggregate read dedupes by
+ * (model, scenarioId) keeping the latest line, so a re-run of the
+ * same scenario in a recycled worker overrides the prior row.
+ *
+ * The file lives outside docs/ so it doesn't pollute git status; it
+ * is ignored via .gitignore's tests/e2e/.artifacts/ rule.
+ */
+const ROWS_JSONL_PATH = path.resolve(__dirname, '.artifacts/matrix-rows.jsonl');
+
+function persistRow(row) {
+  const dir = path.dirname(ROWS_JSONL_PATH);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.appendFileSync(ROWS_JSONL_PATH, JSON.stringify(row) + '\n', 'utf8');
+}
+
+function loadAllRowsDeduped() {
+  if (!fs.existsSync(ROWS_JSONL_PATH)) return [];
+  const text = fs.readFileSync(ROWS_JSONL_PATH, 'utf8');
+  const seen = new Map();
+  for (const line of text.split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      const r = JSON.parse(line);
+      const key = `${r.model}|${r.scenarioId}`;
+      // Latest write wins.
+      seen.set(key, r);
+    } catch { /* skip malformed lines */ }
+  }
+  return [...seen.values()];
+}
+
+// (clearMatrixRowsFile lives in global-setup.js so it fires once per
+// `npm run test:e2e:ollama-live` invocation, before workers spawn.)
+
 function summarizeGroundTruth(gt) {
   if (gt == null) return null;
   if (gt.__error) return { error: gt.__error };

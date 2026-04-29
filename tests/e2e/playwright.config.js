@@ -19,6 +19,9 @@ const PER_TEST_TIMEOUT = IS_OLLAMA_LIVE ? 360_000 : 60_000;
 
 export default defineConfig({
   testDir: '.',
+  // FMN-120 Phase 2: clears the matrix-rows JSONL once per run before
+  // any worker spawns. See global-setup.js for the rationale.
+  globalSetup: IS_OLLAMA_LIVE ? './global-setup.js' : undefined,
   // Each test launches its own Chromium with the unpacked extension.
   // 30s leaves room for slow first-launch service-worker registration
   // on cold caches; tests themselves are sub-second once warm.
