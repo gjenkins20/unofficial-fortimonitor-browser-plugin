@@ -106,23 +106,28 @@ test('popup loads cleanly after the FMN-94 epic merge (no service-worker errors)
   });
   await page.goto(popupUrl);
   // The Ask Claude tile should be visible once the popup mounts.
-  await expect(page.locator('.tool-card', { hasText: 'Ask Claude' })).toBeVisible();
+  await expect(page.locator('.tool-card', { hasText: 'Ask AI' })).toBeVisible();
   await page.close();
   expect(consoleErrors, `console errors: ${consoleErrors.join('\n')}`).toEqual([]);
 });
 
-test('Ask Claude tile description carries the cost-warning prose (FMN-109)', async ({ extensionContext, popupUrl }) => {
+test('Ask AI tile description carries the tier prose (FMN-109 / FMN-120)', async ({ extensionContext, popupUrl }) => {
   // popup.js refreshGuards swaps the visible .tool-desc text when auth
   // is missing (e.g. "Set a FortiMonitor v2 API key in Settings"). The
   // data-default-desc attribute is the source of truth for the live
   // prose and is preserved regardless of guard state, so this test
   // asserts on the attribute rather than the rendered text.
+  // FMN-120: the tile description is now provider-generic. The cost
+  // warning lives on the Anthropic-specific surfaces (Settings key
+  // section, chat-page warning); the tile only references tokens-per-turn.
   const page = await extensionContext.newPage();
   await page.goto(popupUrl);
-  const desc = page.locator('.tool-card', { hasText: 'Ask Claude' }).locator('.tool-desc');
+  const desc = page.locator('.tool-card', { hasText: 'Ask AI' }).locator('.tool-desc');
   const defaultDesc = await desc.getAttribute('data-default-desc');
   expect(defaultDesc, 'tile data-default-desc must mention bigger tool tiers').toMatch(/bigger tool tiers/i);
-  expect(defaultDesc, 'tile data-default-desc must mention cost').toMatch(/cost more/i);
+  expect(defaultDesc, 'tile data-default-desc must mention tokens per turn').toMatch(/tokens per turn/i);
+  expect(defaultDesc, 'tile data-default-desc should name the available providers').toMatch(/anthropic/i);
+  expect(defaultDesc, 'tile data-default-desc should name the available providers').toMatch(/ollama/i);
   await page.close();
 });
 

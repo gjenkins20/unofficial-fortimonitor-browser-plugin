@@ -319,6 +319,51 @@ test('streamOneTurn throws OpenAICompatError on non-2xx response', async () => {
   );
 });
 
+test('streamOneTurn 403 against localhost includes an OLLAMA_ORIGINS hint', async () => {
+  const fetchFn = async () => fakeResponse({ ok: false, status: 403, jsonBody: { error: 'forbidden' } });
+  let caught;
+  try {
+    await streamOneTurn({
+      url: 'http://localhost:11434/v1',
+      model: 'qwen2.5',
+      messages: [{ role: 'user', content: 'x' }],
+      fetchFn
+    });
+  } catch (err) { caught = err; }
+  assert.ok(caught instanceof OpenAICompatError);
+  assert.equal(caught.status, 403);
+  assert.match(caught.message, /OLLAMA_ORIGINS/);
+  assert.match(caught.message, /chrome-extension/);
+});
+
+test('streamOneTurn 401 against a remote URL hints at API key, not OLLAMA_ORIGINS', async () => {
+  const fetchFn = async () => fakeResponse({ ok: false, status: 401, jsonBody: { error: 'no key' } });
+  let caught;
+  try {
+    await streamOneTurn({
+      url: 'https://api.example.com/v1',
+      model: 'm',
+      messages: [{ role: 'user', content: 'x' }],
+      fetchFn
+    });
+  } catch (err) { caught = err; }
+  assert.ok(caught instanceof OpenAICompatError);
+  assert.match(caught.message, /check API key/);
+  assert.doesNotMatch(caught.message, /OLLAMA_ORIGINS/);
+});
+
+test('streamOneTurn error message includes a body snippet when present', async () => {
+  const fetchFn = async () => fakeResponse({ ok: false, status: 500, jsonBody: { error: 'internal explosion' } });
+  let caught;
+  try {
+    await streamOneTurn({
+      url: 'http://x/v1', model: 'm',
+      messages: [{ role: 'user', content: 'x' }], fetchFn
+    });
+  } catch (err) { caught = err; }
+  assert.match(caught.message, /internal explosion/);
+});
+
 test('streamOneTurn requires url and model', async () => {
   await assert.rejects(
     streamOneTurn({ model: 'm', messages: [{ role: 'user', content: 'x' }] }),

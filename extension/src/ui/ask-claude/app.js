@@ -1,13 +1,24 @@
-// Unofficial FortiMonitor Toolkit - Ask Claude (FMN-53) UI
+// Unofficial FortiMonitor Toolkit - Ask AI (FMN-53 / FMN-120) UI
 // Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 //
 // Thin chat UI. Sends user turns to the service worker ('chat:send'),
 // listens for 'chat:event' broadcasts to render streaming text and
 // tool-call activity, shows the final assistant message when the loop
-// settles.
+// settles. Provider-aware: Anthropic / Ollama / LM Studio.
+
+import {
+  getAskClaudeProvider,
+  getAskClaudeProviderConfig
+} from '../../lib/settings.js';
 
 const PANOPTA_KEY = 'panopta.apiKey';
 const CLAUDE_KEY = 'claude.apiKey';
+
+const PROVIDER_LABEL = {
+  anthropic: 'Anthropic',
+  ollama: 'Ollama',
+  lmstudio: 'LM Studio'
+};
 
 const state = {
   messages: [], // message objects sent to the API ({role, content})
@@ -23,16 +34,27 @@ const els = {
   resetBtn: document.getElementById('reset-btn'),
   status: document.getElementById('status-text'),
   setupWarning: document.getElementById('setup-warning'),
-  setupWarningText: document.getElementById('setup-warning-text')
+  setupWarningText: document.getElementById('setup-warning-text'),
+  providerIndicator: document.getElementById('provider-indicator'),
+  costWarningAnthropic: document.getElementById('cost-warning-anthropic'),
+  costWarningLocal: document.getElementById('cost-warning-local')
 };
 
-// ---- Preflight: make sure both keys are configured --------------------------
+// ---- Preflight: make sure auth for the active provider is configured -------
 
 async function preflight() {
+  const provider = await getAskClaudeProvider();
+  applyProviderUi(provider);
   const data = await chrome.storage.local.get([PANOPTA_KEY, CLAUDE_KEY]);
   const missing = [];
   if (!data?.[PANOPTA_KEY]) missing.push('FortiMonitor RW API key');
-  if (!data?.[CLAUDE_KEY]) missing.push('Anthropic (Claude) API key');
+  if (provider === 'anthropic') {
+    if (!data?.[CLAUDE_KEY]) missing.push('Anthropic API key');
+  } else {
+    const cfg = await getAskClaudeProviderConfig(provider);
+    if (!cfg.url) missing.push(`${PROVIDER_LABEL[provider]} base URL`);
+    if (!cfg.model) missing.push(`${PROVIDER_LABEL[provider]} model`);
+  }
   if (missing.length === 0) {
     els.setupWarning.hidden = true;
     return true;
@@ -41,6 +63,20 @@ async function preflight() {
   els.setupWarning.hidden = false;
   setSending(false);
   return false;
+}
+
+function applyProviderUi(provider) {
+  if (els.providerIndicator) {
+    const label = PROVIDER_LABEL[provider] ?? provider;
+    els.providerIndicator.textContent = `Provider: ${label}`;
+    els.providerIndicator.hidden = false;
+  }
+  if (els.costWarningAnthropic) {
+    els.costWarningAnthropic.hidden = provider !== 'anthropic';
+  }
+  if (els.costWarningLocal) {
+    els.costWarningLocal.hidden = provider === 'anthropic';
+  }
 }
 
 // ---- Rendering --------------------------------------------------------------
@@ -204,9 +240,21 @@ els.input.addEventListener('keydown', (e) => {
 
 // Self-heal the setup-needed banner when keys are saved in the popup or
 // when the tab comes back to the foreground after configuring elsewhere.
+// FMN-120: also re-run preflight when the operator switches providers or
+// edits the local-provider URL/model from Settings.
+const PROVIDER_KEYS = [
+  'fm:askClaudeProvider',
+  'fm:askClaudeOllamaUrl',
+  'fm:askClaudeOllamaModel',
+  'fm:askClaudeLmStudioUrl',
+  'fm:askClaudeLmStudioModel'
+];
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
-  if (changes[PANOPTA_KEY] || changes[CLAUDE_KEY]) preflight();
+  if (changes[PANOPTA_KEY] || changes[CLAUDE_KEY]) { preflight(); return; }
+  for (const k of PROVIDER_KEYS) {
+    if (changes[k]) { preflight(); return; }
+  }
 });
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) preflight();

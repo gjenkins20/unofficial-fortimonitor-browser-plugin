@@ -1,13 +1,13 @@
 <!DOCTYPE html>
 <!--
-  Unofficial FortiMonitor Toolkit - Ask Claude (prototype)
+  Unofficial FortiMonitor Toolkit - Ask AI (prototype)
   Built by Gregori Jenkins · https://www.linkedin.com/in/gregorijenkins
 -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Ask Claude · Unofficial FortiMonitor Toolkit</title>
-<meta name="description" content="In-plugin Claude chat with FortiMonitor tool use.">
+<title>Ask AI · Unofficial FortiMonitor Toolkit</title>
+<meta name="description" content="In-plugin AI chat with FortiMonitor tool use.">
 <link rel="stylesheet" href="../styles.css">
 <link rel="stylesheet" href="app.css">
 </head>
@@ -15,10 +15,11 @@
 <div class="tool-shell">
   <header class="tool-header">
     <a href="../../popup/popup.html" class="back-link">‹ Back</a>
-    <h1>Ask Claude <span class="badge beta">Beta</span></h1>
+    <h1>Ask AI <span class="badge beta">Beta</span></h1>
     <p class="tool-subtitle">
-      Natural-language Q&amp;A against your FortiMonitor environment, powered by Claude with
-      a curated set of v2 API tools.
+      Natural-language Q&amp;A against your FortiMonitor environment, powered by your
+      configured AI provider with a curated set of v2 API tools.
+      <span id="provider-indicator" class="provider-indicator" hidden></span>
     </p>
   </header>
 
@@ -29,12 +30,19 @@
   </section>
 
   <details class="alert info tool-notes">
-    <summary>Heads up: cost warning + related projects</summary>
+    <summary>Heads up: usage notes + related projects</summary>
     <div class="notes-body">
-      <p>
-        <strong>Cost warning.</strong> This tool calls the Anthropic API directly with <em>your</em> key.
-        There is no rate limit or budget cap on our side - cost exposure is on your account.
-        Keep conversations short and close this tab when you're done.
+      <p id="cost-warning-anthropic" hidden>
+        <strong>Cost warning.</strong> When the provider is Anthropic, this
+        tool calls the Anthropic API directly with <em>your</em> key. There is
+        no rate limit or budget cap on our side - cost exposure is on your
+        account. Keep conversations short and close this tab when you're
+        done.
+      </p>
+      <p id="cost-warning-local" hidden>
+        <strong>Local provider.</strong> Chat turns route to the local OpenAI-compatible
+        server you configured in Settings. No data leaves your network and
+        there is no per-turn cost; throughput is bounded by your local model.
       </p>
       <p>
         <strong>Like this?</strong>

@@ -261,7 +261,7 @@ export async function streamOneTurn({
     let errBody = null;
     try { errBody = await res.json(); } catch { try { errBody = await res.text(); } catch {} }
     throw new OpenAICompatError(
-      `OpenAI-compat API error: HTTP ${res.status}`,
+      formatHttpError(res.status, errBody, endpoint),
       { status: res.status, body: errBody }
     );
   }
@@ -346,6 +346,32 @@ export async function streamOneTurn({
     stopReason,
     usage
   };
+}
+
+/**
+ * Build a human-readable error message from an HTTP status + parsed
+ * body. Adds a provider-specific hint for the most common gotcha:
+ * Ollama returns 403 when the request Origin isn't in OLLAMA_ORIGINS.
+ * Browser-extension fetches always include an `Origin: chrome-extension://...`
+ * header, so a fresh Ollama install will reject every request from the
+ * plugin until the operator restarts Ollama with
+ * `OLLAMA_ORIGINS="chrome-extension://*"` (or the specific extension id).
+ */
+function formatHttpError(status, body, endpoint) {
+  const bodySnippet = (() => {
+    if (!body) return '';
+    if (typeof body === 'string') return body.slice(0, 300);
+    try { return JSON.stringify(body).slice(0, 300); } catch { return ''; }
+  })();
+  let msg = `HTTP ${status} from ${endpoint}`;
+  if (bodySnippet) msg += ` - ${bodySnippet}`;
+  const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)/i.test(endpoint);
+  if (status === 403 && isLocal) {
+    msg += ' (If using Ollama, this usually means the chrome-extension:// origin is not in OLLAMA_ORIGINS. Restart Ollama with: OLLAMA_ORIGINS="chrome-extension://*" ollama serve)';
+  } else if ((status === 401 || status === 403) && !isLocal) {
+    msg += ' (check API key)';
+  }
+  return msg;
 }
 
 function mapFinishReason(finish) {
@@ -474,7 +500,7 @@ export async function testConnection({
     let body = null;
     try { body = await res.json(); } catch { try { body = await res.text(); } catch {} }
     throw new OpenAICompatError(
-      `${endpoint} returned HTTP ${res.status}`,
+      formatHttpError(res.status, body, endpoint),
       { status: res.status, body }
     );
   }

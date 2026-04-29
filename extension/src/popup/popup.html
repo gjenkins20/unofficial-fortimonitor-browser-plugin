@@ -152,14 +152,14 @@
               data-claude-key-required="true"
               data-experimental="ask-claude"
               hidden
-              title="Requires FortiMonitor v2 API key + Anthropic (Claude) API key - both configured in Settings (⚙).">
+              title="Requires FortiMonitor v2 API key + a configured Ask AI provider - manage in Settings (⚙).">
         <div class="tool-meta">
           <div class="tool-name">
-            Ask Claude
+            Ask AI
             <span class="badge beta">Beta</span>
           </div>
-          <div class="tool-desc" data-default-desc="Natural-language Q&amp;A against your FortiMonitor environment. Each turn calls the Anthropic API with your key; bigger tool tiers (in Settings) send more tokens per turn and cost more.">
-            Natural-language Q&amp;A against your FortiMonitor environment. Each turn calls the Anthropic API with your key; bigger tool tiers (in Settings) send more tokens per turn and cost more.
+          <div class="tool-desc" data-default-desc="Natural-language Q&amp;A against your FortiMonitor environment. Each turn streams to your configured AI provider (Anthropic, Ollama, or LM Studio) with a curated set of v2 API tools; bigger tool tiers (in Settings) send more tokens per turn.">
+            Natural-language Q&amp;A against your FortiMonitor environment. Each turn streams to your configured AI provider (Anthropic, Ollama, or LM Studio) with a curated set of v2 API tools; bigger tool tiers (in Settings) send more tokens per turn.
           </div>
         </div>
         <div class="chevron">›</div>
@@ -213,17 +213,18 @@
     </div>
 
     <div class="settings-section" data-experimental="ask-claude" hidden>
-      <label class="settings-label">Ask Claude provider</label>
+      <label class="settings-label">Ask AI</label>
       <p class="settings-help">
-        Choose where Ask Claude sends each turn. <strong>Anthropic</strong> is
-        the default and uses your Claude API key. <strong>Ollama</strong> and
-        <strong>LM Studio</strong> route to a local OpenAI-compatible server
-        (e.g. <code>http://localhost:11434/v1</code> for Ollama,
-        <code>http://localhost:1234/v1</code> for LM Studio) so chat turns and
-        tool calls stay on your network. Switching providers requests a host
-        permission for the URL you enter; it is not granted at install time.
+        Choose where the chat tool sends each turn. <strong>Anthropic</strong>
+        is the default and uses your Anthropic API key. <strong>Ollama</strong>
+        and <strong>LM Studio</strong> route to a local OpenAI-compatible
+        server (e.g. <code>http://localhost:11434/v1</code> for Ollama,
+        <code>http://localhost:1234/v1</code> for LM Studio) so chat turns
+        and tool calls stay on your network. Switching to a local provider
+        requests a host permission scoped to the URL you enter; it is not
+        granted at install time.
       </p>
-      <div class="radio-group" role="radiogroup" aria-label="Ask Claude provider">
+      <div class="radio-group" role="radiogroup" aria-label="Ask AI provider">
         <label class="radio-row">
           <input type="radio" name="ask-claude-provider" value="anthropic">
           <span><strong>Anthropic</strong> (cloud, default)</span>
@@ -240,12 +241,12 @@
     </div>
 
     <div class="settings-section" data-ask-claude-provider="anthropic" data-experimental="ask-claude" hidden>
-      <label class="settings-label" for="claude-key-input">Anthropic (Claude) API Key</label>
+      <label class="settings-label" for="claude-key-input">Anthropic API Key</label>
       <p class="settings-help">
-        Required for the <strong>Ask Claude</strong> tool when the provider is
-        Anthropic. Create a key at <code>console.anthropic.com</code>. Stored
-        locally in your browser via <code>chrome.storage.local</code>; sent
-        only to <code>api.anthropic.com</code>.
+        Required when the <strong>Ask AI</strong> provider is Anthropic.
+        Create a key at <code>console.anthropic.com</code>. Stored locally in
+        your browser via <code>chrome.storage.local</code>; sent only to
+        <code>api.anthropic.com</code>.
         <strong>Cost warning:</strong> calls go directly to Anthropic with your key - no rate limit or budget cap is enforced by this extension.
       </p>
       <input id="claude-key-input" type="password" placeholder="Paste Claude API key" autocomplete="off" spellcheck="false">
@@ -260,10 +261,14 @@
     <div class="settings-section" data-ask-claude-provider="ollama" data-experimental="ask-claude" hidden>
       <label class="settings-label">Ollama (local, OpenAI-compat)</label>
       <p class="settings-help">
-        Point Ask Claude at a local Ollama server. Tool use requires a
+        Point Ask AI at a local Ollama server. Tool use requires a
         tool-capable model (e.g. <code>qwen2.5</code>, <code>llama3.1</code>,
         <code>mistral-nemo</code>, <code>command-r-plus</code>). API key is
         optional and only used if your Ollama install requires one.
+        <strong>Note:</strong> Ollama rejects browser-extension origins by
+        default. If a chat turn returns HTTP 403, restart Ollama with
+        <code>OLLAMA_ORIGINS="chrome-extension://*" ollama serve</code> so it
+        accepts requests from this extension.
       </p>
       <label class="settings-sublabel" for="ollama-url-input">Base URL</label>
       <input id="ollama-url-input" type="text" placeholder="http://localhost:11434/v1" autocomplete="off" spellcheck="false">
@@ -281,8 +286,8 @@
     <div class="settings-section" data-ask-claude-provider="lmstudio" data-experimental="ask-claude" hidden>
       <label class="settings-label">LM Studio (local, OpenAI-compat)</label>
       <p class="settings-help">
-        Point Ask Claude at a local LM Studio server. Load a tool-capable
-        model in LM Studio first; copy its identifier into <strong>Model</strong>
+        Point Ask AI at a local LM Studio server. Load a tool-capable model
+        in LM Studio first; copy its identifier into <strong>Model</strong>
         (LM Studio shows it in the loaded-model header). API key is optional
         and matches whatever LM Studio is configured to require.
       </p>
@@ -302,17 +307,17 @@
     <div class="settings-section">
       <label class="settings-label" for="ask-claude-toggle">Experimental tools</label>
       <p class="settings-help">
-        <strong>Ask Claude</strong> is an in-plugin Claude chat that queries your FortiMonitor environment via a curated set of v2 API tools. Shown by default; toggle off to hide the tile and the Anthropic API key settings section. Requires an Anthropic API key in addition to your FortiMonitor RW key.
+        <strong>Ask AI</strong> is an in-plugin chat that queries your FortiMonitor environment via a curated set of v2 API tools. Pick the AI provider above (Anthropic, Ollama, or LM Studio); requires the matching credentials plus your FortiMonitor RW key. Shown by default; toggle off to hide the tile and provider settings.
       </p>
       <label class="toggle-row">
         <input id="ask-claude-toggle" type="checkbox">
-        <span>Show Ask Claude</span>
+        <span>Show Ask AI</span>
       </label>
 
       <div id="ask-claude-tier-section" class="settings-subsection" hidden>
-        <label class="settings-label">Ask Claude tool tier</label>
+        <label class="settings-label">Ask AI tool tier</label>
         <p class="settings-help">
-          Controls how many tools are sent to Claude on each chat turn. Bigger tier means a bigger prompt, more tokens billed by Anthropic per turn, and more capability for Claude to act on its own. Read-only is the safest default; promote to read+write only when you want Claude able to call <code>create</code>/<code>update</code>/<code>delete</code> tools (still gated on you asking explicitly). The "all tools" tier loads the entire 260+ catalog and is for when you genuinely want maximum capability and accept the per-turn cost.
+          Controls how many tools are sent to the AI on each chat turn. Bigger tier means a bigger prompt, more tokens per turn (and more cost when the provider is Anthropic), and more capability for the model to act on its own. Read-only is the safest default; promote to read+write only when you want the model able to call <code>create</code>/<code>update</code>/<code>delete</code> tools (still gated on you asking explicitly). The "all tools" tier loads the entire 260+ catalog and is for when you genuinely want maximum capability.
         </p>
         <div class="radio-group" role="radiogroup" aria-label="Ask Claude tool tier">
           <label class="radio-row">

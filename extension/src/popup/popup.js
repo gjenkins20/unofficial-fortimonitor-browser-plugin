@@ -98,14 +98,17 @@ function setSessionState(ok) {
 
 function applyToolGuards({ sessionOk, apiKeyOk, claudeKeyOk, askClaudeProvider }) {
   const localProvider = askClaudeProvider && askClaudeProvider !== 'anthropic';
+  const providerLabel = askClaudeProvider === 'ollama' ? 'Ollama'
+    : askClaudeProvider === 'lmstudio' ? 'LM Studio'
+    : 'Anthropic';
   const claudeBlockedDesc = localProvider
-    ? `Configure your ${askClaudeProvider === 'ollama' ? 'Ollama' : 'LM Studio'} URL and model in Settings (⚙) to enable.`
-    : 'Set an Anthropic (Claude) API key in Settings (⚙) to enable.';
+    ? `Configure your ${providerLabel} URL and model in Settings (⚙) to enable.`
+    : 'Set an Anthropic API key in Settings (⚙) to enable.';
   const claudeBlockedTitle = localProvider
-    ? `No ${askClaudeProvider === 'ollama' ? 'Ollama' : 'LM Studio'} URL/model configured. Click ⚙ in the popup header to set a base URL and model name.`
-    : 'No Claude API key configured. Click ⚙ in the popup header to paste your Anthropic key.';
+    ? `No ${providerLabel} URL/model configured. Click ⚙ in the popup header to set a base URL and model name.`
+    : 'No Anthropic API key configured. Click ⚙ in the popup header to paste your Anthropic key.';
   const claudeReadyTitle = localProvider
-    ? `Requires FortiMonitor v2 API key + ${askClaudeProvider === 'ollama' ? 'Ollama' : 'LM Studio'} URL/model - manage in popup → Settings (⚙).`
+    ? `Requires FortiMonitor v2 API key + ${providerLabel} URL/model - manage in popup → Settings (⚙).`
     : 'Requires FortiMonitor v2 API key + Anthropic API key - manage in popup → Settings (⚙).';
   for (const card of document.querySelectorAll('.tool-card')) {
     const needsSession = card.dataset.sessionRequired === 'true';
