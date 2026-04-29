@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import {
   streamOneTurn,
   runToolLoop,
+  anthropicToOllamaMessages,
   OllamaError
 } from '../src/lib/ollama-native-client.js';
 
@@ -183,6 +184,75 @@ test('streamOneTurn handles bare URL without /v1 suffix', async () => {
     fetchFn
   });
   assert.equal(captured, 'http://localhost:11434/api/chat');
+});
+
+// ---------- anthropicToOllamaMessages ----------
+
+test('anthropicToOllamaMessages drops id and type from tool_calls (Ollama-native shape)', () => {
+  const out = anthropicToOllamaMessages([
+    {
+      role: 'assistant',
+      content: [
+        { type: 'text', text: 'looking up' },
+        { type: 'tool_use', id: 'call_1', name: 'list_active_outages', input: { limit: 25 } }
+      ]
+    }
+  ]);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].role, 'assistant');
+  assert.equal(out[0].content, 'looking up');
+  assert.equal(out[0].tool_calls.length, 1);
+  // No id, no type; just function: { name, arguments }
+  assert.ok(!('id' in out[0].tool_calls[0]));
+  assert.ok(!('type' in out[0].tool_calls[0]));
+  assert.equal(out[0].tool_calls[0].function.name, 'list_active_outages');
+  // arguments is an OBJECT, not a JSON-encoded string
+  assert.deepEqual(out[0].tool_calls[0].function.arguments, { limit: 25 });
+});
+
+test('anthropicToOllamaMessages converts tool_result to {role:tool, content} without tool_call_id', () => {
+  const out = anthropicToOllamaMessages([
+    {
+      role: 'user',
+      content: [
+        { type: 'tool_result', tool_use_id: 'call_1', content: '{"count":17}' }
+      ]
+    }
+  ]);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].role, 'tool');
+  assert.equal(out[0].content, '{"count":17}');
+  // Ollama doesn't expect tool_call_id and rejects unknown fields in
+  // some configurations.
+  assert.ok(!('tool_call_id' in out[0]));
+});
+
+test('anthropicToOllamaMessages preserves string-content messages', () => {
+  const out = anthropicToOllamaMessages([
+    { role: 'user', content: 'hi' },
+    { role: 'assistant', content: 'hello' }
+  ]);
+  assert.deepEqual(out, [
+    { role: 'user', content: 'hi' },
+    { role: 'assistant', content: 'hello' }
+  ]);
+});
+
+test('anthropicToOllamaMessages emits user text + tool results in order', () => {
+  const out = anthropicToOllamaMessages([
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: 'follow up' },
+        { type: 'tool_result', tool_use_id: 'c', content: 'ok' }
+      ]
+    }
+  ]);
+  assert.equal(out.length, 2);
+  assert.equal(out[0].role, 'user');
+  assert.equal(out[0].content, 'follow up');
+  assert.equal(out[1].role, 'tool');
+  assert.equal(out[1].content, 'ok');
 });
 
 test('runToolLoop dispatches tool calls and returns final assistant text', async () => {

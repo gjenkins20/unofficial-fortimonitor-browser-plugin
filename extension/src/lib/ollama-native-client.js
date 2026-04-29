@@ -18,7 +18,99 @@
 //
 // LM Studio still uses /v1/chat/completions (it doesn't have /api/chat).
 
-import { anthropicToOpenAIMessages, toOpenAIToolList } from './openai-compat-client.js';
+import { toOpenAIToolList } from './openai-compat-client.js';
+
+/**
+ * Convert Anthropic-shape messages (with tool_use / tool_result content
+ * blocks) to Ollama /api/chat shape.
+ *
+ *   Anthropic assistant turn that calls a tool:
+ *     { role: 'assistant', content: [
+ *         { type: 'text', text: '...' },
+ *         { type: 'tool_use', id, name, input }
+ *     ]}
+ *
+ *   Ollama assistant turn that calls a tool:
+ *     { role: 'assistant', content: '...', tool_calls: [
+ *         { function: { name, arguments: <object> } }
+ *     ]}
+ *     - NO id field
+ *     - NO type wrapper
+ *     - arguments is an OBJECT, not a JSON string
+ *
+ *   Anthropic tool result:
+ *     { role: 'user', content: [
+ *         { type: 'tool_result', tool_use_id, content, is_error }
+ *     ]}
+ *
+ *   Ollama tool result:
+ *     { role: 'tool', content: '<string>' }
+ *     - NO tool_call_id needed (Ollama does not generate them and does
+ *       not require them on the way back)
+ *
+ * The OpenAI-compat converter (anthropicToOpenAIMessages) produces id +
+ * type + JSON-string arguments which Ollama's /api/chat REJECTS with
+ * HTTP 400 - empirically observed: every second turn was 400-ing
+ * before this converter was put in place.
+ */
+export function anthropicToOllamaMessages(messages) {
+  if (!Array.isArray(messages)) return [];
+  const out = [];
+  for (const msg of messages) {
+    if (!msg || typeof msg !== 'object') continue;
+    const { role, content } = msg;
+    if (typeof content === 'string') {
+      out.push({ role, content });
+      continue;
+    }
+    if (!Array.isArray(content)) {
+      out.push({ role, content: '' });
+      continue;
+    }
+    if (role === 'user') {
+      const toolResults = content.filter((b) => b?.type === 'tool_result');
+      const textParts = content
+        .filter((b) => b?.type === 'text' && typeof b.text === 'string')
+        .map((b) => b.text);
+      if (textParts.length > 0) {
+        out.push({ role: 'user', content: textParts.join('\n') });
+      }
+      for (const tr of toolResults) {
+        const text = typeof tr.content === 'string'
+          ? tr.content
+          : JSON.stringify(tr.content ?? null);
+        out.push({ role: 'tool', content: text });
+      }
+      continue;
+    }
+    if (role === 'assistant') {
+      const textParts = content
+        .filter((b) => b?.type === 'text' && typeof b.text === 'string')
+        .map((b) => b.text);
+      const toolUses = content.filter((b) => b?.type === 'tool_use');
+      const assistantMsg = {
+        role: 'assistant',
+        content: textParts.length > 0 ? textParts.join('\n') : ''
+      };
+      if (toolUses.length > 0) {
+        assistantMsg.tool_calls = toolUses.map((tu) => ({
+          function: {
+            name: tu.name,
+            arguments: tu.input ?? {} // OBJECT, not JSON string
+          }
+        }));
+      }
+      out.push(assistantMsg);
+      continue;
+    }
+    // System or other roles - flatten to text.
+    const textParts = content
+      .filter((b) => b?.type === 'text' && typeof b.text === 'string')
+      .map((b) => b.text);
+    out.push({ role, content: textParts.join('\n') });
+  }
+  return out;
+}
 
 export const DEFAULT_MAX_TOKENS = 2048;
 
@@ -64,14 +156,14 @@ export async function streamOneTurn({
   if (!url) throw new OllamaError('ollama-native client: url is required');
   if (!model) throw new OllamaError('ollama-native client: model is required');
 
-  // Ollama /api/chat takes OpenAI-shaped messages but we still need
-  // to flatten Anthropic tool_use/tool_result content blocks. Reuse
-  // the OpenAI-compat converter; the message shape is the same up to
-  // the tool-call format.
-  const openaiMessages = anthropicToOpenAIMessages(messages);
+  // Convert Anthropic-shape messages (with tool_use/tool_result blocks)
+  // to Ollama's tool-call shape. CANNOT reuse anthropicToOpenAIMessages
+  // because Ollama's /api/chat rejects (HTTP 400) the OpenAI shape's
+  // id field, type:'function' wrapper, and JSON-string arguments.
+  const ollamaMessages = anthropicToOllamaMessages(messages);
   const finalMessages = systemPrompt
-    ? [{ role: 'system', content: systemPrompt }, ...openaiMessages]
-    : openaiMessages;
+    ? [{ role: 'system', content: systemPrompt }, ...ollamaMessages]
+    : ollamaMessages;
 
   // Ollama /api/chat accepts the OpenAI tool shape directly:
   // { type: 'function', function: { name, description, parameters } }
