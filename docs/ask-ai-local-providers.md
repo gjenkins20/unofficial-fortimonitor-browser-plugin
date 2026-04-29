@@ -45,27 +45,47 @@ The full tool-capable catalog on Ollama: <https://ollama.com/search?c=tools>
 
 ## Catalog size for local providers
 
-**Local providers (Ollama, LM Studio) automatically receive a curated handwritten-only catalog**, regardless of the tier setting. The codegen 260+ tools are filtered out for local providers because they consistently break tool selection on small/medium open models:
+**Local providers (Ollama, LM Studio) automatically receive a curated handwritten-only catalog**, regardless of the tier setting. The codegen 260+ tools are filtered out for local providers because the larger surface increases tool-selection difficulty for small/medium models — there are name collisions (e.g. `list_server_outages` codegen vs `list_active_outages` handwritten) that pattern-match on similar substrings.
 
-- qwen3:8b on readonly picked codegen `list_server_outages` (requires `server_id`) over handwritten `list_active_outages` (no params), then asked the user for a server id instead of just listing outages.
-- qwen2.5:14b made the same mistake even when told explicitly "call list_active_outages with no filters", and on a third try produced gibberish in Thai script — tokens lost to the 30-50 tool catalog.
-
-The handwritten catalog is ~10-15 tools, narrow and curated, with names that don't shadow each other:
+The handwritten catalog is ~10-15 tools, narrow and curated:
 
 - `search_servers`, `list_servers`, `get_server`
 - `list_active_outages`, `list_outages`, `get_outage`
 - `list_agent_resources_for_server`
 - `list_fabric_connections`, `list_templates`, `list_server_groups`
 - `acknowledge_outage` (readwrite tier)
-- Hand-port composite/bulk tools
+- Hand-port composite/bulk tools (e.g. `search_servers_advanced`, `get_servers_with_active_outages`)
 
 The Ask AI tool tier setting still applies (readonly hides writes; readwrite includes them; "all" is functionally equivalent to readwrite for local providers since codegen is excluded), but the catalog never grows to the codegen surface.
 
-**This means cloud Anthropic still has access to 260+ tools when the operator picks Anthropic as the provider** — the filter is provider-scoped, not global.
+**Cloud Anthropic still has access to 260+ tools when the operator picks Anthropic as the provider** — the filter is provider-scoped, not global.
 
-### When the local model still misbehaves
+## Context window (`num_ctx`)
 
-If even the curated handwritten catalog isn't enough:
+The dominant cause of local-LLM failures (gibberish output, prompt drop, wrong tool picks on the second turn) is Ollama's default 4096-token context window. Tool definitions + tool result + system prompt routinely overflow it on outage-list queries. The plugin sends `options.num_ctx=8192` on every Ollama / LM Studio request by default, which closes the gap on the validated matrix (qwen3:8b, qwen2.5:14b — both 8/8 pass).
+
+If you still see truncation warnings (`time=... level=WARN ... msg="truncating input prompt"`) in your `ollama serve` log on outage-heavy queries, raise the override:
+
+```
+chrome.storage.local.set({ 'fm:askAiNumCtx': 16384 })
+```
+
+(There's no Settings UI for this yet; set it via the extension's storage if you need a higher value.)
+
+## Validated model matrix
+
+`tests/e2e/ask-ai-live.spec.js` runs canonical chat scenarios against a real local Ollama. As of this writing:
+
+| Model | Scenarios passed | Notes |
+|---|---|---|
+| `qwen3:8b` | 8/8 | clean tool selection, no gibberish |
+| `qwen2.5:14b` | 8/8 | one scenario produced Thai-script prose; tool call still correct |
+
+Run it yourself with `OLLAMA_LIVE=1 OLLAMA_MODELS=qwen3:8b npm run test:e2e:ollama-live` (see `tests/e2e/ask-ai-live.spec.js` for env vars). Untested at present: llama3.x family, mistral-nemo, qwen2.5:7b, sub-7B sizes.
+
+## When the local model still misbehaves
+
+If a tool-capable model with `num_ctx=8192` still picks wrong:
 
 1. **Be explicit.** Say "call list_active_outages with no filters" — small models follow direct tool names well even when they don't infer them.
 2. **Bigger model.** Step up to qwen2.5:14b or qwen3:14b. Tool-selection accuracy scales with model size, but any model below 7B will struggle.
