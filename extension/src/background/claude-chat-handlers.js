@@ -49,7 +49,13 @@ export function createClaudeChatHandlers({ events = {}, getPanoptaClient, getApi
           getAskClaudeToolTier(),
           getAskClaudeProvider()
         ]);
-        const tools = buildToolDefinitions(tier);
+        // FMN-120: pass the provider so buildToolDefinitions can shrink
+        // the catalog for local providers (skip codegen tools that
+        // confuse small models). Tool dispatch (handlers) stays full -
+        // a tool the model never sees won't be called, and if a future
+        // provider does call a codegen tool by name, the dispatch
+        // table can still serve it.
+        const tools = buildToolDefinitions(tier, { provider });
         const handlers = buildToolHandlers(client);
         const runTool = async (name, input) => {
           const handler = handlers[name];

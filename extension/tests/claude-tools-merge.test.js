@@ -91,6 +91,57 @@ test('codegen catalog count + hand-port count are unchanged by tier filter (no d
   assert.equal(COMPOSITE_TOOLS.length, 5);
 });
 
+// ---------- FMN-120: per-provider catalog filter ----------
+
+test('buildToolDefinitions(readonly, ollama) excludes codegen tools', () => {
+  const tools = buildToolDefinitions('readonly', { provider: 'ollama' });
+  const names = new Set(tools.map((t) => t.name));
+  // Handwritten readonly is present.
+  assert.ok(names.has('search_servers'));
+  assert.ok(names.has('list_active_outages'));
+  // Codegen readonly is gone. list_server_outages is the codegen tool
+  // that was shadowing list_active_outages on small local models.
+  assert.ok(!names.has('list_server_outages'),
+    'codegen list_server_outages must not appear for local providers');
+  // No write codegen either.
+  assert.ok(!names.has('create_server'));
+});
+
+test('buildToolDefinitions(readonly, lmstudio) also excludes codegen', () => {
+  const tools = buildToolDefinitions('readonly', { provider: 'lmstudio' });
+  const names = new Set(tools.map((t) => t.name));
+  assert.ok(!names.has('list_server_outages'));
+  assert.ok(!names.has('create_server'));
+});
+
+test('buildToolDefinitions(readonly, anthropic) keeps codegen tools', () => {
+  const tools = buildToolDefinitions('readonly', { provider: 'anthropic' });
+  const names = new Set(tools.map((t) => t.name));
+  // Codegen readonly tools should still be present for the cloud provider.
+  assert.ok(names.has('list_server_outages'),
+    'cloud provider gets the full codegen catalog');
+});
+
+test('buildToolDefinitions defaults to anthropic when provider omitted (regression)', () => {
+  const withDefault = buildToolDefinitions('readonly').length;
+  const withAnthropic = buildToolDefinitions('readonly', { provider: 'anthropic' }).length;
+  assert.equal(withDefault, withAnthropic);
+});
+
+test('local provider catalog is meaningfully smaller than cloud catalog', () => {
+  const local = buildToolDefinitions('readonly', { provider: 'ollama' }).length;
+  const cloud = buildToolDefinitions('readonly', { provider: 'anthropic' }).length;
+  assert.ok(local < cloud / 2,
+    `local catalog (${local}) should be much smaller than cloud (${cloud}); ratio is what makes small models reliable`);
+});
+
+test('local provider catalog at "all" tier equals readwrite (no codegen growth)', () => {
+  const localAll = buildToolDefinitions('all', { provider: 'ollama' }).length;
+  const localRw = buildToolDefinitions('readwrite', { provider: 'ollama' }).length;
+  assert.equal(localAll, localRw,
+    'for local providers, "all" tier collapses to readwrite since codegen is filtered out');
+});
+
 function makeStubClient(overrides = {}) {
   const noop = async () => null;
   return {

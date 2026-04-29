@@ -364,6 +364,9 @@
         <p class="settings-help">
           Controls how many tools are sent to the AI on each chat turn. Bigger tier means a bigger prompt, more tokens per turn (and more cost when the provider is Anthropic), and more capability for the model to act on its own. Read-only is the safest default; promote to read+write only when you want the model able to call <code>create</code>/<code>update</code>/<code>delete</code> tools (still gated on you asking explicitly). The "all tools" tier loads the entire 260+ catalog and is for when you genuinely want maximum capability.
         </p>
+        <p class="settings-help">
+          <strong>Local providers (Ollama, LM Studio) always get a curated handwritten-only subset</strong> regardless of tier - the 260+ codegen tools confuse small open models. Cloud Anthropic still gets the full catalog at the "all" tier.
+        </p>
         <div class="radio-group" role="radiogroup" aria-label="Ask Claude tool tier">
           <label class="radio-row">
             <input type="radio" name="ask-claude-tool-tier" value="readonly">

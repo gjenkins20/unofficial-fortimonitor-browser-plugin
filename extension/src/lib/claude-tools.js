@@ -319,7 +319,7 @@ function stripPrivateFields(tool) {
  * @param {('readonly'|'readwrite'|'all')} [tier='readonly'] operator's tier
  * @returns {Array<object>} tool definitions sans internal `_spec` / `_handler` / `tier`
  */
-export function buildToolDefinitions(tier = 'readonly') {
+export function buildToolDefinitions(tier = 'readonly', { provider = 'anthropic' } = {}) {
   const handWritten = HAND_WRITTEN_TOOLS
     .filter((t) => tierIncludes(t.tier, tier))
     .map(stripPrivateFields);
@@ -330,6 +330,23 @@ export function buildToolDefinitions(tier = 'readonly') {
     .map(stripPrivateFields);
 
   const handPortNames = new Set([...HAND_WRITTEN_NAMES, ...handPort.map((t) => t.name)]);
+
+  // FMN-120: local providers (Ollama, LM Studio) get only the curated
+  // handwritten + hand-port catalog. The codegen 260+ tools regularly
+  // break tool selection on small/medium open models:
+  //   - qwen3:8b on readonly picked codegen list_server_outages
+  //     (requires path param server_id) over handwritten
+  //     list_active_outages (no params), then asked the user for a
+  //     server id instead of just listing outages.
+  //   - qwen2.5:14b made the same mistake, even when told explicitly
+  //     "call list_active_outages with no filters", and on a third
+  //     try produced gibberish in Thai script - tokens lost to the
+  //     30-50 tool catalog.
+  // The codegen surface stays intact for cloud Anthropic, which
+  // navigates 260+ tools without difficulty.
+  if (provider !== 'anthropic') {
+    return [...handWritten, ...handPort];
+  }
 
   const codegen = ALL_CODEGEN_TOOLS
     .filter((t) => tierIncludes(t.tier, tier))
