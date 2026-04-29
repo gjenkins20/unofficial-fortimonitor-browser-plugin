@@ -20,22 +20,40 @@ import {
 
 const CLAUDE_KEY_STORAGE_KEY = 'claude.apiKey';
 
-// FMN-120 Phase 2 toggles. Default to current behavior (both on); the
-// matrix test seeds these via chrome.storage.local to A/B the codegen
-// filter and the prompt-hint block. Storage errors fail OPEN (toggles
-// stay on) so production users never see the test config bleed in.
+// FMN-120 Phase 2 toggles. Default to current behavior; the matrix
+// test seeds these via chrome.storage.local to A/B the codegen filter,
+// the prompt-hint block, and the num_ctx context window. Storage errors
+// fail OPEN to defaults so production users never see the test config
+// bleed in.
 const ASK_AI_FILTER_CODEGEN_KEY = 'fm:askAiFilterCodegen';
 const ASK_AI_PROMPT_HINTS_KEY = 'fm:askAiPromptHints';
+const ASK_AI_NUM_CTX_KEY = 'fm:askAiNumCtx';
+
+// Phase 2 evidence: Ollama's default num_ctx of 4096 truncates the
+// prompt on most chat turns once tool definitions + tool results fill
+// the context, producing gibberish or wrong-tool responses. 8192 is
+// supported by every tool-capable model in the matrix and eliminated
+// the !ctx flag in the qwen3:8b smoke run.
+const DEFAULT_NUM_CTX = 8192;
 
 async function readAskAiToggles(storage = chrome.storage.local) {
   try {
-    const data = await storage.get([ASK_AI_FILTER_CODEGEN_KEY, ASK_AI_PROMPT_HINTS_KEY]);
+    const data = await storage.get([
+      ASK_AI_FILTER_CODEGEN_KEY,
+      ASK_AI_PROMPT_HINTS_KEY,
+      ASK_AI_NUM_CTX_KEY
+    ]);
+    const rawCtx = data?.[ASK_AI_NUM_CTX_KEY];
+    const numCtx = Number.isFinite(Number(rawCtx)) && Number(rawCtx) > 0
+      ? Number(rawCtx)
+      : DEFAULT_NUM_CTX;
     return {
       filterCodegen: data?.[ASK_AI_FILTER_CODEGEN_KEY] === false ? false : true,
-      promptHints: data?.[ASK_AI_PROMPT_HINTS_KEY] === false ? false : true
+      promptHints: data?.[ASK_AI_PROMPT_HINTS_KEY] === false ? false : true,
+      numCtx
     };
   } catch {
-    return { filterCodegen: true, promptHints: true };
+    return { filterCodegen: true, promptHints: true, numCtx: DEFAULT_NUM_CTX };
   }
 }
 
@@ -127,6 +145,10 @@ export function createClaudeChatHandlers({ events = {}, getPanoptaClient, getApi
             messages,
             maxIterations,
             maxTokens,
+            // Pass Ollama-style runtime options. num_ctx is the dominant
+            // factor; sending it on every turn is harmless on LM Studio
+            // (ignored) and Anthropic isn't reached on this branch.
+            options: { num_ctx: toggles.numCtx },
             signal: ac.signal,
             runTool,
             onEvent: (ev) => emit('chat:event', ev)

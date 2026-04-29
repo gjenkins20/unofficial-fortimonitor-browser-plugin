@@ -8,10 +8,10 @@
 
 | Run metadata | Value |
 |---|---|
-| Date | 2026-04-29T18:14:39.414Z |
+| Date | 2026-04-29T18:33:30.605Z |
 | Host | darwin arm64 |
 | Node | v24.13.0 |
-| Git SHA | 7468e84 |
+| Git SHA | 3f98390 |
 | Models | qwen3:8b |
 | Toggles | filterCodegen=on, promptHints=on |
 
@@ -19,37 +19,18 @@
 
 | Scenario | qwen3:8b |
 |---|---|
-| `active-outages-direct` | PASS 105.7s !ctx |
-| `active-outages-paraphrase` | PASS 164.6s !ctx |
-| `server-by-name` | PASS 36.7s |
-| `server-details` | PASS 46.8s |
-| `fabric-connections` | PASS 43.9s |
-| `templates-list` | PASS 44.4s |
+| `active-outages-direct` | PASS 131.7s !ctx |
+| `active-outages-paraphrase` | PASS 144.4s !ctx |
+| `server-by-name` | PASS 82.6s |
+| `server-details` | PASS 50.8s |
+| `fabric-connections` | PASS 36.5s |
+| `templates-list` | PASS 51.3s |
 | `ambiguous-tool` | obs: `list_active_outages` |
-| `multi-step` | FAIL: none of [list_active_outages, search_servers, list_servers] called; got [search_servers_advanced] |
+| `multi-step` | PASS 53.4s |
 
 ## Per-failure detail
 
-### `multi-step` on `qwen3:8b`
-- Reason: none of [list_active_outages, search_servers, list_servers] called; got [search_servers_advanced]
-- Tools called: search_servers_advanced
-- Latency: 80.7s
-- Truncation logged: false
-- Gibberish heuristic: false
-- Response (first 500 chars):
-```
-No servers were found with the "Linux" tag that currently have active outages. This could mean:
-
-1. No servers in the account have both the "Linux" tag and active outages
-2. The tag might be case-sensitive (try "linux" instead of "Linux")
-3. The tag might be formatted differently (e.g., "os:Linux" instead of just "Linux")
-
-Would you like me to:
-1. Check all servers with active outages and show their tags?
-2. Search for servers containing "Linux" in their name instead?
-3. Try a different tag form
-```
-
+_All scenarios passed across all models._
 
 ## Per-cell raw
 
@@ -63,7 +44,7 @@ Would you like me to:
     "toolsCalled": [
       "list_active_outages"
     ],
-    "latencyMs": 105748,
+    "latencyMs": 131665,
     "ollamaContextTruncationLogged": true,
     "gibberishHeuristic": false,
     "passed": true,
@@ -73,7 +54,7 @@ Would you like me to:
       "filterCodegen": true,
       "promptHints": true
     },
-    "responseTextPreview": "The provided JSON data appears to represent a list of alerts or events, possibly from a monitoring or alerting system. Here's a breakdown of the structure and content:\n\n### Key Observations:\n1. **Repe"
+    "responseTextPreview": "The provided JSON appears to represent a list of alerts or notifications, likely from a monitoring system or alerting service. Here's a breakdown of the data and its implications:\n\n---\n\n### **Key Obse"
   },
   {
     "model": "qwen3:8b",
@@ -81,7 +62,7 @@ Would you like me to:
     "toolsCalled": [
       "list_active_outages"
     ],
-    "latencyMs": 164639,
+    "latencyMs": 144434,
     "ollamaContextTruncationLogged": true,
     "gibberishHeuristic": false,
     "passed": true,
@@ -91,7 +72,7 @@ Would you like me to:
       "filterCodegen": true,
       "promptHints": true
     },
-    "responseTextPreview": "The provided JSON represents a list of alerts or incidents, each with metadata and acknowledgments. Here's a structured breakdown:\n\n### **Key Observations**\n1. **Alert Structure**:\n   - Each entry in "
+    "responseTextPreview": "The JSON you provided appears to represent a list of alerts or notifications, likely from a monitoring or alerting system (e.g., a server, application, or infrastructure tool). Each entry in the `aler"
   },
   {
     "model": "qwen3:8b",
@@ -99,7 +80,7 @@ Would you like me to:
     "toolsCalled": [
       "search_servers"
     ],
-    "latencyMs": 36659,
+    "latencyMs": 82575,
     "ollamaContextTruncationLogged": false,
     "gibberishHeuristic": false,
     "passed": true,
@@ -109,7 +90,7 @@ Would you like me to:
       "filterCodegen": true,
       "promptHints": true
     },
-    "responseTextPreview": "The server **ip-172-31-9-170.us-east-2.compute.internal** was found and is currently **active**. \n\nWould you like additional details about this server?"
+    "responseTextPreview": "The server **ip-172-31-9-170.us-east-2.compute.internal** was found and is currently **active**. \n\nWould you like me to retrieve additional details about this server (e.g., its ID, metrics, or associa"
   },
   {
     "model": "qwen3:8b",
@@ -117,7 +98,7 @@ Would you like me to:
     "toolsCalled": [
       "get_server"
     ],
-    "latencyMs": 46795,
+    "latencyMs": 50773,
     "ollamaContextTruncationLogged": false,
     "gibberishHeuristic": false,
     "passed": true,
@@ -127,7 +108,7 @@ Would you like me to:
       "filterCodegen": true,
       "promptHints": true
     },
-    "responseTextPreview": "Here are the details for server **40234446**:\n\n- **Name**: `ip-172-31-9-170.us-east-2.compute.internal`  \n- **Status**: **Down** (current outage detected)  \n- **OS**: Linux  \n- **Location**: Latitude "
+    "responseTextPreview": "Here are the key details for server **40234446**:\n\n- **Name**: `ip-172-31-9-170.us-east-2.compute.internal`  \n- **OS**: Linux  \n- **Status**: `down` (with **1 active outage** linked: [Outage 266746359"
   },
   {
     "model": "qwen3:8b",
@@ -135,7 +116,7 @@ Would you like me to:
     "toolsCalled": [
       "list_fabric_connections"
     ],
-    "latencyMs": 43885,
+    "latencyMs": 36540,
     "ollamaContextTruncationLogged": false,
     "gibberishHeuristic": false,
     "passed": true,
@@ -145,7 +126,7 @@ Would you like me to:
       "filterCodegen": true,
       "promptHints": true
     },
-    "responseTextPreview": "Here are the fabric connections in your FortiMonitor account:\n\n1. **Label:** 10.0.0.227  \n   **Upstream Host:** 10.0.0.227  \n   **Serial Number:** FGVM01TM24006845  \n   **Type:** OnSight CSF Tunnel  \n"
+    "responseTextPreview": "Here are the fabric connections in your FortiMonitor account:\n\n1. **Connection**: 10.0.0.227  \n   - Upstream Host: 10.0.0.227  \n   - Serial Number: FGVM01TM24006845  \n   - Integration Type: OnSight CS"
   },
   {
     "model": "qwen3:8b",
@@ -153,7 +134,7 @@ Would you like me to:
     "toolsCalled": [
       "list_templates"
     ],
-    "latencyMs": 44390,
+    "latencyMs": 51344,
     "ollamaContextTruncationLogged": false,
     "gibberishHeuristic": false,
     "passed": true,
@@ -163,7 +144,7 @@ Would you like me to:
       "filterCodegen": true,
       "promptHints": true
     },
-    "responseTextPreview": "Here are the monitoring templates in your FortiMonitor account (total of 40 templates):\n\n**Standard Templates (dem_template - 23 entries):**\n- Developers (1 server)\n- APIs (1)\n- Google Office (1)\n- Ca"
+    "responseTextPreview": "Here are the monitoring templates in your FortiMonitor account (40 total):\n\n**Common Application Templates (dem_template):**\n- Developers (1 server)\n- APIs (1)\n- Google Office (1)\n- Calendar (1)\n- Dri"
   },
   {
     "model": "qwen3:8b",
@@ -171,7 +152,7 @@ Would you like me to:
     "toolsCalled": [
       "list_active_outages"
     ],
-    "latencyMs": 140075,
+    "latencyMs": 148494,
     "ollamaContextTruncationLogged": true,
     "gibberishHeuristic": false,
     "passed": true,
@@ -181,7 +162,7 @@ Would you like me to:
       "filterCodegen": true,
       "promptHints": true
     },
-    "responseTextPreview": "The provided JSON represents a list of alerts or notifications, each associated with the same user who acknowledged them. Here's a structured breakdown of the key observations and insights:\n\n---\n\n### "
+    "responseTextPreview": "The response you've provided appears to contain multiple identical entries, which suggests a potential issue with the data source or the API endpoint. Here's a breakdown of the situation and possible "
   },
   {
     "model": "qwen3:8b",
@@ -189,17 +170,17 @@ Would you like me to:
     "toolsCalled": [
       "search_servers_advanced"
     ],
-    "latencyMs": 80701,
+    "latencyMs": 53399,
     "ollamaContextTruncationLogged": false,
     "gibberishHeuristic": false,
-    "passed": false,
-    "reason": "none of [list_active_outages, search_servers, list_servers] called; got [search_servers_advanced]",
+    "passed": true,
+    "reason": null,
     "observation": false,
     "toggles": {
       "filterCodegen": true,
       "promptHints": true
     },
-    "responseTextPreview": "No servers were found with the \"Linux\" tag that currently have active outages. This could mean:\n\n1. No servers in the account have both the \"Linux\" tag and active outages\n2. The tag might be case-sens"
+    "responseTextPreview": "No servers tagged \"Linux\" are currently experiencing active outages in your FortiMonitor account. The search returned 0 matches. Would you like me to check for servers with different tags or verify ou"
   }
 ]
 ```

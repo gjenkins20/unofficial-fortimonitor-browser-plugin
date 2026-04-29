@@ -109,10 +109,19 @@ export async function startOllama(opts = {}) {
   const logStream = createWriteStream(logFile, { flags: 'a' });
   logStream.write(`# ollama serve - started ${new Date().toISOString()} - port ${port}\n`);
 
+  // Pin OLLAMA_MODELS to ~/.ollama/models so the spawned daemon shares
+  // the user's existing model store (the operator's pre-pulled models
+  // are visible immediately and we never re-download). Without this,
+  // Ollama defaults to the daemon's cwd in some configurations and
+  // silently drops a 5GB model directory into the repo.
+  const ollamaModelsDir = process.env.OLLAMA_MODELS_DIR
+    ?? path.join(process.env.HOME ?? '', '.ollama', 'models');
   const child = spawn(binary, ['serve'], {
+    cwd: process.env.HOME ?? process.cwd(),
     env: {
       ...process.env,
       OLLAMA_HOST: `${host}:${port}`,
+      OLLAMA_MODELS: ollamaModelsDir,
       // CORS allowlist is irrelevant here (we're hitting Ollama from
       // Node, not the browser extension), but set it just in case some
       // downstream hooks check Origin.

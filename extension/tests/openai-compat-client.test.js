@@ -241,6 +241,62 @@ test('streamOneTurn assembles streamed text and finish_reason=stop', async () =>
   assert.equal(captured.init.headers.Authorization, 'Bearer sk-test');
 });
 
+test('streamOneTurn forwards options (num_ctx, etc.) to the request body', async () => {
+  const chunks = [
+    'data: {"choices":[{"delta":{"content":"x"}}]}\n\n',
+    'data: {"choices":[{"finish_reason":"stop","delta":{}}]}\n\n',
+    'data: [DONE]\n\n'
+  ];
+  let captured;
+  const fetchFn = async (url, init) => { captured = init; return fakeResponse({ bodyChunks: chunks }); };
+  await streamOneTurn({
+    url: 'http://localhost:11434/v1',
+    model: 'qwen3:8b',
+    options: { num_ctx: 8192, temperature: 0.5 },
+    messages: [{ role: 'user', content: 'hi' }],
+    fetchFn
+  });
+  const body = JSON.parse(captured.body);
+  assert.deepEqual(body.options, { num_ctx: 8192, temperature: 0.5 });
+});
+
+test('streamOneTurn omits options field when none provided', async () => {
+  const chunks = [
+    'data: {"choices":[{"delta":{"content":"x"}}]}\n\n',
+    'data: {"choices":[{"finish_reason":"stop","delta":{}}]}\n\n',
+    'data: [DONE]\n\n'
+  ];
+  let captured;
+  const fetchFn = async (url, init) => { captured = init; return fakeResponse({ bodyChunks: chunks }); };
+  await streamOneTurn({
+    url: 'http://localhost:11434/v1',
+    model: 'qwen3:8b',
+    messages: [{ role: 'user', content: 'hi' }],
+    fetchFn
+  });
+  const body = JSON.parse(captured.body);
+  assert.equal(body.options, undefined);
+});
+
+test('streamOneTurn omits options field when empty object', async () => {
+  const chunks = [
+    'data: {"choices":[{"delta":{"content":"x"}}]}\n\n',
+    'data: {"choices":[{"finish_reason":"stop","delta":{}}]}\n\n',
+    'data: [DONE]\n\n'
+  ];
+  let captured;
+  const fetchFn = async (url, init) => { captured = init; return fakeResponse({ bodyChunks: chunks }); };
+  await streamOneTurn({
+    url: 'http://localhost:11434/v1',
+    model: 'qwen3:8b',
+    options: {},
+    messages: [{ role: 'user', content: 'hi' }],
+    fetchFn
+  });
+  const body = JSON.parse(captured.body);
+  assert.equal(body.options, undefined);
+});
+
 test('streamOneTurn omits Authorization header when no apiKey is provided', async () => {
   const chunks = [
     'data: {"choices":[{"delta":{"content":"x"}}]}\n\n',

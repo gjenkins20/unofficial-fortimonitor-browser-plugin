@@ -219,6 +219,7 @@ export async function streamOneTurn({
   tools,
   messages,
   maxTokens = DEFAULT_MAX_TOKENS,
+  options,
   onDelta,
   signal,
   fetchFn = globalThis.fetch.bind(globalThis)
@@ -237,6 +238,15 @@ export async function streamOneTurn({
     stream: true,
     max_tokens: maxTokens
   };
+  // Ollama-style provider extension: per-request runtime options. The
+  // Phase 2 matrix flagged the default 4096-token context as a major
+  // failure mode (truncation -> gibberish output). Operators can pass
+  // { num_ctx, temperature, top_p, ... } here; we forward them under
+  // OpenAI's `options` field which Ollama maps onto its own /api/chat
+  // options. LM Studio ignores unknown fields gracefully.
+  if (options && typeof options === 'object' && Object.keys(options).length > 0) {
+    body.options = options;
+  }
   const openaiTools = toOpenAIToolList(tools);
   if (openaiTools.length > 0) {
     body.tools = openaiTools;
@@ -438,6 +448,7 @@ export async function runToolLoop({
   messages,
   maxIterations = 8,
   maxTokens = DEFAULT_MAX_TOKENS,
+  options,
   runTool,
   onEvent,
   signal,
@@ -454,6 +465,7 @@ export async function runToolLoop({
       tools,
       messages: workingMessages,
       maxTokens,
+      options,
       onDelta: (ev) => onEvent?.({ phase: 'turn', iter, ...ev }),
       signal,
       fetchFn
