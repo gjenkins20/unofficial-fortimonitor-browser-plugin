@@ -23,7 +23,9 @@
     "https://fortimonitor.forticloud.com/*",
     "https://*.fortimonitor.com/*",
     "https://api2.panopta.com/*",
-    "https://api.anthropic.com/*"
+    "https://api.anthropic.com/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
   ],
   "optional_host_permissions": [
     "http://*/*",

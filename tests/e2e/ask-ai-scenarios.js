@@ -91,8 +91,19 @@ export function buildScenarios(tenant) {
       prompt: tag
         ? `Find any server tagged "${tag}" that is currently in an active outage.`
         : `Find any server in an active outage and tell me its name.`,
-      expectedTool: ['list_active_outages', 'search_servers', 'list_servers'],
-      assert: (r) => assertAnyTool(r, ['list_active_outages', 'search_servers', 'list_servers'])
+      // Multiple legitimate paths: composite tools that fuse the query
+      // (search_servers_advanced takes tags + active filter;
+      // get_servers_with_active_outages is the specific composite), or
+      // sequential basic tools (list_active_outages then search_servers).
+      // All are correct.
+      expectedTool: [
+        'list_active_outages', 'search_servers', 'list_servers',
+        'search_servers_advanced', 'get_servers_with_active_outages'
+      ],
+      assert: (r) => assertAnyTool(r, [
+        'list_active_outages', 'search_servers', 'list_servers',
+        'search_servers_advanced', 'get_servers_with_active_outages'
+      ])
     }
   ];
 }
