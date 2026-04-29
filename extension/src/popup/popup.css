@@ -314,6 +314,13 @@ html, body {
   border-top: 1px dashed var(--border);
 }
 .settings-subsection[hidden] { display: none; }
+.settings-sublabel {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  margin: 8px 0 2px;
+  color: var(--text-muted);
+}
 .radio-group {
   display: flex;
   flex-direction: column;

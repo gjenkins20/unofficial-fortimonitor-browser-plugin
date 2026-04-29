@@ -6,6 +6,15 @@ import {
   setAskClaudeEnabled,
   getAskClaudeToolTier,
   setAskClaudeToolTier,
+  getAskClaudeProvider,
+  setAskClaudeProvider,
+  getAskClaudeProviderConfig,
+  setAskClaudeProviderConfig,
+  ASK_CLAUDE_PROVIDERS,
+  DEFAULT_OLLAMA_URL,
+  DEFAULT_OLLAMA_MODEL,
+  DEFAULT_LMSTUDIO_URL,
+  DEFAULT_LMSTUDIO_MODEL,
   isServerSearchEnabled,
   setServerSearchEnabled,
   isSidebarLauncherEnabled,
@@ -58,6 +67,21 @@ async function claudeKeyConfigured() {
   }
 }
 
+// FMN-120: a local-provider install (Ollama / LM Studio) is "ready" when
+// the operator has saved a base URL and model. The Anthropic API key is
+// not required - Ask Claude only sends to api.anthropic.com when the
+// active provider is 'anthropic'.
+async function askClaudeProviderReady() {
+  try {
+    const provider = await getAskClaudeProvider();
+    if (provider === 'anthropic') return await claudeKeyConfigured();
+    const cfg = await getAskClaudeProviderConfig(provider);
+    return Boolean(cfg.url && cfg.model);
+  } catch {
+    return false;
+  }
+}
+
 function setSessionState(ok) {
   const strip = document.getElementById('session-strip');
   const text = document.getElementById('session-text');
@@ -72,7 +96,17 @@ function setSessionState(ok) {
   link.textContent = ok ? 'Open console ↗' : 'Open login ↗';
 }
 
-function applyToolGuards({ sessionOk, apiKeyOk, claudeKeyOk }) {
+function applyToolGuards({ sessionOk, apiKeyOk, claudeKeyOk, askClaudeProvider }) {
+  const localProvider = askClaudeProvider && askClaudeProvider !== 'anthropic';
+  const claudeBlockedDesc = localProvider
+    ? `Configure your ${askClaudeProvider === 'ollama' ? 'Ollama' : 'LM Studio'} URL and model in Settings (⚙) to enable.`
+    : 'Set an Anthropic (Claude) API key in Settings (⚙) to enable.';
+  const claudeBlockedTitle = localProvider
+    ? `No ${askClaudeProvider === 'ollama' ? 'Ollama' : 'LM Studio'} URL/model configured. Click ⚙ in the popup header to set a base URL and model name.`
+    : 'No Claude API key configured. Click ⚙ in the popup header to paste your Anthropic key.';
+  const claudeReadyTitle = localProvider
+    ? `Requires FortiMonitor v2 API key + ${askClaudeProvider === 'ollama' ? 'Ollama' : 'LM Studio'} URL/model - manage in popup → Settings (⚙).`
+    : 'Requires FortiMonitor v2 API key + Anthropic API key - manage in popup → Settings (⚙).';
   for (const card of document.querySelectorAll('.tool-card')) {
     const needsSession = card.dataset.sessionRequired === 'true';
     const needsApiKey = card.dataset.apiKeyRequired === 'true';
@@ -90,13 +124,11 @@ function applyToolGuards({ sessionOk, apiKeyOk, claudeKeyOk }) {
       desc.textContent = 'Set a FortiMonitor v2 API key in Settings (⚙) to enable.';
       card.title = 'No API key configured. Click ⚙ in the popup header to paste your FortiMonitor v2 RW API key.';
     } else if (needsClaudeKey && !claudeKeyOk) {
-      desc.textContent = 'Set an Anthropic (Claude) API key in Settings (⚙) to enable.';
-      card.title = 'No Claude API key configured. Click ⚙ in the popup header to paste your Anthropic key.';
+      desc.textContent = claudeBlockedDesc;
+      card.title = claudeBlockedTitle;
     } else if (needsApiKey || needsClaudeKey) {
-      // Enabled but still benefits from a reminder of what auth surface it uses.
       desc.textContent = desc.dataset.defaultDesc ?? desc.textContent;
-      card.title = needsClaudeKey
-        ? 'Requires FortiMonitor v2 API key + Anthropic API key - manage in popup → Settings (⚙).'
+      card.title = needsClaudeKey ? claudeReadyTitle
         : 'Requires a FortiMonitor v2 API key - manage in popup → Settings (⚙).';
     } else {
       desc.textContent = desc.dataset.defaultDesc ?? desc.textContent;
@@ -258,6 +290,15 @@ async function applyExperimentalVisibility() {
   }
   const tierSection = document.getElementById('ask-claude-tier-section');
   if (tierSection) tierSection.hidden = !askClaudeOn;
+  // FMN-120: only one provider's settings section is visible at a time
+  // when ask-claude is on. The provider radio itself lives in a section
+  // without a data-ask-claude-provider attribute so it always shows.
+  if (askClaudeOn) {
+    const provider = await getAskClaudeProvider();
+    for (const el of document.querySelectorAll('[data-ask-claude-provider]')) {
+      el.hidden = el.dataset.askClaudeProvider !== provider;
+    }
+  }
   const serverSearchOn = await isServerSearchEnabled();
   for (const el of document.querySelectorAll('[data-experimental="server-search"]')) {
     el.hidden = !serverSearchOn;
@@ -338,6 +379,140 @@ async function clearClaudeKey() {
   await chrome.storage.local.remove(CLAUDE_KEY_STORAGE_KEY);
   setClaudeStatus('ok', 'Claude API key cleared.');
   await loadClaudeKeyIntoInput();
+}
+
+// FMN-120: provider radio (Anthropic / Ollama / LM Studio) and per-
+// provider URL/model/key fields. Persisted in chrome.storage.local
+// via settings.js helpers; the service worker reads the active
+// provider on each chat turn.
+async function loadAskClaudeProviderIntoRadio() {
+  const provider = await getAskClaudeProvider();
+  for (const r of document.querySelectorAll('input[name="ask-claude-provider"]')) {
+    r.checked = (r.value === provider);
+  }
+}
+
+function setProviderStatus(provider, kind, message) {
+  const el = document.getElementById(`${provider}-status`);
+  if (!el) return;
+  el.hidden = false;
+  el.className = `settings-status ${kind}`;
+  el.textContent = message;
+}
+
+function clearProviderStatus(provider) {
+  const el = document.getElementById(`${provider}-status`);
+  if (!el) return;
+  el.hidden = true;
+  el.textContent = '';
+}
+
+async function loadProviderConfigIntoInputs(provider) {
+  const cfg = await getAskClaudeProviderConfig(provider);
+  const urlInput = document.getElementById(`${provider}-url-input`);
+  const modelInput = document.getElementById(`${provider}-model-input`);
+  const keyInput = document.getElementById(`${provider}-key-input`);
+  if (urlInput) urlInput.value = cfg.url || '';
+  if (modelInput) modelInput.value = cfg.model || '';
+  if (keyInput) {
+    keyInput.value = '';
+    if (cfg.apiKey) {
+      keyInput.placeholder = `••••••••${cfg.apiKey.slice(-4)} (saved - paste a new key to replace)`;
+    } else {
+      keyInput.placeholder = '(usually blank for ' + (provider === 'ollama' ? 'Ollama' : 'LM Studio') + ')';
+    }
+  }
+}
+
+async function saveProviderConfig(provider) {
+  const url = (document.getElementById(`${provider}-url-input`)?.value ?? '').trim();
+  const model = (document.getElementById(`${provider}-model-input`)?.value ?? '').trim();
+  const keyInput = document.getElementById(`${provider}-key-input`);
+  const newKey = (keyInput?.value ?? '').trim();
+  if (!url) {
+    setProviderStatus(provider, 'warn', 'Base URL is required.');
+    return;
+  }
+  if (!model) {
+    setProviderStatus(provider, 'warn', 'Model is required.');
+    return;
+  }
+  // Only overwrite the API key when the operator typed something - empty
+  // input means "leave the saved key alone".
+  const update = { url, model };
+  if (newKey) update.apiKey = newKey;
+  await setAskClaudeProviderConfig(provider, update);
+  await maybeRequestHostPermission(url);
+  setProviderStatus(provider, 'ok', 'Saved.');
+  await loadProviderConfigIntoInputs(provider);
+}
+
+async function maybeRequestHostPermission(url) {
+  try {
+    const u = new URL(url);
+    const origin = `${u.protocol}//${u.host}/*`;
+    const has = await chrome.permissions.contains({ origins: [origin] });
+    if (has) return;
+    await chrome.permissions.request({ origins: [origin] });
+  } catch {
+    // Invalid URL or user denied - the request flow surfaces the error
+    // path; we don't block save on permission grant. The chat turn will
+    // fail with a network error if the permission isn't granted.
+  }
+}
+
+async function testProviderConnection(provider) {
+  setProviderStatus(provider, 'ok', 'Testing…');
+  try {
+    // Use whatever is in the form, not what's persisted, so the
+    // operator can probe a candidate URL/model before saving.
+    const url = (document.getElementById(`${provider}-url-input`)?.value ?? '').trim();
+    const model = (document.getElementById(`${provider}-model-input`)?.value ?? '').trim();
+    const newKey = (document.getElementById(`${provider}-key-input`)?.value ?? '').trim();
+    if (!url) {
+      setProviderStatus(provider, 'warn', 'Base URL is required to test.');
+      return;
+    }
+    if (newKey) {
+      // Make sure permission for this origin is granted before the
+      // service worker tries to fetch it.
+      await maybeRequestHostPermission(url);
+    } else {
+      await maybeRequestHostPermission(url);
+    }
+    let apiKeyForTest;
+    if (newKey) apiKeyForTest = newKey;
+    else {
+      const cfg = await getAskClaudeProviderConfig(provider);
+      apiKeyForTest = cfg.apiKey || '';
+    }
+    const result = await chrome.runtime.sendMessage({
+      type: 'chat:test-openai-compat',
+      payload: { provider, url, model, apiKey: apiKeyForTest }
+    });
+    if (!result) {
+      setProviderStatus(provider, 'error', 'No response from service worker.');
+      return;
+    }
+    if (!result.ok) {
+      setProviderStatus(provider, 'error', `Failed: ${result.error || 'unknown error'}`);
+      return;
+    }
+    const r = result.result;
+    if (r.soft) {
+      setProviderStatus(provider, 'ok', `Reachable. (Server doesn't expose /models; could not verify model "${model}".)`);
+      return;
+    }
+    if (r.modelFound === false) {
+      const sample = (r.models ?? []).slice(0, 5).join(', ');
+      setProviderStatus(provider, 'warn',
+        `Reachable, but model "${model}" was not in /models. Available: ${sample || '(empty)'}`);
+      return;
+    }
+    setProviderStatus(provider, 'ok', `Connection OK; model "${model}" found.`);
+  } catch (err) {
+    setProviderStatus(provider, 'error', `Failed: ${err?.message ?? err}`);
+  }
 }
 
 async function testClaudeKey() {
@@ -558,13 +733,14 @@ function attachRowDrag(row, augId) {
 // -------- Init --------
 
 async function refreshGuards() {
-  const [sessionOk, apiKeyOk, claudeKeyOk] = await Promise.all([
+  const [sessionOk, apiKeyOk, claudeKeyOk, askClaudeProvider] = await Promise.all([
     sessionActive(),
     apiKeyConfigured(),
-    claudeKeyConfigured()
+    askClaudeProviderReady(),
+    getAskClaudeProvider()
   ]);
   setSessionState(sessionOk);
-  applyToolGuards({ sessionOk, apiKeyOk, claudeKeyOk });
+  applyToolGuards({ sessionOk, apiKeyOk, claudeKeyOk, askClaudeProvider });
 }
 
 function init() {
@@ -604,15 +780,21 @@ function init() {
   document.getElementById('settings-toggle').addEventListener('click', async () => {
     clearStatus();
     clearClaudeStatus();
+    clearProviderStatus('ollama');
+    clearProviderStatus('lmstudio');
     await loadApiKeyIntoInput();
     await loadClaudeKeyIntoInput();
     await loadDevModeIntoToggle();
     await loadAskClaudeIntoToggle();
     await loadAskClaudeTierIntoRadio();
+    await loadAskClaudeProviderIntoRadio();
+    await loadProviderConfigIntoInputs('ollama');
+    await loadProviderConfigIntoInputs('lmstudio');
     await loadServerSearchIntoToggle();
     await loadSidebarLauncherIntoToggle();
     await loadShowFeatureBadgesIntoToggle();
     await loadWebguiColumnsIntoSettings();
+    await applyExperimentalVisibility();
     showSettings();
   });
   document.getElementById('settings-back').addEventListener('click', hideSettings);
@@ -646,6 +828,22 @@ function init() {
       if (e.target.checked) await setAskClaudeToolTier(e.target.value);
     });
   }
+
+  // FMN-120: provider radio + provider-config save/test buttons.
+  for (const radio of document.querySelectorAll('input[name="ask-claude-provider"]')) {
+    radio.addEventListener('change', async (e) => {
+      if (!e.target.checked) return;
+      const provider = e.target.value;
+      if (!ASK_CLAUDE_PROVIDERS.includes(provider)) return;
+      await setAskClaudeProvider(provider);
+      await applyExperimentalVisibility();
+      await refreshGuards();
+    });
+  }
+  document.getElementById('ollama-save').addEventListener('click', () => saveProviderConfig('ollama'));
+  document.getElementById('ollama-test').addEventListener('click', () => testProviderConnection('ollama'));
+  document.getElementById('lmstudio-save').addEventListener('click', () => saveProviderConfig('lmstudio'));
+  document.getElementById('lmstudio-test').addEventListener('click', () => testProviderConnection('lmstudio'));
 
   document.getElementById('server-search-toggle').addEventListener('change', async (e) => {
     await setServerSearchEnabled(e.target.checked);

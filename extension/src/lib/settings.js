@@ -13,6 +13,47 @@ export const SHOW_FEATURE_BADGES_KEY = 'fm:showFeatureBadges';
 export const ASK_CLAUDE_TOOL_TIERS = ['readonly', 'readwrite', 'all'];
 export const DEFAULT_ASK_CLAUDE_TOOL_TIER = 'readonly';
 
+// FMN-120: provider selection for Ask Claude. 'anthropic' is the cloud
+// default; 'ollama' and 'lmstudio' are local-network OpenAI-compatible
+// targets. The wire format for the two locals is identical (POST
+// /v1/chat/completions); the choice is mostly UX + per-provider default
+// URL/model.
+export const ASK_CLAUDE_PROVIDER_KEY = 'fm:askClaudeProvider';
+export const ASK_CLAUDE_PROVIDERS = ['anthropic', 'ollama', 'lmstudio'];
+export const DEFAULT_ASK_CLAUDE_PROVIDER = 'anthropic';
+
+// Per-provider URL/model/key. Keys are stored separately so switching
+// providers preserves prior settings (operator can flip between Ollama
+// and LM Studio without re-typing URLs).
+export const ASK_CLAUDE_OLLAMA_URL_KEY = 'fm:askClaudeOllamaUrl';
+export const ASK_CLAUDE_OLLAMA_MODEL_KEY = 'fm:askClaudeOllamaModel';
+export const ASK_CLAUDE_OLLAMA_API_KEY_KEY = 'fm:askClaudeOllamaApiKey';
+export const ASK_CLAUDE_LMSTUDIO_URL_KEY = 'fm:askClaudeLmStudioUrl';
+export const ASK_CLAUDE_LMSTUDIO_MODEL_KEY = 'fm:askClaudeLmStudioModel';
+export const ASK_CLAUDE_LMSTUDIO_API_KEY_KEY = 'fm:askClaudeLmStudioApiKey';
+
+export const DEFAULT_OLLAMA_URL = 'http://localhost:11434/v1';
+export const DEFAULT_OLLAMA_MODEL = 'qwen2.5';
+export const DEFAULT_LMSTUDIO_URL = 'http://localhost:1234/v1';
+export const DEFAULT_LMSTUDIO_MODEL = '';
+
+const PROVIDER_FIELDS = {
+  ollama: {
+    urlKey: ASK_CLAUDE_OLLAMA_URL_KEY,
+    modelKey: ASK_CLAUDE_OLLAMA_MODEL_KEY,
+    apiKeyKey: ASK_CLAUDE_OLLAMA_API_KEY_KEY,
+    defaultUrl: DEFAULT_OLLAMA_URL,
+    defaultModel: DEFAULT_OLLAMA_MODEL
+  },
+  lmstudio: {
+    urlKey: ASK_CLAUDE_LMSTUDIO_URL_KEY,
+    modelKey: ASK_CLAUDE_LMSTUDIO_MODEL_KEY,
+    apiKeyKey: ASK_CLAUDE_LMSTUDIO_API_KEY_KEY,
+    defaultUrl: DEFAULT_LMSTUDIO_URL,
+    defaultModel: DEFAULT_LMSTUDIO_MODEL
+  }
+};
+
 /**
  * Read the developer-mode flag. Returns false on any storage error so
  * diagnostic surfaces stay hidden by default - we never want to leak
@@ -184,6 +225,109 @@ export async function isShowFeatureBadgesEnabled(storage = defaultStorage()) {
  */
 export async function setShowFeatureBadgesEnabled(enabled, storage = defaultStorage()) {
   await storage.set({ [SHOW_FEATURE_BADGES_KEY]: Boolean(enabled) });
+}
+
+/**
+ * Read the Ask-Claude provider selection. Three values:
+ *   'anthropic' - default. Calls api.anthropic.com directly.
+ *   'ollama'    - local Ollama server, OpenAI-compatible API.
+ *   'lmstudio'  - LM Studio local server, OpenAI-compatible API.
+ *
+ * Storage errors fail closed (return 'anthropic') so a transient blip
+ * never silently routes a turn to an unconfigured local URL.
+ *
+ * @param {{ get: (key: string) => Promise<Record<string, any>> }} [storage]
+ */
+export async function getAskClaudeProvider(storage = defaultStorage()) {
+  try {
+    const data = await storage.get(ASK_CLAUDE_PROVIDER_KEY);
+    const value = data?.[ASK_CLAUDE_PROVIDER_KEY];
+    if (ASK_CLAUDE_PROVIDERS.includes(value)) return value;
+    return DEFAULT_ASK_CLAUDE_PROVIDER;
+  } catch {
+    return DEFAULT_ASK_CLAUDE_PROVIDER;
+  }
+}
+
+/**
+ * Persist the Ask-Claude provider selection. Unknown values fall back
+ * to the default rather than being written through.
+ *
+ * @param {string} provider
+ * @param {{ set: (obj: Record<string, any>) => Promise<void> }} [storage]
+ */
+export async function setAskClaudeProvider(provider, storage = defaultStorage()) {
+  const value = ASK_CLAUDE_PROVIDERS.includes(provider) ? provider : DEFAULT_ASK_CLAUDE_PROVIDER;
+  await storage.set({ [ASK_CLAUDE_PROVIDER_KEY]: value });
+}
+
+/**
+ * Read the per-provider OpenAI-compat config (URL + model + optional
+ * API key). Returns the configured value, or the provider's default if
+ * unset. URL is normalized to remove a trailing slash so the client can
+ * append /chat/completions or /models without double-slashing.
+ *
+ * @param {'ollama' | 'lmstudio'} provider
+ * @param {{ get: (key: string) => Promise<Record<string, any>> }} [storage]
+ */
+export async function getAskClaudeProviderConfig(provider, storage = defaultStorage()) {
+  const fields = PROVIDER_FIELDS[provider];
+  if (!fields) {
+    throw new Error(`getAskClaudeProviderConfig: unknown provider "${provider}"`);
+  }
+  try {
+    const data = await storage.get([fields.urlKey, fields.modelKey, fields.apiKeyKey]);
+    const url = typeof data?.[fields.urlKey] === 'string' && data[fields.urlKey].trim()
+      ? data[fields.urlKey].trim().replace(/\/+$/, '')
+      : fields.defaultUrl.replace(/\/+$/, '');
+    const model = typeof data?.[fields.modelKey] === 'string' && data[fields.modelKey].trim()
+      ? data[fields.modelKey].trim()
+      : fields.defaultModel;
+    const apiKey = typeof data?.[fields.apiKeyKey] === 'string' && data[fields.apiKeyKey]
+      ? data[fields.apiKeyKey]
+      : '';
+    return { url, model, apiKey };
+  } catch {
+    return {
+      url: fields.defaultUrl.replace(/\/+$/, ''),
+      model: fields.defaultModel,
+      apiKey: ''
+    };
+  }
+}
+
+/**
+ * Persist per-provider OpenAI-compat config. Pass `null` for any field
+ * to clear it (falls back to the provider default on next read). Empty
+ * strings are treated the same as null.
+ *
+ * @param {'ollama' | 'lmstudio'} provider
+ * @param {{ url?: string|null, model?: string|null, apiKey?: string|null }} config
+ * @param {{ set, remove }} [storage]
+ */
+export async function setAskClaudeProviderConfig(provider, config, storage = defaultStorage()) {
+  const fields = PROVIDER_FIELDS[provider];
+  if (!fields) {
+    throw new Error(`setAskClaudeProviderConfig: unknown provider "${provider}"`);
+  }
+  const writes = {};
+  const removes = [];
+  if ('url' in config) {
+    if (config.url) writes[fields.urlKey] = String(config.url).trim();
+    else removes.push(fields.urlKey);
+  }
+  if ('model' in config) {
+    if (config.model) writes[fields.modelKey] = String(config.model).trim();
+    else removes.push(fields.modelKey);
+  }
+  if ('apiKey' in config) {
+    if (config.apiKey) writes[fields.apiKeyKey] = String(config.apiKey);
+    else removes.push(fields.apiKeyKey);
+  }
+  if (Object.keys(writes).length > 0) await storage.set(writes);
+  if (removes.length > 0 && typeof storage.remove === 'function') {
+    await storage.remove(removes);
+  }
 }
 
 function defaultStorage() {

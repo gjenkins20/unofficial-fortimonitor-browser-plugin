@@ -11,7 +11,21 @@ import {
   setAskClaudeToolTier,
   ASK_CLAUDE_TOOL_TIER_KEY,
   ASK_CLAUDE_TOOL_TIERS,
-  DEFAULT_ASK_CLAUDE_TOOL_TIER
+  DEFAULT_ASK_CLAUDE_TOOL_TIER,
+  getAskClaudeProvider,
+  setAskClaudeProvider,
+  getAskClaudeProviderConfig,
+  setAskClaudeProviderConfig,
+  ASK_CLAUDE_PROVIDER_KEY,
+  ASK_CLAUDE_PROVIDERS,
+  DEFAULT_ASK_CLAUDE_PROVIDER,
+  ASK_CLAUDE_OLLAMA_URL_KEY,
+  ASK_CLAUDE_OLLAMA_MODEL_KEY,
+  ASK_CLAUDE_OLLAMA_API_KEY_KEY,
+  ASK_CLAUDE_LMSTUDIO_URL_KEY,
+  DEFAULT_OLLAMA_URL,
+  DEFAULT_OLLAMA_MODEL,
+  DEFAULT_LMSTUDIO_URL
 } from '../src/lib/settings.js';
 import { createStorageMock } from './fixtures/chrome-mocks.js';
 
@@ -115,4 +129,132 @@ test('getAskClaudeToolTier fails closed (returns readonly) on storage error (FMN
     set: async () => {}
   };
   assert.equal(await getAskClaudeToolTier(storage), 'readonly');
+});
+
+// ---------- FMN-120: provider selection ----------
+
+test('getAskClaudeProvider defaults to anthropic on empty storage (FMN-120)', async () => {
+  const storage = createStorageMock();
+  assert.equal(await getAskClaudeProvider(storage), 'anthropic');
+  assert.equal(DEFAULT_ASK_CLAUDE_PROVIDER, 'anthropic');
+});
+
+test('setAskClaudeProvider round-trips each valid provider (FMN-120)', async () => {
+  const storage = createStorageMock();
+  for (const p of ASK_CLAUDE_PROVIDERS) {
+    await setAskClaudeProvider(p, storage);
+    assert.equal(await getAskClaudeProvider(storage), p);
+    assert.equal(storage.__raw()[ASK_CLAUDE_PROVIDER_KEY], p);
+  }
+});
+
+test('setAskClaudeProvider coerces unknown values to default (FMN-120)', async () => {
+  const storage = createStorageMock();
+  await setAskClaudeProvider('openai', storage);
+  assert.equal(storage.__raw()[ASK_CLAUDE_PROVIDER_KEY], 'anthropic');
+});
+
+test('getAskClaudeProvider ignores stored garbage and falls back to default (FMN-120)', async () => {
+  const storage = createStorageMock();
+  await storage.set({ [ASK_CLAUDE_PROVIDER_KEY]: 'something-else' });
+  assert.equal(await getAskClaudeProvider(storage), 'anthropic');
+});
+
+test('getAskClaudeProvider fails closed (returns anthropic) on storage error (FMN-120)', async () => {
+  const storage = {
+    get: async () => { throw new Error('boom'); },
+    set: async () => {}
+  };
+  assert.equal(await getAskClaudeProvider(storage), 'anthropic');
+});
+
+// ---------- FMN-120: per-provider URL/model/key ----------
+
+test('getAskClaudeProviderConfig returns provider defaults on empty storage (FMN-120)', async () => {
+  const storage = createStorageMock();
+  const ollama = await getAskClaudeProviderConfig('ollama', storage);
+  assert.equal(ollama.url, DEFAULT_OLLAMA_URL.replace(/\/+$/, ''));
+  assert.equal(ollama.model, DEFAULT_OLLAMA_MODEL);
+  assert.equal(ollama.apiKey, '');
+  const lms = await getAskClaudeProviderConfig('lmstudio', storage);
+  assert.equal(lms.url, DEFAULT_LMSTUDIO_URL.replace(/\/+$/, ''));
+});
+
+test('setAskClaudeProviderConfig persists URL/model/apiKey and round-trips (FMN-120)', async () => {
+  const storage = createStorageMock();
+  await setAskClaudeProviderConfig('ollama', {
+    url: 'http://10.0.0.5:11434/v1',
+    model: 'qwen2.5:7b',
+    apiKey: 'shh'
+  }, storage);
+  const cfg = await getAskClaudeProviderConfig('ollama', storage);
+  assert.equal(cfg.url, 'http://10.0.0.5:11434/v1');
+  assert.equal(cfg.model, 'qwen2.5:7b');
+  assert.equal(cfg.apiKey, 'shh');
+  assert.equal(storage.__raw()[ASK_CLAUDE_OLLAMA_URL_KEY], 'http://10.0.0.5:11434/v1');
+  assert.equal(storage.__raw()[ASK_CLAUDE_OLLAMA_MODEL_KEY], 'qwen2.5:7b');
+  assert.equal(storage.__raw()[ASK_CLAUDE_OLLAMA_API_KEY_KEY], 'shh');
+});
+
+test('setAskClaudeProviderConfig leaves untouched fields alone (FMN-120)', async () => {
+  const storage = createStorageMock();
+  await setAskClaudeProviderConfig('ollama', { url: 'http://a/v1', model: 'm', apiKey: 'k' }, storage);
+  // Only update the model; URL and apiKey should stay.
+  await setAskClaudeProviderConfig('ollama', { model: 'm2' }, storage);
+  const cfg = await getAskClaudeProviderConfig('ollama', storage);
+  assert.equal(cfg.url, 'http://a/v1');
+  assert.equal(cfg.model, 'm2');
+  assert.equal(cfg.apiKey, 'k');
+});
+
+test('setAskClaudeProviderConfig clears a field when passed an empty value (FMN-120)', async () => {
+  const storage = createStorageMock();
+  await setAskClaudeProviderConfig('ollama', { url: 'http://a/v1', model: 'm', apiKey: 'k' }, storage);
+  await setAskClaudeProviderConfig('ollama', { apiKey: '' }, storage);
+  const cfg = await getAskClaudeProviderConfig('ollama', storage);
+  assert.equal(cfg.apiKey, '');
+  // URL and model still stored.
+  assert.equal(cfg.url, 'http://a/v1');
+});
+
+test('getAskClaudeProviderConfig strips trailing slashes from URL (FMN-120)', async () => {
+  const storage = createStorageMock();
+  await setAskClaudeProviderConfig('ollama', { url: 'http://localhost:11434/v1////' }, storage);
+  const cfg = await getAskClaudeProviderConfig('ollama', storage);
+  assert.equal(cfg.url, 'http://localhost:11434/v1');
+});
+
+test('getAskClaudeProviderConfig falls back to defaults when stored values are blank (FMN-120)', async () => {
+  const storage = createStorageMock();
+  await storage.set({
+    [ASK_CLAUDE_OLLAMA_URL_KEY]: '   ',
+    [ASK_CLAUDE_OLLAMA_MODEL_KEY]: ''
+  });
+  const cfg = await getAskClaudeProviderConfig('ollama', storage);
+  assert.equal(cfg.url, DEFAULT_OLLAMA_URL.replace(/\/+$/, ''));
+  assert.equal(cfg.model, DEFAULT_OLLAMA_MODEL);
+});
+
+test('getAskClaudeProviderConfig throws for unknown provider (FMN-120)', async () => {
+  const storage = createStorageMock();
+  await assert.rejects(
+    getAskClaudeProviderConfig('anthropic', storage),
+    /unknown provider/
+  );
+});
+
+test('setAskClaudeProviderConfig throws for unknown provider (FMN-120)', async () => {
+  const storage = createStorageMock();
+  await assert.rejects(
+    setAskClaudeProviderConfig('anthropic', { url: 'x' }, storage),
+    /unknown provider/
+  );
+});
+
+test('getAskClaudeProviderConfig fails closed to provider defaults on storage error (FMN-120)', async () => {
+  const storage = {
+    get: async () => { throw new Error('boom'); }
+  };
+  const cfg = await getAskClaudeProviderConfig('lmstudio', storage);
+  assert.equal(cfg.url, DEFAULT_LMSTUDIO_URL.replace(/\/+$/, ''));
 });

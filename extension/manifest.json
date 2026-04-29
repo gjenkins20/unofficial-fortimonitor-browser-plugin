@@ -24,6 +24,10 @@
     "https://api2.panopta.com/*",
     "https://api.anthropic.com/*"
   ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
   "content_scripts": [
     {
       "matches": [

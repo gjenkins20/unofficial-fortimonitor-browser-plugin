@@ -213,11 +213,39 @@
     </div>
 
     <div class="settings-section" data-experimental="ask-claude" hidden>
+      <label class="settings-label">Ask Claude provider</label>
+      <p class="settings-help">
+        Choose where Ask Claude sends each turn. <strong>Anthropic</strong> is
+        the default and uses your Claude API key. <strong>Ollama</strong> and
+        <strong>LM Studio</strong> route to a local OpenAI-compatible server
+        (e.g. <code>http://localhost:11434/v1</code> for Ollama,
+        <code>http://localhost:1234/v1</code> for LM Studio) so chat turns and
+        tool calls stay on your network. Switching providers requests a host
+        permission for the URL you enter; it is not granted at install time.
+      </p>
+      <div class="radio-group" role="radiogroup" aria-label="Ask Claude provider">
+        <label class="radio-row">
+          <input type="radio" name="ask-claude-provider" value="anthropic">
+          <span><strong>Anthropic</strong> (cloud, default)</span>
+        </label>
+        <label class="radio-row">
+          <input type="radio" name="ask-claude-provider" value="ollama">
+          <span><strong>Ollama</strong> (local, OpenAI-compat)</span>
+        </label>
+        <label class="radio-row">
+          <input type="radio" name="ask-claude-provider" value="lmstudio">
+          <span><strong>LM Studio</strong> (local, OpenAI-compat)</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="settings-section" data-ask-claude-provider="anthropic" data-experimental="ask-claude" hidden>
       <label class="settings-label" for="claude-key-input">Anthropic (Claude) API Key</label>
       <p class="settings-help">
-        Required for the <strong>Ask Claude</strong> tool (Beta). Create a key at
-        <code>console.anthropic.com</code>. Stored locally in your browser via
-        <code>chrome.storage.local</code>; sent only to <code>api.anthropic.com</code>.
+        Required for the <strong>Ask Claude</strong> tool when the provider is
+        Anthropic. Create a key at <code>console.anthropic.com</code>. Stored
+        locally in your browser via <code>chrome.storage.local</code>; sent
+        only to <code>api.anthropic.com</code>.
         <strong>Cost warning:</strong> calls go directly to Anthropic with your key - no rate limit or budget cap is enforced by this extension.
       </p>
       <input id="claude-key-input" type="password" placeholder="Paste Claude API key" autocomplete="off" spellcheck="false">
@@ -227,6 +255,48 @@
         <button id="claude-key-test" class="btn">Test key</button>
       </div>
       <div id="claude-key-status" class="settings-status" hidden></div>
+    </div>
+
+    <div class="settings-section" data-ask-claude-provider="ollama" data-experimental="ask-claude" hidden>
+      <label class="settings-label">Ollama (local, OpenAI-compat)</label>
+      <p class="settings-help">
+        Point Ask Claude at a local Ollama server. Tool use requires a
+        tool-capable model (e.g. <code>qwen2.5</code>, <code>llama3.1</code>,
+        <code>mistral-nemo</code>, <code>command-r-plus</code>). API key is
+        optional and only used if your Ollama install requires one.
+      </p>
+      <label class="settings-sublabel" for="ollama-url-input">Base URL</label>
+      <input id="ollama-url-input" type="text" placeholder="http://localhost:11434/v1" autocomplete="off" spellcheck="false">
+      <label class="settings-sublabel" for="ollama-model-input">Model</label>
+      <input id="ollama-model-input" type="text" placeholder="qwen2.5" autocomplete="off" spellcheck="false">
+      <label class="settings-sublabel" for="ollama-key-input">API key (optional)</label>
+      <input id="ollama-key-input" type="password" placeholder="(usually blank for Ollama)" autocomplete="off" spellcheck="false">
+      <div class="settings-actions">
+        <button id="ollama-save" class="btn primary">Save</button>
+        <button id="ollama-test" class="btn">Test connection</button>
+      </div>
+      <div id="ollama-status" class="settings-status" hidden></div>
+    </div>
+
+    <div class="settings-section" data-ask-claude-provider="lmstudio" data-experimental="ask-claude" hidden>
+      <label class="settings-label">LM Studio (local, OpenAI-compat)</label>
+      <p class="settings-help">
+        Point Ask Claude at a local LM Studio server. Load a tool-capable
+        model in LM Studio first; copy its identifier into <strong>Model</strong>
+        (LM Studio shows it in the loaded-model header). API key is optional
+        and matches whatever LM Studio is configured to require.
+      </p>
+      <label class="settings-sublabel" for="lmstudio-url-input">Base URL</label>
+      <input id="lmstudio-url-input" type="text" placeholder="http://localhost:1234/v1" autocomplete="off" spellcheck="false">
+      <label class="settings-sublabel" for="lmstudio-model-input">Model</label>
+      <input id="lmstudio-model-input" type="text" placeholder="(LM Studio loaded-model id)" autocomplete="off" spellcheck="false">
+      <label class="settings-sublabel" for="lmstudio-key-input">API key (optional)</label>
+      <input id="lmstudio-key-input" type="password" placeholder="(usually blank for LM Studio)" autocomplete="off" spellcheck="false">
+      <div class="settings-actions">
+        <button id="lmstudio-save" class="btn primary">Save</button>
+        <button id="lmstudio-test" class="btn">Test connection</button>
+      </div>
+      <div id="lmstudio-status" class="settings-status" hidden></div>
     </div>
 
     <div class="settings-section">
