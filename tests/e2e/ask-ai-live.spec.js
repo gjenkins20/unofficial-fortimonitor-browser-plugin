@@ -38,7 +38,12 @@ import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const REPORT_PATH = path.resolve(__dirname, '../../docs/ask-ai-model-matrix.md');
+// Report path defaults to docs/ask-ai-model-matrix.md for the
+// canonical run. Phase 3 ablations override via ASK_AI_REPORT_PATH so
+// each toggle config has a separate artifact.
+const REPORT_PATH = process.env.ASK_AI_REPORT_PATH
+  ? path.resolve(__dirname, '../..', process.env.ASK_AI_REPORT_PATH)
+  : path.resolve(__dirname, '../../docs/ask-ai-model-matrix.md');
 
 const PANOPTA_BASE = 'https://api2.panopta.com/v2';
 
