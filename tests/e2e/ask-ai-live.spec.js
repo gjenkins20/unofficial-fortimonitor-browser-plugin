@@ -165,6 +165,18 @@ test.describe('live - Ask AI [matrix]', () => {
           };
           matrixRows.push(row);
 
+          // Write the report after EVERY test rather than once in
+          // afterAll. The afterAll-only approach was racing with
+          // expect.soft failures - some tests' rows weren't surviving
+          // to the final write, so the report ended up with only the
+          // last two scenarios. Per-test write is idempotent: each
+          // call overwrites with the full current state of matrixRows.
+          try {
+            writeMatrixReport(matrixRows, REPORT_PATH);
+          } catch (err) {
+            console.warn(`[ask-ai-live] report write failed: ${err?.message ?? err}`);
+          }
+
           // We do NOT abort on scenario failure; the matrix needs every
           // cell. The test still expects to be able to differentiate
           // pass/fail in the runner, so we use expect.soft where useful

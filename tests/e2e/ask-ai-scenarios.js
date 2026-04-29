@@ -155,10 +155,12 @@ export function buildScenarios(tenant) {
       expectedTool: 'list_templates',
       maxToolCalls: 2,
       groundTruth: async (api) => {
-        const r = await api.fetch('/template?limit=50');
+        // Real v2 endpoint is /server_template; the body field is
+        // server_template_list. (See panopta-client.js listTemplates.)
+        const r = await api.fetch('/server_template?limit=100');
         return {
-          count: r?.meta?.total_count ?? (r?.template_list?.length ?? 0),
-          templates: r?.template_list ?? []
+          count: r?.meta?.total_count ?? (r?.server_template_list?.length ?? 0),
+          templates: r?.server_template_list ?? []
         };
       },
       verify: (result, gt) => combineVerdicts(
