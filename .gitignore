@@ -12,6 +12,11 @@ build/
 *.log
 npm-debug.log*
 
+# Playwright (FMN-116 E2E suite)
+test-results/
+playwright-report/
+.playwright-cache/
+
 # Environment / secrets (defense in depth - nothing secret currently expected)
 .env
 .env.local

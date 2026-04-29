@@ -1,0 +1,13 @@
+{
+  "name": "unofficial-fortimonitor-browser-plugin-tests",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Repo-root tooling for E2E tests. The extension itself lives under extension/ with its own package.json; this manifest exists only to host the Playwright dev-dep and the test:e2e script.",
+  "type": "module",
+  "scripts": {
+    "test:e2e": "playwright test --config tests/e2e/playwright.config.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1"
+  }
+}
