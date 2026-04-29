@@ -72,6 +72,23 @@ test('deriveToolName: POST/PUT/PATCH/DELETE map to create/update/delete', () => 
   assert.equal(deriveToolName('/server/{server_id}', 'delete'), 'delete_server');
 });
 
+test('deriveToolName: POST on a single-resource path -> replace_<resource> (FMN-108)', () => {
+  // POST on a path whose last segment is a placeholder is REST-anomalous;
+  // it indicates upsert-style behavior where the client supplies the id.
+  // Distinct from POST on a collection so /contact/{id}/contact_info and
+  // /contact/{id}/contact_info/{contact_info_id} get distinct names.
+  assert.equal(deriveToolName('/server/{server_id}', 'post'), 'replace_server');
+  assert.equal(
+    deriveToolName('/contact/{contact_id}/contact_info/{contact_info_id}', 'post'),
+    'replace_contact_info'
+  );
+  // Sanity: POST on collection still maps to create_*.
+  assert.equal(
+    deriveToolName('/contact/{contact_id}/contact_info', 'post'),
+    'create_contact_info'
+  );
+});
+
 test('deriveTier: GET is readonly, everything else is readwrite', () => {
   assert.equal(deriveTier('GET'), 'readonly');
   assert.equal(deriveTier('get'), 'readonly');
@@ -231,7 +248,7 @@ test('compileToolsByDomain: nested collision escalates only as far as needed for
   assert.ok(names.includes('update_public_outage_acknowledge'));
 });
 
-test('compileToolsByDomain: regression - live OpenAPI has no algorithmically-resolvable collisions', () => {
+test('compileToolsByDomain: regression - live OpenAPI yields 262 unique tool names', () => {
   const specPath = path.resolve(
     process.env.HOME || '',
     'Projects/fortimonitor-schema-discovery/data/compiled/openapi.json'
@@ -247,45 +264,28 @@ test('compileToolsByDomain: regression - live OpenAPI has no algorithmically-res
   const spec = JSON.parse(fs.readFileSync(specPath, 'utf8'));
   const grouped = compileToolsByDomain(spec);
   const allTools = Object.values(grouped).flat();
-  // Total operation count (post-FMN-108) must be 262. If the OpenAPI grows
-  // or shrinks this fires; bumping the number is the intended fix.
+  // Total operation count must equal the OpenAPI's operation count. The
+  // ticket's headline goal is "all 262 surface" - if compileToolsByDomain
+  // ever drops or duplicates an operation, this fires.
   assert.equal(allTools.length, 262, `expected 262 tools, got ${allTools.length}`);
 
-  // Group remaining collisions and verify each surviving collision is a
-  // "real OpenAPI duplicate" - members share both their final name AND
-  // their full ancestor path, so no level escalation could have separated
-  // them. Anything else is an algorithmic regression we want the test to
-  // catch.
+  // Zero collisions: every operation produces a unique tool name. Any
+  // remaining collision is a regression we want to catch loudly. Per
+  // FMN-108, the previously-known persistent collision (POST on
+  // /contact/{contact_id}/contact_info{,/{contact_info_id}}) is now
+  // resolved by the POST-on-single-resource -> replace_<resource>
+  // heuristic, so this assertion can be strict.
   const byName = new Map();
   for (const t of allTools) {
     if (!byName.has(t.name)) byName.set(t.name, []);
     byName.get(t.name).push(t);
   }
   const collisions = [...byName.entries()].filter(([, ts]) => ts.length > 1);
-  const algorithmic = collisions.filter(([, ts]) => {
-    const ancestorSets = ts.map((t) => JSON.stringify([t._spec.method, ...pathAncestors(t._spec.path)]));
-    return new Set(ancestorSets).size > 1;
-  });
   assert.equal(
-    algorithmic.length,
+    collisions.length,
     0,
-    `algorithmically-resolvable collisions remain: ${algorithmic.map(([n, ts]) => `${n}(${ts.map((t) => t._spec.path).join(', ')})`).join('; ')}`
+    `expected zero collisions; got: ${collisions.map(([n, ts]) => `${n}(${ts.map((t) => t._spec.path).join(', ')})`).join('; ')}`
   );
-
-  // Document persistent collisions so future drift surfaces here. As of
-  // FMN-108 there is exactly one: POST /contact/{contact_id}/contact_info
-  // and POST /contact/{contact_id}/contact_info/{contact_info_id} both
-  // compile to create_contact_contact_info and have identical ancestors.
-  const persistent = collisions.map(([n, ts]) => ({ name: n, paths: ts.map((t) => t._spec.path).sort() }));
-  assert.deepEqual(persistent, [
-    {
-      name: 'create_contact_contact_info',
-      paths: [
-        '/contact/{contact_id}/contact_info',
-        '/contact/{contact_id}/contact_info/{contact_info_id}'
-      ]
-    }
-  ]);
 });
 
 test('compileToolsByDomain: groups by first path segment, sorts alphabetically by tool name', () => {

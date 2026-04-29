@@ -65,15 +65,24 @@ export function pathTargetsSingleResource(path) {
 /**
  * Tool name from path + HTTP method. Heuristic, matches how the Python MCP
  * server names its tools wherever possible:
- *   GET    /server                        -> list_servers
- *   GET    /server/{server_id}            -> get_server
- *   POST   /server                        -> create_server
- *   PUT    /server/{server_id}            -> update_server
- *   PATCH  /server/{server_id}            -> update_server
- *   DELETE /server/{server_id}            -> delete_server
- *   GET    /server/{id}/server_attribute  -> list_server_attributes
- *   POST   /server/{id}/server_attribute  -> create_server_attribute
+ *   GET    /server                          -> list_servers
+ *   GET    /server/{server_id}              -> get_server
+ *   POST   /server                          -> create_server
+ *   POST   /server/{server_id}              -> replace_server   (FMN-108)
+ *   PUT    /server/{server_id}              -> update_server
+ *   PATCH  /server/{server_id}              -> update_server
+ *   DELETE /server/{server_id}              -> delete_server
+ *   GET    /server/{id}/server_attribute    -> list_server_attributes
+ *   POST   /server/{id}/server_attribute    -> create_server_attribute
  *   GET    /server/{id}/server_attribute/{aid} -> get_server_attribute
+ *
+ * POST on a single-resource path (last segment placeholder) is rare and
+ * REST-anomalous. In the FortiMonitor spec the only occurrence is
+ * /contact/{contact_id}/contact_info/{contact_info_id}, an upsert-style
+ * endpoint where the client supplies the id. Naming it `replace_<resource>`
+ * disambiguates from the collection-style `create_<resource>` POST without
+ * relying on ancestor-prefix escalation (the two would otherwise share
+ * identical ancestors and collide persistently).
  */
 export function deriveToolName(path, method) {
   const m = method.toLowerCase();
@@ -81,7 +90,7 @@ export function deriveToolName(path, method) {
   if (!last) return `${m}_unknown`;
   const single = pathTargetsSingleResource(path);
   if (m === 'get') return single ? `get_${last}` : `list_${pluralize(last)}`;
-  if (m === 'post') return `create_${last}`;
+  if (m === 'post') return single ? `replace_${last}` : `create_${last}`;
   if (m === 'put' || m === 'patch') return `update_${last}`;
   if (m === 'delete') return `delete_${last}`;
   return `${m}_${last}`;

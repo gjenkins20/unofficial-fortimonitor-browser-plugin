@@ -60,46 +60,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "create_contact_contact_info",
-    "tier": "readwrite"
-  },
-  {
-    "_spec": {
-      "bodyParams": [
-        "body"
-      ],
-      "method": "POST",
-      "path": "/contact/{contact_id}/contact_info/{contact_info_id}",
-      "pathParams": [
-        "contact_id",
-        "contact_info_id"
-      ],
-      "queryParams": []
-    },
-    "description": "Create contact's contact info",
-    "input_schema": {
-      "properties": {
-        "body": {
-          "description": "Request body (see API docs).",
-          "type": "object"
-        },
-        "contact_id": {
-          "description": "Contact id",
-          "type": "string"
-        },
-        "contact_info_id": {
-          "description": "Contact info id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "contact_id",
-        "contact_info_id",
-        "body"
-      ],
-      "type": "object"
-    },
-    "name": "create_contact_contact_info",
+    "name": "create_contact_info",
     "tier": "readwrite"
   },
   {
@@ -266,6 +227,45 @@ export const TOOLS = [
     },
     "name": "list_contacts",
     "tier": "readonly"
+  },
+  {
+    "_spec": {
+      "bodyParams": [
+        "body"
+      ],
+      "method": "POST",
+      "path": "/contact/{contact_id}/contact_info/{contact_info_id}",
+      "pathParams": [
+        "contact_id",
+        "contact_info_id"
+      ],
+      "queryParams": []
+    },
+    "description": "Create contact's contact info",
+    "input_schema": {
+      "properties": {
+        "body": {
+          "description": "Request body (see API docs).",
+          "type": "object"
+        },
+        "contact_id": {
+          "description": "Contact id",
+          "type": "string"
+        },
+        "contact_info_id": {
+          "description": "Contact info id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "contact_id",
+        "contact_info_id",
+        "body"
+      ],
+      "type": "object"
+    },
+    "name": "replace_contact_info",
+    "tier": "readwrite"
   },
   {
     "_spec": {
