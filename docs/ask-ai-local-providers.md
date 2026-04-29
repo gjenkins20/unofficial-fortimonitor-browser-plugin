@@ -71,6 +71,75 @@ After loading the extension, find its ID at `chrome://extensions/` (Developer mo
 OLLAMA_ORIGINS="chrome-extension://<your-extension-id>" ollama serve
 ```
 
+### Windows persistence options
+
+**PowerShell, current session only** (simplest test):
+
+```
+$env:OLLAMA_ORIGINS = "chrome-extension://*"
+ollama serve
+```
+
+The variable disappears when the PowerShell window closes. Stop the running Ollama before this so the new `ollama serve` actually picks up the env.
+
+**PowerShell, persistent for your user account:**
+
+```
+[Environment]::SetEnvironmentVariable("OLLAMA_ORIGINS", "chrome-extension://*", "User")
+```
+
+Restart PowerShell so the new env propagates, then either run `ollama serve` from a fresh shell or restart the Ollama desktop app / service.
+
+**Persistent system-wide** (requires admin PowerShell):
+
+```
+[Environment]::SetEnvironmentVariable("OLLAMA_ORIGINS", "chrome-extension://*", "Machine")
+```
+
+Then restart the Ollama service (`Restart-Service Ollama` in admin PowerShell, or via `services.msc` if you used the official installer's service-mode option).
+
+**GUI path:** System Properties → Advanced → Environment Variables → New (System variables) → name `OLLAMA_ORIGINS`, value `chrome-extension://*`. Restart the Ollama service or sign out/in.
+
+**CMD, current session only:**
+
+```
+set OLLAMA_ORIGINS=chrome-extension://*
+ollama serve
+```
+
+### Verify on Windows
+
+In a fresh PowerShell:
+
+```
+echo $env:OLLAMA_ORIGINS                    # should print chrome-extension://*
+Get-Process ollama | Select-Object -ExpandProperty StartInfo  # confirm ollama is running
+```
+
+Then from any host on the LAN (or the Windows host itself):
+
+```
+curl -i -H "Origin: chrome-extension://test" http://<windows-ip>:11434/v1/models
+```
+
+200 = ready. 403 = the running Ollama still doesn't have the env var (most often: you set it user-scope but Ollama is running as a system service, or you set it after the service started). Restart the service.
+
+### Windows firewall + LAN access
+
+If reaching the Windows host from another machine fails before any 403 appears (timeout, "Failed to fetch"), Windows Firewall is blocking inbound 11434:
+
+```
+New-NetFirewallRule -DisplayName "Ollama" -Direction Inbound -LocalPort 11434 -Protocol TCP -Action Allow
+```
+
+Also confirm Ollama is binding to all interfaces, not just 127.0.0.1:
+
+```
+[Environment]::SetEnvironmentVariable("OLLAMA_HOST", "0.0.0.0:11434", "Machine")
+```
+
+Restart the Ollama service after that.
+
 ### macOS persistence options
 
 **Inline per-shell** (simplest, what we recommend for testing):

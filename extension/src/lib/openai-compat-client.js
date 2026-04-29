@@ -356,6 +356,12 @@ export async function streamOneTurn({
  * header, so a fresh Ollama install will reject every request from the
  * plugin until the operator restarts Ollama with
  * `OLLAMA_ORIGINS="chrome-extension://*"` (or the specific extension id).
+ *
+ * The "is this a private/LAN address?" check covers: localhost,
+ * 127.x.x.x, 0.0.0.0, RFC1918 ranges (10/8, 172.16/12, 192.168/16),
+ * link-local (169.254/16), .local mDNS hostnames, and single-segment
+ * hostnames - so a LAN Ollama at 192.168.1.125 still gets the right
+ * hint instead of being told to check an API key.
  */
 function formatHttpError(status, body, endpoint) {
   const bodySnippet = (() => {
@@ -365,13 +371,43 @@ function formatHttpError(status, body, endpoint) {
   })();
   let msg = `HTTP ${status} from ${endpoint}`;
   if (bodySnippet) msg += ` - ${bodySnippet}`;
-  const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)/i.test(endpoint);
+  const isLocal = isPrivateOrLoopbackUrl(endpoint);
   if (status === 403 && isLocal) {
-    msg += ' (If using Ollama, this usually means the chrome-extension:// origin is not in OLLAMA_ORIGINS. Restart Ollama with: OLLAMA_ORIGINS="chrome-extension://*" ollama serve)';
+    msg += ' (If using Ollama, this usually means the chrome-extension:// origin is not in OLLAMA_ORIGINS on the host running Ollama. Restart Ollama with OLLAMA_ORIGINS="chrome-extension://*" set in its environment. On Windows: $env:OLLAMA_ORIGINS="chrome-extension://*" then ollama serve - or set it via System Properties -> Environment Variables and restart the Ollama service)';
   } else if ((status === 401 || status === 403) && !isLocal) {
     msg += ' (check API key)';
   }
   return msg;
+}
+
+/**
+ * True when the URL points at a loopback, RFC1918, link-local, mDNS,
+ * or single-segment hostname. Used to decide whether a 403 is more
+ * likely a CORS / OLLAMA_ORIGINS issue (private network) versus an
+ * authentication issue (public API).
+ *
+ * Exported for unit tests.
+ */
+export function isPrivateOrLoopbackUrl(urlStr) {
+  let u;
+  try { u = new URL(urlStr); } catch { return false; }
+  const host = u.hostname;
+  if (!host) return false;
+  if (host === 'localhost') return true;
+  if (host === '0.0.0.0') return true;
+  if (host.endsWith('.local')) return true;
+  if (!host.includes('.')) return true; // bare hostname like "ollama-server"
+  // IPv4 private ranges.
+  const m = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (m) {
+    const a = Number(m[1]), b = Number(m[2]);
+    if (a === 127) return true;
+    if (a === 10) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 169 && b === 254) return true; // link-local
+  }
+  return false;
 }
 
 function mapFinishReason(finish) {

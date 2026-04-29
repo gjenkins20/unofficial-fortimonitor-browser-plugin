@@ -11,6 +11,7 @@ import {
   streamOneTurn,
   runToolLoop,
   testConnection,
+  isPrivateOrLoopbackUrl,
   OpenAICompatError
 } from '../src/lib/openai-compat-client.js';
 
@@ -336,6 +337,35 @@ test('streamOneTurn 403 against localhost includes an OLLAMA_ORIGINS hint', asyn
   assert.match(caught.message, /chrome-extension/);
 });
 
+test('streamOneTurn 403 against a LAN host (192.168.x.y) includes an OLLAMA_ORIGINS hint', async () => {
+  const fetchFn = async () => fakeResponse({ ok: false, status: 403, jsonBody: null });
+  let caught;
+  try {
+    await streamOneTurn({
+      url: 'http://192.168.1.125:11434/v1',
+      model: 'qwen2.5',
+      messages: [{ role: 'user', content: 'x' }],
+      fetchFn
+    });
+  } catch (err) { caught = err; }
+  assert.match(caught.message, /OLLAMA_ORIGINS/);
+  assert.doesNotMatch(caught.message, /check API key/);
+});
+
+test('streamOneTurn 403 against a 10.x LAN host hints at OLLAMA_ORIGINS', async () => {
+  const fetchFn = async () => fakeResponse({ ok: false, status: 403, jsonBody: null });
+  let caught;
+  try {
+    await streamOneTurn({
+      url: 'http://10.0.0.5:11434/v1',
+      model: 'qwen2.5',
+      messages: [{ role: 'user', content: 'x' }],
+      fetchFn
+    });
+  } catch (err) { caught = err; }
+  assert.match(caught.message, /OLLAMA_ORIGINS/);
+});
+
 test('streamOneTurn 401 against a remote URL hints at API key, not OLLAMA_ORIGINS', async () => {
   const fetchFn = async () => fakeResponse({ ok: false, status: 401, jsonBody: { error: 'no key' } });
   let caught;
@@ -350,6 +380,36 @@ test('streamOneTurn 401 against a remote URL hints at API key, not OLLAMA_ORIGIN
   assert.ok(caught instanceof OpenAICompatError);
   assert.match(caught.message, /check API key/);
   assert.doesNotMatch(caught.message, /OLLAMA_ORIGINS/);
+});
+
+test('isPrivateOrLoopbackUrl: covers loopback, RFC1918, link-local, .local, bare hostnames', () => {
+  // Loopback / wildcard
+  assert.equal(isPrivateOrLoopbackUrl('http://localhost:11434/v1'), true);
+  assert.equal(isPrivateOrLoopbackUrl('http://127.0.0.1:11434/v1'), true);
+  assert.equal(isPrivateOrLoopbackUrl('http://127.5.5.5/v1'), true);
+  assert.equal(isPrivateOrLoopbackUrl('http://0.0.0.0:11434/v1'), true);
+  // RFC1918
+  assert.equal(isPrivateOrLoopbackUrl('http://10.0.0.5/v1'), true);
+  assert.equal(isPrivateOrLoopbackUrl('http://10.255.255.1/v1'), true);
+  assert.equal(isPrivateOrLoopbackUrl('http://192.168.1.125:11434/v1'), true);
+  assert.equal(isPrivateOrLoopbackUrl('http://172.16.0.1/v1'), true);
+  assert.equal(isPrivateOrLoopbackUrl('http://172.31.255.255/v1'), true);
+  // Outside RFC1918 but looks similar
+  assert.equal(isPrivateOrLoopbackUrl('http://172.15.0.1/v1'), false);
+  assert.equal(isPrivateOrLoopbackUrl('http://172.32.0.1/v1'), false);
+  assert.equal(isPrivateOrLoopbackUrl('http://11.0.0.1/v1'), false);
+  // Link-local
+  assert.equal(isPrivateOrLoopbackUrl('http://169.254.0.1/v1'), true);
+  // mDNS / bare hostname
+  assert.equal(isPrivateOrLoopbackUrl('http://my-server.local/v1'), true);
+  assert.equal(isPrivateOrLoopbackUrl('http://ollama-host/v1'), true);
+  // Public-ish hostnames
+  assert.equal(isPrivateOrLoopbackUrl('https://api.openai.com/v1'), false);
+  assert.equal(isPrivateOrLoopbackUrl('https://api.anthropic.com/v1'), false);
+  assert.equal(isPrivateOrLoopbackUrl('http://8.8.8.8/v1'), false);
+  // Garbage input
+  assert.equal(isPrivateOrLoopbackUrl('not a url'), false);
+  assert.equal(isPrivateOrLoopbackUrl(''), false);
 });
 
 test('streamOneTurn error message includes a body snippet when present', async () => {

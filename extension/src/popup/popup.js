@@ -465,10 +465,14 @@ async function maybeRequestHostPermission(url) {
 }
 
 async function testProviderConnection(provider) {
-  setProviderStatus(provider, 'ok', 'Testing…');
+  // FMN-120 follow-up: Test = Save then Test. Persists whatever is in
+  // the form, requests the host permission for the URL, and only then
+  // probes /v1/models. Avoids the "Failed to fetch" trap where the
+  // operator types a new URL and hits Test before Save - the service
+  // worker's fetch needs the host permission to have been granted, and
+  // the permission request flow lives on the popup side.
+  setProviderStatus(provider, 'ok', 'Saving + testing…');
   try {
-    // Use whatever is in the form, not what's persisted, so the
-    // operator can probe a candidate URL/model before saving.
     const url = (document.getElementById(`${provider}-url-input`)?.value ?? '').trim();
     const model = (document.getElementById(`${provider}-model-input`)?.value ?? '').trim();
     const newKey = (document.getElementById(`${provider}-key-input`)?.value ?? '').trim();
@@ -476,22 +480,29 @@ async function testProviderConnection(provider) {
       setProviderStatus(provider, 'warn', 'Base URL is required to test.');
       return;
     }
-    if (newKey) {
-      // Make sure permission for this origin is granted before the
-      // service worker tries to fetch it.
-      await maybeRequestHostPermission(url);
-    } else {
-      await maybeRequestHostPermission(url);
+    if (!model) {
+      setProviderStatus(provider, 'warn', 'Model is required to test.');
+      return;
     }
-    let apiKeyForTest;
-    if (newKey) apiKeyForTest = newKey;
-    else {
-      const cfg = await getAskClaudeProviderConfig(provider);
-      apiKeyForTest = cfg.apiKey || '';
-    }
+    // Save the form values to chrome.storage.local. Empty key field =
+    // "leave the saved key alone"; non-empty overwrites.
+    const update = { url, model };
+    if (newKey) update.apiKey = newKey;
+    await setAskClaudeProviderConfig(provider, update);
+    // Trigger the chrome.permissions.request for this URL's origin.
+    // If already granted (e.g. localhost previously approved), the
+    // request resolves immediately without a prompt.
+    await maybeRequestHostPermission(url);
+    // Re-render the form so the api-key placeholder shows the masked
+    // tail of whatever's now persisted.
+    await loadProviderConfigIntoInputs(provider);
+    // Read back persisted config and run the probe against it. This
+    // also surfaces the saved api key for cases where the operator
+    // didn't paste a new key in this turn.
+    const cfg = await getAskClaudeProviderConfig(provider);
     const result = await chrome.runtime.sendMessage({
       type: 'chat:test-openai-compat',
-      payload: { provider, url, model, apiKey: apiKeyForTest }
+      payload: { provider, url: cfg.url, model: cfg.model, apiKey: cfg.apiKey || '' }
     });
     if (!result) {
       setProviderStatus(provider, 'error', 'No response from service worker.');
@@ -503,16 +514,16 @@ async function testProviderConnection(provider) {
     }
     const r = result.result;
     if (r.soft) {
-      setProviderStatus(provider, 'ok', `Reachable. (Server doesn't expose /models; could not verify model "${model}".)`);
+      setProviderStatus(provider, 'ok', `Saved. Reachable, but server doesn't expose /models so model "${cfg.model}" wasn't verified.`);
       return;
     }
     if (r.modelFound === false) {
       const sample = (r.models ?? []).slice(0, 5).join(', ');
       setProviderStatus(provider, 'warn',
-        `Reachable, but model "${model}" was not in /models. Available: ${sample || '(empty)'}`);
+        `Saved. Reachable, but model "${cfg.model}" was not in /models. Available: ${sample || '(empty)'}`);
       return;
     }
-    setProviderStatus(provider, 'ok', `Connection OK; model "${model}" found.`);
+    setProviderStatus(provider, 'ok', `Saved. Connection OK; model "${cfg.model}" found.`);
   } catch (err) {
     setProviderStatus(provider, 'error', `Failed: ${err?.message ?? err}`);
   }
