@@ -160,7 +160,14 @@ function handleChatEvent(ev) {
       rec.el.appendChild(det);
     }
   } else if (ev.phase === 'loop_end') {
-    setStatus(`done (${ev.reason}, ${ev.iterations} turn${ev.iterations === 1 ? '' : 's'})`);
+    // loop_end stops the thinking clock and replaces it with the
+    // outcome line. Include total elapsed seconds so the operator
+    // can see how long the turn took even after it's done.
+    const totalElapsed = thinkingStartMs != null
+      ? Math.floor((Date.now() - thinkingStartMs) / 1000)
+      : null;
+    const elapsedSuffix = totalElapsed != null ? ` in ${formatElapsed(totalElapsed)}` : '';
+    stopThinkingClock(`done (${ev.reason}, ${ev.iterations} turn${ev.iterations === 1 ? '' : 's'}${elapsedSuffix})`);
   }
 }
 
@@ -183,6 +190,41 @@ function setStatus(text) {
   els.status.textContent = text ?? '';
 }
 
+// FMN-120 followup: thinking indicator with a ticking elapsed-time
+// counter. Local providers can take 30-180s on a cold model load;
+// without feedback the operator can't tell whether the chat is
+// progressing or stuck. Tick once per second while a turn is in
+// flight and clear the timer when the loop ends or the user aborts.
+let thinkingTimer = null;
+let thinkingStartMs = null;
+
+function startThinkingClock() {
+  stopThinkingClock();
+  thinkingStartMs = Date.now();
+  setStatus('thinking… (0s)');
+  thinkingTimer = setInterval(() => {
+    if (thinkingStartMs == null) return;
+    const elapsed = Math.floor((Date.now() - thinkingStartMs) / 1000);
+    setStatus(`thinking… (${formatElapsed(elapsed)})`);
+  }, 1000);
+}
+
+function stopThinkingClock(finalText = '') {
+  if (thinkingTimer != null) {
+    clearInterval(thinkingTimer);
+    thinkingTimer = null;
+  }
+  thinkingStartMs = null;
+  if (finalText !== null) setStatus(finalText);
+}
+
+function formatElapsed(seconds) {
+  if (seconds < 60) return `${seconds}s`;
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}m ${s}s`;
+}
+
 async function send() {
   const ok = await preflight();
   if (!ok) return;
@@ -194,7 +236,7 @@ async function send() {
   state.messages.push({ role: 'user', content: text });
   els.input.value = '';
   setSending(true);
-  setStatus('thinking…');
+  startThinkingClock();
 
   try {
     const res = await chrome.runtime.sendMessage({
@@ -202,16 +244,21 @@ async function send() {
       payload: { messages: state.messages }
     });
     if (!res) {
+      stopThinkingClock('');
       appendMessage('error', 'No response from service worker.');
       return;
     }
     if (!res.ok) {
+      stopThinkingClock('');
       appendMessage('error', `Error: ${res.error ?? 'unknown'}`);
       return;
     }
-    // Sync the canonical message list from the service-worker run.
+    // Sync the canonical message list from the service-worker run. The
+    // loop_end event already updated the status to "done (...)"; we
+    // don't override it here.
     state.messages = res.result.messages;
   } catch (err) {
+    stopThinkingClock('');
     appendMessage('error', `Error: ${err?.message ?? err}`);
   } finally {
     setSending(false);
@@ -221,7 +268,7 @@ async function send() {
 async function abort() {
   try {
     await chrome.runtime.sendMessage({ type: 'chat:abort', payload: {} });
-    setStatus('aborted');
+    stopThinkingClock('aborted');
   } catch { /* ignore */ }
 }
 
@@ -229,7 +276,7 @@ function reset() {
   state.messages = [];
   els.messages.innerHTML = '';
   toolCallEls.clear();
-  setStatus('');
+  stopThinkingClock('');
 }
 
 els.sendBtn.addEventListener('click', send);
