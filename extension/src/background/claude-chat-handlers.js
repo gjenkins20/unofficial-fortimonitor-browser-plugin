@@ -29,12 +29,18 @@ const ASK_AI_FILTER_CODEGEN_KEY = 'fm:askAiFilterCodegen';
 const ASK_AI_PROMPT_HINTS_KEY = 'fm:askAiPromptHints';
 const ASK_AI_NUM_CTX_KEY = 'fm:askAiNumCtx';
 
-// Phase 2 evidence: Ollama's default num_ctx of 4096 truncates the
-// prompt on most chat turns once tool definitions + tool results fill
-// the context, producing gibberish or wrong-tool responses. 8192 is
-// supported by every tool-capable model in the matrix and eliminated
-// the !ctx flag in the qwen3:8b smoke run.
-const DEFAULT_NUM_CTX = 8192;
+// Phase 2 evidence (commit 38a6049 matrix run): with num_ctx=8192 the
+// outage-list scenarios still flag !ctx because tool result + catalog
+// + system prompt routinely runs ~7-8k tokens and Ollama truncates
+// from the FRONT (clipping the system prompt). The model then loses
+// the "PRESENT what the tool returned" directive and writes meta-
+// analysis prose ("the JSON you've provided represents a list of
+// alerts...") instead of presenting the 17 outages. Bumping to 16384
+// to give the directive room to survive.
+//
+// Memory cost on Apple M3 with Metal: roughly +1.5GB VRAM for an 8B
+// model at 16k context vs 8k. Operator's M3 has 11.8GB - still room.
+const DEFAULT_NUM_CTX = 16384;
 
 async function readAskAiToggles(storage = chrome.storage.local) {
   try {
