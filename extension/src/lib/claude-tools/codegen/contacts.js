@@ -60,7 +60,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "create_contact_info",
+    "name": "create_contact_contact_info",
     "tier": "readwrite"
   },
   {
@@ -99,7 +99,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "create_contact_info",
+    "name": "create_contact_contact_info",
     "tier": "readwrite"
   },
   {

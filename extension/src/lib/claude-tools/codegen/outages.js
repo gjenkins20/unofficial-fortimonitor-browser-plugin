@@ -80,6 +80,43 @@ export const TOOLS = [
     "_spec": {
       "bodyParams": [],
       "method": "GET",
+      "path": "/outage/{outage_id}",
+      "pathParams": [
+        "outage_id"
+      ],
+      "queryParams": [
+        "end_time",
+        "start_time"
+      ]
+    },
+    "description": "Get outage",
+    "input_schema": {
+      "properties": {
+        "end_time": {
+          "description": "End_time in UTC",
+          "type": "string"
+        },
+        "outage_id": {
+          "description": "Outage id",
+          "type": "string"
+        },
+        "start_time": {
+          "description": "Start_time in UTC",
+          "type": "string"
+        }
+      },
+      "required": [
+        "outage_id"
+      ],
+      "type": "object"
+    },
+    "name": "get_outage",
+    "tier": "readonly"
+  },
+  {
+    "_spec": {
+      "bodyParams": [],
+      "method": "GET",
       "path": "/outage/{outage_id}/delay/{delay_in_seconds}",
       "pathParams": [
         "outage_id",
@@ -112,35 +149,24 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "get_delay",
+    "name": "get_outage_delay",
     "tier": "readonly"
   },
   {
     "_spec": {
       "bodyParams": [],
       "method": "GET",
-      "path": "/outage/{outage_id}",
+      "path": "/outage/{outage_id}/actions",
       "pathParams": [
         "outage_id"
       ],
-      "queryParams": [
-        "end_time",
-        "start_time"
-      ]
+      "queryParams": []
     },
-    "description": "Get outage",
+    "description": "Notification actions",
     "input_schema": {
       "properties": {
-        "end_time": {
-          "description": "End_time in UTC",
-          "type": "string"
-        },
         "outage_id": {
           "description": "Outage id",
-          "type": "string"
-        },
-        "start_time": {
-          "description": "Start_time in UTC",
           "type": "string"
         }
       },
@@ -149,7 +175,72 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "get_outage",
+    "name": "list_actionses",
+    "tier": "readonly"
+  },
+  {
+    "_spec": {
+      "bodyParams": [],
+      "method": "GET",
+      "path": "/outage/{outage_id}/broadcast",
+      "pathParams": [
+        "outage_id"
+      ],
+      "queryParams": [
+        "message",
+        "who"
+      ]
+    },
+    "description": "Broadcast a message",
+    "input_schema": {
+      "properties": {
+        "message": {
+          "description": "Broadcast message",
+          "type": "string"
+        },
+        "outage_id": {
+          "description": "Outage id",
+          "type": "string"
+        },
+        "who": {
+          "description": "Indicate who has boradcasted the alert message; Url format = [https://api2.panopta.com/v2/user/{user_id} or https://api2.panopta.com/v2/contact/{contact_id}]",
+          "type": "string"
+        }
+      },
+      "required": [
+        "outage_id",
+        "message",
+        "who"
+      ],
+      "type": "object"
+    },
+    "name": "list_broadcasts",
+    "tier": "readonly"
+  },
+  {
+    "_spec": {
+      "bodyParams": [],
+      "method": "GET",
+      "path": "/outage/{outage_id}/countermeasure_output",
+      "pathParams": [
+        "outage_id"
+      ],
+      "queryParams": []
+    },
+    "description": "Countermeasure output",
+    "input_schema": {
+      "properties": {
+        "outage_id": {
+          "description": "Outage id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "outage_id"
+      ],
+      "type": "object"
+    },
+    "name": "list_countermeasure_outputs",
     "tier": "readonly"
   },
   {
@@ -197,33 +288,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "list_acknowledges",
-    "tier": "readonly"
-  },
-  {
-    "_spec": {
-      "bodyParams": [],
-      "method": "GET",
-      "path": "/outage/{outage_id}/actions",
-      "pathParams": [
-        "outage_id"
-      ],
-      "queryParams": []
-    },
-    "description": "Notification actions",
-    "input_schema": {
-      "properties": {
-        "outage_id": {
-          "description": "Outage id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "outage_id"
-      ],
-      "type": "object"
-    },
-    "name": "list_actionses",
+    "name": "list_outage_acknowledges",
     "tier": "readonly"
   },
   {
@@ -246,46 +311,7 @@ export const TOOLS = [
       },
       "type": "object"
     },
-    "name": "list_actives",
-    "tier": "readonly"
-  },
-  {
-    "_spec": {
-      "bodyParams": [],
-      "method": "GET",
-      "path": "/outage/{outage_id}/broadcast",
-      "pathParams": [
-        "outage_id"
-      ],
-      "queryParams": [
-        "message",
-        "who"
-      ]
-    },
-    "description": "Broadcast a message",
-    "input_schema": {
-      "properties": {
-        "message": {
-          "description": "Broadcast message",
-          "type": "string"
-        },
-        "outage_id": {
-          "description": "Outage id",
-          "type": "string"
-        },
-        "who": {
-          "description": "Indicate who has boradcasted the alert message; Url format = [https://api2.panopta.com/v2/user/{user_id} or https://api2.panopta.com/v2/contact/{contact_id}]",
-          "type": "string"
-        }
-      },
-      "required": [
-        "outage_id",
-        "message",
-        "who"
-      ],
-      "type": "object"
-    },
-    "name": "list_broadcasts",
+    "name": "list_outage_actives",
     "tier": "readonly"
   },
   {
@@ -311,33 +337,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "list_countermeasure_metadatas",
-    "tier": "readonly"
-  },
-  {
-    "_spec": {
-      "bodyParams": [],
-      "method": "GET",
-      "path": "/outage/{outage_id}/countermeasure_output",
-      "pathParams": [
-        "outage_id"
-      ],
-      "queryParams": []
-    },
-    "description": "Countermeasure output",
-    "input_schema": {
-      "properties": {
-        "outage_id": {
-          "description": "Outage id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "outage_id"
-      ],
-      "type": "object"
-    },
-    "name": "list_countermeasure_outputs",
+    "name": "list_outage_countermeasure_metadatas",
     "tier": "readonly"
   },
   {
@@ -369,7 +369,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "list_countermeasures",
+    "name": "list_outage_countermeasures",
     "tier": "readonly"
   },
   {
@@ -402,7 +402,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "list_escalates",
+    "name": "list_outage_escalates",
     "tier": "readonly"
   },
   {
@@ -592,39 +592,6 @@ export const TOOLS = [
         "body"
       ],
       "method": "PUT",
-      "path": "/outage/{outage_id}/acknowledge",
-      "pathParams": [
-        "outage_id"
-      ],
-      "queryParams": []
-    },
-    "description": "Acknowledge outage",
-    "input_schema": {
-      "properties": {
-        "body": {
-          "description": "Request body (see API docs).",
-          "type": "object"
-        },
-        "outage_id": {
-          "description": "Outage id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "outage_id",
-        "body"
-      ],
-      "type": "object"
-    },
-    "name": "update_acknowledge",
-    "tier": "readwrite"
-  },
-  {
-    "_spec": {
-      "bodyParams": [
-        "body"
-      ],
-      "method": "PUT",
       "path": "/outage/{outage_id}/broadcast",
       "pathParams": [
         "outage_id"
@@ -658,78 +625,6 @@ export const TOOLS = [
         "body"
       ],
       "method": "PUT",
-      "path": "/outage/{outage_id}/countermeasure",
-      "pathParams": [
-        "outage_id"
-      ],
-      "queryParams": []
-    },
-    "description": "Update outage's countermeasure",
-    "input_schema": {
-      "properties": {
-        "body": {
-          "description": "Request body (see API docs).",
-          "type": "object"
-        },
-        "outage_id": {
-          "description": "Outage id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "outage_id",
-        "body"
-      ],
-      "type": "object"
-    },
-    "name": "update_countermeasure",
-    "tier": "readwrite"
-  },
-  {
-    "_spec": {
-      "bodyParams": [
-        "body"
-      ],
-      "method": "PUT",
-      "path": "/outage/{outage_id}/delay/{delay_in_seconds}",
-      "pathParams": [
-        "outage_id",
-        "delay_in_seconds"
-      ],
-      "queryParams": []
-    },
-    "description": "Delay outage",
-    "input_schema": {
-      "properties": {
-        "body": {
-          "description": "Request body (see API docs).",
-          "type": "object"
-        },
-        "delay_in_seconds": {
-          "description": "Delay in seconds; a value of 0 meaning permanently delay any future alerts",
-          "type": "string"
-        },
-        "outage_id": {
-          "description": "Outage id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "outage_id",
-        "delay_in_seconds",
-        "body"
-      ],
-      "type": "object"
-    },
-    "name": "update_delay",
-    "tier": "readwrite"
-  },
-  {
-    "_spec": {
-      "bodyParams": [
-        "body"
-      ],
-      "method": "PUT",
       "path": "/outage/{outage_id}/description",
       "pathParams": [
         "outage_id"
@@ -755,39 +650,6 @@ export const TOOLS = [
       "type": "object"
     },
     "name": "update_description",
-    "tier": "readwrite"
-  },
-  {
-    "_spec": {
-      "bodyParams": [
-        "body"
-      ],
-      "method": "PUT",
-      "path": "/outage/{outage_id}/escalate",
-      "pathParams": [
-        "outage_id"
-      ],
-      "queryParams": []
-    },
-    "description": "Escalate outage",
-    "input_schema": {
-      "properties": {
-        "body": {
-          "description": "Request body (see API docs).",
-          "type": "object"
-        },
-        "outage_id": {
-          "description": "Outage id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "outage_id",
-        "body"
-      ],
-      "type": "object"
-    },
-    "name": "update_escalate",
     "tier": "readwrite"
   },
   {
@@ -854,6 +716,144 @@ export const TOOLS = [
       "type": "object"
     },
     "name": "update_lead",
+    "tier": "readwrite"
+  },
+  {
+    "_spec": {
+      "bodyParams": [
+        "body"
+      ],
+      "method": "PUT",
+      "path": "/outage/{outage_id}/acknowledge",
+      "pathParams": [
+        "outage_id"
+      ],
+      "queryParams": []
+    },
+    "description": "Acknowledge outage",
+    "input_schema": {
+      "properties": {
+        "body": {
+          "description": "Request body (see API docs).",
+          "type": "object"
+        },
+        "outage_id": {
+          "description": "Outage id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "outage_id",
+        "body"
+      ],
+      "type": "object"
+    },
+    "name": "update_outage_acknowledge",
+    "tier": "readwrite"
+  },
+  {
+    "_spec": {
+      "bodyParams": [
+        "body"
+      ],
+      "method": "PUT",
+      "path": "/outage/{outage_id}/countermeasure",
+      "pathParams": [
+        "outage_id"
+      ],
+      "queryParams": []
+    },
+    "description": "Update outage's countermeasure",
+    "input_schema": {
+      "properties": {
+        "body": {
+          "description": "Request body (see API docs).",
+          "type": "object"
+        },
+        "outage_id": {
+          "description": "Outage id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "outage_id",
+        "body"
+      ],
+      "type": "object"
+    },
+    "name": "update_outage_countermeasure",
+    "tier": "readwrite"
+  },
+  {
+    "_spec": {
+      "bodyParams": [
+        "body"
+      ],
+      "method": "PUT",
+      "path": "/outage/{outage_id}/delay/{delay_in_seconds}",
+      "pathParams": [
+        "outage_id",
+        "delay_in_seconds"
+      ],
+      "queryParams": []
+    },
+    "description": "Delay outage",
+    "input_schema": {
+      "properties": {
+        "body": {
+          "description": "Request body (see API docs).",
+          "type": "object"
+        },
+        "delay_in_seconds": {
+          "description": "Delay in seconds; a value of 0 meaning permanently delay any future alerts",
+          "type": "string"
+        },
+        "outage_id": {
+          "description": "Outage id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "outage_id",
+        "delay_in_seconds",
+        "body"
+      ],
+      "type": "object"
+    },
+    "name": "update_outage_delay",
+    "tier": "readwrite"
+  },
+  {
+    "_spec": {
+      "bodyParams": [
+        "body"
+      ],
+      "method": "PUT",
+      "path": "/outage/{outage_id}/escalate",
+      "pathParams": [
+        "outage_id"
+      ],
+      "queryParams": []
+    },
+    "description": "Escalate outage",
+    "input_schema": {
+      "properties": {
+        "body": {
+          "description": "Request body (see API docs).",
+          "type": "object"
+        },
+        "outage_id": {
+          "description": "Outage id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "outage_id",
+        "body"
+      ],
+      "type": "object"
+    },
+    "name": "update_outage_escalate",
     "tier": "readwrite"
   },
   {

@@ -109,7 +109,7 @@ export const TOOLS = [
     "input_schema": {
       "type": "object"
     },
-    "name": "list_actives",
+    "name": "list_maintenance_schedule_actives",
     "tier": "readonly"
   },
   {

@@ -39,32 +39,6 @@ export const TOOLS = [
   },
   {
     "_spec": {
-      "bodyParams": [],
-      "method": "POST",
-      "path": "/server/{server_id}/apply_monitoring_policy",
-      "pathParams": [
-        "server_id"
-      ],
-      "queryParams": []
-    },
-    "description": "Apply monitoring policy",
-    "input_schema": {
-      "properties": {
-        "server_id": {
-          "description": "Server id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "server_id"
-      ],
-      "type": "object"
-    },
-    "name": "create_apply_monitoring_policy",
-    "tier": "readwrite"
-  },
-  {
-    "_spec": {
       "bodyParams": [
         "body"
       ],
@@ -105,85 +79,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "create_countermeasure",
-    "tier": "readwrite"
-  },
-  {
-    "_spec": {
-      "bodyParams": [
-        "body"
-      ],
-      "method": "POST",
-      "path": "/server/{server_id}/network_service/{network_service_id}/countermeasure",
-      "pathParams": [
-        "server_id",
-        "network_service_id"
-      ],
-      "queryParams": []
-    },
-    "description": "Create server's network service countermeasure",
-    "input_schema": {
-      "properties": {
-        "body": {
-          "description": "Request body (see API docs).",
-          "type": "object"
-        },
-        "network_service_id": {
-          "description": "Network service id",
-          "type": "string"
-        },
-        "server_id": {
-          "description": "Server id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "server_id",
-        "network_service_id",
-        "body"
-      ],
-      "type": "object"
-    },
-    "name": "create_countermeasure",
-    "tier": "readwrite"
-  },
-  {
-    "_spec": {
-      "bodyParams": [
-        "body"
-      ],
-      "method": "POST",
-      "path": "/server/{server_id}/network_service/{network_service_id}/response_time/countermeasure",
-      "pathParams": [
-        "server_id",
-        "network_service_id"
-      ],
-      "queryParams": []
-    },
-    "description": "Response time countermeasure",
-    "input_schema": {
-      "properties": {
-        "body": {
-          "description": "Request body (see API docs).",
-          "type": "object"
-        },
-        "network_service_id": {
-          "description": "Network service id",
-          "type": "string"
-        },
-        "server_id": {
-          "description": "Server id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "server_id",
-        "network_service_id",
-        "body"
-      ],
-      "type": "object"
-    },
-    "name": "create_countermeasure",
+    "name": "create_agent_resource_threshold_countermeasure",
     "tier": "readwrite"
   },
   {
@@ -258,6 +154,45 @@ export const TOOLS = [
         "body"
       ],
       "method": "POST",
+      "path": "/server/{server_id}/network_service/{network_service_id}/countermeasure",
+      "pathParams": [
+        "server_id",
+        "network_service_id"
+      ],
+      "queryParams": []
+    },
+    "description": "Create server's network service countermeasure",
+    "input_schema": {
+      "properties": {
+        "body": {
+          "description": "Request body (see API docs).",
+          "type": "object"
+        },
+        "network_service_id": {
+          "description": "Network service id",
+          "type": "string"
+        },
+        "server_id": {
+          "description": "Server id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "server_id",
+        "network_service_id",
+        "body"
+      ],
+      "type": "object"
+    },
+    "name": "create_network_service_countermeasure",
+    "tier": "readwrite"
+  },
+  {
+    "_spec": {
+      "bodyParams": [
+        "body"
+      ],
+      "method": "POST",
       "path": "/server/{server_id}/path_monitoring",
       "pathParams": [
         "server_id"
@@ -317,6 +252,45 @@ export const TOOLS = [
         "body"
       ],
       "method": "POST",
+      "path": "/server/{server_id}/network_service/{network_service_id}/response_time/countermeasure",
+      "pathParams": [
+        "server_id",
+        "network_service_id"
+      ],
+      "queryParams": []
+    },
+    "description": "Response time countermeasure",
+    "input_schema": {
+      "properties": {
+        "body": {
+          "description": "Request body (see API docs).",
+          "type": "object"
+        },
+        "network_service_id": {
+          "description": "Network service id",
+          "type": "string"
+        },
+        "server_id": {
+          "description": "Server id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "server_id",
+        "network_service_id",
+        "body"
+      ],
+      "type": "object"
+    },
+    "name": "create_response_time_countermeasure",
+    "tier": "readwrite"
+  },
+  {
+    "_spec": {
+      "bodyParams": [
+        "body"
+      ],
+      "method": "POST",
       "path": "/server",
       "pathParams": [],
       "queryParams": []
@@ -335,6 +309,32 @@ export const TOOLS = [
       "type": "object"
     },
     "name": "create_server",
+    "tier": "readwrite"
+  },
+  {
+    "_spec": {
+      "bodyParams": [],
+      "method": "POST",
+      "path": "/server/{server_id}/apply_monitoring_policy",
+      "pathParams": [
+        "server_id"
+      ],
+      "queryParams": []
+    },
+    "description": "Apply monitoring policy",
+    "input_schema": {
+      "properties": {
+        "server_id": {
+          "description": "Server id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "server_id"
+      ],
+      "type": "object"
+    },
+    "name": "create_server_apply_monitoring_policy",
     "tier": "readwrite"
   },
   {
@@ -536,45 +536,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "delete_agent_resource_threshold",
-    "tier": "readwrite"
-  },
-  {
-    "_spec": {
-      "bodyParams": [],
-      "method": "DELETE",
-      "path": "/server/{server_id}/snmp_resource/{agent_resource_id}/agent_resource_threshold/{agent_resource_threshold_id}",
-      "pathParams": [
-        "server_id",
-        "agent_resource_id",
-        "agent_resource_threshold_id"
-      ],
-      "queryParams": []
-    },
-    "description": "Delete server's agent resource threshold",
-    "input_schema": {
-      "properties": {
-        "agent_resource_id": {
-          "description": "Agent resource id",
-          "type": "string"
-        },
-        "agent_resource_threshold_id": {
-          "description": "Agent resource threshold id",
-          "type": "string"
-        },
-        "server_id": {
-          "description": "Server id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "server_id",
-        "agent_resource_id",
-        "agent_resource_threshold_id"
-      ],
-      "type": "object"
-    },
-    "name": "delete_agent_resource_threshold",
+    "name": "delete_agent_resource_agent_resource_threshold",
     "tier": "readwrite"
   },
   {
@@ -618,83 +580,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "delete_countermeasure",
-    "tier": "readwrite"
-  },
-  {
-    "_spec": {
-      "bodyParams": [],
-      "method": "DELETE",
-      "path": "/server/{server_id}/network_service/{network_service_id}/countermeasure/{network_service_countermeasure_id}",
-      "pathParams": [
-        "server_id",
-        "network_service_id",
-        "network_service_countermeasure_id"
-      ],
-      "queryParams": []
-    },
-    "description": "Delete server's network service countermeasure",
-    "input_schema": {
-      "properties": {
-        "network_service_countermeasure_id": {
-          "description": "Network service countermeasure id",
-          "type": "string"
-        },
-        "network_service_id": {
-          "description": "Network service id",
-          "type": "string"
-        },
-        "server_id": {
-          "description": "Server id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "server_id",
-        "network_service_id",
-        "network_service_countermeasure_id"
-      ],
-      "type": "object"
-    },
-    "name": "delete_countermeasure",
-    "tier": "readwrite"
-  },
-  {
-    "_spec": {
-      "bodyParams": [],
-      "method": "DELETE",
-      "path": "/server/{server_id}/network_service/{network_service_id}/response_time/countermeasure/{network_service_response_time_countermeasure_id}",
-      "pathParams": [
-        "server_id",
-        "network_service_id",
-        "network_service_response_time_countermeasure_id"
-      ],
-      "queryParams": []
-    },
-    "description": "Edit response time countermeasure",
-    "input_schema": {
-      "properties": {
-        "network_service_id": {
-          "description": "Network service id",
-          "type": "string"
-        },
-        "network_service_response_time_countermeasure_id": {
-          "description": "Network service response time countermeasure id",
-          "type": "string"
-        },
-        "server_id": {
-          "description": "Server id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "server_id",
-        "network_service_id",
-        "network_service_response_time_countermeasure_id"
-      ],
-      "type": "object"
-    },
-    "name": "delete_countermeasure",
+    "name": "delete_agent_resource_threshold_countermeasure",
     "tier": "readwrite"
   },
   {
@@ -733,6 +619,44 @@ export const TOOLS = [
     "_spec": {
       "bodyParams": [],
       "method": "DELETE",
+      "path": "/server/{server_id}/network_service/{network_service_id}/countermeasure/{network_service_countermeasure_id}",
+      "pathParams": [
+        "server_id",
+        "network_service_id",
+        "network_service_countermeasure_id"
+      ],
+      "queryParams": []
+    },
+    "description": "Delete server's network service countermeasure",
+    "input_schema": {
+      "properties": {
+        "network_service_countermeasure_id": {
+          "description": "Network service countermeasure id",
+          "type": "string"
+        },
+        "network_service_id": {
+          "description": "Network service id",
+          "type": "string"
+        },
+        "server_id": {
+          "description": "Server id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "server_id",
+        "network_service_id",
+        "network_service_countermeasure_id"
+      ],
+      "type": "object"
+    },
+    "name": "delete_network_service_countermeasure",
+    "tier": "readwrite"
+  },
+  {
+    "_spec": {
+      "bodyParams": [],
+      "method": "DELETE",
       "path": "/server/{server_id}/path_monitoring/{path_monitoring_id}",
       "pathParams": [
         "server_id",
@@ -759,6 +683,44 @@ export const TOOLS = [
       "type": "object"
     },
     "name": "delete_path_monitoring",
+    "tier": "readwrite"
+  },
+  {
+    "_spec": {
+      "bodyParams": [],
+      "method": "DELETE",
+      "path": "/server/{server_id}/network_service/{network_service_id}/response_time/countermeasure/{network_service_response_time_countermeasure_id}",
+      "pathParams": [
+        "server_id",
+        "network_service_id",
+        "network_service_response_time_countermeasure_id"
+      ],
+      "queryParams": []
+    },
+    "description": "Edit response time countermeasure",
+    "input_schema": {
+      "properties": {
+        "network_service_id": {
+          "description": "Network service id",
+          "type": "string"
+        },
+        "network_service_response_time_countermeasure_id": {
+          "description": "Network service response time countermeasure id",
+          "type": "string"
+        },
+        "server_id": {
+          "description": "Server id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "server_id",
+        "network_service_id",
+        "network_service_response_time_countermeasure_id"
+      ],
+      "type": "object"
+    },
+    "name": "delete_response_time_countermeasure",
     "tier": "readwrite"
   },
   {
@@ -849,6 +811,44 @@ export const TOOLS = [
       "type": "object"
     },
     "name": "delete_snmp_resource",
+    "tier": "readwrite"
+  },
+  {
+    "_spec": {
+      "bodyParams": [],
+      "method": "DELETE",
+      "path": "/server/{server_id}/snmp_resource/{agent_resource_id}/agent_resource_threshold/{agent_resource_threshold_id}",
+      "pathParams": [
+        "server_id",
+        "agent_resource_id",
+        "agent_resource_threshold_id"
+      ],
+      "queryParams": []
+    },
+    "description": "Delete server's agent resource threshold",
+    "input_schema": {
+      "properties": {
+        "agent_resource_id": {
+          "description": "Agent resource id",
+          "type": "string"
+        },
+        "agent_resource_threshold_id": {
+          "description": "Agent resource threshold id",
+          "type": "string"
+        },
+        "server_id": {
+          "description": "Server id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "server_id",
+        "agent_resource_id",
+        "agent_resource_threshold_id"
+      ],
+      "type": "object"
+    },
+    "name": "delete_snmp_resource_agent_resource_threshold",
     "tier": "readwrite"
   },
   {
@@ -950,45 +950,56 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "get_agent_resource_threshold",
+    "name": "get_agent_resource_agent_resource_threshold",
     "tier": "readonly"
   },
   {
     "_spec": {
       "bodyParams": [],
       "method": "GET",
-      "path": "/server/{server_id}/snmp_resource/{agent_resource_id}/agent_resource_threshold/{agent_resource_threshold_id}",
+      "path": "/server/{server_id}/agent_resource/{agent_resource_id}/metric/{timescale}",
       "pathParams": [
         "server_id",
         "agent_resource_id",
-        "agent_resource_threshold_id"
+        "timescale"
       ],
-      "queryParams": []
+      "queryParams": [
+        "end_time",
+        "aggregate"
+      ]
     },
-    "description": "Get server's agent resource threshold",
+    "description": "Get agent resource metric graph data",
     "input_schema": {
       "properties": {
         "agent_resource_id": {
           "description": "Agent resource id",
           "type": "string"
         },
-        "agent_resource_threshold_id": {
-          "description": "Agent resource threshold id",
+        "aggregate": {
+          "description": "Whether to aggregate metric values into time slices",
+          "type": "string"
+        },
+        "end_time": {
+          "description": "End time in UTC; format: YYYY-MM-DD HH:MM:SS",
           "type": "string"
         },
         "server_id": {
           "description": "Server id",
+          "type": "string"
+        },
+        "timescale": {
+          "description": "('hour', 'day', 'week', 'month', or 'year')",
           "type": "string"
         }
       },
       "required": [
         "server_id",
         "agent_resource_id",
-        "agent_resource_threshold_id"
+        "timescale"
       ],
       "type": "object"
     },
-    "name": "get_agent_resource_threshold",
+    "name": "get_agent_resource_metric",
     "tier": "readonly"
   },
   {
@@ -1032,7 +1043,56 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "get_countermeasure",
+    "name": "get_agent_resource_threshold_countermeasure",
+    "tier": "readonly"
+  },
+  {
+    "_spec": {
+      "bodyParams": [],
+      "method": "GET",
+      "path": "/server/{server_id}/fabric_resource/{fabric_resource_id}/metric/{timescale}",
+      "pathParams": [
+        "server_id",
+        "fabric_resource_id",
+        "timescale"
+      ],
+      "queryParams": [
+        "end_time",
+        "aggregate"
+      ]
+    },
+    "description": "Get fabric resource metric graph data",
+    "input_schema": {
+      "properties": {
+        "aggregate": {
+          "description": "Whether to aggregate metric values into time slices",
+          "type": "string"
+        },
+        "end_time": {
+          "description": "End time in UTC; format: YYYY-MM-DD HH:MM:SS",
+          "type": "string"
+        },
+        "fabric_resource_id": {
+          "description": "Fabric resource id",
+          "type": "string"
+        },
+        "server_id": {
+          "description": "Server id",
+          "type": "string"
+        },
+        "timescale": {
+          "description": "('hour', 'day', 'week', 'month', or 'year')",
+          "type": "string"
+        }
+      },
+      "required": [
+        "server_id",
+        "fabric_resource_id",
+        "timescale"
+      ],
+      "type": "object"
+    },
+    "name": "get_fabric_resource_metric",
     "tier": "readonly"
   },
   {
@@ -1070,7 +1130,39 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "get_countermeasure",
+    "name": "get_network_service_countermeasure",
+    "tier": "readonly"
+  },
+  {
+    "_spec": {
+      "bodyParams": [],
+      "method": "GET",
+      "path": "/server/{server_id}/path_monitoring/{path_monitoring_id}",
+      "pathParams": [
+        "server_id",
+        "path_monitoring_id"
+      ],
+      "queryParams": []
+    },
+    "description": "Get server's path monitoring",
+    "input_schema": {
+      "properties": {
+        "path_monitoring_id": {
+          "description": "Path monitoring id",
+          "type": "string"
+        },
+        "server_id": {
+          "description": "Server id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "server_id",
+        "path_monitoring_id"
+      ],
+      "type": "object"
+    },
+    "name": "get_path_monitoring",
     "tier": "readonly"
   },
   {
@@ -1130,299 +1222,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "get_countermeasure",
-    "tier": "readonly"
-  },
-  {
-    "_spec": {
-      "bodyParams": [],
-      "method": "GET",
-      "path": "/server/{server_id}/countermeasure_metadata/{countermeasure_metadata_id}",
-      "pathParams": [
-        "server_id",
-        "countermeasure_metadata_id"
-      ],
-      "queryParams": []
-    },
-    "description": "Get server's countermeasure metadata",
-    "input_schema": {
-      "properties": {
-        "countermeasure_metadata_id": {
-          "description": "Countermeasure metadata id",
-          "type": "string"
-        },
-        "server_id": {
-          "description": "Server id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "server_id",
-        "countermeasure_metadata_id"
-      ],
-      "type": "object"
-    },
-    "name": "get_countermeasure_metadata",
-    "tier": "readonly"
-  },
-  {
-    "_spec": {
-      "bodyParams": [],
-      "method": "GET",
-      "path": "/server/{server_id}/agent_resource/{agent_resource_id}/metric/{timescale}",
-      "pathParams": [
-        "server_id",
-        "agent_resource_id",
-        "timescale"
-      ],
-      "queryParams": [
-        "end_time",
-        "aggregate"
-      ]
-    },
-    "description": "Get agent resource metric graph data",
-    "input_schema": {
-      "properties": {
-        "agent_resource_id": {
-          "description": "Agent resource id",
-          "type": "string"
-        },
-        "aggregate": {
-          "description": "Whether to aggregate metric values into time slices",
-          "type": "string"
-        },
-        "end_time": {
-          "description": "End time in UTC; format: YYYY-MM-DD HH:MM:SS",
-          "type": "string"
-        },
-        "server_id": {
-          "description": "Server id",
-          "type": "string"
-        },
-        "timescale": {
-          "description": "('hour', 'day', 'week', 'month', or 'year')",
-          "type": "string"
-        }
-      },
-      "required": [
-        "server_id",
-        "agent_resource_id",
-        "timescale"
-      ],
-      "type": "object"
-    },
-    "name": "get_metric",
-    "tier": "readonly"
-  },
-  {
-    "_spec": {
-      "bodyParams": [],
-      "method": "GET",
-      "path": "/server/{server_id}/fabric_resource/{fabric_resource_id}/metric/{timescale}",
-      "pathParams": [
-        "server_id",
-        "fabric_resource_id",
-        "timescale"
-      ],
-      "queryParams": [
-        "end_time",
-        "aggregate"
-      ]
-    },
-    "description": "Get fabric resource metric graph data",
-    "input_schema": {
-      "properties": {
-        "aggregate": {
-          "description": "Whether to aggregate metric values into time slices",
-          "type": "string"
-        },
-        "end_time": {
-          "description": "End time in UTC; format: YYYY-MM-DD HH:MM:SS",
-          "type": "string"
-        },
-        "fabric_resource_id": {
-          "description": "Fabric resource id",
-          "type": "string"
-        },
-        "server_id": {
-          "description": "Server id",
-          "type": "string"
-        },
-        "timescale": {
-          "description": "('hour', 'day', 'week', 'month', or 'year')",
-          "type": "string"
-        }
-      },
-      "required": [
-        "server_id",
-        "fabric_resource_id",
-        "timescale"
-      ],
-      "type": "object"
-    },
-    "name": "get_metric",
-    "tier": "readonly"
-  },
-  {
-    "_spec": {
-      "bodyParams": [],
-      "method": "GET",
-      "path": "/server/{server_id}/snmp_resource/{snmp_resource_id}/metric/{timescale}",
-      "pathParams": [
-        "server_id",
-        "snmp_resource_id",
-        "timescale"
-      ],
-      "queryParams": [
-        "end_time",
-        "aggregate"
-      ]
-    },
-    "description": "Get snmp resource metric graph data",
-    "input_schema": {
-      "properties": {
-        "aggregate": {
-          "description": "Whether to aggregate metric values into time slices",
-          "type": "string"
-        },
-        "end_time": {
-          "description": "End time in UTC; format: YYYY-MM-DD HH:MM:SS",
-          "type": "string"
-        },
-        "server_id": {
-          "description": "Server id",
-          "type": "string"
-        },
-        "snmp_resource_id": {
-          "description": "Snmp resource id",
-          "type": "string"
-        },
-        "timescale": {
-          "description": "('hour', 'day', 'week', 'month', or 'year')",
-          "type": "string"
-        }
-      },
-      "required": [
-        "server_id",
-        "snmp_resource_id",
-        "timescale"
-      ],
-      "type": "object"
-    },
-    "name": "get_metric",
-    "tier": "readonly"
-  },
-  {
-    "_spec": {
-      "bodyParams": [],
-      "method": "GET",
-      "path": "/server/{server_id}/network_service/{network_service_id}",
-      "pathParams": [
-        "server_id",
-        "network_service_id"
-      ],
-      "queryParams": []
-    },
-    "description": "Get server's network service",
-    "input_schema": {
-      "properties": {
-        "network_service_id": {
-          "description": "Network service id",
-          "type": "string"
-        },
-        "server_id": {
-          "description": "Server id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "server_id",
-        "network_service_id"
-      ],
-      "type": "object"
-    },
-    "name": "get_network_service",
-    "tier": "readonly"
-  },
-  {
-    "_spec": {
-      "bodyParams": [],
-      "method": "GET",
-      "path": "/server/{server_id}/path_monitoring/{path_monitoring_id}",
-      "pathParams": [
-        "server_id",
-        "path_monitoring_id"
-      ],
-      "queryParams": []
-    },
-    "description": "Get server's path monitoring",
-    "input_schema": {
-      "properties": {
-        "path_monitoring_id": {
-          "description": "Path monitoring id",
-          "type": "string"
-        },
-        "server_id": {
-          "description": "Server id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "server_id",
-        "path_monitoring_id"
-      ],
-      "type": "object"
-    },
-    "name": "get_path_monitoring",
-    "tier": "readonly"
-  },
-  {
-    "_spec": {
-      "bodyParams": [],
-      "method": "GET",
-      "path": "/server/{server_id}/network_service/{network_service_id}/response_time/{timescale}",
-      "pathParams": [
-        "server_id",
-        "network_service_id",
-        "timescale"
-      ],
-      "queryParams": [
-        "end_time",
-        "aggregate"
-      ]
-    },
-    "description": "Get service response time graph data",
-    "input_schema": {
-      "properties": {
-        "aggregate": {
-          "description": "Whether to aggregate metric values into time slices",
-          "type": "string"
-        },
-        "end_time": {
-          "description": "End time in UTC; format: YYYY-MM-DD HH:MM:SS",
-          "type": "string"
-        },
-        "network_service_id": {
-          "description": "Network service id",
-          "type": "string"
-        },
-        "server_id": {
-          "description": "Server id",
-          "type": "string"
-        },
-        "timescale": {
-          "description": "('hour', 'day', 'week', 'month', or 'year')",
-          "type": "string"
-        }
-      },
-      "required": [
-        "server_id",
-        "network_service_id",
-        "timescale"
-      ],
-      "type": "object"
-    },
-    "name": "get_response_time",
+    "name": "get_response_time_countermeasure",
     "tier": "readonly"
   },
   {
@@ -1487,6 +1287,119 @@ export const TOOLS = [
     "_spec": {
       "bodyParams": [],
       "method": "GET",
+      "path": "/server/{server_id}/countermeasure_metadata/{countermeasure_metadata_id}",
+      "pathParams": [
+        "server_id",
+        "countermeasure_metadata_id"
+      ],
+      "queryParams": []
+    },
+    "description": "Get server's countermeasure metadata",
+    "input_schema": {
+      "properties": {
+        "countermeasure_metadata_id": {
+          "description": "Countermeasure metadata id",
+          "type": "string"
+        },
+        "server_id": {
+          "description": "Server id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "server_id",
+        "countermeasure_metadata_id"
+      ],
+      "type": "object"
+    },
+    "name": "get_server_countermeasure_metadata",
+    "tier": "readonly"
+  },
+  {
+    "_spec": {
+      "bodyParams": [],
+      "method": "GET",
+      "path": "/server/{server_id}/network_service/{network_service_id}",
+      "pathParams": [
+        "server_id",
+        "network_service_id"
+      ],
+      "queryParams": []
+    },
+    "description": "Get server's network service",
+    "input_schema": {
+      "properties": {
+        "network_service_id": {
+          "description": "Network service id",
+          "type": "string"
+        },
+        "server_id": {
+          "description": "Server id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "server_id",
+        "network_service_id"
+      ],
+      "type": "object"
+    },
+    "name": "get_server_network_service",
+    "tier": "readonly"
+  },
+  {
+    "_spec": {
+      "bodyParams": [],
+      "method": "GET",
+      "path": "/server/{server_id}/network_service/{network_service_id}/response_time/{timescale}",
+      "pathParams": [
+        "server_id",
+        "network_service_id",
+        "timescale"
+      ],
+      "queryParams": [
+        "end_time",
+        "aggregate"
+      ]
+    },
+    "description": "Get service response time graph data",
+    "input_schema": {
+      "properties": {
+        "aggregate": {
+          "description": "Whether to aggregate metric values into time slices",
+          "type": "string"
+        },
+        "end_time": {
+          "description": "End time in UTC; format: YYYY-MM-DD HH:MM:SS",
+          "type": "string"
+        },
+        "network_service_id": {
+          "description": "Network service id",
+          "type": "string"
+        },
+        "server_id": {
+          "description": "Server id",
+          "type": "string"
+        },
+        "timescale": {
+          "description": "('hour', 'day', 'week', 'month', or 'year')",
+          "type": "string"
+        }
+      },
+      "required": [
+        "server_id",
+        "network_service_id",
+        "timescale"
+      ],
+      "type": "object"
+    },
+    "name": "get_server_network_service_response_time",
+    "tier": "readonly"
+  },
+  {
+    "_spec": {
+      "bodyParams": [],
+      "method": "GET",
       "path": "/server/{server_id}/snmp_resource/{snmp_resource_id}",
       "pathParams": [
         "server_id",
@@ -1513,6 +1426,131 @@ export const TOOLS = [
       "type": "object"
     },
     "name": "get_snmp_resource",
+    "tier": "readonly"
+  },
+  {
+    "_spec": {
+      "bodyParams": [],
+      "method": "GET",
+      "path": "/server/{server_id}/snmp_resource/{agent_resource_id}/agent_resource_threshold/{agent_resource_threshold_id}",
+      "pathParams": [
+        "server_id",
+        "agent_resource_id",
+        "agent_resource_threshold_id"
+      ],
+      "queryParams": []
+    },
+    "description": "Get server's agent resource threshold",
+    "input_schema": {
+      "properties": {
+        "agent_resource_id": {
+          "description": "Agent resource id",
+          "type": "string"
+        },
+        "agent_resource_threshold_id": {
+          "description": "Agent resource threshold id",
+          "type": "string"
+        },
+        "server_id": {
+          "description": "Server id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "server_id",
+        "agent_resource_id",
+        "agent_resource_threshold_id"
+      ],
+      "type": "object"
+    },
+    "name": "get_snmp_resource_agent_resource_threshold",
+    "tier": "readonly"
+  },
+  {
+    "_spec": {
+      "bodyParams": [],
+      "method": "GET",
+      "path": "/server/{server_id}/snmp_resource/{snmp_resource_id}/metric/{timescale}",
+      "pathParams": [
+        "server_id",
+        "snmp_resource_id",
+        "timescale"
+      ],
+      "queryParams": [
+        "end_time",
+        "aggregate"
+      ]
+    },
+    "description": "Get snmp resource metric graph data",
+    "input_schema": {
+      "properties": {
+        "aggregate": {
+          "description": "Whether to aggregate metric values into time slices",
+          "type": "string"
+        },
+        "end_time": {
+          "description": "End time in UTC; format: YYYY-MM-DD HH:MM:SS",
+          "type": "string"
+        },
+        "server_id": {
+          "description": "Server id",
+          "type": "string"
+        },
+        "snmp_resource_id": {
+          "description": "Snmp resource id",
+          "type": "string"
+        },
+        "timescale": {
+          "description": "('hour', 'day', 'week', 'month', or 'year')",
+          "type": "string"
+        }
+      },
+      "required": [
+        "server_id",
+        "snmp_resource_id",
+        "timescale"
+      ],
+      "type": "object"
+    },
+    "name": "get_snmp_resource_metric",
+    "tier": "readonly"
+  },
+  {
+    "_spec": {
+      "bodyParams": [],
+      "method": "GET",
+      "path": "/server/{server_id}/agent_resource/{agent_resource_id}/agent_resource_threshold/{agent_resource_threshold_id}/countermeasure",
+      "pathParams": [
+        "server_id",
+        "agent_resource_id",
+        "agent_resource_threshold_id"
+      ],
+      "queryParams": []
+    },
+    "description": "Get server's agent resource threshold countermeasures",
+    "input_schema": {
+      "properties": {
+        "agent_resource_id": {
+          "description": "Agent resource id",
+          "type": "string"
+        },
+        "agent_resource_threshold_id": {
+          "description": "Agent resource threshold id",
+          "type": "string"
+        },
+        "server_id": {
+          "description": "Server id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "server_id",
+        "agent_resource_id",
+        "agent_resource_threshold_id"
+      ],
+      "type": "object"
+    },
+    "name": "list_agent_resource_threshold_countermeasures",
     "tier": "readonly"
   },
   {
@@ -1555,50 +1593,6 @@ export const TOOLS = [
       "type": "object"
     },
     "name": "list_agent_resources",
-    "tier": "readonly"
-  },
-  {
-    "_spec": {
-      "bodyParams": [],
-      "method": "GET",
-      "path": "/server/{server_id}/availability",
-      "pathParams": [
-        "server_id"
-      ],
-      "queryParams": [
-        "start_time",
-        "end_time",
-        "with_excluded_outages"
-      ]
-    },
-    "description": "Get server availability",
-    "input_schema": {
-      "properties": {
-        "end_time": {
-          "description": "End time of the range; format: YYYY-MM-DD HH:MM:SS",
-          "type": "string"
-        },
-        "server_id": {
-          "description": "Server id",
-          "type": "string"
-        },
-        "start_time": {
-          "description": "Start time of the range; format: YYYY-MM-DD HH:MM:SS",
-          "type": "string"
-        },
-        "with_excluded_outages": {
-          "description": "Include the outages that had been marked as excluded",
-          "type": "string"
-        }
-      },
-      "required": [
-        "server_id",
-        "start_time",
-        "end_time"
-      ],
-      "type": "object"
-    },
-    "name": "list_availabilities",
     "tier": "readonly"
   },
   {
@@ -1715,81 +1709,6 @@ export const TOOLS = [
     "_spec": {
       "bodyParams": [],
       "method": "GET",
-      "path": "/server/{server_id}/countermeasure_metadata",
-      "pathParams": [
-        "server_id"
-      ],
-      "queryParams": [
-        "status"
-      ]
-    },
-    "description": "Get server's countermeasure metadatas",
-    "input_schema": {
-      "properties": {
-        "server_id": {
-          "description": "Server id",
-          "type": "string"
-        },
-        "status": {
-          "description": "Filter results by status",
-          "enum": [
-            "pending",
-            "available",
-            "unavailable"
-          ],
-          "type": "string"
-        }
-      },
-      "required": [
-        "server_id"
-      ],
-      "type": "object"
-    },
-    "name": "list_countermeasure_metadatas",
-    "tier": "readonly"
-  },
-  {
-    "_spec": {
-      "bodyParams": [],
-      "method": "GET",
-      "path": "/server/{server_id}/agent_resource/{agent_resource_id}/agent_resource_threshold/{agent_resource_threshold_id}/countermeasure",
-      "pathParams": [
-        "server_id",
-        "agent_resource_id",
-        "agent_resource_threshold_id"
-      ],
-      "queryParams": []
-    },
-    "description": "Get server's agent resource threshold countermeasures",
-    "input_schema": {
-      "properties": {
-        "agent_resource_id": {
-          "description": "Agent resource id",
-          "type": "string"
-        },
-        "agent_resource_threshold_id": {
-          "description": "Agent resource threshold id",
-          "type": "string"
-        },
-        "server_id": {
-          "description": "Server id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "server_id",
-        "agent_resource_id",
-        "agent_resource_threshold_id"
-      ],
-      "type": "object"
-    },
-    "name": "list_countermeasures",
-    "tier": "readonly"
-  },
-  {
-    "_spec": {
-      "bodyParams": [],
-      "method": "GET",
       "path": "/server/{server_id}/network_service/{network_service_id}/countermeasure",
       "pathParams": [
         "server_id",
@@ -1815,7 +1734,39 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "list_countermeasures",
+    "name": "list_network_service_countermeasures",
+    "tier": "readonly"
+  },
+  {
+    "_spec": {
+      "bodyParams": [],
+      "method": "GET",
+      "path": "/server/{server_id}/path_monitoring",
+      "pathParams": [
+        "server_id"
+      ],
+      "queryParams": [
+        "location"
+      ]
+    },
+    "description": "Get server's path monitorings",
+    "input_schema": {
+      "properties": {
+        "location": {
+          "description": "Filter results by monitoring location URL either server (https://api2.panopta.com/v2/server/{server_id}), appliance (https://api2.panopta.com/v2/onsight/{onsight_id}), or monitor node (https://api2.panopta.com/v2/monitoring_node/{monitoring_node_id})",
+          "type": "string"
+        },
+        "server_id": {
+          "description": "Server id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "server_id"
+      ],
+      "type": "object"
+    },
+    "name": "list_path_monitorings",
     "tier": "readonly"
   },
   {
@@ -1869,197 +1820,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "list_countermeasures",
-    "tier": "readonly"
-  },
-  {
-    "_spec": {
-      "bodyParams": [],
-      "method": "GET",
-      "path": "/server/{server_id}/maintenance_schedule",
-      "pathParams": [
-        "server_id"
-      ],
-      "queryParams": [
-        "name"
-      ]
-    },
-    "description": "Get server's maintenance schedules",
-    "input_schema": {
-      "properties": {
-        "name": {
-          "description": "Filter results by name",
-          "type": "string"
-        },
-        "server_id": {
-          "description": "Server id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "server_id"
-      ],
-      "type": "object"
-    },
-    "name": "list_maintenance_schedules",
-    "tier": "readonly"
-  },
-  {
-    "_spec": {
-      "bodyParams": [],
-      "method": "GET",
-      "path": "/server/{server_id}/network_service",
-      "pathParams": [
-        "server_id"
-      ],
-      "queryParams": [
-        "ip_type",
-        "name",
-        "service_type",
-        "server_interface",
-        "status",
-        "tags",
-        "monitoring_location"
-      ]
-    },
-    "description": "Get server's network services",
-    "input_schema": {
-      "properties": {
-        "ip_type": {
-          "description": "Mode in which to filter by ip type, choices: [v4, v6]",
-          "type": "string"
-        },
-        "monitoring_location": {
-          "description": "Filter results by monitoring location URL either server (https://api2.panopta.com/v2/server/{server_id}), appliance (https://api2.panopta.com/v2/onsight/{onsight_id}), or monitor node (https://api2.panopta.com/v2/monitoring_node/{monitoring_node_id})",
-          "type": "string"
-        },
-        "name": {
-          "description": "Filter results by name",
-          "type": "string"
-        },
-        "server_id": {
-          "description": "Server id",
-          "type": "string"
-        },
-        "server_interface": {
-          "description": "Filter results by server_interface",
-          "type": "string"
-        },
-        "service_type": {
-          "description": "Filter results by service_type id",
-          "type": "string"
-        },
-        "status": {
-          "description": "Filter results by status",
-          "enum": [
-            "active",
-            "suspended"
-          ],
-          "type": "string"
-        },
-        "tags": {
-          "description": "Filter results by tags (comma separated)",
-          "type": "string"
-        }
-      },
-      "required": [
-        "server_id"
-      ],
-      "type": "object"
-    },
-    "name": "list_network_services",
-    "tier": "readonly"
-  },
-  {
-    "_spec": {
-      "bodyParams": [],
-      "method": "GET",
-      "path": "/server/{server_id}/outage",
-      "pathParams": [
-        "server_id"
-      ],
-      "queryParams": [
-        "server",
-        "severity",
-        "status",
-        "end_time",
-        "start_time"
-      ]
-    },
-    "description": "Get server's outages",
-    "input_schema": {
-      "properties": {
-        "end_time": {
-          "description": "End_time in UTC",
-          "type": "string"
-        },
-        "server": {
-          "description": "Filter results by server id",
-          "type": "string"
-        },
-        "server_id": {
-          "description": "Server id",
-          "type": "string"
-        },
-        "severity": {
-          "description": "Filter results by severity",
-          "enum": [
-            "critical",
-            "warning"
-          ],
-          "type": "string"
-        },
-        "start_time": {
-          "description": "Start_time in UTC",
-          "type": "string"
-        },
-        "status": {
-          "description": "Filter results by status",
-          "enum": [
-            "active",
-            "resolved"
-          ],
-          "type": "string"
-        }
-      },
-      "required": [
-        "server_id"
-      ],
-      "type": "object"
-    },
-    "name": "list_outages",
-    "tier": "readonly"
-  },
-  {
-    "_spec": {
-      "bodyParams": [],
-      "method": "GET",
-      "path": "/server/{server_id}/path_monitoring",
-      "pathParams": [
-        "server_id"
-      ],
-      "queryParams": [
-        "location"
-      ]
-    },
-    "description": "Get server's path monitorings",
-    "input_schema": {
-      "properties": {
-        "location": {
-          "description": "Filter results by monitoring location URL either server (https://api2.panopta.com/v2/server/{server_id}), appliance (https://api2.panopta.com/v2/onsight/{onsight_id}), or monitor node (https://api2.panopta.com/v2/monitoring_node/{monitoring_node_id})",
-          "type": "string"
-        },
-        "server_id": {
-          "description": "Server id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "server_id"
-      ],
-      "type": "object"
-    },
-    "name": "list_path_monitorings",
+    "name": "list_response_time_countermeasures",
     "tier": "readonly"
   },
   {
@@ -2135,6 +1896,87 @@ export const TOOLS = [
     "_spec": {
       "bodyParams": [],
       "method": "GET",
+      "path": "/server/{server_id}/availability",
+      "pathParams": [
+        "server_id"
+      ],
+      "queryParams": [
+        "start_time",
+        "end_time",
+        "with_excluded_outages"
+      ]
+    },
+    "description": "Get server availability",
+    "input_schema": {
+      "properties": {
+        "end_time": {
+          "description": "End time of the range; format: YYYY-MM-DD HH:MM:SS",
+          "type": "string"
+        },
+        "server_id": {
+          "description": "Server id",
+          "type": "string"
+        },
+        "start_time": {
+          "description": "Start time of the range; format: YYYY-MM-DD HH:MM:SS",
+          "type": "string"
+        },
+        "with_excluded_outages": {
+          "description": "Include the outages that had been marked as excluded",
+          "type": "string"
+        }
+      },
+      "required": [
+        "server_id",
+        "start_time",
+        "end_time"
+      ],
+      "type": "object"
+    },
+    "name": "list_server_availabilities",
+    "tier": "readonly"
+  },
+  {
+    "_spec": {
+      "bodyParams": [],
+      "method": "GET",
+      "path": "/server/{server_id}/countermeasure_metadata",
+      "pathParams": [
+        "server_id"
+      ],
+      "queryParams": [
+        "status"
+      ]
+    },
+    "description": "Get server's countermeasure metadatas",
+    "input_schema": {
+      "properties": {
+        "server_id": {
+          "description": "Server id",
+          "type": "string"
+        },
+        "status": {
+          "description": "Filter results by status",
+          "enum": [
+            "pending",
+            "available",
+            "unavailable"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "server_id"
+      ],
+      "type": "object"
+    },
+    "name": "list_server_countermeasure_metadatas",
+    "tier": "readonly"
+  },
+  {
+    "_spec": {
+      "bodyParams": [],
+      "method": "GET",
       "path": "/server/{server_id}/server_log",
       "pathParams": [
         "server_id"
@@ -2155,6 +1997,164 @@ export const TOOLS = [
       "type": "object"
     },
     "name": "list_server_logs",
+    "tier": "readonly"
+  },
+  {
+    "_spec": {
+      "bodyParams": [],
+      "method": "GET",
+      "path": "/server/{server_id}/maintenance_schedule",
+      "pathParams": [
+        "server_id"
+      ],
+      "queryParams": [
+        "name"
+      ]
+    },
+    "description": "Get server's maintenance schedules",
+    "input_schema": {
+      "properties": {
+        "name": {
+          "description": "Filter results by name",
+          "type": "string"
+        },
+        "server_id": {
+          "description": "Server id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "server_id"
+      ],
+      "type": "object"
+    },
+    "name": "list_server_maintenance_schedules",
+    "tier": "readonly"
+  },
+  {
+    "_spec": {
+      "bodyParams": [],
+      "method": "GET",
+      "path": "/server/{server_id}/network_service",
+      "pathParams": [
+        "server_id"
+      ],
+      "queryParams": [
+        "ip_type",
+        "name",
+        "service_type",
+        "server_interface",
+        "status",
+        "tags",
+        "monitoring_location"
+      ]
+    },
+    "description": "Get server's network services",
+    "input_schema": {
+      "properties": {
+        "ip_type": {
+          "description": "Mode in which to filter by ip type, choices: [v4, v6]",
+          "type": "string"
+        },
+        "monitoring_location": {
+          "description": "Filter results by monitoring location URL either server (https://api2.panopta.com/v2/server/{server_id}), appliance (https://api2.panopta.com/v2/onsight/{onsight_id}), or monitor node (https://api2.panopta.com/v2/monitoring_node/{monitoring_node_id})",
+          "type": "string"
+        },
+        "name": {
+          "description": "Filter results by name",
+          "type": "string"
+        },
+        "server_id": {
+          "description": "Server id",
+          "type": "string"
+        },
+        "server_interface": {
+          "description": "Filter results by server_interface",
+          "type": "string"
+        },
+        "service_type": {
+          "description": "Filter results by service_type id",
+          "type": "string"
+        },
+        "status": {
+          "description": "Filter results by status",
+          "enum": [
+            "active",
+            "suspended"
+          ],
+          "type": "string"
+        },
+        "tags": {
+          "description": "Filter results by tags (comma separated)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "server_id"
+      ],
+      "type": "object"
+    },
+    "name": "list_server_network_services",
+    "tier": "readonly"
+  },
+  {
+    "_spec": {
+      "bodyParams": [],
+      "method": "GET",
+      "path": "/server/{server_id}/outage",
+      "pathParams": [
+        "server_id"
+      ],
+      "queryParams": [
+        "server",
+        "severity",
+        "status",
+        "end_time",
+        "start_time"
+      ]
+    },
+    "description": "Get server's outages",
+    "input_schema": {
+      "properties": {
+        "end_time": {
+          "description": "End_time in UTC",
+          "type": "string"
+        },
+        "server": {
+          "description": "Filter results by server id",
+          "type": "string"
+        },
+        "server_id": {
+          "description": "Server id",
+          "type": "string"
+        },
+        "severity": {
+          "description": "Filter results by severity",
+          "enum": [
+            "critical",
+            "warning"
+          ],
+          "type": "string"
+        },
+        "start_time": {
+          "description": "Start_time in UTC",
+          "type": "string"
+        },
+        "status": {
+          "description": "Filter results by status",
+          "enum": [
+            "active",
+            "resolved"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "server_id"
+      ],
+      "type": "object"
+    },
+    "name": "list_server_outages",
     "tier": "readonly"
   },
   {
@@ -2408,85 +2408,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "update_agent_resource_threshold",
-    "tier": "readwrite"
-  },
-  {
-    "_spec": {
-      "bodyParams": [
-        "body"
-      ],
-      "method": "PUT",
-      "path": "/server/{server_id}/snmp_resource/{agent_resource_id}/agent_resource_threshold/{agent_resource_threshold_id}",
-      "pathParams": [
-        "server_id",
-        "agent_resource_id",
-        "agent_resource_threshold_id"
-      ],
-      "queryParams": []
-    },
-    "description": "Update server's agent resource threshold",
-    "input_schema": {
-      "properties": {
-        "agent_resource_id": {
-          "description": "Agent resource id",
-          "type": "string"
-        },
-        "agent_resource_threshold_id": {
-          "description": "Agent resource threshold id",
-          "type": "string"
-        },
-        "body": {
-          "description": "Request body (see API docs).",
-          "type": "object"
-        },
-        "server_id": {
-          "description": "Server id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "server_id",
-        "agent_resource_id",
-        "agent_resource_threshold_id",
-        "body"
-      ],
-      "type": "object"
-    },
-    "name": "update_agent_resource_threshold",
-    "tier": "readwrite"
-  },
-  {
-    "_spec": {
-      "bodyParams": [
-        "body"
-      ],
-      "method": "PUT",
-      "path": "/server/{server_id}/change_customer",
-      "pathParams": [
-        "server_id"
-      ],
-      "queryParams": []
-    },
-    "description": "Move server between customers",
-    "input_schema": {
-      "properties": {
-        "body": {
-          "description": "Request body (see API docs).",
-          "type": "object"
-        },
-        "server_id": {
-          "description": "Server id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "server_id",
-        "body"
-      ],
-      "type": "object"
-    },
-    "name": "update_change_customer",
+    "name": "update_agent_resource_agent_resource_threshold",
     "tier": "readwrite"
   },
   {
@@ -2537,7 +2459,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "update_countermeasure",
+    "name": "update_agent_resource_threshold_countermeasure",
     "tier": "readwrite"
   },
   {
@@ -2546,28 +2468,18 @@ export const TOOLS = [
         "body"
       ],
       "method": "PUT",
-      "path": "/server/{server_id}/network_service/{network_service_id}/countermeasure/{network_service_countermeasure_id}",
+      "path": "/server/{server_id}/change_customer",
       "pathParams": [
-        "server_id",
-        "network_service_id",
-        "network_service_countermeasure_id"
+        "server_id"
       ],
       "queryParams": []
     },
-    "description": "Update server's network service countermeasure",
+    "description": "Move server between customers",
     "input_schema": {
       "properties": {
         "body": {
           "description": "Request body (see API docs).",
           "type": "object"
-        },
-        "network_service_countermeasure_id": {
-          "description": "Network service countermeasure id",
-          "type": "string"
-        },
-        "network_service_id": {
-          "description": "Network service id",
-          "type": "string"
         },
         "server_id": {
           "description": "Server id",
@@ -2576,58 +2488,11 @@ export const TOOLS = [
       },
       "required": [
         "server_id",
-        "network_service_id",
-        "network_service_countermeasure_id",
         "body"
       ],
       "type": "object"
     },
-    "name": "update_countermeasure",
-    "tier": "readwrite"
-  },
-  {
-    "_spec": {
-      "bodyParams": [
-        "body"
-      ],
-      "method": "PUT",
-      "path": "/server/{server_id}/network_service/{network_service_id}/response_time/countermeasure/{network_service_response_time_countermeasure_id}",
-      "pathParams": [
-        "server_id",
-        "network_service_id",
-        "network_service_response_time_countermeasure_id"
-      ],
-      "queryParams": []
-    },
-    "description": "Edit response time countermeasure",
-    "input_schema": {
-      "properties": {
-        "body": {
-          "description": "Request body (see API docs).",
-          "type": "object"
-        },
-        "network_service_id": {
-          "description": "Network service id",
-          "type": "string"
-        },
-        "network_service_response_time_countermeasure_id": {
-          "description": "Network service response time countermeasure id",
-          "type": "string"
-        },
-        "server_id": {
-          "description": "Server id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "server_id",
-        "network_service_id",
-        "network_service_response_time_countermeasure_id",
-        "body"
-      ],
-      "type": "object"
-    },
-    "name": "update_countermeasure",
+    "name": "update_change_customer",
     "tier": "readwrite"
   },
   {
@@ -2700,6 +2565,96 @@ export const TOOLS = [
       "type": "object"
     },
     "name": "update_network_service",
+    "tier": "readwrite"
+  },
+  {
+    "_spec": {
+      "bodyParams": [
+        "body"
+      ],
+      "method": "PUT",
+      "path": "/server/{server_id}/network_service/{network_service_id}/countermeasure/{network_service_countermeasure_id}",
+      "pathParams": [
+        "server_id",
+        "network_service_id",
+        "network_service_countermeasure_id"
+      ],
+      "queryParams": []
+    },
+    "description": "Update server's network service countermeasure",
+    "input_schema": {
+      "properties": {
+        "body": {
+          "description": "Request body (see API docs).",
+          "type": "object"
+        },
+        "network_service_countermeasure_id": {
+          "description": "Network service countermeasure id",
+          "type": "string"
+        },
+        "network_service_id": {
+          "description": "Network service id",
+          "type": "string"
+        },
+        "server_id": {
+          "description": "Server id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "server_id",
+        "network_service_id",
+        "network_service_countermeasure_id",
+        "body"
+      ],
+      "type": "object"
+    },
+    "name": "update_network_service_countermeasure",
+    "tier": "readwrite"
+  },
+  {
+    "_spec": {
+      "bodyParams": [
+        "body"
+      ],
+      "method": "PUT",
+      "path": "/server/{server_id}/network_service/{network_service_id}/response_time/countermeasure/{network_service_response_time_countermeasure_id}",
+      "pathParams": [
+        "server_id",
+        "network_service_id",
+        "network_service_response_time_countermeasure_id"
+      ],
+      "queryParams": []
+    },
+    "description": "Edit response time countermeasure",
+    "input_schema": {
+      "properties": {
+        "body": {
+          "description": "Request body (see API docs).",
+          "type": "object"
+        },
+        "network_service_id": {
+          "description": "Network service id",
+          "type": "string"
+        },
+        "network_service_response_time_countermeasure_id": {
+          "description": "Network service response time countermeasure id",
+          "type": "string"
+        },
+        "server_id": {
+          "description": "Server id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "server_id",
+        "network_service_id",
+        "network_service_response_time_countermeasure_id",
+        "body"
+      ],
+      "type": "object"
+    },
+    "name": "update_response_time_countermeasure",
     "tier": "readwrite"
   },
   {
@@ -2838,6 +2793,51 @@ export const TOOLS = [
       "type": "object"
     },
     "name": "update_snmp_resource",
+    "tier": "readwrite"
+  },
+  {
+    "_spec": {
+      "bodyParams": [
+        "body"
+      ],
+      "method": "PUT",
+      "path": "/server/{server_id}/snmp_resource/{agent_resource_id}/agent_resource_threshold/{agent_resource_threshold_id}",
+      "pathParams": [
+        "server_id",
+        "agent_resource_id",
+        "agent_resource_threshold_id"
+      ],
+      "queryParams": []
+    },
+    "description": "Update server's agent resource threshold",
+    "input_schema": {
+      "properties": {
+        "agent_resource_id": {
+          "description": "Agent resource id",
+          "type": "string"
+        },
+        "agent_resource_threshold_id": {
+          "description": "Agent resource threshold id",
+          "type": "string"
+        },
+        "body": {
+          "description": "Request body (see API docs).",
+          "type": "object"
+        },
+        "server_id": {
+          "description": "Server id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "server_id",
+        "agent_resource_id",
+        "agent_resource_threshold_id",
+        "body"
+      ],
+      "type": "object"
+    },
+    "name": "update_snmp_resource_agent_resource_threshold",
     "tier": "readwrite"
   }
 ];

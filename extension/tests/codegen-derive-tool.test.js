@@ -1,12 +1,17 @@
 // FMN-96: tests for the codegen transform functions.
+// FMN-108: tests for the collision-resolving naming heuristic.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import {
   pluralize,
   deriveDomain,
   lastResource,
   pathTargetsSingleResource,
   deriveToolName,
+  pathAncestors,
+  deriveToolNameWithLevel,
   deriveTier,
   normalizeParamSchema,
   operationToTool,
@@ -139,6 +144,148 @@ test('operationToTool: POST with requestBody lifts body fields into input_schema
   // server_id (path-required) and attribute_type (body-required) are both in required
   assert.ok(tool.input_schema.required.includes('server_id'));
   assert.ok(tool.input_schema.required.includes('attribute_type'));
+});
+
+test('pathAncestors: returns non-placeholder ancestors closest-first, excluding last-resource segment', () => {
+  assert.deepEqual(pathAncestors('/server'), []);
+  assert.deepEqual(pathAncestors('/server/{server_id}'), []);
+  assert.deepEqual(pathAncestors('/server/{server_id}/server_attribute'), ['server']);
+  assert.deepEqual(pathAncestors('/server_group/{id}/server'), ['server_group']);
+  assert.deepEqual(pathAncestors('/public/outage/{HASH}/acknowledge'), ['outage', 'public']);
+  assert.deepEqual(
+    pathAncestors('/server/{server_id}/agent_resource/{agent_resource_id}/agent_resource_threshold/{tid}/countermeasure'),
+    ['agent_resource_threshold', 'agent_resource', 'server']
+  );
+});
+
+test('deriveToolNameWithLevel: level 0 is the base verb_lastSeg name', () => {
+  assert.equal(deriveToolNameWithLevel('/server', 'get', 0), 'list_servers');
+  assert.equal(deriveToolNameWithLevel('/outage/{id}/acknowledge', 'put', 0), 'update_acknowledge');
+  assert.equal(deriveToolNameWithLevel('/server_group/{id}/server', 'get', 0), 'list_servers');
+});
+
+test('deriveToolNameWithLevel: level k prepends k closest ancestors outermost-first', () => {
+  // Single-ancestor escalation
+  assert.equal(deriveToolNameWithLevel('/outage/{id}/acknowledge', 'put', 1),
+               'update_outage_acknowledge');
+  assert.equal(deriveToolNameWithLevel('/server_group/{id}/server', 'get', 1),
+               'list_server_group_servers');
+  // Two-ancestor escalation: outermost-first ordering
+  assert.equal(deriveToolNameWithLevel('/public/outage/{HASH}/acknowledge', 'put', 1),
+               'update_outage_acknowledge');
+  assert.equal(deriveToolNameWithLevel('/public/outage/{HASH}/acknowledge', 'put', 2),
+               'update_public_outage_acknowledge');
+});
+
+test('deriveToolNameWithLevel: caps at available ancestor count', () => {
+  // Asking for level 5 on a path with 0 ancestors keeps the base name.
+  assert.equal(deriveToolNameWithLevel('/server', 'get', 5), 'list_servers');
+  // Asking for level 5 on a path with 2 ancestors caps at 2.
+  assert.equal(deriveToolNameWithLevel('/public/outage/{HASH}/acknowledge', 'put', 5),
+               'update_public_outage_acknowledge');
+});
+
+test('compileToolsByDomain: collision resolution disambiguates colliding base names', () => {
+  // Three different paths that all yield list_servers at level 0:
+  //   /server                            (0 ancestors, can't escalate)
+  //   /server_group/{id}/server          (1 ancestor)
+  //   /cloud_credential/{id}/server      (1 ancestor)
+  // Expected: /server keeps list_servers, others get a single-ancestor prefix.
+  const spec = {
+    paths: {
+      '/server': { get: { summary: 'List servers', parameters: [] } },
+      '/server_group/{id}/server': {
+        get: { summary: 'List servers in group', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }] }
+      },
+      '/cloud_credential/{id}/server': {
+        get: { summary: 'List servers for credential', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }] }
+      }
+    }
+  };
+  const grouped = compileToolsByDomain(spec);
+  const allNames = Object.values(grouped).flatMap((tools) => tools.map((t) => t.name));
+  assert.equal(new Set(allNames).size, allNames.length, `expected unique names, got ${allNames.join(', ')}`);
+  assert.ok(allNames.includes('list_servers'), 'canonical /server keeps list_servers');
+  assert.ok(allNames.includes('list_server_group_servers'));
+  assert.ok(allNames.includes('list_cloud_credential_servers'));
+});
+
+test('compileToolsByDomain: nested collision escalates only as far as needed for uniqueness', () => {
+  // Two paths whose closest ancestor is the same (`outage`) share the
+  // level-1 disambiguated name; the deeper path must escalate to level 2
+  // to disambiguate.
+  const spec = {
+    paths: {
+      '/outage/{id}/acknowledge': {
+        put: { summary: 'Acknowledge outage', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }] }
+      },
+      '/public/outage/{HASH}/acknowledge': {
+        put: { summary: 'Public acknowledge', parameters: [{ name: 'HASH', in: 'path', required: true, schema: { type: 'string' } }] }
+      }
+    }
+  };
+  const grouped = compileToolsByDomain(spec);
+  const names = Object.values(grouped).flatMap((tools) => tools.map((t) => t.name));
+  assert.equal(new Set(names).size, names.length, `expected unique names, got ${names.join(', ')}`);
+  assert.ok(names.includes('update_outage_acknowledge'));
+  assert.ok(names.includes('update_public_outage_acknowledge'));
+});
+
+test('compileToolsByDomain: regression - live OpenAPI has no algorithmically-resolvable collisions', () => {
+  const specPath = path.resolve(
+    process.env.HOME || '',
+    'Projects/fortimonitor-schema-discovery/data/compiled/openapi.json'
+  );
+  if (!fs.existsSync(specPath)) {
+    // The schema-discovery checkout is a sibling project; in environments
+    // where it isn't present (e.g. fresh CI without that repo), skip
+    // rather than fail. The synthetic collision tests above cover the
+    // algorithm; this regression guards against the live spec drifting.
+    console.log(`# skip live OpenAPI regression - ${specPath} not found`);
+    return;
+  }
+  const spec = JSON.parse(fs.readFileSync(specPath, 'utf8'));
+  const grouped = compileToolsByDomain(spec);
+  const allTools = Object.values(grouped).flat();
+  // Total operation count (post-FMN-108) must be 262. If the OpenAPI grows
+  // or shrinks this fires; bumping the number is the intended fix.
+  assert.equal(allTools.length, 262, `expected 262 tools, got ${allTools.length}`);
+
+  // Group remaining collisions and verify each surviving collision is a
+  // "real OpenAPI duplicate" - members share both their final name AND
+  // their full ancestor path, so no level escalation could have separated
+  // them. Anything else is an algorithmic regression we want the test to
+  // catch.
+  const byName = new Map();
+  for (const t of allTools) {
+    if (!byName.has(t.name)) byName.set(t.name, []);
+    byName.get(t.name).push(t);
+  }
+  const collisions = [...byName.entries()].filter(([, ts]) => ts.length > 1);
+  const algorithmic = collisions.filter(([, ts]) => {
+    const ancestorSets = ts.map((t) => JSON.stringify([t._spec.method, ...pathAncestors(t._spec.path)]));
+    return new Set(ancestorSets).size > 1;
+  });
+  assert.equal(
+    algorithmic.length,
+    0,
+    `algorithmically-resolvable collisions remain: ${algorithmic.map(([n, ts]) => `${n}(${ts.map((t) => t._spec.path).join(', ')})`).join('; ')}`
+  );
+
+  // Document persistent collisions so future drift surfaces here. As of
+  // FMN-108 there is exactly one: POST /contact/{contact_id}/contact_info
+  // and POST /contact/{contact_id}/contact_info/{contact_info_id} both
+  // compile to create_contact_contact_info and have identical ancestors.
+  const persistent = collisions.map(([n, ts]) => ({ name: n, paths: ts.map((t) => t._spec.path).sort() }));
+  assert.deepEqual(persistent, [
+    {
+      name: 'create_contact_contact_info',
+      paths: [
+        '/contact/{contact_id}/contact_info',
+        '/contact/{contact_id}/contact_info/{contact_info_id}'
+      ]
+    }
+  ]);
 });
 
 test('compileToolsByDomain: groups by first path segment, sorts alphabetically by tool name', () => {

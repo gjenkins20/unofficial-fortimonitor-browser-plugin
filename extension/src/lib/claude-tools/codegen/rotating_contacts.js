@@ -111,7 +111,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "list_actives",
+    "name": "list_rotating_contact_actives",
     "tier": "readonly"
   },
   {

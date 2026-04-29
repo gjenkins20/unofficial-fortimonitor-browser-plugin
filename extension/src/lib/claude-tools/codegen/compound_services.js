@@ -60,6 +60,32 @@ export const TOOLS = [
     "_spec": {
       "bodyParams": [],
       "method": "GET",
+      "path": "/compound_service/{compound_service_id}",
+      "pathParams": [
+        "compound_service_id"
+      ],
+      "queryParams": []
+    },
+    "description": "Get compound service",
+    "input_schema": {
+      "properties": {
+        "compound_service_id": {
+          "description": "Compound service id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "compound_service_id"
+      ],
+      "type": "object"
+    },
+    "name": "get_compound_service",
+    "tier": "readonly"
+  },
+  {
+    "_spec": {
+      "bodyParams": [],
+      "method": "GET",
       "path": "/compound_service/{compound_service_id}/agent_resource_threshold/{agent_resource_threshold_id}",
       "pathParams": [
         "compound_service_id",
@@ -85,33 +111,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "get_agent_resource_threshold",
-    "tier": "readonly"
-  },
-  {
-    "_spec": {
-      "bodyParams": [],
-      "method": "GET",
-      "path": "/compound_service/{compound_service_id}",
-      "pathParams": [
-        "compound_service_id"
-      ],
-      "queryParams": []
-    },
-    "description": "Get compound service",
-    "input_schema": {
-      "properties": {
-        "compound_service_id": {
-          "description": "Compound service id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "compound_service_id"
-      ],
-      "type": "object"
-    },
-    "name": "get_compound_service",
+    "name": "get_compound_service_agent_resource_threshold",
     "tier": "readonly"
   },
   {
@@ -143,7 +143,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "get_network_service",
+    "name": "get_compound_service_network_service",
     "tier": "readonly"
   },
   {
@@ -187,7 +187,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "get_response_time",
+    "name": "get_compound_service_network_service_response_time",
     "tier": "readonly"
   },
   {
@@ -213,7 +213,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "list_agent_resource_thresholds",
+    "name": "list_compound_service_agent_resource_thresholds",
     "tier": "readonly"
   },
   {
@@ -252,35 +252,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "list_availabilities",
-    "tier": "readonly"
-  },
-  {
-    "_spec": {
-      "bodyParams": [],
-      "method": "GET",
-      "path": "/compound_service",
-      "pathParams": [],
-      "queryParams": [
-        "name",
-        "tags"
-      ]
-    },
-    "description": "Get compound services",
-    "input_schema": {
-      "properties": {
-        "name": {
-          "description": "Filter results by name",
-          "type": "string"
-        },
-        "tags": {
-          "description": "Filter results by tags (comma separated)",
-          "type": "string"
-        }
-      },
-      "type": "object"
-    },
-    "name": "list_compound_services",
+    "name": "list_compound_service_availabilities",
     "tier": "readonly"
   },
   {
@@ -341,7 +313,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "list_network_services",
+    "name": "list_compound_service_network_services",
     "tier": "readonly"
   },
   {
@@ -391,7 +363,35 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "list_outages",
+    "name": "list_compound_service_outages",
+    "tier": "readonly"
+  },
+  {
+    "_spec": {
+      "bodyParams": [],
+      "method": "GET",
+      "path": "/compound_service",
+      "pathParams": [],
+      "queryParams": [
+        "name",
+        "tags"
+      ]
+    },
+    "description": "Get compound services",
+    "input_schema": {
+      "properties": {
+        "name": {
+          "description": "Filter results by name",
+          "type": "string"
+        },
+        "tags": {
+          "description": "Filter results by tags (comma separated)",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "list_compound_services",
     "tier": "readonly"
   },
   {

@@ -40,7 +40,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "get_delay",
+    "name": "get_public_outage_delay",
     "tier": "readonly"
   },
   {
@@ -73,7 +73,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "list_acknowledges",
+    "name": "list_public_outage_acknowledges",
     "tier": "readonly"
   },
   {
@@ -106,7 +106,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "list_escalates",
+    "name": "list_public_outage_escalates",
     "tier": "readonly"
   },
   {
@@ -139,7 +139,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "update_acknowledge",
+    "name": "update_public_outage_acknowledge",
     "tier": "readwrite"
   },
   {
@@ -178,7 +178,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "update_delay",
+    "name": "update_public_outage_delay",
     "tier": "readwrite"
   },
   {
@@ -211,7 +211,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "update_escalate",
+    "name": "update_public_outage_escalate",
     "tier": "readwrite"
   }
 ];

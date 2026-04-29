@@ -105,7 +105,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "list_agent_resource_thresholds",
+    "name": "list_notification_schedule_agent_resource_thresholds",
     "tier": "readonly"
   },
   {
@@ -142,7 +142,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "list_compound_services",
+    "name": "list_notification_schedule_compound_services",
     "tier": "readonly"
   },
   {
@@ -203,30 +203,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "list_network_services",
-    "tier": "readonly"
-  },
-  {
-    "_spec": {
-      "bodyParams": [],
-      "method": "GET",
-      "path": "/notification_schedule",
-      "pathParams": [],
-      "queryParams": [
-        "name"
-      ]
-    },
-    "description": "Get notification schedules",
-    "input_schema": {
-      "properties": {
-        "name": {
-          "description": "Filter results by name",
-          "type": "string"
-        }
-      },
-      "type": "object"
-    },
-    "name": "list_notification_schedules",
+    "name": "list_notification_schedule_network_services",
     "tier": "readonly"
   },
   {
@@ -267,7 +244,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "list_server_groups",
+    "name": "list_notification_schedule_server_groups",
     "tier": "readonly"
   },
   {
@@ -340,7 +317,30 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "list_servers",
+    "name": "list_notification_schedule_servers",
+    "tier": "readonly"
+  },
+  {
+    "_spec": {
+      "bodyParams": [],
+      "method": "GET",
+      "path": "/notification_schedule",
+      "pathParams": [],
+      "queryParams": [
+        "name"
+      ]
+    },
+    "description": "Get notification schedules",
+    "input_schema": {
+      "properties": {
+        "name": {
+          "description": "Filter results by name",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "list_notification_schedules",
     "tier": "readonly"
   },
   {

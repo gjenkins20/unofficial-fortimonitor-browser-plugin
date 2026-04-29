@@ -6,32 +6,6 @@
 export const TOOLS = [
   {
     "_spec": {
-      "bodyParams": [],
-      "method": "POST",
-      "path": "/server_group/{server_group_id}/apply_monitoring_policy",
-      "pathParams": [
-        "server_group_id"
-      ],
-      "queryParams": []
-    },
-    "description": "Apply monitoring policy",
-    "input_schema": {
-      "properties": {
-        "server_group_id": {
-          "description": "Server group id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "server_group_id"
-      ],
-      "type": "object"
-    },
-    "name": "create_apply_monitoring_policy",
-    "tier": "readwrite"
-  },
-  {
-    "_spec": {
       "bodyParams": [
         "body"
       ],
@@ -59,6 +33,32 @@ export const TOOLS = [
       "type": "object"
     },
     "name": "create_server_group",
+    "tier": "readwrite"
+  },
+  {
+    "_spec": {
+      "bodyParams": [],
+      "method": "POST",
+      "path": "/server_group/{server_group_id}/apply_monitoring_policy",
+      "pathParams": [
+        "server_group_id"
+      ],
+      "queryParams": []
+    },
+    "description": "Apply monitoring policy",
+    "input_schema": {
+      "properties": {
+        "server_group_id": {
+          "description": "Server group id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "server_group_id"
+      ],
+      "type": "object"
+    },
+    "name": "create_server_group_apply_monitoring_policy",
     "tier": "readwrite"
   },
   {
@@ -222,7 +222,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "list_compound_services",
+    "name": "list_server_group_compound_services",
     "tier": "readonly"
   },
   {
@@ -254,39 +254,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "list_onsights",
-    "tier": "readonly"
-  },
-  {
-    "_spec": {
-      "bodyParams": [],
-      "method": "GET",
-      "path": "/server_group",
-      "pathParams": [],
-      "queryParams": [
-        "name",
-        "tags",
-        "root_only"
-      ]
-    },
-    "description": "Get server groups",
-    "input_schema": {
-      "properties": {
-        "name": {
-          "description": "Filter results by name",
-          "type": "string"
-        },
-        "root_only": {
-          "type": "string"
-        },
-        "tags": {
-          "description": "Filter results by tags (comma separated)",
-          "type": "string"
-        }
-      },
-      "type": "object"
-    },
-    "name": "list_server_groups",
+    "name": "list_server_group_onsights",
     "tier": "readonly"
   },
   {
@@ -327,7 +295,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "list_server_groups",
+    "name": "list_server_group_server_groups",
     "tier": "readonly"
   },
   {
@@ -400,7 +368,39 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "list_servers",
+    "name": "list_server_group_servers",
+    "tier": "readonly"
+  },
+  {
+    "_spec": {
+      "bodyParams": [],
+      "method": "GET",
+      "path": "/server_group",
+      "pathParams": [],
+      "queryParams": [
+        "name",
+        "tags",
+        "root_only"
+      ]
+    },
+    "description": "Get server groups",
+    "input_schema": {
+      "properties": {
+        "name": {
+          "description": "Filter results by name",
+          "type": "string"
+        },
+        "root_only": {
+          "type": "string"
+        },
+        "tags": {
+          "description": "Filter results by tags (comma separated)",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "list_server_groups",
     "tier": "readonly"
   },
   {

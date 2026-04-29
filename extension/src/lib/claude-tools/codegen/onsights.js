@@ -60,6 +60,32 @@ export const TOOLS = [
     "_spec": {
       "bodyParams": [],
       "method": "GET",
+      "path": "/onsight/{onsight_id}",
+      "pathParams": [
+        "onsight_id"
+      ],
+      "queryParams": []
+    },
+    "description": "Get onsight",
+    "input_schema": {
+      "properties": {
+        "onsight_id": {
+          "description": "Onsight id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "onsight_id"
+      ],
+      "type": "object"
+    },
+    "name": "get_onsight",
+    "tier": "readonly"
+  },
+  {
+    "_spec": {
+      "bodyParams": [],
+      "method": "GET",
       "path": "/onsight/{onsight_id}/countermeasure_metadata/{countermeasure_metadata_id}",
       "pathParams": [
         "onsight_id",
@@ -85,33 +111,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "get_countermeasure_metadata",
-    "tier": "readonly"
-  },
-  {
-    "_spec": {
-      "bodyParams": [],
-      "method": "GET",
-      "path": "/onsight/{onsight_id}",
-      "pathParams": [
-        "onsight_id"
-      ],
-      "queryParams": []
-    },
-    "description": "Get onsight",
-    "input_schema": {
-      "properties": {
-        "onsight_id": {
-          "description": "Onsight id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "onsight_id"
-      ],
-      "type": "object"
-    },
-    "name": "get_onsight",
+    "name": "get_onsight_countermeasure_metadata",
     "tier": "readonly"
   },
   {
@@ -148,7 +148,7 @@ export const TOOLS = [
       ],
       "type": "object"
     },
-    "name": "list_countermeasure_metadatas",
+    "name": "list_onsight_countermeasure_metadatas",
     "tier": "readonly"
   },
   {
