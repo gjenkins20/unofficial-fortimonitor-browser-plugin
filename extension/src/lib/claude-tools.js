@@ -34,6 +34,7 @@ import {
 } from './claude-tools/codegen/dispatcher.js';
 import { BULK_OPS_TOOLS, buildBulkOpsHandlers } from './claude-tools/handwritten/bulk_operations.js';
 import { COMPOSITE_TOOLS, buildCompositeHandlers } from './claude-tools/handwritten/composite.js';
+import { stripNulls } from './claude-tools/handwritten/util.js';
 
 const SYSTEM_PROMPT_BASE = [
   'You are an assistant embedded in the Unofficial FortiMonitor Toolkit browser extension.',
@@ -62,6 +63,8 @@ const SYSTEM_PROMPT_GUIDELINES = [
   '- Server identifiers are numeric. If the user gives a name, call search_servers first, then use the resulting id.',
   '- Outage lists are paginated; default to page 1 unless the user asks for more.',
   '- Be concise. Summaries over raw JSON dumps.',
+  '- Tool results are intentionally summarized. The plugin omits fields that have no value and projects each list element down to the operationally-relevant keys. PRESENT what the tool returned. Do not call get_outage / get_server / etc. on every list item to "fill in details" - those are separate tools the user can ask for. If a list result has 18 outages with id and severity, your reply is "18 outages, X critical, Y warning..." - not "the data is incomplete, let me re-fetch each one."',
+  '- When asked for a tabular view ("list as a table", "show me a table"), render markdown table syntax with columns drawn from the keys present in the tool result.',
   '- Never call write tools (create_*, update_*, delete_*, replace_*, acknowledge_*, bulk_*) without explicit user instruction for a specific resource id.',
   '- If a tool returns an error, tell the user plainly what failed.'
 ].join('\n');
@@ -127,7 +130,7 @@ const HAND_WRITTEN_TOOLS = [
     _handler: (client) => async ({ name, limit = 25 }) => {
       const body = await client.listServers({ name, limit });
       const list = body?.server_list ?? [];
-      return list.map((s) => ({ id: s.id, name: s.name, status: s.status ?? null }));
+      return list.map((s) => stripNulls({ id: s.id, name: s.name, status: s.status ?? null }));
     }
   },
   {
@@ -148,7 +151,7 @@ const HAND_WRITTEN_TOOLS = [
         total: body?.meta?.total_count ?? list.length,
         offset,
         limit,
-        servers: list.map((s) => ({ id: s.id, name: s.name, status: s.status ?? null }))
+        servers: list.map((s) => stripNulls({ id: s.id, name: s.name, status: s.status ?? null }))
       };
     }
   },
@@ -239,7 +242,7 @@ const HAND_WRITTEN_TOOLS = [
       const list = body?.agent_resource_list ?? [];
       return {
         total: body?.meta?.total_count ?? list.length,
-        resources: list.map((r) => ({
+        resources: list.map((r) => stripNulls({
           id: r.id,
           type: r.agent_resource_type,
           resource_option: r.resource_option ?? null,
@@ -408,7 +411,10 @@ export function buildToolHandlers(client) {
 }
 
 function summarizeOutages(list) {
-  return list.map((o) => ({
+  // Strip null fields so the model sees only populated metadata. Open
+  // models read explicit `null` as "I'm missing data" and re-query
+  // for individual outage detail when the user just wants the summary.
+  return list.map((o) => stripNulls({
     id: o.id,
     server: o.server?.name ?? o.server_url ?? null,
     active: o.active ?? null,
@@ -418,6 +424,10 @@ function summarizeOutages(list) {
     severity: o.severity ?? null
   }));
 }
+
+// stripNulls is imported from ./claude-tools/handwritten/util.js so
+// the codegen-side, bulk-ops, and composite handlers all share the
+// same projection logic.
 
 function extractIdFromUrl(url) {
   if (typeof url !== 'string') return null;

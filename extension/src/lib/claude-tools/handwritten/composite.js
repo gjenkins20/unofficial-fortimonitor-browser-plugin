@@ -5,6 +5,7 @@
 // All read-only.
 
 import { mapWithConcurrency } from './concurrency.js';
+import { stripNulls } from './util.js';
 
 export const COMPOSITE_TOOLS = [
   {
@@ -96,7 +97,7 @@ export function buildCompositeHandlers(client) {
       return {
         server: pickServerFields(server),
         outages: summarizeOutages(outagesBody?.outage_list ?? []),
-        agent_resources: (resourcesBody?.agent_resource_list ?? []).map((r) => ({
+        agent_resources: (resourcesBody?.agent_resource_list ?? []).map((r) => stripNulls({
           id: r.id,
           type: r.agent_resource_type,
           resource_option: r.resource_option ?? null,
@@ -197,7 +198,7 @@ export function buildCompositeHandlers(client) {
           const sid = o.server?.id ?? extractServerIdFromOutage(o);
           if (sid == null) continue;
           const key = Number(sid);
-          if (!counts.has(key)) counts.set(key, { id: key, name: o.server?.name ?? null, outage_count: 0 });
+          if (!counts.has(key)) counts.set(key, stripNulls({ id: key, name: o.server?.name ?? null, outage_count: 0 }));
           counts.get(key).outage_count += 1;
         }
         offset += list.length;
@@ -214,12 +215,12 @@ export function buildCompositeHandlers(client) {
 
 function pickServerFields(server) {
   if (!server || typeof server !== 'object') return null;
-  return {
+  return stripNulls({
     id: server.id ?? extractIdFromUrl(server.url),
     name: server.name ?? null,
     status: server.status ?? null,
     tags: Array.isArray(server.tags) ? server.tags : []
-  };
+  });
 }
 
 function summarizeOutages(list) {
@@ -227,14 +228,14 @@ function summarizeOutages(list) {
 }
 
 function summarizeOneOutage(o) {
-  return {
+  return stripNulls({
     id: o?.id ?? null,
     active: o?.active ?? null,
     acknowledged: o?.acknowledged ?? null,
     severity: o?.severity ?? null,
     start: o?.start ?? null,
     end: o?.end ?? null
-  };
+  });
 }
 
 function extractServerIdFromOutage(outage) {

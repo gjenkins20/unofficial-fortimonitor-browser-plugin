@@ -9,6 +9,7 @@
 // get_servers_with_active_outages page until the API runs out.
 
 import { mapWithConcurrency } from './concurrency.js';
+import { stripNulls } from './util.js';
 
 const MAX_OUTAGES_PER_BULK = 50;
 const MAX_SERVERS_PER_BULK = 100;
@@ -231,7 +232,7 @@ export function buildBulkOpsHandlers(client) {
             if (!ok) continue;
           }
           if (activeOutageServers && !activeOutageServers.has(Number(s.id))) continue;
-          matches.push({ id: s.id, name: s.name, status: s.status ?? null, tags: s.tags ?? [] });
+          matches.push(stripNulls({ id: s.id, name: s.name, status: s.status ?? null, tags: s.tags ?? [] }));
         }
         const total = body?.meta?.total_count ?? offset + list.length;
         offset += list.length;
@@ -246,13 +247,13 @@ export function buildBulkOpsHandlers(client) {
       for (const o of (aoBody?.outage_list ?? [])) {
         const sid = o.server?.id ?? extractServerIdFromOutage(o);
         if (sid == null || seen.has(sid)) continue;
-        seen.set(sid, {
+        seen.set(sid, stripNulls({
           id: sid,
           name: o.server?.name ?? null,
           outage_id: o.id,
           severity: o.severity ?? null,
           start: o.start ?? null
-        });
+        }));
         if (seen.size >= limit) break;
       }
       return { count: seen.size, servers: Array.from(seen.values()) };
