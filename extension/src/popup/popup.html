@@ -285,25 +285,26 @@
         </p>
       </details>
       <details class="settings-details">
-        <summary>Fix HTTP 403 (OLLAMA_ORIGINS)</summary>
+        <summary>Origin handling (no Ollama config required)</summary>
         <p class="settings-help">
-          Ollama rejects browser-extension origins by default. If chat turns
-          return HTTP 403, set <code>OLLAMA_ORIGINS</code> on the host running
-          Ollama and restart the server.
+          Ollama rejects <code>chrome-extension://</code> origins by default.
+          To save you from configuring <code>OLLAMA_ORIGINS</code> on every
+          host, this extension automatically rewrites the outbound
+          <code>Origin</code> header to <code>http://localhost</code> for
+          requests to your saved Ollama URL. <code>localhost</code> is in
+          Ollama's default allowlist, so chat turns just work.
         </p>
         <p class="settings-help">
-          <strong>macOS / Linux:</strong>
-          <code>OLLAMA_ORIGINS="chrome-extension://*" ollama serve</code>
+          The rewrite is scoped to the URL you save here; requests to
+          Anthropic and other origins are not affected.
         </p>
         <p class="settings-help">
-          <strong>Windows (PowerShell):</strong>
-          <code>$env:OLLAMA_ORIGINS="chrome-extension://*"; ollama serve</code>
-        </p>
-        <p class="settings-help">
-          <strong>Windows (service install):</strong> System Properties &rarr;
-          Environment Variables &rarr; New (System), name
-          <code>OLLAMA_ORIGINS</code>, value <code>chrome-extension://*</code>,
-          then restart the Ollama service.
+          <strong>If 403s persist</strong> the rewrite may have failed to
+          register (rare). Fall back to setting
+          <code>OLLAMA_ORIGINS="chrome-extension://*"</code> on the host
+          running Ollama and restart the server. macOS / Linux:
+          <code>OLLAMA_ORIGINS="chrome-extension://*" ollama serve</code>.
+          Windows: see <code>docs/ask-ai-local-providers.md</code>.
         </p>
       </details>
       <label class="settings-sublabel" for="ollama-url-input">Base URL</label>

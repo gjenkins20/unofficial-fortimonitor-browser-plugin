@@ -16,7 +16,8 @@
   },
   "permissions": [
     "cookies",
-    "storage"
+    "storage",
+    "declarativeNetRequestWithHostAccess"
   ],
   "host_permissions": [
     "https://fortimonitor.forticloud.com/*",

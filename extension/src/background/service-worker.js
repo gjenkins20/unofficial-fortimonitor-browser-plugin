@@ -19,6 +19,7 @@ import { createServerLookupHandlers } from './server-lookup-handlers.js';
 import { createServerSearchHandlers } from './server-search-handlers.js';
 import { createClaudeChatHandlers } from './claude-chat-handlers.js';
 import { resolveFortimonitorOrigin } from '../lib/origin-resolver.js';
+import { applyAllProviderRules, WATCHED_STORAGE_KEYS } from '../lib/origin-rewrite.js';
 
 const resolveOrigin = () => resolveFortimonitorOrigin({
   queryTabs: (q) => chrome.tabs.query(q),
@@ -48,6 +49,25 @@ chrome.runtime.onInstalled.addListener(() => {
   const m = chrome.runtime.getManifest();
   console.log(`[fm-toolkit] installed - ${m.name} v${m.version}`);
   console.log(`[fm-toolkit] built by ${BUILT_BY}`);
+  // FMN-120: re-apply Origin-rewrite rules so a fresh install / update
+  // picks up any saved local-provider URLs immediately.
+  applyAllProviderRules();
+});
+
+// Service worker wakeups (and reloads) - re-apply Origin rules so they
+// match the current saved URLs even if storage changed while the
+// worker was inactive.
+applyAllProviderRules();
+
+// Keep DNR rules in sync with Settings edits.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local') return;
+  for (const key of WATCHED_STORAGE_KEYS) {
+    if (changes[key]) {
+      applyAllProviderRules();
+      return;
+    }
+  }
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {

@@ -373,7 +373,7 @@ function formatHttpError(status, body, endpoint) {
   if (bodySnippet) msg += ` - ${bodySnippet}`;
   const isLocal = isPrivateOrLoopbackUrl(endpoint);
   if (status === 403 && isLocal) {
-    msg += ' (If using Ollama, this usually means the chrome-extension:// origin is not in OLLAMA_ORIGINS on the host running Ollama. Restart Ollama with OLLAMA_ORIGINS="chrome-extension://*" set in its environment. On Windows: $env:OLLAMA_ORIGINS="chrome-extension://*" then ollama serve - or set it via System Properties -> Environment Variables and restart the Ollama service)';
+    msg += ' (The extension auto-rewrites Origin to http://localhost for local providers; if a 403 still gets through, the rewrite rule may have failed to register. Fallback: restart Ollama with OLLAMA_ORIGINS="chrome-extension://*" in its environment. Windows: $env:OLLAMA_ORIGINS="chrome-extension://*" then ollama serve - or set it via System Properties -> Environment Variables and restart the Ollama service)';
   } else if ((status === 401 || status === 403) && !isLocal) {
     msg += ' (check API key)';
   }
