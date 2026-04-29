@@ -37,7 +37,8 @@ const els = {
   setupWarningText: document.getElementById('setup-warning-text'),
   providerIndicator: document.getElementById('provider-indicator'),
   costWarningAnthropic: document.getElementById('cost-warning-anthropic'),
-  costWarningLocal: document.getElementById('cost-warning-local')
+  costWarningLocal: document.getElementById('cost-warning-local'),
+  localModelTip: document.getElementById('local-model-tip')
 };
 
 // ---- Preflight: make sure auth for the active provider is configured -------
@@ -76,6 +77,9 @@ function applyProviderUi(provider) {
   }
   if (els.costWarningLocal) {
     els.costWarningLocal.hidden = provider === 'anthropic';
+  }
+  if (els.localModelTip) {
+    els.localModelTip.hidden = provider === 'anthropic';
   }
 }
 

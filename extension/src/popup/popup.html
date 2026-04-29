@@ -261,12 +261,31 @@
     <div class="settings-section" data-ask-claude-provider="ollama" data-experimental="ask-claude" hidden>
       <label class="settings-label">Ollama (local, OpenAI-compat)</label>
       <p class="settings-help">
-        Point Ask AI at a local Ollama server. Tool use requires a
-        tool-capable model (e.g. <code>qwen2.5</code>, <code>llama3.1</code>,
-        <code>mistral-nemo</code>, <code>command-r-plus</code>). API key is
-        optional and only used if your Ollama install requires one.
-        <strong>Note:</strong> Ollama rejects browser-extension origins by
-        default. If a chat turn returns HTTP 403, restart Ollama with
+        Point Ask AI at a local Ollama server. API key is optional and only
+        used if your Ollama install requires one.
+      </p>
+      <p class="settings-help">
+        <strong>Tool-capable models only.</strong> The chat tool sends function
+        definitions on each turn and expects the model to emit
+        <code>tool_calls</code>. Models without tool training (Gemma 1/2/3,
+        Llama 2, base Mistral) will ignore the tools and reply with text. Use:
+      </p>
+      <ul class="settings-help" style="margin-top:-4px;">
+        <li><code>qwen2.5</code> / <code>qwen2.5:14b</code> - reliable default</li>
+        <li><code>llama3.1</code> / <code>llama3.2</code> - Meta, broad tool support</li>
+        <li><code>mistral-nemo</code>, <code>mistral-small</code></li>
+        <li><code>command-r-plus</code> (Cohere) - heavy but very strong tool use</li>
+        <li><code>qwen3</code> / <code>qwen3-coder</code> - recent, tool-trained</li>
+      </ul>
+      <p class="settings-help">
+        Verify with <code>ollama show &lt;model&gt;</code>; the
+        <code>Capabilities:</code> line must include <code>tools</code>. The
+        full Ollama tool catalog is at
+        <code>https://ollama.com/search?c=tools</code>.
+      </p>
+      <p class="settings-help">
+        <strong>CORS note:</strong> Ollama rejects browser-extension origins
+        by default. If a chat turn returns HTTP 403, restart Ollama with
         <code>OLLAMA_ORIGINS="chrome-extension://*" ollama serve</code> so it
         accepts requests from this extension.
       </p>
@@ -286,10 +305,17 @@
     <div class="settings-section" data-ask-claude-provider="lmstudio" data-experimental="ask-claude" hidden>
       <label class="settings-label">LM Studio (local, OpenAI-compat)</label>
       <p class="settings-help">
-        Point Ask AI at a local LM Studio server. Load a tool-capable model
-        in LM Studio first; copy its identifier into <strong>Model</strong>
-        (LM Studio shows it in the loaded-model header). API key is optional
-        and matches whatever LM Studio is configured to require.
+        Point Ask AI at a local LM Studio server. Load the model in LM Studio
+        first; copy its identifier into <strong>Model</strong> (LM Studio
+        shows it in the loaded-model header). API key is optional and matches
+        whatever LM Studio is configured to require.
+      </p>
+      <p class="settings-help">
+        <strong>Tool-capable models only.</strong> Same caveat as Ollama: the
+        chat sends function definitions and expects <code>tool_calls</code>
+        back. Models without tool training (Gemma 1/2/3, Llama 2, base
+        Mistral) just generate text. Pick from Qwen 2.5+, Llama 3.1+,
+        Mistral Nemo / Small, Command R+, Qwen 3.
       </p>
       <label class="settings-sublabel" for="lmstudio-url-input">Base URL</label>
       <input id="lmstudio-url-input" type="text" placeholder="http://localhost:1234/v1" autocomplete="off" spellcheck="false">

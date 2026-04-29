@@ -44,6 +44,18 @@
         server you configured in Settings. No data leaves your network and
         there is no per-turn cost; throughput is bounded by your local model.
       </p>
+      <p id="local-model-tip" hidden>
+        <strong>Tool-capable models only.</strong> Each chat turn sends
+        function definitions and expects the model to emit
+        <code>tool_calls</code>. Models without tool training (Gemma 1/2/3,
+        Llama 2, base Mistral) ignore the tools and reply with text. Pick
+        from <code>qwen2.5</code>, <code>llama3.1</code>,
+        <code>mistral-nemo</code>, <code>command-r-plus</code>,
+        <code>qwen3</code>, or any other model that lists
+        <code>tools</code> under <code>ollama show &lt;model&gt;</code>'s
+        Capabilities line. Stick to the read-only tier (~10 tools) for 7B/8B
+        models; bigger catalogs reliably need 14B+.
+      </p>
       <p>
         <strong>Like this?</strong>
         This is a narrow slice (11 tools). For full 241-tool coverage plus a knowledge layer over the FortiMonitor docs, check out the
