@@ -217,9 +217,9 @@
       <p class="settings-help">
         Choose where the chat tool sends each turn. <strong>Anthropic</strong>
         is the default and uses your Anthropic API key. <strong>Ollama</strong>
-        and <strong>LM Studio</strong> route to a local OpenAI-compatible
-        server (e.g. <code>http://localhost:11434/v1</code> for Ollama,
-        <code>http://localhost:1234/v1</code> for LM Studio) so chat turns
+        and <strong>LM Studio</strong> route to a local LLM server
+        (e.g. <code>http://localhost:11434</code> for Ollama,
+        <code>http://localhost:1234</code> for LM Studio) so chat turns
         and tool calls stay on your network. Switching to a local provider
         requests a host permission scoped to the URL you enter; it is not
         granted at install time.
@@ -231,11 +231,11 @@
         </label>
         <label class="radio-row">
           <input type="radio" name="ask-claude-provider" value="ollama">
-          <span><strong>Ollama</strong> (local, OpenAI-compat)</span>
+          <span><strong>Ollama</strong> (local)</span>
         </label>
         <label class="radio-row">
           <input type="radio" name="ask-claude-provider" value="lmstudio">
-          <span><strong>LM Studio</strong> (local, OpenAI-compat)</span>
+          <span><strong>LM Studio</strong> (local)</span>
         </label>
       </div>
     </div>
@@ -259,7 +259,7 @@
     </div>
 
     <div class="settings-section" data-ask-claude-provider="ollama" data-experimental="ask-claude" hidden>
-      <label class="settings-label">Ollama (local, OpenAI-compat)</label>
+      <label class="settings-label">Ollama (local)</label>
       <p class="settings-help">
         Point Ask AI at an Ollama server (local or LAN). Requires a tool-capable model and may require a server-side env-var change for the extension origin.
       </p>
@@ -321,7 +321,7 @@
     </div>
 
     <div class="settings-section" data-ask-claude-provider="lmstudio" data-experimental="ask-claude" hidden>
-      <label class="settings-label">LM Studio (local, OpenAI-compat)</label>
+      <label class="settings-label">LM Studio (local)</label>
       <p class="settings-help">
         Point Ask AI at a local LM Studio server. Load the model in LM Studio
         first; copy its identifier into <strong>Model</strong> (LM Studio

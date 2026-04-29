@@ -1,6 +1,16 @@
 # Ask AI - Local-Provider Setup (FMN-120)
 
-The Ask AI tool can route chat turns to a local OpenAI-compatible server (Ollama or LM Studio) instead of Anthropic. This page covers the gotchas operators hit when setting that up.
+The Ask AI tool can route chat turns to a local Ollama or LM Studio server instead of Anthropic. This page covers the architecture, the gotchas operators hit, and the validated model list.
+
+## Endpoint architecture (per provider)
+
+| Provider | Endpoint the extension uses | Why |
+|---|---|---|
+| Anthropic | `https://api.anthropic.com/v1/messages` | cloud, native Anthropic |
+| Ollama | `http://&lt;host&gt;:11434/api/chat` (Ollama-native NDJSON) | Ollama's `/v1/chat/completions` is an OpenAI-compat shim that **silently drops the `options` field**, including `num_ctx`. Without `num_ctx` the default 4096 truncates the system prompt and breaks tool-result-heavy turns. `/api/chat` honors `options` per request. |
+| LM Studio | `http://&lt;host&gt;:1234/v1/chat/completions` (OpenAI-compat) | LM Studio doesn't have an `/api/chat` endpoint; its OpenAI-compat surface DOES honor `options`. |
+
+The extension's Settings UI shows the same configuration shape for both local providers (URL + Model + optional API key); the URL routing is handled internally based on which provider the operator selected.
 
 ## Pick a tool-capable model
 
@@ -62,30 +72,53 @@ The Ask AI tool tier setting still applies (readonly hides writes; readwrite inc
 
 ## Context window (`num_ctx`)
 
-The dominant cause of local-LLM failures (gibberish output, prompt drop, wrong tool picks on the second turn) is Ollama's default 4096-token context window. Tool definitions + tool result + system prompt routinely overflow it on outage-list queries. The plugin sends `options.num_ctx=8192` on every Ollama / LM Studio request by default, which closes the gap on the validated matrix (qwen3:8b, qwen2.5:14b — both 8/8 pass).
+The dominant cause of local-LLM failures (truncated system prompt → meta-analysis prose, gibberish output) is Ollama's default 4096-token context window. Tool definitions + tool result + system prompt routinely overflow it on outage-list queries.
 
-If you still see truncation warnings (`time=... level=WARN ... msg="truncating input prompt"`) in your `ollama serve` log on outage-heavy queries, raise the override:
+The plugin defaults `num_ctx` to **16384** on every Ollama request (set on `/api/chat` request body, where it's actually honored). This closes the gap on the validated model matrix.
+
+If your tenant's outage-list result is unusually large (50+ active outages with full attributes) and you still see truncation warnings (`time=... level=WARN ... msg="truncating input prompt"`) in `ollama serve`'s log, raise the override:
 
 ```
-chrome.storage.local.set({ 'fm:askAiNumCtx': 16384 })
+chrome.storage.local.set({ 'fm:askAiNumCtx': 32768 })
 ```
 
-(There's no Settings UI for this yet; set it via the extension's storage if you need a higher value.)
+(There's no Settings UI for this yet; set it via the extension's service-worker DevTools console if you need a higher value. The Ollama daemon's VRAM footprint scales with this — at 32k an 8B model needs roughly 6GB Metal VRAM vs 3GB at 8k.)
+
+### Why not just use `/v1/chat/completions`?
+
+Ollama exposes both `/v1/chat/completions` (OpenAI-compat) and `/api/chat` (native). The OpenAI-compat shim silently drops the `options` field because it's not in the OpenAI spec. Pre-warming the model via `/api/generate` with `options.num_ctx` doesn't transfer to subsequent `/v1/chat/completions` calls — Ollama maintains independent loaded model instances per endpoint. The only reliable way to set `num_ctx` per-request on Ollama is through `/api/chat`, which is what the plugin uses.
 
 ## Validated model matrix
 
-`tests/e2e/ask-ai-live.spec.js` runs canonical chat scenarios against a real local Ollama. As of this writing:
+`tests/e2e/ask-ai-live.spec.js` runs 8 canonical chat scenarios against a real local Ollama. Each scenario fetches ground truth from the FortiMonitor API and asserts that the chat response actually surfaces real data (count + at least one specific record), not just that the right tool fired. The matrix catches the meta-analysis-prose failure mode (the model writing essays about JSON structure instead of presenting data) — that's the failure mode that regular tool-call assertion misses.
+
+As of this writing (commit `3030011`):
 
 | Model | Scenarios passed | Notes |
 |---|---|---|
-| `qwen3:8b` | 8/8 | clean tool selection, no gibberish |
-| `qwen2.5:14b` | 8/8 | one scenario produced Thai-script prose; tool call still correct |
+| `qwen3:8b` | 8/8 | clean tool selection, real response prose |
+| `qwen2.5:14b` | 8/8 (older run) | one scenario emitted Thai-script prose pre-fix; needs re-run on current commit |
 
-Run it yourself with `OLLAMA_LIVE=1 OLLAMA_MODELS=qwen3:8b npm run test:e2e:ollama-live` (see `tests/e2e/ask-ai-live.spec.js` for env vars). Untested at present: llama3.x family, mistral-nemo, qwen2.5:7b, sub-7B sizes.
+Untested at present: llama3.x family, mistral-nemo, qwen2.5:7b, sub-7B sizes.
+
+### Run it yourself
+
+```
+# Run with both pre-pulled models
+OLLAMA_LIVE=1 OLLAMA_MODELS=qwen3:8b,qwen2.5:14b npm run test:e2e:ollama-live
+
+# Single-model smoke
+OLLAMA_LIVE=1 OLLAMA_MODELS=qwen3:8b npm run test:e2e:ollama-live
+
+# Default matrix (pulls additional models)
+OLLAMA_LIVE=1 npm run test:e2e:ollama-live
+```
+
+Report goes to `docs/ask-ai-model-matrix.md`. Cell format: `PASS &lt;latency&gt;` or `FAIL: &lt;reason&gt;`. Flags `!ctx` and `!gib` mark cells where Ollama logged truncation or where the response tripped the gibberish heuristic. Per-failure detail includes the first 500 chars of the model's response.
 
 ## When the local model still misbehaves
 
-If a tool-capable model with `num_ctx=8192` still picks wrong:
+If a tool-capable model with `num_ctx=16384` still picks wrong:
 
 1. **Be explicit.** Say "call list_active_outages with no filters" — small models follow direct tool names well even when they don't infer them.
 2. **Bigger model.** Step up to qwen2.5:14b or qwen3:14b. Tool-selection accuracy scales with model size, but any model below 7B will struggle.
