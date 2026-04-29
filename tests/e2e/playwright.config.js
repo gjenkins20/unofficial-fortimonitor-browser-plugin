@@ -10,9 +10,12 @@ loadEnv();
 
 // FMN-120 Phase 2: when running the Ollama live matrix
 // (OLLAMA_LIVE=1), small-model first-load latency dominates each test
-// (cold model load can take 30-60s on Apple Silicon for a 7-14B model).
-// Bump the per-test timeout for that mode only.
-const PER_TEST_TIMEOUT = process.env.OLLAMA_LIVE === '1' ? 180_000 : 60_000;
+// AND back-to-back model swaps on a single worker can take >2 min
+// (Apple Silicon Metal VRAM swap between e.g. qwen3:8b and qwen2.5:14b).
+// Bump per-test timeout so the first call into a freshly-swapped model
+// has headroom.
+const IS_OLLAMA_LIVE = process.env.OLLAMA_LIVE === '1';
+const PER_TEST_TIMEOUT = IS_OLLAMA_LIVE ? 360_000 : 60_000;
 
 export default defineConfig({
   testDir: '.',
@@ -31,7 +34,12 @@ export default defineConfig({
   reporter: [['list']],
   use: {
     actionTimeout: 5_000,
-    trace: 'retain-on-failure',
-    screenshot: 'only-on-failure'
+    // Live matrix: tracing the long-running chat turns produces
+    // multi-MB trace files that race with worker-scoped persistent-
+    // context cleanup, surfacing as ENOENT on .playwright-artifacts
+    // paths. We have the matrix report as the durable artifact, so
+    // disable trace + screenshot in live mode.
+    trace: IS_OLLAMA_LIVE ? 'off' : 'retain-on-failure',
+    screenshot: IS_OLLAMA_LIVE ? 'off' : 'only-on-failure'
   }
 });
