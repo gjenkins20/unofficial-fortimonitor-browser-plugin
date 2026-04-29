@@ -440,38 +440,59 @@ async function saveProviderConfig(provider) {
     setProviderStatus(provider, 'warn', 'Model is required.');
     return;
   }
+  // Request permission FIRST, before any awaits, so Chrome's user-
+  // gesture token is still valid. (chrome.permissions.request silently
+  // rejects after the gesture context is gone.)
+  const perm = await maybeRequestHostPermission(url);
   // Only overwrite the API key when the operator typed something - empty
   // input means "leave the saved key alone".
   const update = { url, model };
   if (newKey) update.apiKey = newKey;
   await setAskClaudeProviderConfig(provider, update);
-  await maybeRequestHostPermission(url);
-  setProviderStatus(provider, 'ok', 'Saved.');
   await loadProviderConfigIntoInputs(provider);
+  if (!perm.granted) {
+    const detail = perm.error ?? 'permission denied';
+    setProviderStatus(provider, 'warn',
+      `Saved. Note: access to ${perm.origin ?? 'that origin'} is not granted yet (${detail}). Click Test connection to re-prompt.`);
+    return;
+  }
+  setProviderStatus(provider, 'ok', 'Saved.');
 }
 
+/**
+ * Request host permission for the URL's origin if not already granted.
+ * Returns the granted state. Must be called from a user-gesture context
+ * (popup click handler) - chrome.permissions.request silently rejects
+ * if the user-gesture token has expired (e.g. after multiple awaits).
+ *
+ * @param {string} url
+ * @returns {Promise<{ granted: boolean, origin: string|null, error: string|null }>}
+ */
 async function maybeRequestHostPermission(url) {
+  let origin = null;
   try {
     const u = new URL(url);
-    const origin = `${u.protocol}//${u.host}/*`;
+    origin = `${u.protocol}//${u.host}/*`;
+  } catch (err) {
+    return { granted: false, origin: null, error: `Invalid URL: ${err?.message ?? err}` };
+  }
+  try {
     const has = await chrome.permissions.contains({ origins: [origin] });
-    if (has) return;
-    await chrome.permissions.request({ origins: [origin] });
-  } catch {
-    // Invalid URL or user denied - the request flow surfaces the error
-    // path; we don't block save on permission grant. The chat turn will
-    // fail with a network error if the permission isn't granted.
+    if (has) return { granted: true, origin, error: null };
+    const granted = await chrome.permissions.request({ origins: [origin] });
+    return { granted: Boolean(granted), origin, error: granted ? null : 'User declined or browser dismissed the permission prompt.' };
+  } catch (err) {
+    return { granted: false, origin, error: err?.message ?? String(err) };
   }
 }
 
 async function testProviderConnection(provider) {
-  // FMN-120 follow-up: Test = Save then Test. Persists whatever is in
-  // the form, requests the host permission for the URL, and only then
-  // probes /v1/models. Avoids the "Failed to fetch" trap where the
-  // operator types a new URL and hits Test before Save - the service
-  // worker's fetch needs the host permission to have been granted, and
-  // the permission request flow lives on the popup side.
-  setProviderStatus(provider, 'ok', 'Saving + testing…');
+  // FMN-120 follow-up: Test = (request host permission) then Save then
+  // Test. The permission request must be the FIRST async call after
+  // the click handler so Chrome's user-gesture token is still valid -
+  // chrome.permissions.request silently rejects if too many awaits run
+  // first. Surfaces "permission not granted" explicitly so the operator
+  // sees why the test couldn't run.
   try {
     const url = (document.getElementById(`${provider}-url-input`)?.value ?? '').trim();
     const model = (document.getElementById(`${provider}-model-input`)?.value ?? '').trim();
@@ -484,21 +505,23 @@ async function testProviderConnection(provider) {
       setProviderStatus(provider, 'warn', 'Model is required to test.');
       return;
     }
-    // Save the form values to chrome.storage.local. Empty key field =
-    // "leave the saved key alone"; non-empty overwrites.
+    // 1. Request permission FIRST while we're still in the click's
+    //    user-gesture context.
+    setProviderStatus(provider, 'ok', 'Requesting permission…');
+    const perm = await maybeRequestHostPermission(url);
+    if (!perm.granted) {
+      const detail = perm.error ?? 'permission denied';
+      setProviderStatus(provider, 'error',
+        `Cannot reach ${url} until you grant access to ${perm.origin ?? 'that origin'}. ${detail}. Click Test connection again to re-prompt.`);
+      return;
+    }
+    // 2. Persist form values now that we know we can reach the URL.
+    setProviderStatus(provider, 'ok', 'Saving + testing…');
     const update = { url, model };
     if (newKey) update.apiKey = newKey;
     await setAskClaudeProviderConfig(provider, update);
-    // Trigger the chrome.permissions.request for this URL's origin.
-    // If already granted (e.g. localhost previously approved), the
-    // request resolves immediately without a prompt.
-    await maybeRequestHostPermission(url);
-    // Re-render the form so the api-key placeholder shows the masked
-    // tail of whatever's now persisted.
     await loadProviderConfigIntoInputs(provider);
-    // Read back persisted config and run the probe against it. This
-    // also surfaces the saved api key for cases where the operator
-    // didn't paste a new key in this turn.
+    // 3. Probe.
     const cfg = await getAskClaudeProviderConfig(provider);
     const result = await chrome.runtime.sendMessage({
       type: 'chat:test-openai-compat',
