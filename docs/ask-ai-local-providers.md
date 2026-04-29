@@ -47,9 +47,19 @@ The full tool-capable catalog on Ollama: <https://ollama.com/search?c=tools>
 
 The Ask AI tool tier (Settings → Ask AI tool tier) controls how many tools are sent per turn:
 
-- **Read-only**: ~10 tools. **Use this for 7B/8B models.** Larger catalogs cause small models to hallucinate tool names or pick the wrong one.
+- **Read-only**: handwritten read tools + read-only codegen tools. Roughly 30-50 tools depending on the OpenAPI surface. Even at this tier, 7B/8B models will sometimes pick the wrong tool — they pattern-match on tool names and miss intent.
 - **Read + write**: adds the gated mutating tools.
 - **All tools**: 260+ codegen tools. Recommended only for 14B+ models, ideally cloud (Anthropic) for cost-equivalent quality.
+
+### When the model picks the wrong tool
+
+If you ask for "active outages" and the model calls something unrelated (e.g. `list_server_attributes`), or asks you for a server ID instead of just calling `list_active_outages` with no filters, that's a tool-selection failure, not a wire issue. Options:
+
+1. **Be explicit.** Say "call list_active_outages with no filters" — small models follow direct tool names well even when they don't infer them.
+2. **Bigger model.** Step up to qwen2.5:14b or qwen3:14b. Tool-selection accuracy scales noticeably with model size.
+3. **Cloud provider for hard queries.** Anthropic Sonnet/Opus is essentially perfect at tool selection; switch the provider in Settings for one-off queries that the local model fumbles.
+
+The system prompt already includes a tool-selection quick-reference for the most common queries, but small models still occasionally veer.
 
 ## Ollama: the CORS / `OLLAMA_ORIGINS` gotcha
 
