@@ -9,7 +9,8 @@ import { createProductionPanoptaClient } from '../lib/panopta-client.js';
 import { runToolLoop, DEFAULT_MODEL } from '../lib/claude-client.js';
 import {
   runToolLoop as runOpenAIToolLoop,
-  testConnection as testOpenAIConnection
+  testConnection as testOpenAIConnection,
+  preloadOllamaModel
 } from '../lib/openai-compat-client.js';
 import { buildToolDefinitions, buildToolHandlers, buildSystemPrompt } from '../lib/claude-tools.js';
 import {
@@ -142,6 +143,22 @@ export function createClaudeChatHandlers({ events = {}, getPanoptaClient, getApi
           if (!effectiveModel) {
             throw new Error(`No model configured for ${provider}. Open Settings and set a model name.`);
           }
+          // Pre-warm Ollama to apply num_ctx (and any other options).
+          // Ollama's /v1/chat/completions silently ignores `options`;
+          // /api/generate honors it. Pre-loading the model with the
+          // desired num_ctx makes the subsequent /v1/chat/completions
+          // inherit that context size from the loaded instance. No-op
+          // for LM Studio (its /api/generate 404s, captured silently).
+          if (provider === 'ollama' && toggles.numCtx) {
+            await preloadOllamaModel({
+              url: cfg.url,
+              model: effectiveModel,
+              apiKey: cfg.apiKey || null,
+              options: { num_ctx: toggles.numCtx },
+              keepAlive: '10m',
+              signal: ac.signal
+            });
+          }
           result = await runOpenAIToolLoop({
             url: cfg.url,
             apiKey: cfg.apiKey || null,
@@ -151,9 +168,10 @@ export function createClaudeChatHandlers({ events = {}, getPanoptaClient, getApi
             messages,
             maxIterations,
             maxTokens,
-            // Pass Ollama-style runtime options. num_ctx is the dominant
-            // factor; sending it on every turn is harmless on LM Studio
-            // (ignored) and Anthropic isn't reached on this branch.
+            // Still pass options on /v1/chat/completions for LM Studio
+            // and any other provider that DOES honor them; harmless on
+            // Ollama which ignores them (the pre-warm above is the
+            // real lever for Ollama).
             options: { num_ctx: toggles.numCtx },
             signal: ac.signal,
             runTool,

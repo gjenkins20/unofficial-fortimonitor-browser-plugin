@@ -420,6 +420,73 @@ export function isPrivateOrLoopbackUrl(urlStr) {
   return false;
 }
 
+/**
+ * Ollama's OpenAI-compatibility shim at /v1/chat/completions silently
+ * ignores the `options` field (it's not in the OpenAI spec). To
+ * actually set num_ctx, temperature, etc., we have to pre-load the
+ * model via Ollama's native /api/generate endpoint - which DOES honor
+ * `options` - and let the subsequent /v1/chat/completions reuse that
+ * loaded instance. The keep_alive parameter holds the loaded model
+ * for the requested duration.
+ *
+ * Empirically (Ollama 0.21.0, qwen3:8b): without this pre-warm, the
+ * /v1/chat/completions endpoint runs at the default num_ctx=4096 even
+ * with options.num_ctx=16384 in the body. The pre-warm reloads the
+ * model with the desired context size; the chat then inherits it.
+ *
+ * No-op when not Ollama (URL host doesn't reach /api/generate, or LM
+ * Studio doesn't have it). The function captures-and-logs failures
+ * rather than throwing, since pre-warm is an optimization, not the
+ * critical path.
+ *
+ * @param {{
+ *   url: string,            // e.g. http://localhost:11434/v1
+ *   model: string,
+ *   apiKey?: string|null,
+ *   options?: object,       // num_ctx, temperature, etc.
+ *   keepAlive?: string,     // default "5m"
+ *   fetchFn?: function,
+ *   signal?: AbortSignal
+ * }} args
+ */
+export async function preloadOllamaModel({
+  url,
+  model,
+  apiKey = null,
+  options = {},
+  keepAlive = '5m',
+  fetchFn = globalThis.fetch.bind(globalThis),
+  signal
+} = {}) {
+  if (!url || !model) return { ok: false, reason: 'url+model required' };
+  // /v1/<endpoint> -> base, then /api/generate.
+  const baseUrl = url.replace(/\/v1\/?$/, '').replace(/\/+$/, '');
+  const endpoint = `${baseUrl}/api/generate`;
+  const headers = { 'Content-Type': 'application/json' };
+  if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+  // Empty prompt with keep_alive is the documented pre-warm pattern;
+  // Ollama loads the model and returns without generating tokens.
+  const body = JSON.stringify({
+    model,
+    prompt: '',
+    stream: false,
+    options,
+    keep_alive: keepAlive
+  });
+  try {
+    const r = await fetchFn(endpoint, { method: 'POST', headers, body, signal });
+    if (!r.ok) {
+      // 404 = LM Studio (no /api/generate), expected. Other 4xx/5xx
+      // also non-fatal - if we can't pre-warm, the chat still works at
+      // whatever default num_ctx Ollama loaded.
+      return { ok: false, reason: `pre-warm HTTP ${r.status}` };
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, reason: err?.message ?? String(err) };
+  }
+}
+
 function mapFinishReason(finish) {
   switch (finish) {
     case 'stop': return 'end_turn';
