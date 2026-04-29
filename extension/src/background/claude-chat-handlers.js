@@ -9,9 +9,11 @@ import { createProductionPanoptaClient } from '../lib/panopta-client.js';
 import { runToolLoop, DEFAULT_MODEL } from '../lib/claude-client.js';
 import {
   runToolLoop as runOpenAIToolLoop,
-  testConnection as testOpenAIConnection,
-  preloadOllamaModel
+  testConnection as testOpenAIConnection
 } from '../lib/openai-compat-client.js';
+import {
+  runToolLoop as runOllamaToolLoop
+} from '../lib/ollama-native-client.js';
 import { buildToolDefinitions, buildToolHandlers, buildSystemPrompt } from '../lib/claude-tools.js';
 import {
   getAskClaudeToolTier,
@@ -143,23 +145,19 @@ export function createClaudeChatHandlers({ events = {}, getPanoptaClient, getApi
           if (!effectiveModel) {
             throw new Error(`No model configured for ${provider}. Open Settings and set a model name.`);
           }
-          // Pre-warm Ollama to apply num_ctx (and any other options).
-          // Ollama's /v1/chat/completions silently ignores `options`;
-          // /api/generate honors it. Pre-loading the model with the
-          // desired num_ctx makes the subsequent /v1/chat/completions
-          // inherit that context size from the loaded instance. No-op
-          // for LM Studio (its /api/generate 404s, captured silently).
-          if (provider === 'ollama' && toggles.numCtx) {
-            await preloadOllamaModel({
-              url: cfg.url,
-              model: effectiveModel,
-              apiKey: cfg.apiKey || null,
-              options: { num_ctx: toggles.numCtx },
-              keepAlive: '10m',
-              signal: ac.signal
-            });
-          }
-          result = await runOpenAIToolLoop({
+          // Provider-specific endpoint selection.
+          //   Ollama:    /api/chat (native) - honors options.num_ctx.
+          //              /v1/chat/completions silently drops options
+          //              including num_ctx, leading to 4096-default
+          //              context truncation. Pre-warming via
+          //              /api/generate doesn't transfer because the
+          //              two endpoints maintain independent loaded
+          //              instances.
+          //   LM Studio: /v1/chat/completions - the only endpoint it
+          //              exposes; doesn't have /api/chat. options on
+          //              the OpenAI-compat surface ARE honored here.
+          const runLoop = provider === 'ollama' ? runOllamaToolLoop : runOpenAIToolLoop;
+          result = await runLoop({
             url: cfg.url,
             apiKey: cfg.apiKey || null,
             model: effectiveModel,
@@ -168,10 +166,6 @@ export function createClaudeChatHandlers({ events = {}, getPanoptaClient, getApi
             messages,
             maxIterations,
             maxTokens,
-            // Still pass options on /v1/chat/completions for LM Studio
-            // and any other provider that DOES honor them; harmless on
-            // Ollama which ignores them (the pre-warm above is the
-            // real lever for Ollama).
             options: { num_ctx: toggles.numCtx },
             signal: ac.signal,
             runTool,
