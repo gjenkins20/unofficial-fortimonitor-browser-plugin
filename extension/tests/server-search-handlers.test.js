@@ -9,10 +9,12 @@ import {
   matchesStatus,
   matchesDeviceType,
   matchesHasActiveOutage,
+  matchesAppliedTemplate,
   matchOneCriterion,
   matchesByCriteria,
   shapeMatch,
   fetchActiveOutageServerIds,
+  fetchAppliedTemplateSets,
   resolveIdentifiers,
   findServers,
   createServerSearchHandlers
@@ -106,6 +108,66 @@ test('matchesHasActiveOutage: ctx-driven boolean', () => {
 
 test('matchesHasActiveOutage: no ctx Set => never matches', () => {
   assert.equal(matchesHasActiveOutage({ id: 42 }, { value: true }).matched, false);
+});
+
+// =====================================================================
+// matchesAppliedTemplate (FMN-121)
+// =====================================================================
+
+test('matchesAppliedTemplate: attached/not_attached against ctx Map<url, Set<id>>', () => {
+  const ctx = {
+    appliedTemplateSets: new Map([
+      ['/server_template/501', new Set([1001, 1002])],
+      ['/server_template/502', new Set([])]
+    ])
+  };
+  // attached match
+  assert.equal(matchesAppliedTemplate({ id: 1001 }, { templateUrl: '/server_template/501', match: 'attached' }, ctx).matched, true);
+  // not attached, mode=attached -> miss
+  assert.equal(matchesAppliedTemplate({ id: 9999 }, { templateUrl: '/server_template/501', match: 'attached' }, ctx).matched, false);
+  // not attached, mode=not_attached -> hit
+  assert.equal(matchesAppliedTemplate({ id: 9999 }, { templateUrl: '/server_template/501', match: 'not_attached' }, ctx).matched, true);
+  // attached, mode=not_attached -> miss
+  assert.equal(matchesAppliedTemplate({ id: 1001 }, { templateUrl: '/server_template/501', match: 'not_attached' }, ctx).matched, false);
+  // unknown templateUrl -> miss
+  assert.equal(matchesAppliedTemplate({ id: 1001 }, { templateUrl: '/server_template/999', match: 'attached' }, ctx).matched, false);
+  // missing ctx Map -> miss
+  assert.equal(matchesAppliedTemplate({ id: 1001 }, { templateUrl: '/server_template/501' }).matched, false);
+});
+
+test('matchesAppliedTemplate: attached match info carries name + flag', () => {
+  const ctx = { appliedTemplateSets: new Map([['/server_template/501', new Set([42])]]) };
+  const r = matchesAppliedTemplate({ id: 42 }, { templateUrl: '/server_template/501', templateName: 'Critical Infra' }, ctx);
+  assert.equal(r.matched, true);
+  assert.equal(r.info.templateName, 'Critical Infra');
+  assert.equal(r.info.attached, true);
+});
+
+test('fetchAppliedTemplateSets: one getServerTemplate call per unique templateUrl', async () => {
+  const calls = [];
+  const fakeClient = {
+    async getServerTemplate(id) {
+      calls.push(id);
+      if (id === '501') return { id: 501, name: 'A', appliedServerUrls: [], appliedServerIds: [1, 2, 3] };
+      if (id === '502') return { id: 502, name: 'B', appliedServerUrls: [], appliedServerIds: [9] };
+      const err = new PanoptaError('404', { phase: 'read' });
+      err.status = 404;
+      throw err;
+    }
+  };
+  const sets = await fetchAppliedTemplateSets(fakeClient, ['/server_template/501', '/server_template/502', '/server_template/777']);
+  assert.deepEqual(calls, ['501', '502', '777']);
+  assert.deepEqual([...sets.get('/server_template/501')], [1, 2, 3]);
+  assert.deepEqual([...sets.get('/server_template/502')], [9]);
+  assert.deepEqual([...sets.get('/server_template/777')], []); // 404 -> empty
+});
+
+test('fetchAppliedTemplateSets: malformed templateUrl yields empty set without API call', async () => {
+  let called = false;
+  const fakeClient = { async getServerTemplate() { called = true; return null; } };
+  const sets = await fetchAppliedTemplateSets(fakeClient, ['not-a-server-template-url']);
+  assert.equal(called, false);
+  assert.deepEqual([...sets.get('not-a-server-template-url')], []);
 });
 
 // =====================================================================
@@ -379,6 +441,98 @@ test('findServers: has_active_outage criterion fetches active outages once', asy
   assert.equal(result.matches[0].name, 'down-server');
 });
 
+test('findServers: applied_template criterion intersects with filter set (FMN-121)', async () => {
+  // Three servers, one template attached to two of them. Tag filter
+  // narrows to two; applied_template narrows further to the one in both.
+  const pages = [{
+    server_list: [
+      { url: '.../server/1001', id: 1001, name: 'edge-win-01', tags: ['production'] },
+      { url: '.../server/1002', id: 1002, name: 'edge-win-02', tags: ['production'] },
+      { url: '.../server/1003', id: 1003, name: 'staging-lnx-01', tags: ['staging'] }
+    ],
+    meta: { total_count: 3 }
+  }];
+  const client = {
+    ...makePagedClient(pages),
+    async getServerTemplate(id) {
+      assert.equal(id, '501');
+      return { id: 501, name: 'Critical Infra', appliedServerUrls: [], appliedServerIds: [1001, 1003] };
+    }
+  };
+  const result = await findServers({
+    client,
+    criteria: [
+      { fieldType: 'tag', value: 'production' },
+      { fieldType: 'applied_template', templateUrl: '/server_template/501', templateName: 'Critical Infra', match: 'attached' }
+    ],
+    mode: 'all'
+  });
+  assert.equal(result.matches.length, 1);
+  assert.equal(result.matches[0].id, 1001);
+  // criteriaInfo carries the matched-template payload for the UI column.
+  const tplInfo = result.matches[0].matchedCriteria.find((c) => c.fieldType === 'applied_template');
+  assert.equal(tplInfo.templateName, 'Critical Infra');
+  assert.equal(tplInfo.attached, true);
+});
+
+test('findServers: applied_template not_attached selects servers WITHOUT the template (FMN-121)', async () => {
+  const pages = [{
+    server_list: [
+      { url: '.../server/1001', id: 1001 },
+      { url: '.../server/1002', id: 1002 }
+    ],
+    meta: { total_count: 2 }
+  }];
+  const client = {
+    ...makePagedClient(pages),
+    async getServerTemplate() {
+      return { id: 501, name: 'Critical Infra', appliedServerUrls: [], appliedServerIds: [1001] };
+    }
+  };
+  const result = await findServers({
+    client,
+    criteria: [{ fieldType: 'applied_template', templateUrl: '/server_template/501', match: 'not_attached' }],
+    mode: 'all'
+  });
+  assert.equal(result.matches.length, 1);
+  assert.equal(result.matches[0].id, 1002);
+});
+
+test('findServers: applied_template fetches each unique template exactly once (FMN-121)', async () => {
+  // Same template referenced by two criteria (e.g. attached AND not_attached
+  // would be a contradiction, but the prefetcher dedupes regardless).
+  let calls = 0;
+  const pages = [{ server_list: [{ url: '.../server/1', id: 1 }], meta: { total_count: 1 } }];
+  const client = {
+    ...makePagedClient(pages),
+    async getServerTemplate() { calls++; return { id: 501, name: 'A', appliedServerIds: [1] }; }
+  };
+  await findServers({
+    client,
+    criteria: [
+      { fieldType: 'applied_template', templateUrl: '/server_template/501', match: 'attached' },
+      { fieldType: 'applied_template', templateUrl: '/server_template/501', match: 'attached' }
+    ],
+    mode: 'all'
+  });
+  assert.equal(calls, 1);
+});
+
+test('findServers: applied_template runs only when needed (regression)', async () => {
+  let calls = 0;
+  const pages = [{ server_list: [{ url: '.../server/1', id: 1, tags: ['x'] }], meta: { total_count: 1 } }];
+  const client = {
+    ...makePagedClient(pages),
+    async getServerTemplate() { calls++; return { id: 0, name: '', appliedServerIds: [] }; }
+  };
+  await findServers({
+    client,
+    criteria: [{ fieldType: 'tag', value: 'x' }],
+    mode: 'all'
+  });
+  assert.equal(calls, 0, 'no applied_template criterion -> no template prefetch');
+});
+
 test('findServers: tool-level caseInsensitive stamps onto string criteria when not explicitly set', async () => {
   const pages = [{ server_list: [{ url: '.../server/1', name: 'EDGE-FGT-01' }], meta: { total_count: 1 } }];
   const result = await findServers({
@@ -392,6 +546,20 @@ test('findServers: tool-level caseInsensitive stamps onto string criteria when n
 // =====================================================================
 // Handler factory
 // =====================================================================
+
+test('search:list-templates: delegates to client.listTemplates (FMN-121)', async () => {
+  let called = 0;
+  const fakeTemplates = [
+    { id: 501, name: 'Critical Infra', resourceUrl: '/server_template/501', appliedServerUrls: ['/server/1'] }
+  ];
+  const client = {
+    async listTemplates() { called++; return fakeTemplates; }
+  };
+  const handlers = createServerSearchHandlers({ getClient: async () => client });
+  const out = await handlers['search:list-templates']({});
+  assert.equal(called, 1);
+  assert.deepEqual(out, fakeTemplates);
+});
 
 test('search:list-attribute-types: still merges catalog + sample (regression)', async () => {
   const client = {

@@ -32,7 +32,8 @@ const FIELD_TYPES = [
   { value: 'tag',               label: 'Tag' },
   { value: 'status',            label: 'Status' },
   { value: 'device_type',       label: 'Device type' },
-  { value: 'has_active_outage', label: 'Has active outage' }
+  { value: 'has_active_outage', label: 'Has active outage' },
+  { value: 'applied_template',  label: 'Applied template' }
 ];
 
 const STATUS_VALUES = ['active', 'paused', 'inactive'];
@@ -167,6 +168,38 @@ export function render({ container, store, navigate, events }) {
   // Cached attribute suggestions; populated once.
   let attrSuggestions = [];
   let attrSuggestionsLoading = true;
+  // FMN-121: lazy-loaded template catalog for the applied_template
+  // field type. The fetch fires when the operator first picks
+  // applied_template; results are cached on the store so re-renders
+  // (back-button, /results -> refine) do not re-fetch.
+  let templateOptions = Array.isArray(store.templateOptions) ? store.templateOptions : null;
+  let templateOptionsLoading = false;
+  let templateOptionsError = null;
+  const templateRowSubscribers = new Set();
+  function notifyTemplateSubscribers() {
+    for (const fn of templateRowSubscribers) { try { fn(); } catch { /* swallow */ } }
+  }
+  async function ensureTemplateOptions() {
+    if (templateOptions || templateOptionsLoading) return;
+    templateOptionsLoading = true;
+    notifyTemplateSubscribers();
+    try {
+      const list = await call('search:list-templates', {});
+      templateOptions = (Array.isArray(list) ? list : []).map((t) => ({
+        templateUrl: t.resourceUrl,
+        templateId: t.id,
+        name: t.name,
+        templateType: t.templateType ?? null
+      }));
+      store.templateOptions = templateOptions;
+      templateOptionsError = null;
+    } catch (err) {
+      templateOptionsError = err?.message ?? String(err);
+    } finally {
+      templateOptionsLoading = false;
+      notifyTemplateSubscribers();
+    }
+  }
 
   // Each criterion row keeps a getCriterion() function that returns the
   // current shape, plus setDisabled() for run state.
@@ -233,6 +266,60 @@ export function render({ container, store, navigate, events }) {
         return;
       }
 
+      if (fieldType === 'applied_template') {
+        // FMN-121: applied template criterion. Picker = template name,
+        // mode = is attached / is not attached.
+        const tplSelect = h('select', { class: 'select' });
+        const matchSelect = h('select', { class: 'select' },
+          h('option', { value: 'attached' }, 'is attached'),
+          h('option', { value: 'not_attached' }, 'is not attached')
+        );
+        matchSelect.value = local.match === 'not_attached' ? 'not_attached' : 'attached';
+
+        function repopulate() {
+          while (tplSelect.firstChild) tplSelect.removeChild(tplSelect.firstChild);
+          if (templateOptionsLoading) {
+            tplSelect.appendChild(h('option', { value: '' }, 'Loading templates…'));
+            tplSelect.disabled = true;
+            return;
+          }
+          if (templateOptionsError) {
+            tplSelect.appendChild(h('option', { value: '' }, `Error: ${templateOptionsError}`));
+            tplSelect.disabled = true;
+            return;
+          }
+          tplSelect.disabled = false;
+          tplSelect.appendChild(h('option', { value: '' }, `- choose template (${(templateOptions ?? []).length}) -`));
+          for (const t of (templateOptions ?? [])) {
+            const typeHint = t.templateType ? ` [${t.templateType}]` : '';
+            tplSelect.appendChild(h('option', { value: t.templateUrl }, `${t.name}${typeHint}`));
+          }
+          if (local.templateUrl) tplSelect.value = local.templateUrl;
+        }
+        repopulate();
+        templateRowSubscribers.add(repopulate);
+
+        tplSelect.addEventListener('change', () => {
+          local.templateUrl = tplSelect.value;
+          const opt = tplSelect.options[tplSelect.selectedIndex];
+          local.templateName = opt && opt.value ? opt.textContent.replace(/\s\[.*\]$/, '') : null;
+          refreshRunDisabled();
+        });
+        matchSelect.addEventListener('change', () => {
+          local.match = matchSelect.value === 'not_attached' ? 'not_attached' : 'attached';
+          refreshRunDisabled();
+        });
+
+        fieldHost.appendChild(tplSelect);
+        fieldHost.appendChild(matchSelect);
+
+        // Kick off the catalog load if we haven't yet.
+        ensureTemplateOptions();
+        // When the row is removed, drop the subscriber.
+        local._tplCleanup = () => templateRowSubscribers.delete(repopulate);
+        return;
+      }
+
       // String-comparison field types
       if (fieldType === 'attribute') {
         const combo = createCombobox({
@@ -271,6 +358,7 @@ export function render({ container, store, navigate, events }) {
     fieldSelect.addEventListener('change', () => {
       // Wipe per-row value-ish state when switching field types so stale
       // values don't bleed between fundamentally different inputs.
+      if (local._tplCleanup) { local._tplCleanup(); }
       local = { fieldType: fieldSelect.value };
       rebuildHost();
       refreshRunDisabled();
@@ -284,12 +372,21 @@ export function render({ container, store, navigate, events }) {
         if (local.fieldType === 'has_active_outage') return typeof local.value === 'boolean';
         if (local.fieldType === 'status') return STATUS_VALUES.includes(local.value);
         if (local.fieldType === 'attribute') return !!local.attributeName && !!String(local.value || '').trim();
+        if (local.fieldType === 'applied_template') return !!local.templateUrl;
         return !!String(local.value || '').trim();
       },
       getCriterion() {
         const out = { fieldType: local.fieldType };
         if (local.fieldType === 'has_active_outage') return { ...out, value: !!local.value };
         if (local.fieldType === 'status') return { ...out, value: local.value };
+        if (local.fieldType === 'applied_template') {
+          return {
+            ...out,
+            templateUrl: local.templateUrl,
+            templateName: local.templateName ?? null,
+            match: local.match === 'not_attached' ? 'not_attached' : 'attached'
+          };
+        }
         if (local.fieldType === 'attribute') {
           out.attributeName = local.attributeName;
         }
@@ -313,6 +410,7 @@ export function render({ container, store, navigate, events }) {
         // to drop the filter entirely. But the simplest path is just to
         // remove the row; no rows = no filter.
       }
+      if (local._tplCleanup) local._tplCleanup();
       rows.delete(row);
       rowEl.remove();
       refreshRunDisabled();

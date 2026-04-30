@@ -42,6 +42,17 @@ export const findServersStubScript = `
   ];
   const ACTIVE_OUTAGE_IDS = new Set([1003]);
 
+  // FMN-121: applied-template fixtures. Two templates; "Critical Infra"
+  // is attached to 1001 + 1004; "Standard Linux" is attached to 1003.
+  const TEMPLATES = [
+    { id: 501, name: 'Critical Infra', templateType: 'standard', resourceUrl: '/server_template/501', appliedServerUrls: ['/server/1001', '/server/1004'] },
+    { id: 502, name: 'Standard Linux',  templateType: 'standard', resourceUrl: '/server_template/502', appliedServerUrls: ['/server/1003'] }
+  ];
+  const TEMPLATE_APPLIED_SETS = {
+    '/server_template/501': new Set([1001, 1004]),
+    '/server_template/502': new Set([1003])
+  };
+
   // Field-type matchers (kept minimal; mirrors background handler).
   const eq  = (a, b, ci) => a == null || b == null ? false : (ci ? String(a).toLowerCase() === String(b).toLowerCase() : String(a) === String(b));
   const inc = (a, b, ci) => a == null || b == null ? false : (ci ? String(a).toLowerCase().includes(String(b).toLowerCase()) : String(a).includes(String(b)));
@@ -76,6 +87,12 @@ export const findServersStubScript = `
     if (c.fieldType === 'has_active_outage') {
       const has = ACTIVE_OUTAGE_IDS.has(server.id);
       return Boolean(c.value) === has ? { value: has } : null;
+    }
+    if (c.fieldType === 'applied_template') {
+      const set = TEMPLATE_APPLIED_SETS[c.templateUrl] || new Set();
+      const isAttached = set.has(server.id);
+      const want = c.match === 'not_attached' ? !isAttached : isAttached;
+      return want ? { templateUrl: c.templateUrl, templateName: c.templateName, attached: isAttached } : null;
     }
     return null;
   }
@@ -188,6 +205,9 @@ export const findServersStubScript = `
             }
             if (type === 'search:abort') {
               return callback({ ok: true, result: { aborted: false, reason: 'stub' } });
+            }
+            if (type === 'search:list-templates') {
+              return callback({ ok: true, result: TEMPLATES });
             }
             callback({ ok: false, error: 'stub: unknown message type ' + type });
           } catch (err) {

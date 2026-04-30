@@ -21,7 +21,8 @@ const FIELD_LABEL = {
   tag: 'Tag',
   status: 'Status',
   device_type: 'Device type',
-  has_active_outage: 'Active outage'
+  has_active_outage: 'Active outage',
+  applied_template: 'Applied template'
 };
 
 function describeCriteria(criteria, mode) {
@@ -32,6 +33,10 @@ function describeCriteria(criteria, mode) {
       const label = FIELD_LABEL[c.fieldType] ?? c.fieldType;
       if (c.fieldType === 'has_active_outage') return `${label} ${c.value ? '= true' : '= false'}`;
       if (c.fieldType === 'status') return `${label} = "${c.value}"`;
+      if (c.fieldType === 'applied_template') {
+        const verb = c.match === 'not_attached' ? 'is not attached' : 'is attached';
+        return `Template "${c.templateName ?? c.templateUrl}" ${verb}`;
+      }
       const op = c.exactMatch ? '=' : '~';
       if (c.fieldType === 'attribute') return `${c.attributeName} ${op} "${c.value}"`;
       return `${label} ${op} "${c.value}"`;
@@ -57,7 +62,7 @@ function findAttributeValue(server, name) {
   return null;
 }
 
-function buildColumnList(columns) {
+function buildColumnList(columns, criteria = []) {
   // Build the ordered list of {key, label, getter} based on operator
   // selections. ID / Name / FQDN are always present.
   const list = [
@@ -77,11 +82,29 @@ function buildColumnList(columns) {
       getter: (m) => findAttributeValue(m, attrName) ?? ''
     });
   }
+  // FMN-121: when at least one applied_template criterion is active,
+  // surface the matched template name(s). Includes only templates the
+  // criterion asserted "attached" for - "not_attached" rows wouldn't
+  // populate a meaningful template name.
+  const tmplCriteria = (Array.isArray(criteria) ? criteria : [])
+    .filter((c) => c.fieldType === 'applied_template' && c.match !== 'not_attached');
+  if (tmplCriteria.length > 0) {
+    list.push({
+      key: 'appliedTemplates',
+      label: tmplCriteria.length === 1 ? `Template: ${tmplCriteria[0].templateName ?? tmplCriteria[0].templateUrl}` : 'Matched templates',
+      getter: (m) => {
+        const matched = (Array.isArray(m.matchedCriteria) ? m.matchedCriteria : [])
+          .filter((mc) => mc.fieldType === 'applied_template' && mc.attached)
+          .map((mc) => mc.templateName ?? mc.templateUrl ?? '');
+        return matched.join('|');
+      }
+    });
+  }
   return list;
 }
 
 function buildCsv(result, columns) {
-  const cols = buildColumnList(columns);
+  const cols = buildColumnList(columns, result.criteria);
   const lines = [];
   lines.push(`# Unofficial FortiMonitor Toolkit - Find Servers report`);
   lines.push(`# Author: Gregori Jenkins - https://www.linkedin.com/in/gregorijenkins`);
@@ -110,7 +133,7 @@ export function render({ container, store, navigate }) {
 
   const result = store.runResult ?? { matches: [], totalScanned: 0, criteria: [], identifiers: [], mode: 'all' };
   const matchCount = result.matches.length;
-  const cols = buildColumnList(store.columns ?? {});
+  const cols = buildColumnList(store.columns ?? {}, result.criteria);
 
   const filt = describeCriteria(result.criteria, result.mode);
   const idCount = Array.isArray(result.identifiers) ? result.identifiers.length : 0;

@@ -474,6 +474,42 @@ export class PanoptaClient {
   }
 
   /**
+   * Fetch a single server template, including its applied_servers list.
+   * FMN-121: Find Servers's applied_template criterion uses this to
+   * resolve the set of servers a template is attached to in one call,
+   * rather than paginating the full template catalog.
+   *
+   * @param {number|string} templateId
+   * @returns {Promise<{id:number, name:string, resourceUrl:string|null, appliedServerUrls:string[], appliedServerIds:number[]}>}
+   */
+  async getServerTemplate(templateId) {
+    if (templateId == null || templateId === '') {
+      throw new TypeError('getServerTemplate: templateId is required');
+    }
+    const { body } = await this._request('GET', `/server_template/${encodeURIComponent(templateId)}`);
+    if (!body || typeof body !== 'object') {
+      throw new PanoptaError('Malformed server_template response', { phase: 'read', responseBody: body });
+    }
+    const appliedUrls = Array.isArray(body.applied_servers) ? body.applied_servers : [];
+    const appliedIds = [];
+    for (const url of appliedUrls) {
+      if (typeof url !== 'string') continue;
+      const m = url.match(/\/server\/(\d+)\/?$/);
+      if (m) appliedIds.push(Number(m[1]));
+    }
+    const id = typeof body.url === 'string'
+      ? Number(body.url.split('/').filter(Boolean).pop())
+      : Number(templateId);
+    return {
+      id,
+      name: body.name ?? `#${id}`,
+      resourceUrl: body.url ?? null,
+      appliedServerUrls: appliedUrls,
+      appliedServerIds: appliedIds
+    };
+  }
+
+  /**
    * List the templates currently attached to a server. Used by the
    * preview step to decide attach-vs-skip / detach-vs-skip per row.
    *

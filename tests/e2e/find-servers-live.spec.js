@@ -38,6 +38,7 @@ test.describe('Find Servers (FMN-114) E2E - live tenant', () => {
 
   let sample = null;        // { servers, tag, fqdnPart, namePart, deviceType, osValue }
   let activeOutageId = null; // first id with an active outage, or null
+  let appliedTemplate = null; // FMN-121: { name, url, appliedServerIds[] } or null
 
   test.beforeAll(async ({ extensionContext }) => {
     await seedApiKey(extensionContext, API_KEY);
@@ -86,6 +87,25 @@ test.describe('Find Servers (FMN-114) E2E - live tenant', () => {
       }
     }
 
+    // FMN-121: discover a server_template that has at least one applied
+    // server, so the applied_template scenario has something to match.
+    const tr = await fetch(`${PANOPTA_BASE}/server_template?limit=200`, { headers });
+    if (tr.ok) {
+      const tb = await tr.json();
+      const tlist = Array.isArray(tb?.server_template_list) ? tb.server_template_list : [];
+      const candidate = tlist.find((t) => Array.isArray(t.applied_servers) && t.applied_servers.length > 0);
+      if (candidate) {
+        appliedTemplate = {
+          name: candidate.name,
+          url: candidate.url,
+          appliedServerIds: candidate.applied_servers
+            .map((u) => { const m = String(u).match(/\/server\/(\d+)\/?$/); return m ? Number(m[1]) : null; })
+            .filter((x) => x != null)
+        };
+      }
+    }
+    console.log('[live discovery] appliedTemplate:', JSON.stringify(appliedTemplate?.name ?? null), '→', appliedTemplate?.appliedServerIds?.length ?? 0, 'servers');
+
     // Log the discovered sample so operators running the live suite can
     // see exactly which tenant values exercised which scenarios.
     console.log('[live discovery] sampled', servers.length, 'servers from tenant');
@@ -127,6 +147,17 @@ test.describe('Find Servers (FMN-114) E2E - live tenant', () => {
     }
     if (opts.fieldType === 'status') {
       await row.locator('select').nth(1).selectOption(opts.value);
+      return;
+    }
+    if (opts.fieldType === 'applied_template') {
+      // FMN-121: select #1 is the template picker; wait for it to
+      // populate from search:list-templates before selecting.
+      const tplSelect = row.locator('select').nth(1);
+      await expect(tplSelect).toBeEnabled({ timeout: 30_000 });
+      await tplSelect.selectOption(opts.templateUrl);
+      if (opts.match === 'not_attached') {
+        await row.locator('select').nth(2).selectOption('not_attached');
+      }
       return;
     }
     if (opts.fieldType === 'attribute') {
@@ -344,6 +375,35 @@ test.describe('Find Servers (FMN-114) E2E - live tenant', () => {
       // appears among the results.
       const ids = rows.map((r) => r[1]); // 'Server ID' is column index 1
       expect(ids).toContain(String(activeOutageId));
+    } finally { await page.close(); }
+  });
+
+  test('live - applied_template: matched ids match the tenant template attachment list (FMN-121)', async ({ extensionContext, findServersUrl }) => {
+    test.skip(!appliedTemplate, 'Tenant has no template with applied_servers; skipping applied_template scenario.');
+    const page = await openTool(extensionContext, findServersUrl);
+    try {
+      console.log('[applied_template] template:', appliedTemplate.name, '→', appliedTemplate.appliedServerIds.length, 'servers');
+      await fillCriterion(page, 0, {
+        fieldType: 'applied_template',
+        templateUrl: appliedTemplate.url,
+        match: 'attached'
+      });
+      await runSearch(page);
+      const { columns, rows } = await getRows(page);
+      // The auto-template column is present.
+      expect(columns.some((c) => c.startsWith('Template:'))).toBe(true);
+      // Every returned row's id must be in the tenant's applied list.
+      const expected = new Set(appliedTemplate.appliedServerIds);
+      for (const row of rows) {
+        expect(expected.has(Number(row[1]))).toBe(true);
+      }
+      // Result count cannot exceed the applied list (it can be smaller
+      // if the tenant has servers in applied_servers that the criteria
+      // matcher can't fetch via /server, e.g. archived rows).
+      expect(rows.length).toBeLessThanOrEqual(appliedTemplate.appliedServerIds.length);
+      // At least one row should come back if the applied list is
+      // non-empty.
+      expect(rows.length).toBeGreaterThan(0);
     } finally { await page.close(); }
   });
 
