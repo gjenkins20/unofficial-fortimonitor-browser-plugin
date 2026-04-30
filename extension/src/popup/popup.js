@@ -169,7 +169,7 @@ function sortToolCardsAlphabetically() {
 function toolCardSortKey(card) {
   const nameEl = card.querySelector('.tool-name');
   if (!nameEl) return '';
-  // Strip .badge children (Beta, Beta - Prototype) so they don't affect order.
+  // Strip .badge children so status badges don't affect alphabetical order.
   const clone = nameEl.cloneNode(true);
   clone.querySelectorAll('.badge').forEach((b) => b.remove());
   return clone.textContent.trim().toLowerCase();
