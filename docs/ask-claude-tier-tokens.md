@@ -1,6 +1,6 @@
-# Ask Claude tier token measurement (FMN-110, Phase 2.2)
+# Ask AI tier token measurement (FMN-110, Phase 2.2)
 
-Validation of the three Ask Claude tool tiers per FMN-94's Phase 2 polish goal: confirm that the catalog token cost stays in a reasonable range across the tiers so the tier toggle actually shifts cost meaningfully.
+Validation of the three Ask AI tool tiers per FMN-94's Phase 2 polish goal: confirm that the catalog token cost stays in a reasonable range across the tiers so the tier toggle actually shifts cost meaningfully. (Tool was named "Ask Claude" at the time of FMN-110; renamed to "Ask AI" in FMN-120 when local-LLM providers were added.)
 
 ## How to run
 
