@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FM Toolkit social preview</title>
+<style>
+  :root {
+    --fmt-orange: #ea580c;
+    --fmt-orange-soft: rgba(234, 88, 12, 0.18);
+    --fmt-bg-1: #0b1220;
+    --fmt-bg-2: #111c33;
+    --fmt-fg: #f8fafc;
+    --fmt-fg-dim: #cbd5e1;
+    --fmt-fg-faint: #94a3b8;
+    --fmt-border: rgba(148, 163, 184, 0.18);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 1280px; height: 640px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    color: var(--fmt-fg);
+    overflow: hidden;
+  }
+  .card {
+    width: 1280px; height: 640px;
+    background:
+      radial-gradient(1200px 600px at 0% 0%, rgba(234, 88, 12, 0.10), transparent 60%),
+      radial-gradient(900px 600px at 100% 100%, rgba(56, 189, 248, 0.08), transparent 60%),
+      linear-gradient(135deg, var(--fmt-bg-1), var(--fmt-bg-2));
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+    padding: 56px 64px;
+    overflow: hidden;
+  }
+  /* subtle dot grid */
+  .card::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image: radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+    background-size: 22px 22px;
+    pointer-events: none;
+  }
+  .left {
+    position: relative;
+    display: flex; flex-direction: column;
+    gap: 20px;
+    z-index: 2;
+  }
+  .brand-row {
+    display: flex; align-items: center; gap: 14px;
+    color: var(--fmt-fg-dim);
+  }
+  .brand-mark {
+    width: 48px; height: 48px;
+    border-radius: 10px;
+    background: var(--fmt-orange);
+    color: white;
+    display: grid; place-items: center;
+    font-weight: 800; font-size: 22px;
+    letter-spacing: -0.5px;
+    box-shadow: 0 8px 24px rgba(234, 88, 12, 0.4);
+  }
+  .brand-text {
+    font-size: 14px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--fmt-fg-faint); font-weight: 600;
+  }
+  .headline {
+    font-size: 56px; line-height: 1.05; font-weight: 800;
+    letter-spacing: -1.5px;
+    margin-top: 4px;
+  }
+  .headline em {
+    font-style: normal;
+    background: linear-gradient(135deg, #fb923c, #f97316);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .pitch {
+    font-size: 19px; line-height: 1.5; color: var(--fmt-fg-dim);
+    max-width: 520px;
+  }
+  .tools-line {
+    display: flex; gap: 8px; flex-wrap: wrap;
+    margin-top: 6px;
+  }
+  .tool-chip {
+    font-size: 13px; padding: 6px 10px; border-radius: 999px;
+    background: rgba(148, 163, 184, 0.08);
+    border: 1px solid var(--fmt-border);
+    color: var(--fmt-fg-dim);
+    white-space: nowrap;
+  }
+  .footer-row {
+    margin-top: 14px;
+    display: flex; align-items: center; gap: 16px;
+    color: var(--fmt-fg-faint); font-size: 14px;
+  }
+  .footer-row .dot {
+    width: 4px; height: 4px; border-radius: 50%;
+    background: var(--fmt-fg-faint);
+  }
+  .footer-row code {
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 13px;
+    background: rgba(148, 163, 184, 0.08);
+    border: 1px solid var(--fmt-border);
+    padding: 4px 8px; border-radius: 6px;
+    color: var(--fmt-fg-dim);
+  }
+  .right {
+    position: relative;
+    height: 100%;
+    z-index: 1;
+  }
+  /* The popup card visual: rebuild a stylized popup-launcher right in
+     CSS so the OG card stays self-contained and pixel-clean (no bitmap
+     resampling artifacts at 1280x640). */
+  .popup {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%) rotate(-2deg);
+    width: 360px;
+    background: white;
+    color: #0f172a;
+    border-radius: 14px;
+    box-shadow:
+      0 30px 80px rgba(0, 0, 0, 0.55),
+      0 8px 24px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+  }
+  .popup-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 16px;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .popup-logo {
+    width: 26px; height: 26px;
+    border-radius: 6px;
+    background: var(--fmt-orange);
+    color: white;
+    display: grid; place-items: center;
+    font-weight: 800; font-size: 12px;
+  }
+  .popup-title {
+    font-size: 14px; font-weight: 700; color: #0f172a;
+  }
+  .popup-strip {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 16px;
+    background: #f0fdf4;
+    color: #166534;
+    font-size: 12px;
+    border-bottom: 1px solid #d1fae5;
+  }
+  .popup-strip .green-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #22c55e;
+  }
+  .popup-tile {
+    padding: 12px 16px;
+    border-bottom: 1px solid #f1f5f9;
+    cursor: pointer;
+  }
+  .popup-tile-title {
+    font-size: 13px; font-weight: 700; color: #0f172a;
+    margin-bottom: 2px;
+  }
+  .popup-tile-desc {
+    font-size: 11px; line-height: 1.4; color: #64748b;
+  }
+  .popup-tile-highlight {
+    background: linear-gradient(180deg, #fff7ed, #ffedd5);
+    border-left: 3px solid var(--fmt-orange);
+    padding-left: 13px;
+  }
+  /* a second card peeking out behind the popup, suggesting depth */
+  .stack-card {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 360px; height: 320px;
+    background: white;
+    border-radius: 14px;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    transform: translate(calc(-50% + 24px), calc(-50% + 36px)) rotate(4deg);
+    z-index: -1;
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="left">
+      <div class="brand-row">
+        <div class="brand-mark">FM</div>
+        <div class="brand-text">Unofficial FortiMonitor Toolkit</div>
+      </div>
+      <div class="headline">
+        Batch operator<br>tools for <em>FortiMonitor</em>.
+      </div>
+      <div class="pitch">
+        Per-port scope changes, bulk fabric connections, server
+        attributes, templates, and natural-language Q&amp;A, all
+        behind a Load &rsaquo; Review &rsaquo; Execute flow.
+      </div>
+      <div class="tools-line">
+        <span class="tool-chip">Chrome MV3</span>
+        <span class="tool-chip">Session + v2 API auth</span>
+        <span class="tool-chip">Open source</span>
+      </div>
+      <div class="footer-row">
+        <code>github.com/gjenkins20/unofficial-fortimonitor-browser-plugin</code>
+      </div>
+    </div>
+
+    <div class="right">
+      <div class="stack-card"></div>
+      <div class="popup">
+        <div class="popup-header">
+          <div class="popup-logo">FM</div>
+          <div class="popup-title">Unofficial FortiMonitor Toolkit</div>
+        </div>
+        <div class="popup-strip">
+          <span class="green-dot"></span>
+          <span>Signed in to FortiMonitor</span>
+        </div>
+        <div class="popup-tile">
+          <div class="popup-tile-title">Add Fabric Connection (API)</div>
+          <div class="popup-tile-desc">Bulk-create OnSight CSF tunnel connections via the v2 API.</div>
+        </div>
+        <div class="popup-tile popup-tile-highlight">
+          <div class="popup-tile-title">Manage Server Templates (Bulk)</div>
+          <div class="popup-tile-desc">Bulk-attach or detach monitoring templates across many servers.</div>
+        </div>
+        <div class="popup-tile">
+          <div class="popup-tile-title">Find Servers</div>
+          <div class="popup-tile-desc">Filter by attribute, name, FQDN, tag, status, or applied template.</div>
+        </div>
+        <div class="popup-tile">
+          <div class="popup-tile-title">Ask AI</div>
+          <div class="popup-tile-desc">Natural-language Q&amp;A with tool use against your tenant.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
