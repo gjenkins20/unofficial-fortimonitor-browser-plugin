@@ -171,12 +171,16 @@ export function render({ container, store, navigate }) {
       refreshOperationVisibility();
     }
     handoffBanner.hidden = false;
+    const cancelLink = h('button', { type: 'button', class: 'fmn-handoff-cancel' }, 'Cancel');
+    cancelLink.addEventListener('click', () => { window.close(); });
     handoffBanner.replaceChildren(
       h('strong', {}, 'Selection received: '),
       h('span', {}, `${lines.length} server${lines.length === 1 ? '' : 's'} from ${describeSource(blob.source)}.`),
       blob.hint?.operation
         ? h('span', {}, ` Operation pre-set to ${blob.hint.operation}; pick a template to continue.`)
-        : null
+        : null,
+      h('span', { class: 'fmn-handoff-sep' }, ' · '),
+      cancelLink
     );
     updateContinue();
   })();

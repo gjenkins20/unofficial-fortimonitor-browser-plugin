@@ -1489,3 +1489,14 @@ tr.hidden-scope { display: none; }
   font-size: 13px;
 }
 .fmn-handoff-banner strong { font-weight: 600; }
+.fmn-handoff-sep { color: #92a8c0; margin: 0 4px; }
+.fmn-handoff-cancel {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: #1f4a7a;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.fmn-handoff-cancel:hover { color: #143458; }

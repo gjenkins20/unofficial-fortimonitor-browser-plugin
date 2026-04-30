@@ -7,7 +7,7 @@ import { h, titleBar, downloadBlob } from '../../../lib/dom.js';
 import { lookupBreadcrumbs } from './start.js';
 import { listReceivers, writeSelection } from '../../../lib/selection-handoff.js';
 
-const TOOL_NAME = 'Server Lookup';
+const TOOL_NAME = 'Server ID Lookup';
 
 function csvEscape(v) {
   const s = v == null ? '' : String(v);

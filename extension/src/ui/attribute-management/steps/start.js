@@ -233,9 +233,13 @@ export function render({ container, store, navigate }) {
     store.entries = lines;
     textarea.value = lines.join('\n');
     handoffBanner.hidden = false;
+    const cancelLink = h('button', { type: 'button', class: 'fmn-handoff-cancel' }, 'Cancel');
+    cancelLink.addEventListener('click', () => { window.close(); });
     handoffBanner.replaceChildren(
       h('strong', {}, 'Selection received: '),
-      h('span', {}, `${lines.length} server${lines.length === 1 ? '' : 's'} from ${describeHandoffSource(blob.source)}.`)
+      h('span', {}, `${lines.length} server${lines.length === 1 ? '' : 's'} from ${describeHandoffSource(blob.source)}.`),
+      h('span', { class: 'fmn-handoff-sep' }, ' · '),
+      cancelLink
     );
     updateContinue();
   })();

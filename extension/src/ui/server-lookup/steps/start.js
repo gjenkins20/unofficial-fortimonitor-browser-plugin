@@ -10,7 +10,7 @@ import { h, titleBar } from '../../../lib/dom.js';
 import { call } from '../../../lib/messaging.js';
 import { parseInput } from '../parse-input.js';
 
-const TOOL_NAME = 'Server Lookup';
+const TOOL_NAME = 'Server ID Lookup';
 
 export function lookupBreadcrumbs(active) {
   const steps = [
