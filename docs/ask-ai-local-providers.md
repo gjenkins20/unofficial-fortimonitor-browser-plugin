@@ -92,12 +92,14 @@ Ollama exposes both `/v1/chat/completions` (OpenAI-compat) and `/api/chat` (nati
 
 `tests/e2e/ask-ai-live.spec.js` runs 8 canonical chat scenarios against a real local Ollama. Each scenario fetches ground truth from the FortiMonitor API and asserts that the chat response actually surfaces real data (count + at least one specific record), not just that the right tool fired. The matrix catches the meta-analysis-prose failure mode (the model writing essays about JSON structure instead of presenting data) — that's the failure mode that regular tool-call assertion misses.
 
-As of this writing (commit `3030011`):
+As of this writing:
 
-| Model | Scenarios passed | Notes |
-|---|---|---|
-| `qwen3:8b` | 8/8 | clean tool selection, real response prose |
-| `qwen2.5:14b` | 8/8 (older run) | one scenario emitted Thai-script prose pre-fix; needs re-run on current commit |
+| Model | Scenarios passed | Commit | Notes |
+|---|---|---|---|
+| `qwen3:8b` | 8/8 | `3030011` | clean tool selection, real response prose, recommended default |
+| `qwen2.5:14b` | 7/8 | `1c5ef1e` | one stochastic miss on direct-phrasing outage query ("What active outages are happening right now?" → no tool, no text). The paraphrase ("Anything broken? Show me ongoing incidents.") passes. Same intent, different result — model-quality variance, not a wire bug. |
+
+**Recommendation:** start with `qwen3:8b`. It's stable across all 8 canonical scenarios. Step up to `qwen2.5:14b` only if you hit a specific reasoning task qwen3:8b fumbles, accepting the occasional silent-no-tool miss on direct prompts.
 
 Untested at present: llama3.x family, mistral-nemo, qwen2.5:7b, sub-7B sizes.
 
