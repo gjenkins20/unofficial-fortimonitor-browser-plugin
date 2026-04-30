@@ -77,6 +77,27 @@ export const test = base.extend({
   // extension ID. Tests use `await page.goto(findServersUrl)`.
   findServersUrl: [async ({ extensionId }, use) => {
     await use(`chrome-extension://${extensionId}/src/ui/server-search/app.html#/start`);
+  }, { scope: 'worker' }],
+
+  // FMN-119: per-tool URL fixtures so each new spec doesn't have to
+  // re-derive the path from extensionId.
+  serverLookupUrl: [async ({ extensionId }, use) => {
+    await use(`chrome-extension://${extensionId}/src/ui/server-lookup/app.html#/start`);
+  }, { scope: 'worker' }],
+  manageAttributesUrl: [async ({ extensionId }, use) => {
+    await use(`chrome-extension://${extensionId}/src/ui/attribute-management/app.html#/start`);
+  }, { scope: 'worker' }],
+  manageTemplatesUrl: [async ({ extensionId }, use) => {
+    await use(`chrome-extension://${extensionId}/src/ui/template-management/app.html#/start`);
+  }, { scope: 'worker' }],
+  fabricConnectionUrl: [async ({ extensionId }, use) => {
+    await use(`chrome-extension://${extensionId}/src/ui/fabric-connection/app.html#/start`);
+  }, { scope: 'worker' }],
+  portScopeAddUrl: [async ({ extensionId }, use) => {
+    await use(`chrome-extension://${extensionId}/src/ui/app.html?tool=add`);
+  }, { scope: 'worker' }],
+  portScopeRemoveUrl: [async ({ extensionId }, use) => {
+    await use(`chrome-extension://${extensionId}/src/ui/app.html`);
   }, { scope: 'worker' }]
 });
 
