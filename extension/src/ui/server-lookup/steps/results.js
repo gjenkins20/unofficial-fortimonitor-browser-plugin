@@ -5,6 +5,7 @@
 
 import { h, titleBar, downloadBlob } from '../../../lib/dom.js';
 import { lookupBreadcrumbs } from './start.js';
+import { listReceivers, writeSelection } from '../../../lib/selection-handoff.js';
 
 const TOOL_NAME = 'Server Lookup';
 
@@ -67,9 +68,42 @@ export function render({ container, store, navigate }) {
   const body = h('div', { class: 'body-section' });
   frame.appendChild(body);
 
+  // ---- Selection (only "found" rows are eligible) ----
+  const foundResults = results.filter((r) => r.status === 'found');
+  const selectedIds = new Set(foundResults.map((r) => r.serverId));
+  const rowCheckboxes = new Map();   // serverId -> input
+  let headerCheckbox = null;
+
+  function refreshSendToState() {
+    const count = selectedIds.size;
+    sendToBtn.disabled = count === 0;
+    sendToCount.textContent = count > 0 ? ` (${count})` : '';
+    if (headerCheckbox) {
+      headerCheckbox.checked = count > 0 && count === foundResults.length;
+      headerCheckbox.indeterminate = count > 0 && count < foundResults.length;
+    }
+  }
+
   // ---- Per-entry table ----
   const table = h('table', { class: 'review-table' });
+  headerCheckbox = h('input', {
+    type: 'checkbox',
+    class: 'fmn-row-select fmn-row-select-all',
+    checked: foundResults.length > 0,
+    disabled: foundResults.length === 0
+  });
+  headerCheckbox.addEventListener('change', () => {
+    if (headerCheckbox.checked) {
+      for (const r of foundResults) selectedIds.add(r.serverId);
+      for (const cb of rowCheckboxes.values()) cb.checked = true;
+    } else {
+      selectedIds.clear();
+      for (const cb of rowCheckboxes.values()) cb.checked = false;
+    }
+    refreshSendToState();
+  });
   const thead = h('thead', {}, h('tr', {},
+    h('th', { class: 'fmn-row-select-cell' }, headerCheckbox),
     h('th', {}, '#'),
     h('th', {}, 'Input'),
     h('th', {}, 'Source'),
@@ -95,7 +129,21 @@ export function render({ container, store, navigate }) {
     } else if (r.status === 'error') {
       candidatesCell = r.error ?? '(error)';
     }
+    let selectCell;
+    if (r.status === 'found') {
+      const cb = h('input', { type: 'checkbox', class: 'fmn-row-select', checked: true });
+      cb.addEventListener('change', () => {
+        if (cb.checked) selectedIds.add(r.serverId);
+        else selectedIds.delete(r.serverId);
+        refreshSendToState();
+      });
+      rowCheckboxes.set(r.serverId, cb);
+      selectCell = h('td', { class: 'fmn-row-select-cell' }, cb);
+    } else {
+      selectCell = h('td', { class: 'fmn-row-select-cell' });
+    }
     tbody.appendChild(h('tr', {},
+      selectCell,
       h('td', {}, String(i + 1)),
       h('td', {}, inputLabel(r) || '-'),
       h('td', {}, h('span', { class: `source-tag ${r.kind ?? 'name'}` }, r.kind ?? 'name')),
@@ -111,6 +159,46 @@ export function render({ container, store, navigate }) {
   // ---- Export / copy ----
   const copyCsvBtn = h('button', { class: 'btn btn-secondary' }, 'Copy CSV');
   const exportCsvBtn = h('button', { class: 'btn btn-secondary' }, 'Download CSV');
+  const sendToBtn = h('button', {
+    class: 'btn btn-secondary fmn-send-to-btn',
+    disabled: foundResults.length === 0,
+    'aria-haspopup': 'menu',
+    'aria-expanded': 'false'
+  }, 'Send selection to ▾');
+  const sendToCount = h('span', { class: 'fmn-send-to-count' }, '');
+  sendToBtn.appendChild(sendToCount);
+  const sendToMenu = h('div', { class: 'fmn-send-to-menu', role: 'menu', hidden: true });
+  const sendToStatus = h('span', { class: 'muted' }, '');
+  for (const recv of listReceivers()) {
+    const item = h('button', { type: 'button', class: 'fmn-send-to-item', role: 'menuitem' }, recv.label);
+    item.addEventListener('click', async () => {
+      sendToMenu.hidden = true;
+      sendToBtn.setAttribute('aria-expanded', 'false');
+      const picked = foundResults.filter((r) => selectedIds.has(r.serverId));
+      if (picked.length === 0) return;
+      const ids = picked.map((r) => r.serverId);
+      const names = picked.map((r) => (r.kind === 'name' ? r.name : null)).filter(Boolean);
+      try {
+        await writeSelection({ receiverId: recv.id, ids, names: names.length > 0 ? names : null, source: 'server-lookup' });
+        const url = chrome.runtime.getURL(recv.appPath);
+        chrome.tabs.create({ url });
+      } catch (err) {
+        sendToStatus.textContent = `Send failed: ${err?.message ?? err}`;
+      }
+    });
+    sendToMenu.appendChild(item);
+  }
+  sendToBtn.addEventListener('click', () => {
+    const wasOpen = !sendToMenu.hidden;
+    sendToMenu.hidden = wasOpen;
+    sendToBtn.setAttribute('aria-expanded', String(!wasOpen));
+  });
+  document.addEventListener('click', (ev) => {
+    if (sendToMenu.hidden) return;
+    if (sendToBtn.contains(ev.target) || sendToMenu.contains(ev.target)) return;
+    sendToMenu.hidden = true;
+    sendToBtn.setAttribute('aria-expanded', 'false');
+  });
   const newBatchBtn = h('button', { class: 'btn btn-primary' }, 'Look up another list');
   const copyStatus = h('span', { class: 'muted' }, '');
 
@@ -135,10 +223,12 @@ export function render({ container, store, navigate }) {
     navigate('/start');
   });
 
+  const sendToWrap = h('span', { class: 'fmn-send-to-wrap' }, sendToBtn, sendToMenu);
   const actionBar = h('div', { class: 'action-bar' },
-    h('div', { class: 'left' }, copyCsvBtn, exportCsvBtn, copyStatus),
+    h('div', { class: 'left' }, copyCsvBtn, exportCsvBtn, sendToWrap, sendToStatus, copyStatus),
     h('div', { class: 'right' }, newBatchBtn)
   );
   frame.appendChild(actionBar);
   container.appendChild(frame);
+  refreshSendToState();
 }

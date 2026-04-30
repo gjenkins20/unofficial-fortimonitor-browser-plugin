@@ -5,6 +5,7 @@
 
 import { h, titleBar } from '../../../lib/dom.js';
 import { call } from '../../../lib/messaging.js';
+import { consumeSelectionFor } from '../../../lib/selection-handoff.js';
 
 const TOOL_NAME = 'Manage Server Templates (Bulk)';
 
@@ -33,6 +34,12 @@ function parseEntries(text) {
     .filter((s) => s.length > 0);
 }
 
+function describeSource(source) {
+  if (source === 'find-servers') return 'Find Servers';
+  if (source === 'server-lookup') return 'Server Lookup';
+  return source || 'another tool';
+}
+
 export function render({ container, store, navigate }) {
   const frame = h('div', { class: 'mockup-frame' });
   frame.appendChild(titleBar('Choose operation and targets', { toolName: TOOL_NAME }));
@@ -45,6 +52,10 @@ export function render({ container, store, navigate }) {
 
   const body = h('div', { class: 'body-section' });
   frame.appendChild(body);
+
+  // ---- Handoff banner (FMN-115). Filled in by the async consume below. ----
+  const handoffBanner = h('div', { class: 'fmn-handoff-banner', hidden: true });
+  body.appendChild(handoffBanner);
 
   // ---- Operation ----
   body.appendChild(h('h3', { class: 'subhead' }, 'Operation'));
@@ -131,6 +142,44 @@ export function render({ container, store, navigate }) {
   );
   frame.appendChild(actionBar);
   container.appendChild(frame);
+
+  // ---- Apply handoff selection if one is pending (FMN-115) ----
+  // consumeSelectionFor reads + clears the slot atomically; back-button
+  // revisits cannot duplicate the prefill.
+  (async () => {
+    let blob = null;
+    try {
+      blob = await consumeSelectionFor(['manage-templates-attach', 'manage-templates-detach']);
+    } catch (err) {
+      console.warn('[tmpl handoff]', err);
+      return;
+    }
+    if (!blob) return;
+    // Prefer ids over names: the preview step resolves both, but ids are
+    // stable. If both are present we still pass ids - the operator already
+    // identified targets in the sender tool.
+    const lines = blob.ids.map(String);
+    store.entries = lines;
+    textarea.value = lines.join('\n');
+    if (blob.hint?.operation === 'detach') {
+      store.operation = 'detach';
+      opDetach.checked = true;
+      refreshOperationVisibility();
+    } else if (blob.hint?.operation === 'attach') {
+      store.operation = 'attach';
+      opAttach.checked = true;
+      refreshOperationVisibility();
+    }
+    handoffBanner.hidden = false;
+    handoffBanner.replaceChildren(
+      h('strong', {}, 'Selection received: '),
+      h('span', {}, `${lines.length} server${lines.length === 1 ? '' : 's'} from ${describeSource(blob.source)}.`),
+      blob.hint?.operation
+        ? h('span', {}, ` Operation pre-set to ${blob.hint.operation}; pick a template to continue.`)
+        : null
+    );
+    updateContinue();
+  })();
 
   // ---- Populate templates (async) ----
   (async () => {

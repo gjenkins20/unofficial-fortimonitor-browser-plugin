@@ -5,6 +5,7 @@
 
 import { h, titleBar, downloadBlob } from '../../../lib/dom.js';
 import { findBreadcrumbs } from './start.js';
+import { listReceivers, writeSelection } from '../../../lib/selection-handoff.js';
 
 const TOOL_NAME = 'Find Servers';
 
@@ -127,18 +128,57 @@ export function render({ container, store, navigate }) {
   const body = h('div', { class: 'body-section' });
   frame.appendChild(body);
 
+  // Selection set for the "Send to" handoff. Default: every matched row
+  // is selected. Operator can untick rows or use the header checkbox to
+  // toggle all.
+  const selectedIds = new Set(result.matches.map((m) => m.id));
+  const rowCheckboxes = new Map();   // id -> input
+  let headerCheckbox = null;
+
+  function refreshSendToState() {
+    const count = selectedIds.size;
+    sendToBtn.disabled = count === 0;
+    sendToCount.textContent = count > 0 ? ` (${count})` : '';
+    if (headerCheckbox) {
+      headerCheckbox.checked = count > 0 && count === result.matches.length;
+      headerCheckbox.indeterminate = count > 0 && count < result.matches.length;
+    }
+  }
+
   if (matchCount === 0) {
     body.appendChild(h('div', { class: 'parse-result empty' }, 'No servers matched.'));
   } else {
     const table = h('table', { class: 'review-table' });
+    headerCheckbox = h('input', { type: 'checkbox', class: 'fmn-row-select fmn-row-select-all', checked: true });
+    headerCheckbox.addEventListener('change', () => {
+      if (headerCheckbox.checked) {
+        for (const m of result.matches) selectedIds.add(m.id);
+        for (const cb of rowCheckboxes.values()) cb.checked = true;
+      } else {
+        selectedIds.clear();
+        for (const cb of rowCheckboxes.values()) cb.checked = false;
+      }
+      refreshSendToState();
+    });
     const headerRow = h('tr', {},
+      h('th', { class: 'fmn-row-select-cell' }, headerCheckbox),
       h('th', {}, '#'),
       ...cols.map((c) => h('th', {}, c.label))
     );
     const thead = h('thead', {}, headerRow);
     const tbody = h('tbody', {});
     result.matches.forEach((m, i) => {
-      const cells = [h('td', {}, String(i + 1))];
+      const cb = h('input', { type: 'checkbox', class: 'fmn-row-select', checked: true });
+      cb.addEventListener('change', () => {
+        if (cb.checked) selectedIds.add(m.id);
+        else selectedIds.delete(m.id);
+        refreshSendToState();
+      });
+      rowCheckboxes.set(m.id, cb);
+      const cells = [
+        h('td', { class: 'fmn-row-select-cell' }, cb),
+        h('td', {}, String(i + 1))
+      ];
       for (const c of cols) {
         const v = c.getter(m);
         cells.push(h('td', {}, v == null || v === '' ? '-' : String(v)));
@@ -152,6 +192,48 @@ export function render({ container, store, navigate }) {
 
   const copyCsvBtn = h('button', { class: 'btn btn-secondary', disabled: matchCount === 0 }, 'Copy CSV');
   const exportCsvBtn = h('button', { class: 'btn btn-secondary', disabled: matchCount === 0 }, 'Download CSV');
+  const sendToBtn = h('button', {
+    class: 'btn btn-secondary fmn-send-to-btn',
+    disabled: matchCount === 0,
+    'aria-haspopup': 'menu',
+    'aria-expanded': 'false'
+  }, 'Send selection to ▾');
+  const sendToCount = h('span', { class: 'fmn-send-to-count' }, '');
+  sendToBtn.appendChild(sendToCount);
+  const sendToMenu = h('div', { class: 'fmn-send-to-menu', role: 'menu', hidden: true });
+  for (const r of listReceivers()) {
+    const item = h('button', { type: 'button', class: 'fmn-send-to-item', role: 'menuitem' }, r.label);
+    item.addEventListener('click', async () => {
+      sendToMenu.hidden = true;
+      sendToBtn.setAttribute('aria-expanded', 'false');
+      const ids = result.matches.filter((m) => selectedIds.has(m.id)).map((m) => m.id);
+      const names = result.matches.filter((m) => selectedIds.has(m.id)).map((m) => m.name).filter(Boolean);
+      if (ids.length === 0) return;
+      try {
+        await writeSelection({ receiverId: r.id, ids, names, source: 'find-servers' });
+        // Open the receiver tab. Same window as a new tab; receiver
+        // start.js consumes the blob on mount.
+        const url = chrome.runtime.getURL(r.appPath);
+        chrome.tabs.create({ url });
+      } catch (err) {
+        sendToStatus.textContent = `Send failed: ${err?.message ?? err}`;
+      }
+    });
+    sendToMenu.appendChild(item);
+  }
+  sendToBtn.addEventListener('click', () => {
+    const wasOpen = !sendToMenu.hidden;
+    sendToMenu.hidden = wasOpen;
+    sendToBtn.setAttribute('aria-expanded', String(!wasOpen));
+  });
+  // Click-away dismiss.
+  document.addEventListener('click', (ev) => {
+    if (sendToMenu.hidden) return;
+    if (sendToBtn.contains(ev.target) || sendToMenu.contains(ev.target)) return;
+    sendToMenu.hidden = true;
+    sendToBtn.setAttribute('aria-expanded', 'false');
+  });
+  const sendToStatus = h('span', { class: 'muted' }, '');
   const refineBtn = h('button', { class: 'btn btn-secondary' }, 'Refine query');
   const newBatchBtn = h('button', { class: 'btn btn-primary' }, 'New search');
   const copyStatus = h('span', { class: 'muted' }, '');
@@ -182,10 +264,12 @@ export function render({ container, store, navigate }) {
     navigate('/start');
   });
 
+  const sendToWrap = h('span', { class: 'fmn-send-to-wrap' }, sendToBtn, sendToMenu);
   const actionBar = h('div', { class: 'action-bar' },
-    h('div', { class: 'left' }, copyCsvBtn, exportCsvBtn, copyStatus),
+    h('div', { class: 'left' }, copyCsvBtn, exportCsvBtn, sendToWrap, sendToStatus, copyStatus),
     h('div', { class: 'right' }, refineBtn, newBatchBtn)
   );
   frame.appendChild(actionBar);
   container.appendChild(frame);
+  refreshSendToState();
 }

@@ -7,8 +7,15 @@
 import { h, titleBar } from '../../../lib/dom.js';
 import { call } from '../../../lib/messaging.js';
 import { createCombobox } from '../../../lib/combobox.js';
+import { consumeSelectionFor } from '../../../lib/selection-handoff.js';
 
 const TOOL_NAME = 'Manage Server Attributes (Bulk)';
+
+function describeHandoffSource(source) {
+  if (source === 'find-servers') return 'Find Servers';
+  if (source === 'server-lookup') return 'Server Lookup';
+  return source || 'another tool';
+}
 
 export function attrBreadcrumbs(active) {
   const steps = [
@@ -206,8 +213,32 @@ export function render({ container, store, navigate }) {
   textarea.value = (store.entries ?? []).join('\n');
   body.appendChild(textarea);
 
+  const handoffBanner = h('div', { class: 'fmn-handoff-banner', hidden: true });
+  body.appendChild(handoffBanner);
+
   const statusRow = h('div', { class: 'parse-result empty' });
   body.appendChild(statusRow);
+
+  // FMN-115: pre-populate from a Send-to handoff if one is pending.
+  (async () => {
+    let blob = null;
+    try {
+      blob = await consumeSelectionFor('manage-attributes');
+    } catch (err) {
+      console.warn('[attr handoff]', err);
+      return;
+    }
+    if (!blob) return;
+    const lines = blob.ids.map(String);
+    store.entries = lines;
+    textarea.value = lines.join('\n');
+    handoffBanner.hidden = false;
+    handoffBanner.replaceChildren(
+      h('strong', {}, 'Selection received: '),
+      h('span', {}, `${lines.length} server${lines.length === 1 ? '' : 's'} from ${describeHandoffSource(blob.source)}.`)
+    );
+    updateContinue();
+  })();
 
   // ---- Action bar ----
   const continueBtn = h('button', { class: 'btn btn-primary', disabled: true }, 'Continue → Preview');

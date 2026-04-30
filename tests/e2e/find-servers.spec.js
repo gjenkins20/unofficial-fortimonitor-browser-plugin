@@ -111,18 +111,20 @@ async function runSearch(page) {
 
 async function getResultRows(page) {
   // Returns { columns, rows } - mirrors the harness's dump-results probe.
+  // FMN-115 added a checkbox column at index 0 (.fmn-row-select-cell)
+  // for the Send-to handoff. It carries no text and is not part of the
+  // tool's data model, so we strip it before returning.
   const tbody = page.locator('.body-section table tbody');
   const tbodyVisible = await tbody.count();
   if (tbodyVisible === 0) {
-    // Empty state.
     return { columns: [], rows: [] };
   }
-  const columns = await page.locator('.body-section table thead th').allTextContents();
+  const columns = (await page.locator('.body-section table thead th').allTextContents()).slice(1);
   const rowLocators = await page.locator('.body-section table tbody tr').all();
   const rows = [];
   for (const r of rowLocators) {
     const cells = await r.locator('td').allTextContents();
-    rows.push(cells.map((c) => c.trim()));
+    rows.push(cells.slice(1).map((c) => c.trim()));
   }
   return { columns, rows };
 }

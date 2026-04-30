@@ -1426,3 +1426,66 @@ tr.hidden-scope { display: none; }
 [data-tool-mode="template-management"] .plan-pill.remove  { color: var(--danger); background: var(--danger-soft); }
 [data-tool-mode="template-management"] .plan-pill.skip    { color: var(--text-muted); background: #edeff2; }
 [data-tool-mode="template-management"] .plan-pill.error   { color: var(--danger); background: var(--danger-soft); }
+
+/* --- FMN-115: Send selection to handoff (sender + receiver styles) --- */
+
+.fmn-row-select-cell {
+  width: 28px;
+  text-align: center;
+  padding: 0 4px !important;
+}
+.fmn-row-select { cursor: pointer; }
+
+.fmn-send-to-wrap {
+  position: relative;
+  display: inline-block;
+}
+.fmn-send-to-btn {
+  position: relative;
+}
+.fmn-send-to-count {
+  margin-left: 4px;
+  color: var(--text-muted);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.fmn-send-to-menu {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  min-width: 240px;
+  background: white;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 10;
+}
+.fmn-send-to-menu[hidden] { display: none; }
+.fmn-send-to-item {
+  text-align: left;
+  font-size: 13px;
+  padding: 8px 12px;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text);
+  font-family: inherit;
+}
+.fmn-send-to-item:hover { background: #f3f5f7; }
+.fmn-send-to-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.fmn-handoff-banner {
+  margin: 0 0 10px;
+  padding: 10px 14px;
+  background: #eef4fc;
+  border: 1px solid #cfdef5;
+  border-radius: 6px;
+  color: #1f4a7a;
+  font-size: 13px;
+}
+.fmn-handoff-banner strong { font-weight: 600; }
