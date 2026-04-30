@@ -20,6 +20,7 @@
 //   device_type     : { fieldType, value, exactMatch?, caseInsensitive? }
 //   status          : { fieldType, value }   // 'active' | 'paused' | 'inactive'
 //   has_active_outage: { fieldType, value }  // true | false
+//   applied_template: { fieldType, templateUrl, templateName?, match }   // FMN-121: 'attached' | 'not_attached'
 //
 // Auth: v2 API key via createProductionPanoptaClient (read-only).
 
@@ -154,6 +155,25 @@ export function matchesHasActiveOutage(server, { value } = {}, ctx = {}) {
   return { matched: false };
 }
 
+export function matchesAppliedTemplate(server, { templateUrl, templateName, match = 'attached' } = {}, ctx = {}) {
+  // FMN-121: ctx.appliedTemplateSets is a Map<templateUrl, Set<serverId>>
+  // populated before the criteria loop. matchesByCriteria reads it via
+  // ctx; we don't fetch lazily per-server (would be N+1 over the result
+  // set, defeating the single-call advantage of /server_template/{id}).
+  const sets = ctx.appliedTemplateSets;
+  if (!sets || !templateUrl) return { matched: false };
+  const set = sets.get(templateUrl);
+  if (!set) return { matched: false };
+  const id = extractServerId(server);
+  const isAttached = id != null && set.has(id);
+  const want = match === 'not_attached' ? !isAttached : isAttached;
+  if (!want) return { matched: false };
+  return {
+    matched: true,
+    info: { templateUrl, templateName: templateName ?? null, attached: isAttached }
+  };
+}
+
 const FIELD_MATCHERS = {
   attribute: matchesAttribute,
   name: matchesName,
@@ -161,7 +181,8 @@ const FIELD_MATCHERS = {
   tag: matchesTag,
   device_type: matchesDeviceType,
   status: matchesStatus,
-  has_active_outage: matchesHasActiveOutage
+  has_active_outage: matchesHasActiveOutage,
+  applied_template: matchesAppliedTemplate
 };
 
 /**
@@ -263,6 +284,13 @@ function normalizeCriterion(raw, index, toolCaseInsensitive) {
       caseInsensitive: raw?.caseInsensitive !== false ? true : false
     };
   }
+  if (fieldType === 'applied_template') {
+    const templateUrl = String(raw?.templateUrl ?? '').trim();
+    if (!templateUrl) throw new Error(`criterion ${index}: templateUrl is required`);
+    const match = raw?.match === 'not_attached' ? 'not_attached' : 'attached';
+    const templateName = raw?.templateName ? String(raw.templateName).trim() : null;
+    return { fieldType, templateUrl, templateName, match };
+  }
   // unreachable
   throw new Error(`criterion ${index}: cannot normalise`);
 }
@@ -300,6 +328,41 @@ export async function fetchActiveOutageServerIds(client, { pageSize = 200, signa
     if (Number.isFinite(total) && offset >= total) break;
   }
   return ids;
+}
+
+// ---- Applied-template prefetch (FMN-121) --------------------------
+
+/**
+ * For each template URL in the input list, fetch the template's
+ * applied_servers via GET /server_template/{id} and return a
+ * Map<templateUrl, Set<serverId>>. One round-trip per unique template.
+ */
+export async function fetchAppliedTemplateSets(client, templateUrls, { signal } = {}) {
+  const out = new Map();
+  for (const url of templateUrls) {
+    if (signal?.aborted) {
+      const err = new Error('aborted'); err.name = 'AbortError'; throw err;
+    }
+    const m = String(url).match(/\/server_template\/(\d+)\/?$/);
+    const id = m ? m[1] : null;
+    if (!id) {
+      out.set(url, new Set());
+      continue;
+    }
+    try {
+      const tpl = await client.getServerTemplate(id);
+      out.set(url, new Set(tpl.appliedServerIds));
+    } catch (err) {
+      // 404 -> empty set (template doesn't exist on this tenant); other
+      // errors propagate.
+      if ((err instanceof PanoptaError || err?.name === 'PanoptaError') && err.status === 404) {
+        out.set(url, new Set());
+        continue;
+      }
+      throw err;
+    }
+  }
+  return out;
 }
 
 // ---- Identifier resolution ----------------------------------------
@@ -421,6 +484,15 @@ export async function findServers({
   if (normalizedCriteria.some((c) => c.fieldType === 'has_active_outage')) {
     ctx.activeOutageServerIds = await fetchActiveOutageServerIds(client, { signal });
   }
+  // FMN-121: pre-fetch applied_servers per template URL when applied_template
+  // criteria are present. One GET /server_template/{id} per unique template.
+  const templateUrls = new Set();
+  for (const c of normalizedCriteria) {
+    if (c.fieldType === 'applied_template' && c.templateUrl) templateUrls.add(c.templateUrl);
+  }
+  if (templateUrls.size > 0) {
+    ctx.appliedTemplateSets = await fetchAppliedTemplateSets(client, [...templateUrls], { signal });
+  }
 
   // Path A: identifiers given. Resolve them; if criteria also given,
   // intersect by applying matchesByCriteria to each resolved server.
@@ -534,6 +606,15 @@ export function createServerSearchHandlers({ events = {}, getClient } = {}) {
         if (s?.device_sub_type) seen.add(String(s.device_sub_type));
       }
       return Array.from(seen).sort((a, b) => a.localeCompare(b));
+    },
+
+    'search:list-templates': async () => {
+      // FMN-121: Find Servers's applied_template criterion needs a
+      // template name picker. Reuses the same client method that drives
+      // Manage Templates' picker; payload not needed (the catalog is
+      // fully paginated client-side).
+      const client = await factory();
+      return client.listTemplates();
     },
 
     'search:servers': async (payload) => {

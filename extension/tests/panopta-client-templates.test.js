@@ -98,6 +98,65 @@ test('listTemplates: 401 surfaces phase=auth', async () => {
 
 // ----- listServerTemplateMappings ----------------------------
 
+// ----- getServerTemplate (FMN-121) --------------
+
+test('getServerTemplate: returns name + appliedServerIds parsed from server URLs', async () => {
+  const fetch = createFetchMock(async (url) => {
+    assert.match(url, /\/server_template\/501$/);
+    return jsonResponse({
+      url: 'https://api2.panopta.com/v2/server_template/501',
+      name: 'Critical Infra',
+      applied_servers: [
+        'https://api2.panopta.com/v2/server/1001',
+        'https://api2.panopta.com/v2/server/1002/',
+        'malformed-row',
+        'https://api2.panopta.com/v2/server/9999'
+      ]
+    });
+  });
+  const client = new PanoptaClient({ apiKey: 'k', fetch });
+  const tpl = await client.getServerTemplate(501);
+  assert.equal(tpl.id, 501);
+  assert.equal(tpl.name, 'Critical Infra');
+  assert.deepEqual(tpl.appliedServerIds, [1001, 1002, 9999]);
+  assert.equal(tpl.appliedServerUrls.length, 4);
+});
+
+test('getServerTemplate: missing applied_servers defaults to empty', async () => {
+  const fetch = createFetchMock(async () => jsonResponse({
+    url: 'https://api2.panopta.com/v2/server_template/777',
+    name: 'Empty'
+  }));
+  const client = new PanoptaClient({ apiKey: 'k', fetch });
+  const tpl = await client.getServerTemplate('777');
+  assert.deepEqual(tpl.appliedServerIds, []);
+  assert.deepEqual(tpl.appliedServerUrls, []);
+});
+
+test('getServerTemplate: malformed response throws PanoptaError', async () => {
+  const fetch = createFetchMock(async () => jsonResponse(null));
+  const client = new PanoptaClient({ apiKey: 'k', fetch });
+  await assert.rejects(() => client.getServerTemplate(1), PanoptaError);
+});
+
+test('getServerTemplate: 404 propagates as PanoptaError with status=404', async () => {
+  const fetch = createFetchMock(async () => errorResponse(404));
+  const client = new PanoptaClient({ apiKey: 'k', fetch });
+  try {
+    await client.getServerTemplate(123);
+    assert.fail('expected throw');
+  } catch (err) {
+    assert.equal(err instanceof PanoptaError, true);
+    assert.equal(err.status, 404);
+  }
+});
+
+test('getServerTemplate: requires templateId', async () => {
+  const client = new PanoptaClient({ apiKey: 'k', fetch: () => { throw new Error('no'); } });
+  await assert.rejects(() => client.getServerTemplate(null), TypeError);
+  await assert.rejects(() => client.getServerTemplate(''), TypeError);
+});
+
 test('listServerTemplateMappings: extracts templateId from mapping url', async () => {
   const fetch = createFetchMock(async () => jsonResponse({
     meta: { total_count: 2, limit: 100, offset: 0, next: null },

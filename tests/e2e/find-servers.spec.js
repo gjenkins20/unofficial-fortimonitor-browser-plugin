@@ -57,6 +57,18 @@ async function fillCriterion(page, rowIndex, opts) {
     await row.locator('select').nth(1).selectOption(opts.value);
     return;
   }
+  if (fieldType === 'applied_template') {
+    // FMN-121: select #1 is the template picker (#0 is field-type),
+    // select #2 is attached/not_attached. Wait for the template picker
+    // to populate before selecting.
+    const tplSelect = row.locator('select').nth(1);
+    await expect(tplSelect).toBeEnabled({ timeout: 5_000 });
+    await tplSelect.selectOption(opts.templateUrl);
+    if (opts.match === 'not_attached') {
+      await row.locator('select').nth(2).selectOption('not_attached');
+    }
+    return;
+  }
   if (fieldType === 'attribute') {
     // Inside the .field-host, first text input is the combobox; second is the value.
     const inputs = row.locator('input[type="text"]');
@@ -192,6 +204,74 @@ test.describe('Find Servers (FMN-114) E2E - stubbed tenant', () => {
       expect(columns).toEqual(['#', 'Server ID', 'Name', 'FQDN']);
       expect(rows.length).toBe(2);
       expect(rows.map((r) => r[1]).sort()).toEqual(['1001', '1002']);
+    } finally {
+      await page.close();
+    }
+  });
+
+  test('Scenario 5: applied_template = Critical Infra (FMN-121)', async ({ extensionContext, findServersUrl }) => {
+    const page = await openTool(extensionContext, findServersUrl);
+    try {
+      await fillCriterion(page, 0, {
+        fieldType: 'applied_template',
+        templateUrl: '/server_template/501',
+        match: 'attached'
+      });
+      await runSearch(page);
+
+      const { columns, rows } = await getResultRows(page);
+      // The matched-template column auto-shows when an applied_template
+      // criterion is active (matched mode = attached).
+      expect(columns).toEqual(['#', 'Server ID', 'Name', 'FQDN', 'Template: Critical Infra']);
+      // Critical Infra applies to 1001 + 1004 per the stub.
+      expect(rows.map((r) => r[1]).sort()).toEqual(['1001', '1004']);
+      // Each row's template column shows the matched name.
+      for (const r of rows) {
+        expect(r[4]).toBe('Critical Infra');
+      }
+    } finally {
+      await page.close();
+    }
+  });
+
+  test('Scenario 6: applied_template AND tag intersection (FMN-121)', async ({ extensionContext, findServersUrl }) => {
+    const page = await openTool(extensionContext, findServersUrl);
+    try {
+      await fillCriterion(page, 0, { fieldType: 'tag', value: 'production', exactMatch: true });
+      await addCriterion(page);
+      await fillCriterion(page, 1, {
+        fieldType: 'applied_template',
+        templateUrl: '/server_template/501',
+        match: 'attached'
+      });
+      await setMatchMode(page, 'all');
+      await runSearch(page);
+
+      const { rows } = await getResultRows(page);
+      // production tag servers: 1001, 1002, 1004. Critical Infra: 1001, 1004.
+      // Intersection: 1001, 1004.
+      expect(rows.map((r) => r[1]).sort()).toEqual(['1001', '1004']);
+    } finally {
+      await page.close();
+    }
+  });
+
+  test('Scenario 7: applied_template = NOT attached returns the inverse set (FMN-121)', async ({ extensionContext, findServersUrl }) => {
+    const page = await openTool(extensionContext, findServersUrl);
+    try {
+      await fillCriterion(page, 0, {
+        fieldType: 'applied_template',
+        templateUrl: '/server_template/501',
+        match: 'not_attached'
+      });
+      await runSearch(page);
+
+      const { columns, rows } = await getResultRows(page);
+      // not_attached match: the auto template column should NOT appear
+      // (it's only meaningful for attached matches).
+      expect(columns).toEqual(['#', 'Server ID', 'Name', 'FQDN']);
+      // Critical Infra is attached to 1001 + 1004; the rest (1002, 1003) match.
+      expect(rows.map((r) => r[1]).sort()).toEqual(['1002', '1003']);
     } finally {
       await page.close();
     }
