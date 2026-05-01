@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { getTabs, buildTabCsv, csvEscape, tabFilename } from '../src/ui/bpa-audit/viewer.js';
+import { getTabs, buildTabCsv, csvEscape, tabFilename, buildCombinedZipEntries, combinedZipFilename } from '../src/ui/bpa-audit/viewer.js';
 
 // =============================================================================
 // Tab definitions sanity
@@ -61,9 +61,9 @@ test('tabFilename: pattern is {customer}_{tab}_{YYYYMMDD}.csv (slugified custome
   assert.match(fname, /^acme-corp_incidents_\d{8}\.csv$/);
 });
 
-test('tabFilename: blank customer falls back to "bpa-audit" prefix', () => {
+test('tabFilename: blank customer falls back to "best-practice-assessment" prefix', () => {
   const tab = getTabs().find((t) => t.id === 'incidents');
-  assert.match(tabFilename(tab, ''), /^bpa-audit_incidents_\d{8}\.csv$/);
+  assert.match(tabFilename(tab, ''), /^best-practice-assessment_incidents_\d{8}\.csv$/);
 });
 
 // =============================================================================
@@ -79,7 +79,7 @@ test('buildTabCsv: Raw Counts tab emits a section header + table', () => {
     annotations: {}
   };
   const csv = buildTabCsv(tab, ctx, { generatedAt: '2026-05-01T00:00:00Z', customer: 'Acme' });
-  assert.match(csv, /^# Unofficial FortiMonitor Toolkit - BPA Audit/);
+  assert.match(csv, /^# Unofficial FortiMonitor Toolkit - Best-Practice Assessment/);
   assert.match(csv, /# Customer: Acme/);
   assert.match(csv, /# Tab: Raw Counts/);
   assert.match(csv, /# Resource Counts/);
@@ -126,6 +126,46 @@ test('buildTabCsv: empty sections without alwaysIncludeHeader are skipped from t
   assert.match(csv, /# Tab: Incidents/);
   // The CSV column header should NOT appear when the section has no rows.
   assert.equal(csv.includes('"Server","Incident ID"'), false);
+});
+
+// =============================================================================
+// Combined ZIP download (FMN-133 operator feedback)
+// =============================================================================
+
+test('combinedZipFilename: pattern is {customer}_best-practice-assessment_{YYYYMMDD}.zip', () => {
+  assert.match(combinedZipFilename('Acme Corp'), /^acme-corp_best-practice-assessment_\d{8}\.zip$/);
+});
+
+test('combinedZipFilename: blank customer falls back to generic prefix', () => {
+  assert.match(combinedZipFilename(''), /^best-practice-assessment_best-practice-assessment_\d{8}\.zip$/);
+});
+
+test('buildCombinedZipEntries: emits one CSV per tab + a README, all 12 entries', () => {
+  const ctx = {
+    inventory: { servers: [{ id: 1, status: 'active' }] },
+    analysis: { incidents: { active_details: [], top_by_instance: [], top_by_type: [], noisy_metrics: [], trending: {} }, users: { details: [] } },
+    customer: 'Acme',
+    annotations: {}
+  };
+  const entries = buildCombinedZipEntries(ctx, { generatedAt: '2026-05-01T00:00:00Z', customer: 'Acme' });
+  assert.equal(entries.length, getTabs().length + 1, 'expected 11 tabs + 1 README');
+  // README is first
+  assert.equal(entries[0].filename, 'README.txt');
+  assert.match(entries[0].content, /Best-Practice Assessment/);
+  assert.match(entries[0].content, /Customer: Acme/);
+  // Every tab is represented by exactly one CSV
+  const csvNames = entries.slice(1).map((e) => e.filename);
+  for (const tab of getTabs()) {
+    assert.ok(csvNames.includes(`${tab.filenamePart}.csv`), `expected ${tab.filenamePart}.csv in zip`);
+  }
+});
+
+test('buildCombinedZipEntries: README lists every tab with its label', () => {
+  const entries = buildCombinedZipEntries({ inventory: {}, analysis: {}, customer: '', annotations: {} });
+  const readme = entries[0].content;
+  for (const tab of getTabs()) {
+    assert.match(readme, new RegExp(`${tab.filenamePart}\\.csv\\s+-\\s+${tab.label.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}`));
+  }
 });
 
 test('buildTabCsv: Recommendations tab serializes priority + text rows', () => {

@@ -47,19 +47,22 @@ test.describe('BPA Audit popup wiring (FMN-133)', () => {
     const page = await extensionContext.newPage();
     await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
     const tile = page.locator('.tool-card[data-tool="bpa-audit"]');
-    await expect(tile.locator('.tool-name')).toContainText('BPA Audit');
-    await expect(tile.locator('.tool-desc')).toHaveAttribute('data-default-desc', /best-practice analyzers/);
-    await expect(tile.locator('.tool-desc')).toHaveAttribute('data-default-desc', /per-tab CSVs/);
+    await expect(tile.locator('.tool-name')).toContainText('Best-Practice Assessment');
+    await expect(tile.locator('.tool-desc')).toHaveAttribute('data-default-desc', /best-practice dimensions/);
+    await expect(tile.locator('.tool-desc')).toHaveAttribute('data-default-desc', /combined report or per-tab CSVs/);
+    // No "crawl" verbiage anywhere on the tile.
+    const desc = await tile.locator('.tool-desc').getAttribute('data-default-desc') ?? '';
+    expect(desc.toLowerCase()).not.toContain('crawl');
     await page.close();
   });
 
-  test('Settings toggle copy is scoped to BPA Audit only', async ({ extensionContext, extensionId }) => {
+  test('Settings toggle copy is scoped to Best-Practice Assessment only', async ({ extensionContext, extensionId }) => {
     const page = await extensionContext.newPage();
     await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
     await page.locator('#settings-toggle').click();
     const toggleSpan = page.locator('label.toggle-row:has(#bpa-audit-toggle) span');
     await expect(toggleSpan).toBeAttached();
-    expect((await toggleSpan.textContent())?.trim()).toBe('Show BPA Audit');
+    expect((await toggleSpan.textContent())?.trim()).toBe('Show Best-Practice Assessment');
     await page.close();
   });
 
@@ -87,7 +90,7 @@ test.describe('BPA Audit popup wiring (FMN-133)', () => {
     await expect(appPage.getByRole('heading', { name: /FortiMonitor Best-Practice Assessment/i })).toBeVisible();
     await expect(appPage.locator('input[type="checkbox"]')).toBeVisible();
     await expect(appPage.locator('input[type="number"]')).toBeAttached();
-    await expect(appPage.getByRole('button', { name: /Run audit/ })).toBeVisible();
+    await expect(appPage.getByRole('button', { name: /Run assessment/ })).toBeVisible();
 
     await appPage.close();
     await page.close();

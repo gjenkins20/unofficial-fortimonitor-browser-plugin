@@ -8,7 +8,7 @@
 
 import { h, titleBar } from '../../../lib/dom.js';
 
-const TOOL_NAME = 'BPA Audit';
+const TOOL_NAME = 'Best-Practice Assessment';
 
 export function reportBreadcrumbs(active) {
   const steps = [
@@ -36,10 +36,10 @@ export function render({ container, store, navigate }) {
     reportBreadcrumbs('start'),
     h('h2', {}, 'FortiMonitor Best-Practice Assessment'),
     h('p', {},
-      'Crawls the v2 API, scores the instance against five best-practice analyzers ',
-      '(incidents, users, instances, templates, monitoring policy workflow), and ',
-      'surfaces an 11-tab in-browser viewer with a per-tab CSV download. Hand-curate ',
-      'the CSVs after review and deliver to the customer.'
+      'Assesses the instance against five best-practice analyzers ',
+      '(incidents, users, instances, templates, monitoring policy workflow) and ',
+      'presents the findings in an 11-tab in-browser viewer. Download a single ',
+      'combined report or per-tab CSVs to hand-curate before delivery.'
     ),
     h('p', { class: 'muted' },
       'Read-only. Uses your FortiMonitor v2 API key from popup → Settings.'
@@ -66,7 +66,7 @@ export function render({ container, store, navigate }) {
   // Deep-mode toggle
   body.appendChild(h('h3', { class: 'subhead', style: 'margin-top:1rem;' }, 'Per-server deep dive'));
   body.appendChild(h('p', { class: 'muted', style: 'font-size:0.85rem;margin:0 0 0.4rem;' },
-    'Off by default. When on, the crawl walks each server\'s agent_resource, ',
+    'Off by default. When on, the assessment walks each server\'s agent_resource, ',
     'agent_resource_threshold, network_service, and attribute endpoints. Required for ',
     'the Instance Analysis and Manual Threshold Patterns sections to populate. ',
     'Adds 4-5 v2 API calls per server; allow 5-15 minutes for tenants with hundreds of servers.'
@@ -78,7 +78,7 @@ export function render({ container, store, navigate }) {
   // Max-servers cap
   body.appendChild(h('h3', { class: 'subhead', style: 'margin-top:1rem;' }, 'Max servers (optional)'));
   body.appendChild(h('p', { class: 'muted', style: 'font-size:0.85rem;margin:0 0 0.4rem;' },
-    'Useful for sampling a tenant before committing to a full deep crawl. Leave blank for no cap.'
+    'Useful for sampling a tenant before committing to a full deep assessment. Leave blank for no cap.'
   ));
   const maxInput = h('input', {
     type: 'number', min: '0', step: '1', class: 'paste-area',
@@ -90,7 +90,7 @@ export function render({ container, store, navigate }) {
 
   // Action bar
   const stateLabel = h('span', { class: 'execute-state muted' }, '');
-  const runBtn = h('button', { class: 'btn btn-primary' }, 'Run audit');
+  const runBtn = h('button', { class: 'btn btn-primary' }, 'Run assessment');
   const actionBar = h('div', { class: 'action-bar' },
     h('div', { class: 'left' }, stateLabel),
     h('div', { class: 'right' }, runBtn)

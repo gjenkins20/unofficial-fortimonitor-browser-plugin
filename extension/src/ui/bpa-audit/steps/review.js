@@ -9,7 +9,7 @@ import { h, titleBar } from '../../../lib/dom.js';
 import { reportBreadcrumbs } from './start.js';
 import { renderViewer } from '../viewer.js';
 
-const TOOL_NAME = 'BPA Audit';
+const TOOL_NAME = 'Best-Practice Assessment';
 
 export function render({ container, store, navigate }) {
   const frame = h('div', { class: 'mockup-frame' });
@@ -18,8 +18,8 @@ export function render({ container, store, navigate }) {
   frame.appendChild(h('div', { class: 'step-header' },
     reportBreadcrumbs('review'),
     h('h2', {}, store.customerName
-      ? `${store.customerName} - BPA Audit`
-      : 'BPA Audit'),
+      ? `${store.customerName} - Best-Practice Assessment`
+      : 'Best-Practice Assessment'),
     h('p', { class: 'muted' },
       '11 tabs - one per section of the report. Each tab has a "Download CSV" button. ',
       'User Activity has manual-entry columns; values you type there persist while this ',
@@ -30,7 +30,7 @@ export function render({ container, store, navigate }) {
   const viewerHost = h('div', { class: 'body-section bpa-viewer-host' });
   frame.appendChild(viewerHost);
 
-  const newRunBtn = h('button', { class: 'btn btn-secondary' }, 'New audit');
+  const newRunBtn = h('button', { class: 'btn btn-secondary' }, 'New assessment');
   newRunBtn.addEventListener('click', () => {
     store.runResult = null;
     store.runError = null;

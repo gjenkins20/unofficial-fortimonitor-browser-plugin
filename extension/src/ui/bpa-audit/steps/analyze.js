@@ -10,7 +10,7 @@
 import { h, titleBar } from '../../../lib/dom.js';
 import { reportBreadcrumbs } from './start.js';
 
-const TOOL_NAME = 'BPA Audit';
+const TOOL_NAME = 'Best-Practice Assessment';
 
 export function render({ container, store, navigate }) {
   const result = store.runResult ?? {};
@@ -70,7 +70,7 @@ export function render({ container, store, navigate }) {
   }
 
   const reviewBtn = h('button', { class: 'btn btn-primary' }, 'Open viewer');
-  const restartBtn = h('button', { class: 'btn btn-secondary' }, 'New audit');
+  const restartBtn = h('button', { class: 'btn btn-secondary' }, 'New assessment');
   const actionBar = h('div', { class: 'action-bar' },
     h('div', { class: 'left' }),
     h('div', { class: 'right' }, restartBtn, reviewBtn)

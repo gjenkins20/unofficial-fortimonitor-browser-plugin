@@ -96,6 +96,16 @@ test.describe('BPA Audit viewer harness (FMN-133)', () => {
     await page.close();
   });
 
+  test('Combined-report ZIP button downloads a .zip with the customer-prefixed filename', async ({ extensionContext }) => {
+    const page = await extensionContext.newPage();
+    await page.goto(HARNESS_URL);
+    const downloadPromise = page.waitForEvent('download');
+    await page.locator('[data-test="download-combined-report"]').click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toMatch(/^acme-corp-harness_best-practice-assessment_\d{8}\.zip$/);
+    await page.close();
+  });
+
   test('Filter input restricts visible rows in the active tab', async ({ extensionContext }) => {
     const page = await extensionContext.newPage();
     await page.goto(HARNESS_URL);

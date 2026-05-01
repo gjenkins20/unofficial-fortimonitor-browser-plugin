@@ -1,5 +1,5 @@
 // Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// BPA Audit viewer - 11-tab review surface (FMN-133).
+// Best-Practice Assessment viewer - 11-tab review surface (FMN-133).
 //
 // Each tab declares a list of "sections" (a section is a labelled
 // table). The viewer renders each section as an HTML <table>; the
@@ -11,6 +11,7 @@
 // alongside the rest of the row.
 
 import { h, downloadBlob } from '../../lib/dom.js';
+import { downloadZip } from '../../lib/zip.js';
 import {
   buildExecutiveSummary,
   buildFeatureUtilization,
@@ -34,7 +35,7 @@ export function csvEscape(v) {
  */
 export function buildTabCsv(tab, ctx, { generatedAt = new Date().toISOString(), customer = '' } = {}) {
   const lines = [];
-  lines.push('# Unofficial FortiMonitor Toolkit - BPA Audit');
+  lines.push('# Unofficial FortiMonitor Toolkit - Best-Practice Assessment');
   lines.push(`# Tab: ${tab.label}`);
   if (customer) lines.push(`# Customer: ${customer}`);
   lines.push(`# Generated: ${generatedAt}`);
@@ -75,8 +76,61 @@ function safeFilenamePart(s) {
 
 export function tabFilename(tab, customer) {
   const slugCustomer = safeFilenamePart(customer);
-  const prefix = slugCustomer || 'bpa-audit';
+  const prefix = slugCustomer || 'best-practice-assessment';
   return `${prefix}_${tab.filenamePart}_${timestampPart()}.csv`;
+}
+
+/**
+ * Build the entries list for the combined ZIP download. One CSV per tab,
+ * named so the operator can extract and rename without ambiguity.
+ *
+ * @param {object} ctx     viewer context: { inventory, analysis, customer, annotations }
+ * @param {{ generatedAt?: string, customer?: string }} [options]
+ * @returns {{ filename: string, content: string }[]}
+ */
+export function buildCombinedZipEntries(ctx, { generatedAt = new Date().toISOString(), customer = '' } = {}) {
+  const entries = [];
+  for (const tab of getTabs()) {
+    entries.push({
+      filename: `${String(tab.filenamePart)}.csv`,
+      content: buildTabCsv(tab, ctx, { generatedAt, customer })
+    });
+  }
+  // README so the customer-facing recipient knows what's inside.
+  entries.unshift({
+    filename: 'README.txt',
+    content: combinedReadme(customer, generatedAt)
+  });
+  return entries;
+}
+
+function combinedReadme(customer, generatedAt) {
+  const lines = [
+    'Unofficial FortiMonitor Toolkit - Best-Practice Assessment',
+    'Built by Gregori Jenkins - https://www.linkedin.com/in/gregorijenkins',
+    '',
+    customer ? `Customer: ${customer}` : '',
+    `Generated: ${generatedAt}`,
+    '',
+    'Contents (one CSV per assessment tab):',
+    ''
+  ].filter((l) => l !== null);
+  for (const tab of getTabs()) {
+    lines.push(`  ${tab.filenamePart}.csv  -  ${tab.label}`);
+  }
+  lines.push('');
+  lines.push('Each CSV begins with comment lines (# prefix) describing the tab,');
+  lines.push('followed by one or more sections. Each section has its own column');
+  lines.push('header row. Open in Excel / Numbers / Sheets - the comment lines');
+  lines.push('are ignored by most parsers but human-readable when the file is');
+  lines.push('opened as plain text.');
+  return lines.join('\n');
+}
+
+export function combinedZipFilename(customer) {
+  const slug = safeFilenamePart(customer);
+  const prefix = slug || 'best-practice-assessment';
+  return `${prefix}_best-practice-assessment_${timestampPart()}.zip`;
 }
 
 // =============================================================================
@@ -399,7 +453,7 @@ const TABS = [
         { key: 'text',     header: 'Recommendation', getter: (r) => r.text }
       ],
       rows: ({ inventory, analysis }) => buildRecommendations(inventory, analysis),
-      emptyText: 'No recommendations - looks healthy on the dimensions this audit checks.'
+      emptyText: 'No recommendations - looks healthy on the dimensions this assessment checks.'
     }]
   },
 
@@ -465,6 +519,29 @@ export function renderViewer({ root, store }) {
     annotations: store.annotations
   });
 
+  // Top action bar: combined-report download (one ZIP containing all 11 tabs)
+  const filenameStatus = h('span', { class: 'muted', style: 'font-size:0.85rem;margin-left:0.6rem;' }, '');
+  const combinedBtn = h('button', {
+    class: 'btn btn-primary',
+    'data-test': 'download-combined-report'
+  }, 'Download Combined Report (ZIP)');
+  combinedBtn.addEventListener('click', () => {
+    const entries = buildCombinedZipEntries(ctx(), { customer });
+    const fname = combinedZipFilename(customer);
+    downloadZip(fname, entries);
+    filenameStatus.textContent = `Saved ${fname}`;
+  });
+  root.appendChild(h('div', {
+    class: 'viewer-toolbar',
+    style: 'display:flex;align-items:center;gap:0.6rem;margin-bottom:0.6rem;flex-wrap:wrap;'
+  },
+    combinedBtn,
+    h('span', { class: 'muted', style: 'font-size:0.85rem;' },
+      'One zip with all 11 tabs as separate CSVs plus a README. Or download a single tab below.'
+    ),
+    filenameStatus
+  ));
+
   // Tab strip
   const strip = h('div', {
     class: 'tab-strip',
@@ -473,7 +550,6 @@ export function renderViewer({ root, store }) {
   });
   // Active tab pane
   const pane = h('div', { class: 'tab-pane', 'data-test': 'tab-pane' });
-  const filenameStatus = h('span', { class: 'muted', style: 'font-size:0.85rem;' }, '');
 
   const tabButtons = new Map();
   for (const tab of TABS) {
@@ -502,10 +578,6 @@ export function renderViewer({ root, store }) {
 
   root.appendChild(strip);
   root.appendChild(pane);
-  root.appendChild(h('div', {
-    class: 'tab-status',
-    style: 'margin-top:0.5rem;'
-  }, filenameStatus));
 
   activate(TABS[0].id);
   return () => { /* no-op teardown - DOM lives inside container */ };
