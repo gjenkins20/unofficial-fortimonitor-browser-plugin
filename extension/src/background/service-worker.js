@@ -18,6 +18,7 @@ import { createTemplateHandlers } from './template-handlers.js';
 import { createServerLookupHandlers } from './server-lookup-handlers.js';
 import { createServerSearchHandlers } from './server-search-handlers.js';
 import { createSdwanReportHandlers } from './sdwan-report-handlers.js';
+import { createBpaAuditHandlers } from './bpa-audit-handlers.js';
 import { createClaudeChatHandlers } from './claude-chat-handlers.js';
 import { resolveFortimonitorOrigin } from '../lib/origin-resolver.js';
 import { applyAllProviderRules, WATCHED_STORAGE_KEYS } from '../lib/origin-rewrite.js';
@@ -44,6 +45,7 @@ const handlers = {
   ...createServerLookupHandlers({ events: { emit } }),
   ...createServerSearchHandlers({ events: { emit } }),
   ...createSdwanReportHandlers({ events: { emit } }),
+  ...createBpaAuditHandlers({ events: { emit } }),
   ...createClaudeChatHandlers({ events: { emit } })
 };
 

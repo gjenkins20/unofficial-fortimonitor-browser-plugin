@@ -7,6 +7,9 @@ import {
   isSdwanReportEnabled,
   setSdwanReportEnabled,
   SDWAN_REPORT_ENABLED_KEY,
+  isBpaAuditEnabled,
+  setBpaAuditEnabled,
+  BPA_AUDIT_ENABLED_KEY,
   isShowFeatureBadgesEnabled,
   setShowFeatureBadgesEnabled,
   SHOW_FEATURE_BADGES_KEY,
@@ -122,6 +125,31 @@ test('isSdwanReportEnabled fails closed (returns false) on storage error', async
 
 test('SDWAN_REPORT_ENABLED_KEY uses the sdwan-prefixed storage key', () => {
   assert.equal(SDWAN_REPORT_ENABLED_KEY, 'fm:sdwanReportEnabled');
+});
+
+// ---------- FMN-133: BPA Audit visibility flag ----------
+
+test('isBpaAuditEnabled defaults to false on empty storage (tile hidden until opt-in)', async () => {
+  const storage = createStorageMock();
+  assert.equal(await isBpaAuditEnabled(storage), false);
+});
+
+test('setBpaAuditEnabled round-trips a true write', async () => {
+  const storage = createStorageMock();
+  await setBpaAuditEnabled(true, storage);
+  assert.equal(await isBpaAuditEnabled(storage), true);
+  assert.equal(storage.__raw()[BPA_AUDIT_ENABLED_KEY], true);
+  await setBpaAuditEnabled(false, storage);
+  assert.equal(await isBpaAuditEnabled(storage), false);
+});
+
+test('isBpaAuditEnabled fails closed (returns false) on storage error', async () => {
+  const brokenStorage = { async get() { throw new Error('storage unavailable'); } };
+  assert.equal(await isBpaAuditEnabled(brokenStorage), false);
+});
+
+test('BPA_AUDIT_ENABLED_KEY uses the bpa-prefixed storage key', () => {
+  assert.equal(BPA_AUDIT_ENABLED_KEY, 'fm:bpaAuditEnabled');
 });
 
 test('getAskClaudeToolTier defaults to readonly on empty storage (FMN-97)', async () => {
