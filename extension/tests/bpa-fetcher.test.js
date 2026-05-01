@@ -305,6 +305,20 @@ test('BpaFetcher.collectInventory: 404 from a list endpoint becomes empty array,
   assert.equal(inv.errors.length, 0);
 });
 
+test('BpaFetcher.collectInventory: 405 from a list endpoint is silently skipped (FMN-133 status_page)', async () => {
+  // Real-world: GET /v2/status_page?limit=200 returns 405 on production
+  // tenants. The endpoint is GET-listable for some accounts but not others;
+  // either way, we treat it like 404 - empty list, no error noise.
+  const routes = makeStandardRoutes();
+  routes.unshift({ match: /\/status_page\?limit=/, respond: () => errorResponse(405) });
+  const fetch = routeFetch(routes);
+  const client = new PanoptaClient({ apiKey: 'k', fetch });
+  const fetcher = new BpaFetcher({ client });
+  const inv = await fetcher.collectInventory();
+  assert.deepEqual(inv.status_pages, []);
+  assert.equal(inv.errors.length, 0, 'errors[] must NOT contain status_pages 405');
+});
+
 test('BpaFetcher.collectInventory: 401 from any list endpoint fails the whole collection', async () => {
   const routes = makeStandardRoutes();
   routes.unshift({ match: /\/server\?limit=/, respond: () => errorResponse(401) });

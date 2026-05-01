@@ -11,10 +11,12 @@ export const SIDEBAR_LAUNCHER_ENABLED_KEY = 'fm:sidebarLauncherEnabled';
 export const SHOW_FEATURE_BADGES_KEY = 'fm:showFeatureBadges';
 // FMN-129: per-tool visibility flag for the SD-WAN Report tile. Code
 // merges to main; tile only renders when the operator toggles this on
-// in popup -> Settings. The Best-Practice Assessment tool (FMN-133)
-// will not share this flag - it ships always-visible per operator
-// guidance recorded on FMN-128 / FMN-133.
+// in popup -> Settings.
 export const SDWAN_REPORT_ENABLED_KEY = 'fm:sdwanReportEnabled';
+// FMN-133: per-tool visibility flag for the BPA Audit tile. Same Beta
+// gating pattern as SD-WAN Report; the FMN-133 ticket explicitly calls
+// for "Same gating as FMN-129 / FMN-130. Tile hidden when off."
+export const BPA_AUDIT_ENABLED_KEY = 'fm:bpaAuditEnabled';
 
 export const ASK_CLAUDE_TOOL_TIERS = ['readonly', 'readwrite', 'all'];
 export const DEFAULT_ASK_CLAUDE_TOOL_TIER = 'readonly';
@@ -202,6 +204,33 @@ export async function isSdwanReportEnabled(storage = defaultStorage()) {
  */
 export async function setSdwanReportEnabled(enabled, storage = defaultStorage()) {
   await storage.set({ [SDWAN_REPORT_ENABLED_KEY]: Boolean(enabled) });
+}
+
+/**
+ * Read the BPA-Audit-enabled flag. Returns false by default so the
+ * tile stays hidden until the operator opts in via Settings. Storage
+ * errors fail closed so a transient blip never silently surfaces a
+ * tool the operator hasn't asked for.
+ *
+ * @param {{ get: (key: string) => Promise<Record<string, any>> }} [storage]
+ */
+export async function isBpaAuditEnabled(storage = defaultStorage()) {
+  try {
+    const data = await storage.get(BPA_AUDIT_ENABLED_KEY);
+    return Boolean(data?.[BPA_AUDIT_ENABLED_KEY]);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Persist the BPA-Audit-enabled flag.
+ *
+ * @param {boolean} enabled
+ * @param {{ set: (obj: Record<string, any>) => Promise<void> }} [storage]
+ */
+export async function setBpaAuditEnabled(enabled, storage = defaultStorage()) {
+  await storage.set({ [BPA_AUDIT_ENABLED_KEY]: Boolean(enabled) });
 }
 
 /**

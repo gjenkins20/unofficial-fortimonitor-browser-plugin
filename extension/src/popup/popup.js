@@ -19,6 +19,8 @@ import {
   setServerSearchEnabled,
   isSdwanReportEnabled,
   setSdwanReportEnabled,
+  isBpaAuditEnabled,
+  setBpaAuditEnabled,
   isSidebarLauncherEnabled,
   setSidebarLauncherEnabled,
   isShowFeatureBadgesEnabled,
@@ -283,6 +285,11 @@ async function loadSdwanReportIntoToggle() {
   toggle.checked = await isSdwanReportEnabled();
 }
 
+async function loadBpaAuditIntoToggle() {
+  const toggle = document.getElementById('bpa-audit-toggle');
+  toggle.checked = await isBpaAuditEnabled();
+}
+
 async function loadSidebarLauncherIntoToggle() {
   const toggle = document.getElementById('sidebar-launcher-toggle');
   toggle.checked = await isSidebarLauncherEnabled();
@@ -316,6 +323,10 @@ async function applyExperimentalVisibility() {
   const sdwanReportOn = await isSdwanReportEnabled();
   for (const el of document.querySelectorAll('[data-experimental="sdwan-report"]')) {
     el.hidden = !sdwanReportOn;
+  }
+  const bpaAuditOn = await isBpaAuditEnabled();
+  for (const el of document.querySelectorAll('[data-experimental="bpa-audit"]')) {
+    el.hidden = !bpaAuditOn;
   }
 }
 
@@ -840,6 +851,7 @@ function init() {
     await loadProviderConfigIntoInputs('lmstudio');
     await loadServerSearchIntoToggle();
     await loadSdwanReportIntoToggle();
+    await loadBpaAuditIntoToggle();
     await loadSidebarLauncherIntoToggle();
     await loadShowFeatureBadgesIntoToggle();
     await loadWebguiColumnsIntoSettings();
@@ -902,6 +914,12 @@ function init() {
 
   document.getElementById('sdwan-report-toggle').addEventListener('change', async (e) => {
     await setSdwanReportEnabled(e.target.checked);
+    await applyExperimentalVisibility();
+    await refreshGuards();
+  });
+
+  document.getElementById('bpa-audit-toggle').addEventListener('change', async (e) => {
+    await setBpaAuditEnabled(e.target.checked);
     await applyExperimentalVisibility();
     await refreshGuards();
   });

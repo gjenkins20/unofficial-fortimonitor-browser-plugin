@@ -44,7 +44,11 @@ export const test = base.extend({
         `--disable-extensions-except=${EXTENSION_PATH}`,
         `--load-extension=${EXTENSION_PATH}`,
         '--window-position=-32000,-32000',
-        '--start-minimized'
+        '--start-minimized',
+        // Allow ES-module imports between docs/harnesses/*.html and the
+        // sibling extension/src/ tree without spinning up an HTTP server
+        // (FMN-133 viewer harness Playwright spec).
+        '--allow-file-access-from-files'
       ]
     });
     await use(context);

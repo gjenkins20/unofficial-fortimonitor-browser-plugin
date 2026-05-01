@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<!--
+  Unofficial FortiMonitor Toolkit - BPA Audit viewer synthetic harness (FMN-133).
+  Built by Gregori Jenkins · https://www.linkedin.com/in/gregorijenkins
+
+  Loads viewer.js with a fixture inventory + analysis so the 11-tab
+  surface can be exercised without a live FortiMonitor tenant. No
+  chrome.* APIs are required - the viewer is pure DOM.
+
+  How to open:
+    Default Chrome blocks ES-module imports across file:// directories,
+    so opening this HTML directly will fail silently. Use a local HTTP
+    server instead. From the repo root:
+      python3 -m http.server 8000
+    then visit http://localhost:8000/docs/harnesses/bpa-audit-viewer.html
+    The Playwright runner uses --allow-file-access-from-files which
+    bypasses this restriction; the harness is exercised in CI via
+    tests/e2e/bpa-audit-viewer.spec.js.
+
+  Per memory verify_in_playwright_what_you_can.md: this harness is the
+  Claude-side QA for the viewer's tab strip + section rendering + CSV
+  builder shape. Operator QA happens against a real tenant + popup install.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BPA Audit Viewer harness · FMN-133</title>
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; padding: 1.2rem; }
+  h1 { margin: 0 0 0.5rem; }
+  .heartbeat { color: #888; font-size: 0.85rem; }
+  .frame { border: 1px solid #ccc; border-radius: 6px; padding: 1rem; margin-top: 1rem; }
+  .review-table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+  .review-table th, .review-table td { border: 1px solid #ddd; padding: 0.3rem 0.5rem; text-align: left; vertical-align: top; }
+  .review-table th { background: #f3f5f9; }
+  .subhead { font-size: 1rem; margin-top: 0.3rem; }
+  .muted { color: #777; }
+  .btn { padding: 0.35rem 0.8rem; border: 1px solid #1f4e79; border-radius: 4px; background: #fff; cursor: pointer; }
+  .btn-secondary { background: #fff; color: #1f4e79; }
+  .annotation-input { font: inherit; }
+</style>
+</head>
+<body>
+<h1>BPA Audit Viewer harness <span class="heartbeat" id="heartbeat">[heartbeat: 0]</span></h1>
+<p class="muted">FMN-133 - synthetic 11-tab render against a fixture inventory + analysis. The heartbeat ticks every second to confirm the page isn't frozen.</p>
+<div id="harness-host" class="frame"></div>
+
+<script type="module">
+  import { renderViewer, getTabs } from '../../extension/src/ui/bpa-audit/viewer.js';
+  import { runAllAnalyzers } from '../../extension/src/lib/bpa-analyzers/index.js';
+
+  // Heartbeat - if the harness freezes (eg. infinite render loop) the
+  // counter stops ticking. Per Verification Discipline rule 5,
+  // augment.js-style feedback loops have shipped before; we want a
+  // live signal that the viewer doesn't have an analogous bug.
+  let hb = 0;
+  setInterval(() => {
+    hb += 1;
+    document.getElementById('heartbeat').textContent = `[heartbeat: ${hb}]`;
+  }, 1000);
+
+  // Fixture inventory: small but exercises every analyzer + synthesis path.
+  const inventory = {
+    // Core inventory with enough variety to flip every status / status_reasoning case
+    servers: [
+      { id: 1, name: 'fgvm-prod-01', fqdn: 'fgvm-prod-01.acme.com', status: 'active', server_template: '/v2/server_template/9' },
+      { id: 2, name: 'fgvm-prod-02', fqdn: 'fgvm-prod-02.acme.com', status: 'active', server_template: '/v2/server_template/9' },
+      { id: 3, name: 'fgvm-prod-03', fqdn: 'fgvm-prod-03.acme.com', status: 'paused', server_template: '/v2/server_template/9' }
+    ],
+    server_groups: [
+      { id: 11, name: 'Prod', url: '/v2/server_group/11' },
+      { id: 12, name: 'Dev', url: '/v2/server_group/12' }
+    ],
+    server_templates: [
+      { id: 9, name: 'Linux Standard', url: '/v2/server_template/9' }
+    ],
+    outages: [
+      { id: 5001, server_name: 'fgvm-prod-01', active: true, severity: 'critical', acknowledged: false, start_time: '2026-04-30T12:00:00Z' },
+      { id: 5002, server_name: 'fgvm-prod-02', active: true, severity: 'warning', acknowledged: true, start_time: '2026-04-30T18:30:00Z' },
+      { id: 5003, server_name: 'fgvm-prod-01', active: false, severity: 'warning', start_time: '2026-04-29T10:00:00Z', end_time: '2026-04-29T10:10:00Z' },
+      { id: 5004, server_name: 'fgvm-prod-01', active: false, severity: 'warning', start_time: '2026-04-29T11:00:00Z', end_time: '2026-04-29T11:10:00Z' },
+      { id: 5005, server_name: 'fgvm-prod-01', active: false, severity: 'warning', start_time: '2026-04-29T12:00:00Z', end_time: '2026-04-29T12:10:00Z' }
+    ],
+    outage_logs: {
+      '5001': [{ description: 'Incident detected ICMP Ping (fgvm-prod-01.acme.com)' }]
+    },
+    outage_stats_7d:  { total: 6, by_severity: { critical: 2, warning: 4 } },
+    outage_stats_30d: { total: 18, by_severity: { critical: 5, warning: 13 } },
+    outage_stats_60d: { total: 30 },
+
+    compound_services: [],
+    dem_applications: [],
+    dashboards: [{ id: 1, name: 'Ops' }],
+    status_pages: [],
+    contacts: [{ id: 1, display_name: 'Greg', email: 'g@acme', contact_info: [{}, {}] }],
+    contact_groups: [],
+    notification_schedules: [{ id: 1 }],
+    rotating_contacts: [],
+    maintenance_windows: [{ id: 1 }],
+    onsights: [{ id: 1, name: 'OnSight 1' }],
+    fabric_connections: [{ id: 1 }],
+    cloud_credentials: [],
+    snmp_credentials: [],
+    monitoring_nodes: [{ id: 1, name: 'mon-1' }],
+    users: [
+      { id: 1, name: 'Alice', email: 'a@acme.com', created: '2024-01-01', contact_info: [{}, {}, {}] },
+      { id: 2, name: 'Bob',   email: 'b@acme.com', created: '2025-06-01', contact_info: [{}] },
+      { id: 3, name: 'Alice', email: 'alice2@acme.com', created: '2024-03-01', contact_info: [] }
+    ],
+    account_history: [],
+    server_group_details: {
+      '11': { id: 11, name: 'Prod', server_template: { name: 'Linux Standard' }, server_list: [{ id: 1 }, { id: 2 }], parent: '/v2/server_group/100', notification_schedule: '/v2/notification_schedule/1' },
+      '12': { id: 12, name: 'Dev',  server_list: [{ id: 3 }] }
+    },
+    server_template_details: {
+      '9': {
+        id: 9,
+        name: 'Linux Standard',
+        agent_resource_type: [
+          { name: 'CPU', agent_resource_threshold: [] },
+          { name: 'Memory' }
+        ],
+        network_service: [{ name: 'icmp' }]
+      }
+    },
+
+    // Deep-mode fixture data
+    server_resources: {
+      '1': [
+        { id: 11, agent_resource_type: { name: 'CPU' } },
+        { id: 12, agent_resource_type: { name: 'Memory' } }
+      ],
+      '2': [
+        { id: 21, agent_resource_type: { name: 'CPU' } },
+        { id: 22, agent_resource_type: { name: 'Memory' } }
+      ],
+      '3': [
+        { id: 31, agent_resource_type: { name: 'CPU' } } // missing Memory vs peers
+      ]
+    },
+    server_resource_details: {
+      '1': { '11': { agent_resource_type: { name: 'CPU' }, agent_resource_threshold: [{ warning: 80, critical: 90 }] }, '12': {} },
+      '2': { '21': { agent_resource_type: { name: 'CPU' }, agent_resource_threshold: [{ warning: 80, critical: 90 }] }, '22': {} },
+      '3': { '31': { agent_resource_type: { name: 'CPU' }, agent_resource_threshold: [{ warning: 80, critical: 90 }] } }
+    }
+  };
+
+  const analysis = runAllAnalyzers(inventory);
+
+  const store = {
+    customerName: 'Acme Corp (harness)',
+    deep: true,
+    maxServers: 0,
+    runResult: { inventory, analysis, deep: true },
+    annotations: {}
+  };
+
+  renderViewer({ root: document.getElementById('harness-host'), store });
+
+  console.log(`[bpa-harness] mounted, ${getTabs().length} tabs, ${inventory.servers.length} servers, ${inventory.outages.length} outages`);
+</script>
+</body>
+</html>

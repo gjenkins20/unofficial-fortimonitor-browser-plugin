@@ -333,8 +333,14 @@ export class BpaFetcher {
   }
 
   /**
-   * Paginated list collection. 404 -> []. Other errors -> recorded into
-   * `errors` and []. 401 (auth) re-thrown so the caller can fail fast.
+   * Paginated list collection. 404 / 405 -> []. Other errors -> recorded
+   * into `errors` and []. 401 (auth) re-thrown so the caller can fail fast.
+   *
+   * 405 ("method not allowed") is treated like 404 because the v2 API
+   * surfaces it for endpoints that don't support GET-list at all
+   * (status_page, observed in FMN-133 QA on 2026-05-01). Recording every
+   * such endpoint as an "error" is noise - the audit just doesn't have
+   * data for it, same as 404.
    */
   async _collectList(name, path, errors) {
     this._emit({ type: 'endpoint-start', name });
@@ -350,7 +356,7 @@ export class BpaFetcher {
     } catch (err) {
       if (err?.name === 'AbortError') throw err;
       if (err instanceof PanoptaError && err.phase === 'auth') throw err;
-      if (err instanceof PanoptaError && err.status === 404) {
+      if (err instanceof PanoptaError && (err.status === 404 || err.status === 405)) {
         this._emit({ type: 'endpoint-done', name, count: 0 });
         return [];
       }
@@ -362,7 +368,7 @@ export class BpaFetcher {
   }
 
   /**
-   * Single-shot GET. 404 -> null. Other errors recorded; 401 re-thrown.
+   * Single-shot GET. 404 / 405 -> null. Other errors recorded; 401 re-thrown.
    */
   async _collectSingle(name, path, errors) {
     this._abortIfNeeded();
@@ -372,7 +378,7 @@ export class BpaFetcher {
     } catch (err) {
       if (err?.name === 'AbortError') throw err;
       if (err instanceof PanoptaError && err.phase === 'auth') throw err;
-      if (err instanceof PanoptaError && err.status === 404) return null;
+      if (err instanceof PanoptaError && (err.status === 404 || err.status === 405)) return null;
       const reason = err?.message ?? String(err);
       errors.push(`${name}: ${reason}`);
       return null;
