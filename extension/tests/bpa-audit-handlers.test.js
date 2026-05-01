@@ -1,8 +1,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createBpaAuditHandlers, runBpaAudit } from '../src/background/bpa-audit-handlers.js';
+import {
+  createBpaAuditHandlers,
+  runBpaAudit,
+  BPA_RUN_KEY
+} from '../src/background/bpa-audit-handlers.js';
 import { PanoptaClient, PanoptaError } from '../src/lib/panopta-client.js';
-import { createFetchMock, jsonResponse, errorResponse } from './fixtures/chrome-mocks.js';
+import {
+  createFetchMock,
+  createStorageMock,
+  jsonResponse,
+  errorResponse
+} from './fixtures/chrome-mocks.js';
 
 function listResponse(envelopeKey, items, total = items.length) {
   return jsonResponse({ [envelopeKey]: items, meta: { total_count: total } });
@@ -21,7 +30,8 @@ function buildBaselineFetch() {
 test('createBpaAuditHandlers: bpa:abort returns aborted=false when no run is active', async () => {
   const handlers = createBpaAuditHandlers({
     events: { emit: () => {} },
-    getClient: async () => new PanoptaClient({ apiKey: 'k', fetch: buildBaselineFetch() })
+    getClient: async () => new PanoptaClient({ apiKey: 'k', fetch: buildBaselineFetch() }),
+    storage: createStorageMock()
   });
   const r = await handlers['bpa:abort']({});
   assert.equal(r.aborted, false);
@@ -37,7 +47,8 @@ test('createBpaAuditHandlers: rejects concurrent bpa:run-audit calls', async () 
   });
   const handlers = createBpaAuditHandlers({
     events: { emit: () => {} },
-    getClient: async () => new PanoptaClient({ apiKey: 'k', fetch: slowFetch })
+    getClient: async () => new PanoptaClient({ apiKey: 'k', fetch: slowFetch }),
+    storage: createStorageMock()
   });
   const first = handlers['bpa:run-audit']({});
   // Wait one tick so the first run has registered itself.
@@ -60,7 +71,8 @@ test('createBpaAuditHandlers: bpa:abort while running surfaces an AbortError to 
   });
   const handlers = createBpaAuditHandlers({
     events: { emit: () => {} },
-    getClient: async () => new PanoptaClient({ apiKey: 'k', fetch: slowFetch })
+    getClient: async () => new PanoptaClient({ apiKey: 'k', fetch: slowFetch }),
+    storage: createStorageMock()
   });
   const runPromise = handlers['bpa:run-audit']({});
   await new Promise((r) => setTimeout(r, 10));
@@ -69,6 +81,46 @@ test('createBpaAuditHandlers: bpa:abort while running surfaces an AbortError to 
   if (resolveFirst) resolveFirst();
   // The run rejects with AbortError reshaped to "BPA audit cancelled".
   await assert.rejects(runPromise, (err) => err.name === 'AbortError' && /cancelled/i.test(err.message));
+});
+
+test('createBpaAuditHandlers: bpa:run-audit stages full result in storage and returns small handle', async () => {
+  const storage = createStorageMock();
+  const handlers = createBpaAuditHandlers({
+    events: { emit: () => {} },
+    getClient: async () => new PanoptaClient({ apiKey: 'k', fetch: buildBaselineFetch() }),
+    storage
+  });
+  const handle = await handlers['bpa:run-audit']({});
+  assert.equal(handle.runKey, BPA_RUN_KEY);
+  assert.ok(handle.summary);
+  assert.equal(typeof handle.summary.started_at, 'string');
+  assert.equal(typeof handle.summary.counts, 'object');
+  // Full result should be in storage, not in the handle.
+  assert.equal(handle.inventory, undefined);
+  assert.equal(handle.analysis, undefined);
+  const stored = storage.__raw()[BPA_RUN_KEY];
+  assert.ok(stored?.inventory, 'full inventory must be staged in storage');
+  assert.ok(stored?.analysis, 'full analysis must be staged in storage');
+});
+
+test('createBpaAuditHandlers: bpa:get-run-result returns staged result and clears the slot', async () => {
+  const storage = createStorageMock();
+  const handlers = createBpaAuditHandlers({
+    events: { emit: () => {} },
+    getClient: async () => new PanoptaClient({ apiKey: 'k', fetch: buildBaselineFetch() }),
+    storage
+  });
+  await handlers['bpa:run-audit']({});
+  const result = await handlers['bpa:get-run-result']({});
+  assert.ok(result.inventory);
+  assert.ok(result.analysis);
+  // Slot should be cleared after consumption.
+  assert.equal(storage.__raw()[BPA_RUN_KEY], undefined);
+  // Second call must reject - nothing left to read.
+  await assert.rejects(
+    () => handlers['bpa:get-run-result']({}),
+    /No staged BPA run result/
+  );
 });
 
 test('runBpaAudit: returns inventory + analysis on a tiny baseline fetch', async () => {

@@ -10,11 +10,22 @@
 // Read-only.
 //
 // Cancellation: single-flight; bpa:abort aborts the active run.
+//
+// Result delivery: the inventory + analysis payload is multi-megabyte on
+// real tenants (1000+ outages, hundreds of servers, deep-dive multipliers).
+// chrome.runtime.sendMessage round-trips of that size are unreliable - in
+// FMN-133 first-tenant QA the popup never received the response after a
+// 5-minute run. We sidestep the transport entirely by writing the result
+// to chrome.storage.session under BPA_RUN_KEY and returning a small handle;
+// the popup reads it back via bpa:get-run-result, which clears the slot
+// after consumption so a stale run can never bleed into a fresh one.
 
 import { PanoptaError } from '../lib/panopta-client.js';
 import { BpaFetcher, createBpaFetch } from '../lib/bpa-fetcher.js';
 import { PanoptaClient } from '../lib/panopta-client.js';
 import { runAllAnalyzers } from '../lib/bpa-analyzers/index.js';
+
+export const BPA_RUN_KEY = 'bpa.lastRun';
 
 /**
  * Build a paced + retrying PanoptaClient for the BPA crawl. Pulled out
@@ -84,9 +95,42 @@ export async function runBpaAudit({
 
 // ---- Message handlers ------------------------------------------------------
 
-export function createBpaAuditHandlers({ events = {}, getClient } = {}) {
+/**
+ * Build a small "did the run finish?" handle that fits comfortably in a
+ * chrome.runtime.sendMessage payload. The popup uses this to decide
+ * whether to read the full result back via bpa:get-run-result.
+ */
+function summarizeResult(result) {
+  const inv = result?.inventory ?? {};
+  const arr = (k) => Array.isArray(inv[k]) ? inv[k].length : 0;
+  return {
+    started_at: result?.started_at,
+    finished_at: result?.finished_at,
+    deep: result?.deep,
+    error_count: Array.isArray(inv.errors) ? inv.errors.length : 0,
+    counts: {
+      servers: arr('servers'),
+      outages: arr('outages'),
+      outages_recent: arr('outages_recent'),
+      users: arr('users'),
+      contacts: arr('contacts'),
+      server_groups: arr('server_groups'),
+      server_templates: arr('server_templates')
+    }
+  };
+}
+
+export function createBpaAuditHandlers({
+  events = {},
+  getClient,
+  storage
+} = {}) {
   const emit = events.emit ?? (() => {});
   const factory = getClient ?? (() => defaultClientFactory());
+  // Default to chrome.storage.session (MV3, in-memory, cleared on browser
+  // restart - the right scope for a one-shot run handoff). Tests inject
+  // a Map-backed mock.
+  const sessionStorage = storage ?? (typeof chrome !== 'undefined' ? chrome.storage?.session : null);
 
   let currentRun = null;
 
@@ -104,7 +148,11 @@ export function createBpaAuditHandlers({ events = {}, getClient } = {}) {
           signal: ac.signal,
           onProgress: (evt) => emit('bpa:progress', evt)
         });
-        return result;
+        if (!sessionStorage?.set) {
+          throw new Error('chrome.storage.session is unavailable; cannot stage BPA run result');
+        }
+        await sessionStorage.set({ [BPA_RUN_KEY]: result });
+        return { runKey: BPA_RUN_KEY, summary: summarizeResult(result) };
       } catch (err) {
         if (err?.name === 'AbortError') {
           const e = new Error('BPA audit cancelled');
@@ -116,6 +164,23 @@ export function createBpaAuditHandlers({ events = {}, getClient } = {}) {
       } finally {
         currentRun = null;
       }
+    },
+
+    'bpa:get-run-result': async (payload) => {
+      const key = payload?.runKey ?? BPA_RUN_KEY;
+      if (!sessionStorage?.get) {
+        throw new Error('chrome.storage.session is unavailable');
+      }
+      const stored = await sessionStorage.get(key);
+      const result = stored?.[key] ?? null;
+      if (!result) {
+        throw new Error('No staged BPA run result. The previous run may have been evicted.');
+      }
+      // One-shot: clear the slot so a stale run can't be misread as fresh.
+      if (sessionStorage.remove) {
+        try { await sessionStorage.remove(key); } catch { /* best-effort */ }
+      }
+      return result;
     },
 
     'bpa:abort': async () => {

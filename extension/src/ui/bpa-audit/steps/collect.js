@@ -171,17 +171,56 @@ export function render({ container, store, navigate, events }) {
     try { await call('bpa:abort', {}); } catch { /* run promise will reject */ }
   });
 
+  // Watchdog: if analyze:done has fired but the run-audit response hasn't
+  // come back within this window, surface a stalled-state warning instead
+  // of an indefinite spinner. (FMN-133 first-tenant QA hit a stall caused
+  // by a sendMessage transport issue; the result is now staged in
+  // chrome.storage.session, but if anything else stalls we want a visible
+  // affordance rather than a forever-running spinner.)
+  let stallTimer = null;
+  const STALL_TIMEOUT_MS = 8000;
+  const innerUnsub = events.on((event, payload) => {
+    if (event === 'bpa:progress' && payload?.phase === 'analyze:done') {
+      clearTimeout(stallTimer);
+      stallTimer = setTimeout(() => {
+        if (cancelled) return;
+        // Only surface if the call is still pending (no resolution).
+        if (!stateLabel.dataset.resolved) {
+          stateLabel.textContent = 'Stalled returning result; service worker may have stopped.';
+          stateLabel.className = 'execute-state error';
+          cancelBtn.textContent = 'Back to start';
+          cancelBtn.disabled = false;
+          cancelBtn.classList.remove('btn-secondary');
+          cancelBtn.classList.add('btn-primary');
+          cancelBtn.onclick = () => navigate('/start');
+        }
+      }, STALL_TIMEOUT_MS);
+    }
+  });
+
+  function markResolved() {
+    stateLabel.dataset.resolved = '1';
+    clearTimeout(stallTimer);
+    innerUnsub();
+  }
+
   (async () => {
     try {
-      const result = await call('bpa:run-audit', {
+      const handle = await call('bpa:run-audit', {
         deep: Boolean(store.deep),
         maxServers: store.maxServers ?? 0
       });
+      // The run handler stages the multi-megabyte result in chrome.storage.session
+      // and returns a small handle. Pull the full payload back via a separate
+      // call so this one's response stays small.
+      const result = await call('bpa:get-run-result', { runKey: handle?.runKey });
+      markResolved();
       store.runResult = result;
       stateLabel.textContent = `Done in ${formatElapsed(Date.now() - startTime)}.`;
       stateLabel.className = 'execute-state';
       setTimeout(() => navigate('/analyze'), 250);
     } catch (err) {
+      markResolved();
       const isAbort = err?.name === 'AbortError' || /cancelled/i.test(err?.message ?? '');
       if (isAbort || cancelled) {
         store.runCancelled = true;
@@ -207,6 +246,8 @@ export function render({ container, store, navigate, events }) {
 
   return () => {
     unsubscribe();
+    innerUnsub();
+    clearTimeout(stallTimer);
     clearInterval(elapsedTimer);
   };
 }
