@@ -181,6 +181,40 @@ test('analyzeUsers: builds detail rows, picks primary by contact methods, flags 
   // Issues: duplicate Alice (case-insensitive collapse), and 2 users with 0 contact methods.
   assert.ok(r.issues.some((s) => /duplicate user.*alice/i.test(s)));
   assert.ok(r.issues.some((s) => /2 user\(s\) have no contact methods/.test(s)));
+  // FMN-135: with no frontend_user_data, last_login is empty and remains
+  // an engineer-fillable manual annotation.
+  for (const d of r.details) {
+    assert.equal(d.last_login, '');
+    assert.equal(d.last_login_manual, true);
+    assert.equal(d.created_on, '');
+  }
+});
+
+test('analyzeUsers: merges frontend_user_data when present (FMN-135)', () => {
+  const r = analyzeUsers({
+    users: [
+      { id: 1, name: 'Alice', email: 'a@x', created: '2024-01-01', contact_info: [{}] },
+      { id: 2, name: 'Bob',   email: 'b@x', created: '2024-02-01', contact_info: [{}] },
+      { id: 3, name: 'Carol', email: 'c@x', created: '2024-03-01', contact_info: [{}] }
+    ],
+    frontend_user_data: {
+      '1': { last_login: '2026-04-30 12:00 UTC', created_on: 'Jan 1, 2024' },
+      // user 2 has no frontend datum
+      '3': { last_login: null, created_on: 'Mar 1, 2024' }
+    }
+  });
+  const byName = Object.fromEntries(r.details.map((d) => [d.name, d]));
+  assert.equal(byName.Alice.last_login, '2026-04-30 12:00 UTC');
+  assert.equal(byName.Alice.last_login_manual, false);
+  assert.equal(byName.Alice.created_on, 'Jan 1, 2024');
+  // Bob falls back to manual since no frontend datum was provided.
+  assert.equal(byName.Bob.last_login, '');
+  assert.equal(byName.Bob.last_login_manual, true);
+  assert.equal(byName.Bob.created_on, '');
+  // Carol: frontend datum exists but last_login is null - manual fallback.
+  assert.equal(byName.Carol.last_login, '');
+  assert.equal(byName.Carol.last_login_manual, true);
+  assert.equal(byName.Carol.created_on, 'Mar 1, 2024');
 });
 
 // =============================================================================

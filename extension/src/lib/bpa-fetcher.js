@@ -238,6 +238,10 @@ const ACTIVE_OUTAGE_LOG_CAP = 50;
  * @property {Object<string, Object[]>} [server_network_services]     /server/{id}/network_service (deep)
  * @property {Object<string, Object[]>} [server_attributes]           /server/{id}/attribute (deep)
  *
+ * @property {Object<string, {last_login:string|null, created_on:string|null}>} [frontend_user_data]
+ *   Optional enrichment from BpaFrontendFetcher (FMN-135). Keyed by user id (string).
+ *   Present when the operator opts into "Include FortiMonitor UI data" on the wizard.
+ *
  * @property {string[]} errors  Per-endpoint error strings ("name: reason"); collection continues on each.
  * @property {{requests:number, deep:boolean, maxServers:number, durationMs:number}} stats
  */

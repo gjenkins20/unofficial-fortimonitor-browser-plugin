@@ -154,6 +154,82 @@ test('runBpaAudit: 401 from any endpoint propagates as PanoptaError(auth)', asyn
   );
 });
 
+test('runBpaAudit: includeFrontend walks EditUser pages and enriches inventory (FMN-135)', async () => {
+  // Baseline v2 fetch returns one user; the frontend fetch returns
+  // a tiny EditUser HTML stub for that user.
+  const v2Fetch = createFetchMock(async (url) => {
+    if (/\/v2\/user\b/.test(url)) {
+      return listResponse('user_list', [{ id: 42, name: 'Alice', email: 'a@x' }]);
+    }
+    if (/\/server_attribute_type/.test(url)) return listResponse('server_attribute_type_list', []);
+    return jsonResponse({});
+  });
+  const frontendFetch = createFetchMock(async (url) => {
+    assert.match(url, /\/users\/users\/EditUser\?contact_id=42/);
+    const html = `
+      <p class="pa-txt_secondary pa-mb-6 pa-txt_xs">Last Login</p>
+      <p>2026-04-30 12:34:56 UTC</p>
+      <p class="pa-txt_secondary pa-mb-6 pa-txt_xs">Created On</p>
+      <p>Jan 1, 2024</p>
+    `;
+    return {
+      ok: true, status: 200,
+      headers: new Map([['content-type', 'text/html']]),
+      async text() { return html; },
+      async json() { throw new Error('not json'); }
+    };
+  });
+  const client = new PanoptaClient({ apiKey: 'k', fetch: v2Fetch });
+  const events = [];
+  const r = await runBpaAudit({
+    client,
+    includeFrontend: true,
+    frontendFetch,
+    onProgress: (e) => events.push(e)
+  });
+  assert.equal(r.include_frontend, true);
+  assert.deepEqual(r.inventory.frontend_user_data, {
+    '42': { last_login: '2026-04-30 12:34:56 UTC', created_on: 'Jan 1, 2024' }
+  });
+  // Analyzer picked up the merged data.
+  const alice = r.analysis.users.details.find((d) => d.id === 42);
+  assert.ok(alice, 'analyzer detail for user 42 missing');
+  assert.equal(alice.last_login, '2026-04-30 12:34:56 UTC');
+  assert.equal(alice.last_login_manual, false);
+  assert.equal(alice.created_on, 'Jan 1, 2024');
+  // Frontend lifecycle events fired.
+  const phases = events.map((e) => e.phase);
+  assert.ok(phases.includes('frontend:start'));
+  assert.ok(phases.includes('frontend:done'));
+});
+
+test('runBpaAudit: includeFrontend records auth failure on inventory.errors and continues to analyzers', async () => {
+  const v2Fetch = createFetchMock(async (url) => {
+    if (/\/v2\/user\b/.test(url)) {
+      return listResponse('user_list', [{ id: 1, name: 'Alice' }, { id: 2, name: 'Bob' }]);
+    }
+    if (/\/server_attribute_type/.test(url)) return listResponse('server_attribute_type_list', []);
+    return jsonResponse({});
+  });
+  const frontendFetch = createFetchMock(async () => ({
+    ok: true, status: 200,
+    headers: new Map([['content-type', 'text/html']]),
+    async text() { return '<form id="login-form"><input type="password"></form>'; },
+    async json() { throw new Error('not json'); }
+  }));
+  const client = new PanoptaClient({ apiKey: 'k', fetch: v2Fetch });
+  const r = await runBpaAudit({
+    client,
+    includeFrontend: true,
+    frontendFetch
+  });
+  // Auth failure on first user is fatal for the frontend phase but the
+  // overall run still produces analysis from the v2-only inventory.
+  assert.ok(r.inventory.errors.some((e) => /frontend.*FortiMonitor session not detected/i.test(e)));
+  assert.ok(r.analysis.users.details.length === 2);
+  assert.equal(r.inventory.frontend_user_data, undefined);
+});
+
 test('runBpaAudit: AbortSignal aborts mid-collection', async () => {
   const ctl = new AbortController();
   let calls = 0;

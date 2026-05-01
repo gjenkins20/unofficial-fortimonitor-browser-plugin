@@ -107,11 +107,14 @@ test('buildTabCsv: User Activity includes annotation columns from ctx.annotation
     }
   };
   const csv = buildTabCsv(tab, ctx);
-  // Header includes the annotation columns
-  assert.match(csv, /Last Login \(manual\)/);
+  // Header includes the (still-manual) Active Assessment column. Last
+  // Login dropped its "(manual)" suffix in FMN-135 because the column
+  // can also be populated by the frontend fetcher.
+  assert.match(csv, /Last Login/);
   assert.match(csv, /Active Assessment \(manual\)/);
-  // Annotation values land in the row
-  assert.match(csv, /"Alice","a@x","2024-01-01","1","2026-04-15","active"/);
+  // Annotation values land in the row. created_on column (FMN-135) is
+  // empty here because no frontend_user_data was supplied.
+  assert.match(csv, /"Alice","a@x","2024-01-01","","1","2026-04-15","active"/);
 });
 
 test('buildTabCsv: empty sections without alwaysIncludeHeader are skipped from the output', () => {

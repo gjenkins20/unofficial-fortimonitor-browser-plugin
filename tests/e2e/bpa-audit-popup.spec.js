@@ -88,9 +88,13 @@ test.describe('BPA Audit popup wiring (FMN-133)', () => {
     await expect(appPage).toHaveURL(/\/src\/ui\/bpa-audit\/app\.html(#\/start)?$/);
     // Configure copy + deep-mode toggle + max-servers input all present.
     await expect(appPage.getByRole('heading', { name: /FortiMonitor Best-Practice Assessment/i })).toBeVisible();
-    await expect(appPage.locator('input[type="checkbox"]')).toBeVisible();
+    await expect(appPage.locator('input[type="checkbox"]').first()).toBeVisible();
     await expect(appPage.locator('input[type="number"]')).toBeAttached();
     await expect(appPage.getByRole('button', { name: /Run assessment/ })).toBeVisible();
+    // FMN-135: "Include FortiMonitor UI data" toggle is a separate
+    // checkbox below the deep-mode one. The label calls out the two
+    // fields the EditUser page currently provides.
+    await expect(appPage.getByText(/Include FortiMonitor UI data \(last login, created on\)/)).toBeVisible();
 
     await appPage.close();
     await page.close();

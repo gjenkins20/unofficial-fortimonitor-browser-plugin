@@ -58,11 +58,16 @@ export function buildTabCsv(tab, ctx, { generatedAt = new Date().toISOString(), 
 }
 
 function csvCellValue(col, row, ctx) {
-  if (col.annotation) {
+  // FMN-135: when annotation.skipIf returns true for this row, treat the
+  // column as a plain getter column. This lets a column be both an
+  // editable manual-entry field (when no data) and a populated read-only
+  // field (when an upstream source filled it in).
+  const skipAnnotation = col.annotation?.skipIf?.(row) === true;
+  if (col.annotation && !skipAnnotation) {
     const rowKey = col.annotation.rowKey(row);
     return ctx.annotations?.[col.annotation.storeKey]?.[rowKey] ?? '';
   }
-  return col.getter(row);
+  return col.getter ? col.getter(row) : '';
 }
 
 function timestampPart(d = new Date()) {
@@ -287,12 +292,24 @@ const TABS = [
       columns: [
         { key: 'name',    header: 'Name',           getter: (r) => r.name },
         { key: 'email',   header: 'Email',          getter: (r) => r.email },
-        { key: 'created', header: 'Created',        getter: (r) => r.created },
+        { key: 'created', header: 'Created (API)',  getter: (r) => r.created },
+        { key: 'created_on', header: 'Created On (UI)', getter: (r) => r.created_on || '' },
         { key: 'methods', header: 'Contact Methods',getter: (r) => r.contact_methods },
         {
+          // FMN-135: column is now dual-mode. When the frontend fetcher
+          // populated last_login (UI toggle on, EditUser walked
+          // successfully), the cell renders as plain text from the
+          // getter. When it didn't, the cell falls back to the original
+          // manual-annotation input behavior, so engineers can still
+          // hand-fill the column for v2-only audits.
           key: 'last_login',
-          header: 'Last Login (manual)',
-          annotation: { storeKey: 'user_last_login', rowKey: (r) => String(r.id) }
+          header: 'Last Login',
+          getter: (r) => r.last_login,
+          annotation: {
+            storeKey: 'user_last_login',
+            rowKey: (r) => String(r.id),
+            skipIf: (r) => Boolean(r.last_login && !r.last_login_manual)
+          }
         },
         {
           key: 'active_assessment',
@@ -665,7 +682,8 @@ function renderTable(section, rows, store) {
 }
 
 function renderCell(col, row, store) {
-  if (col.annotation) {
+  const skipAnnotation = col.annotation?.skipIf?.(row) === true;
+  if (col.annotation && !skipAnnotation) {
     const rowKey = col.annotation.rowKey(row);
     const storeBucket = store.annotations[col.annotation.storeKey] ?? {};
     if (!store.annotations[col.annotation.storeKey]) {
@@ -682,7 +700,7 @@ function renderCell(col, row, store) {
     });
     return h('td', {}, input);
   }
-  const v = col.getter(row);
+  const v = col.getter ? col.getter(row) : '';
   return h('td', {}, fmtCell(v));
 }
 

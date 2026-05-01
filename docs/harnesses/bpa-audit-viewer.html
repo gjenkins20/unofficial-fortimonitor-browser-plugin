@@ -107,6 +107,13 @@
       { id: 2, name: 'Bob',   email: 'b@acme.com', created: '2025-06-01', contact_info: [{}] },
       { id: 3, name: 'Alice', email: 'alice2@acme.com', created: '2024-03-01', contact_info: [] }
     ],
+    // FMN-135: simulate a wizard run where "Include FortiMonitor UI data"
+    // was on. Alice (id=1) has both fields populated; Bob (id=2) has only
+    // created_on; user 3 has no datum, so Last Login stays a manual input.
+    frontend_user_data: {
+      '1': { last_login: '2026-04-30 12:34:56 UTC', created_on: 'Jan 1, 2024' },
+      '2': { last_login: null, created_on: 'Jun 1, 2025' }
+    },
     account_history: [],
     server_group_details: {
       '11': { id: 11, name: 'Prod', server_template: { name: 'Linux Standard' }, server_list: [{ id: 1 }, { id: 2 }], parent: '/v2/server_group/100', notification_schedule: '/v2/notification_schedule/1' },

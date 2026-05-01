@@ -154,6 +154,28 @@ export function render({ container, store, navigate, events }) {
         }
         break;
       }
+      case 'frontend:start':
+        phaseLabel.textContent = `Phase 3: FortiMonitor UI data (${payload.total ?? '?'} user pages)`;
+        nowFetching.textContent = '→ FortiMonitor UI: starting';
+        break;
+      case 'frontend:event': {
+        const inner = payload;
+        if (inner.type === 'frontend-user-start') {
+          nowFetching.textContent = `→ FortiMonitor UI: user ${inner.index} of ${inner.total}`;
+          requests += 1;
+          requestEl.textContent = String(requests);
+        } else if (inner.type === 'frontend-user-error') {
+          appendError(`UI fetch user ${inner.id ?? '?'}: ${inner.error ?? 'unknown error'}`);
+        }
+        break;
+      }
+      case 'frontend:done':
+        nowFetching.textContent = '✓ FortiMonitor UI data complete';
+        break;
+      case 'frontend:error':
+        nowFetching.textContent = '✗ FortiMonitor UI fetch failed';
+        appendError(`UI fetch: ${payload.error ?? 'unknown error'}`);
+        break;
       case 'analyze:start':
         phaseLabel.textContent = 'Running analyzers…';
         nowFetching.textContent = '→ analyzers';
@@ -214,7 +236,8 @@ export function render({ container, store, navigate, events }) {
     try {
       const handle = await call('bpa:run-audit', {
         deep: Boolean(store.deep),
-        maxServers: store.maxServers ?? 0
+        maxServers: store.maxServers ?? 0,
+        includeFrontend: Boolean(store.includeFrontend)
       });
       // The run handler stages the multi-megabyte result in chrome.storage.session
       // and returns a small handle. Pull the full payload back via a separate
