@@ -9,10 +9,12 @@ export const ASK_CLAUDE_TOOL_TIER_KEY = 'fm:askClaudeToolTier';
 export const SERVER_SEARCH_ENABLED_KEY = 'fm:serverSearchEnabled';
 export const SIDEBAR_LAUNCHER_ENABLED_KEY = 'fm:sidebarLauncherEnabled';
 export const SHOW_FEATURE_BADGES_KEY = 'fm:showFeatureBadges';
-// FMN-128 / FMN-129: shared Beta flag for the BPA suite (SD-WAN Report,
-// Tag Applier, Audit). Code merges to main; popup tiles only render
-// when the flag is on.
-export const BPA_BETA_ENABLED_KEY = 'fm:bpaBetaEnabled';
+// FMN-129: per-tool visibility flag for the SD-WAN Report tile. Code
+// merges to main; tile only renders when the operator toggles this on
+// in popup -> Settings. The Best-Practice Assessment tool (FMN-133)
+// will not share this flag - it ships always-visible per operator
+// guidance recorded on FMN-128 / FMN-133.
+export const SDWAN_REPORT_ENABLED_KEY = 'fm:sdwanReportEnabled';
 
 export const ASK_CLAUDE_TOOL_TIERS = ['readonly', 'readwrite', 'all'];
 export const DEFAULT_ASK_CLAUDE_TOOL_TIER = 'readonly';
@@ -176,30 +178,30 @@ export async function setServerSearchEnabled(enabled, storage = defaultStorage()
 }
 
 /**
- * Read the BPA-suite Beta flag. Returns false by default so the
- * SD-WAN Report / Tag Applier / Audit tiles stay hidden until the
- * operator opts in via Settings. Storage errors fail closed so a
- * transient blip never silently surfaces unfinished tools.
+ * Read the SD-WAN-Report-enabled flag. Returns false by default so the
+ * tile stays hidden until the operator opts in via Settings. Storage
+ * errors fail closed so a transient blip never silently surfaces a
+ * tool the operator hasn't asked for.
  *
  * @param {{ get: (key: string) => Promise<Record<string, any>> }} [storage]
  */
-export async function isBpaBetaEnabled(storage = defaultStorage()) {
+export async function isSdwanReportEnabled(storage = defaultStorage()) {
   try {
-    const data = await storage.get(BPA_BETA_ENABLED_KEY);
-    return Boolean(data?.[BPA_BETA_ENABLED_KEY]);
+    const data = await storage.get(SDWAN_REPORT_ENABLED_KEY);
+    return Boolean(data?.[SDWAN_REPORT_ENABLED_KEY]);
   } catch {
     return false;
   }
 }
 
 /**
- * Persist the BPA-suite Beta flag.
+ * Persist the SD-WAN-Report-enabled flag.
  *
  * @param {boolean} enabled
  * @param {{ set: (obj: Record<string, any>) => Promise<void> }} [storage]
  */
-export async function setBpaBetaEnabled(enabled, storage = defaultStorage()) {
-  await storage.set({ [BPA_BETA_ENABLED_KEY]: Boolean(enabled) });
+export async function setSdwanReportEnabled(enabled, storage = defaultStorage()) {
+  await storage.set({ [SDWAN_REPORT_ENABLED_KEY]: Boolean(enabled) });
 }
 
 /**

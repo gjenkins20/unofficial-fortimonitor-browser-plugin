@@ -1,9 +1,9 @@
 // Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // SD-WAN Report popup wiring verification (FMN-129).
 //
-// Verifies the operator-facing wiring for the new BPA Beta flag:
+// Verifies the operator-facing wiring for the SD-WAN Report visibility flag:
 //   1. The SD-WAN Report tile is [hidden] by default in the popup.
-//   2. Toggling "Show BPA Beta tools" in Settings makes the tile visible.
+//   2. Toggling "Show SD-WAN Report" in Settings makes the tile visible.
 //   3. Toggling it back off hides the tile again.
 //   4. With API key seeded + flag on, clicking the tile opens the
 //      sdwan-report app on the /start step (Configure).
@@ -22,7 +22,7 @@ import { test, expect } from './fixtures.js';
 import { seedApiKey } from './seed-api-key.js';
 
 test.describe('SD-WAN Report popup wiring (FMN-129)', () => {
-  test('Tile is hidden by default; appears when BPA Beta toggle is enabled', async ({ extensionContext, extensionId }) => {
+  test('Tile is hidden by default; appears when SD-WAN Report toggle is enabled', async ({ extensionContext, extensionId }) => {
     const page = await extensionContext.newPage();
     await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
 
@@ -33,7 +33,7 @@ test.describe('SD-WAN Report popup wiring (FMN-129)', () => {
 
     // Open Settings panel.
     await page.locator('#settings-toggle').click();
-    const toggle = page.locator('#bpa-beta-toggle');
+    const toggle = page.locator('#sdwan-report-toggle');
     await expect(toggle).toBeAttached();
     await expect(toggle).not.toBeChecked();
 
@@ -73,15 +73,18 @@ test.describe('SD-WAN Report popup wiring (FMN-129)', () => {
     await page.close();
   });
 
-  test('Settings toggle copy describes the BPA suite', async ({ extensionContext, extensionId }) => {
+  test('Settings toggle copy is scoped to SD-WAN Report only', async ({ extensionContext, extensionId }) => {
     const page = await extensionContext.newPage();
     await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
     await page.locator('#settings-toggle').click();
-    const toggleSpan = page.locator('label.toggle-row:has(#bpa-beta-toggle) span');
+    const toggleSpan = page.locator('label.toggle-row:has(#sdwan-report-toggle) span');
     await expect(toggleSpan).toBeAttached();
     const text = (await toggleSpan.textContent())?.trim() ?? '';
-    expect(text).toContain('BPA Beta tools');
-    expect(text).toContain('SD-WAN Report');
+    expect(text).toBe('Show SD-WAN Report');
+    // Defensive: nothing in this row should advertise tools that aren't shipping.
+    expect(text).not.toContain('Tag Applier');
+    expect(text).not.toContain('Audit');
+    expect(text).not.toContain('BPA');
     await page.close();
   });
 
@@ -91,9 +94,9 @@ test.describe('SD-WAN Report popup wiring (FMN-129)', () => {
 
     const page = await extensionContext.newPage();
     await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
-    // Enable BPA Beta.
+    // Enable SD-WAN Report visibility.
     await page.locator('#settings-toggle').click();
-    await page.locator('#bpa-beta-toggle').check();
+    await page.locator('#sdwan-report-toggle').check();
     await page.locator('#settings-back').click();
 
     // Open the tool by going to the URL directly. (The popup's tile

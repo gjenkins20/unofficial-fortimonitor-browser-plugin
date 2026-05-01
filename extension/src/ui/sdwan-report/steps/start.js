@@ -70,8 +70,7 @@ export function render({ container, store, navigate }) {
     h('p', {},
       'Crawls every monitored server\'s SNMP, agent, and network-service resources, ',
       'classifies each metric against the SD-WAN regex patterns, and emits a ',
-      'CSV (customer-facing) plus a JSON file (machine-readable, consumed by the ',
-      'Tag Applier tool).'
+      'CSV (customer-facing) plus a JSON file (machine-readable).'
     ),
     h('p', { class: 'muted' },
       'Read-only. Uses your FortiMonitor v2 API key from popup → Settings.'

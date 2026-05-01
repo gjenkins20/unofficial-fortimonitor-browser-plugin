@@ -4,9 +4,9 @@ import {
   isDevModeEnabled,
   setDevModeEnabled,
   DEV_MODE_KEY,
-  isBpaBetaEnabled,
-  setBpaBetaEnabled,
-  BPA_BETA_ENABLED_KEY,
+  isSdwanReportEnabled,
+  setSdwanReportEnabled,
+  SDWAN_REPORT_ENABLED_KEY,
   isShowFeatureBadgesEnabled,
   setShowFeatureBadgesEnabled,
   SHOW_FEATURE_BADGES_KEY,
@@ -99,29 +99,29 @@ test('SHOW_FEATURE_BADGES_KEY uses the new storage key name', () => {
   assert.equal(SHOW_FEATURE_BADGES_KEY, 'fm:showFeatureBadges');
 });
 
-// ---------- FMN-128 / FMN-129: BPA Beta flag ----------
+// ---------- FMN-129: SD-WAN Report visibility flag ----------
 
-test('isBpaBetaEnabled defaults to false on empty storage (BPA tools hidden until opt-in)', async () => {
+test('isSdwanReportEnabled defaults to false on empty storage (tile hidden until opt-in)', async () => {
   const storage = createStorageMock();
-  assert.equal(await isBpaBetaEnabled(storage), false);
+  assert.equal(await isSdwanReportEnabled(storage), false);
 });
 
-test('setBpaBetaEnabled round-trips a true write', async () => {
+test('setSdwanReportEnabled round-trips a true write', async () => {
   const storage = createStorageMock();
-  await setBpaBetaEnabled(true, storage);
-  assert.equal(await isBpaBetaEnabled(storage), true);
-  assert.equal(storage.__raw()[BPA_BETA_ENABLED_KEY], true);
-  await setBpaBetaEnabled(false, storage);
-  assert.equal(await isBpaBetaEnabled(storage), false);
+  await setSdwanReportEnabled(true, storage);
+  assert.equal(await isSdwanReportEnabled(storage), true);
+  assert.equal(storage.__raw()[SDWAN_REPORT_ENABLED_KEY], true);
+  await setSdwanReportEnabled(false, storage);
+  assert.equal(await isSdwanReportEnabled(storage), false);
 });
 
-test('isBpaBetaEnabled fails closed (returns false) on storage error', async () => {
+test('isSdwanReportEnabled fails closed (returns false) on storage error', async () => {
   const brokenStorage = { async get() { throw new Error('storage unavailable'); } };
-  assert.equal(await isBpaBetaEnabled(brokenStorage), false);
+  assert.equal(await isSdwanReportEnabled(brokenStorage), false);
 });
 
-test('BPA_BETA_ENABLED_KEY uses the bpa-prefixed storage key', () => {
-  assert.equal(BPA_BETA_ENABLED_KEY, 'fm:bpaBetaEnabled');
+test('SDWAN_REPORT_ENABLED_KEY uses the sdwan-prefixed storage key', () => {
+  assert.equal(SDWAN_REPORT_ENABLED_KEY, 'fm:sdwanReportEnabled');
 });
 
 test('getAskClaudeToolTier defaults to readonly on empty storage (FMN-97)', async () => {

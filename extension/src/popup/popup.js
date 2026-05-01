@@ -17,8 +17,8 @@ import {
   DEFAULT_LMSTUDIO_MODEL,
   isServerSearchEnabled,
   setServerSearchEnabled,
-  isBpaBetaEnabled,
-  setBpaBetaEnabled,
+  isSdwanReportEnabled,
+  setSdwanReportEnabled,
   isSidebarLauncherEnabled,
   setSidebarLauncherEnabled,
   isShowFeatureBadgesEnabled,
@@ -278,9 +278,9 @@ async function loadServerSearchIntoToggle() {
   toggle.checked = await isServerSearchEnabled();
 }
 
-async function loadBpaBetaIntoToggle() {
-  const toggle = document.getElementById('bpa-beta-toggle');
-  toggle.checked = await isBpaBetaEnabled();
+async function loadSdwanReportIntoToggle() {
+  const toggle = document.getElementById('sdwan-report-toggle');
+  toggle.checked = await isSdwanReportEnabled();
 }
 
 async function loadSidebarLauncherIntoToggle() {
@@ -313,9 +313,9 @@ async function applyExperimentalVisibility() {
   for (const el of document.querySelectorAll('[data-experimental="server-search"]')) {
     el.hidden = !serverSearchOn;
   }
-  const bpaBetaOn = await isBpaBetaEnabled();
-  for (const el of document.querySelectorAll('[data-experimental="bpa-beta"]')) {
-    el.hidden = !bpaBetaOn;
+  const sdwanReportOn = await isSdwanReportEnabled();
+  for (const el of document.querySelectorAll('[data-experimental="sdwan-report"]')) {
+    el.hidden = !sdwanReportOn;
   }
 }
 
@@ -839,7 +839,7 @@ function init() {
     await loadProviderConfigIntoInputs('ollama');
     await loadProviderConfigIntoInputs('lmstudio');
     await loadServerSearchIntoToggle();
-    await loadBpaBetaIntoToggle();
+    await loadSdwanReportIntoToggle();
     await loadSidebarLauncherIntoToggle();
     await loadShowFeatureBadgesIntoToggle();
     await loadWebguiColumnsIntoSettings();
@@ -900,8 +900,8 @@ function init() {
     await refreshGuards();
   });
 
-  document.getElementById('bpa-beta-toggle').addEventListener('change', async (e) => {
-    await setBpaBetaEnabled(e.target.checked);
+  document.getElementById('sdwan-report-toggle').addEventListener('change', async (e) => {
+    await setSdwanReportEnabled(e.target.checked);
     await applyExperimentalVisibility();
     await refreshGuards();
   });

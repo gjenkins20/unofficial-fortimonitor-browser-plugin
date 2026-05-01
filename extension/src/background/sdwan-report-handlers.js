@@ -4,9 +4,8 @@
 // Crawls the v2 API for SNMP / agent / network-service resources across
 // every monitored server, classifies each metric against the SD-WAN
 // regex lists ported from the BPA Python script, and returns a flat
-// records array whose JSON shape is the input contract for the Tag
-// Applier (FMN-130). The CSV format is regenerated from the same array
-// in the UI step.
+// records array. The CSV format is regenerated from the same array in
+// the UI step.
 //
 // Auth: v2 API key via createProductionPanoptaClient. Read-only.
 //
@@ -46,8 +45,8 @@ function toFiniteNumberOrNull(v) {
   const n = Number(v);
   if (!Number.isFinite(n)) return null;
   // Match the Python `float(...) or None` idiom: 0 returns null. Keeping
-  // this pattern matters for the Tag Applier's downstream consumption -
-  // empty cells are nulls, not zeros.
+  // matches the Python source's "value or None" idiom: empty cells
+  // are nulls, not zeros.
   return n === 0 ? null : n;
 }
 
@@ -210,8 +209,9 @@ async function collectFromServer(client, server, groupLookup, compiledPatterns, 
 }
 
 /**
- * Top-level report runner. Returns the JSON-shape required by FMN-130
- * (the Tag Applier consumes this without translation).
+ * Top-level report runner. Returns the JSON-shape that the UI's
+ * Download JSON button serializes verbatim (see steps/results.js
+ * buildJson).
  */
 export async function runSdwanReport({
   client,
