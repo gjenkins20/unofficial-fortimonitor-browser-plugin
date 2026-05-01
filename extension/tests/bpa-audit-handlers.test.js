@@ -214,7 +214,11 @@ test('runBpaAudit: includeFrontend records auth failure on inventory.errors and 
   const frontendFetch = createFetchMock(async () => ({
     ok: true, status: 200,
     headers: new Map([['content-type', 'text/html']]),
-    async text() { return '<form id="login-form"><input type="password"></form>'; },
+    async text() {
+      return '<form action="/login_handler" method="POST">'
+        + '<input name="login" type="text">'
+        + '<input name="password" type="password"></form>';
+    },
     async json() { throw new Error('not json'); }
   }));
   const client = new PanoptaClient({ apiKey: 'k', fetch: v2Fetch });

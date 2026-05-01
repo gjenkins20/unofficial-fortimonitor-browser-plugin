@@ -91,16 +91,35 @@ test('parseLabelledField: case-insensitive label match', () => {
 // looksLikeLoginPage
 // =============================================================================
 
-test('looksLikeLoginPage: detects a login form by id="login"', () => {
-  assert.equal(looksLikeLoginPage('<form id="login-form">...'), true);
+test('looksLikeLoginPage: detects the FortiMonitor login form (action + login + password)', () => {
+  const html = `
+    <form action="/login_handler" method="POST">
+      <input name="login" type="text">
+      <input name="password" type="password">
+    </form>
+  `;
+  assert.equal(looksLikeLoginPage(html), true);
 });
 
-test('looksLikeLoginPage: detects a password input', () => {
-  assert.equal(looksLikeLoginPage('<input type="password" name="pw">'), true);
+test('looksLikeLoginPage: false when only one of the signals is present', () => {
+  // Form action without the input fields - some other form posting to /login_handler.
+  assert.equal(looksLikeLoginPage('<form action="/login_handler" method="POST"></form>'), false);
+  // Login + password fields without the form action - a credential change form.
+  assert.equal(looksLikeLoginPage('<input name="login"><input name="password">'), false);
 });
 
-test('looksLikeLoginPage: false on EditUser-shaped content', () => {
-  const html = '<p class="pa-txt_secondary pa-mb-6 pa-txt_xs">Last Login</p>';
+test('looksLikeLoginPage: false on EditUser pages that contain set-password fields (FMN-135 regression)', () => {
+  // Captured from the real EditUser page on 2026-05-01: the page has
+  // password-change widgets and a "Last Login" marker, but is NOT the
+  // login page. A naive "any password input" check would misfire here.
+  const html = `
+    <div class="user-card">
+      <p class="pa-txt_secondary pa-mb-6 pa-txt_xs">Last Login</p>
+      <p>2025-07-30 17:27 PDT</p>
+      <input type="password" placeholder="Password" id="password" autocomplete="new-password">
+      <input type="password" autocomplete="new-password" placeholder="Confirm Password" id="password2">
+    </div>
+  `;
   assert.equal(looksLikeLoginPage(html), false);
 });
 
@@ -173,8 +192,13 @@ test('BpaFrontendFetcher.collect: per-user 500 records error and continues', asy
 });
 
 test('BpaFrontendFetcher.collect: login-page on first user is fatal', async () => {
-  const fetch = createFetchMock(async () =>
-    htmlResponse('<form id="login-form"><input type="password"></form>'));
+  const loginPageHtml = `
+    <form action="/login_handler" method="POST">
+      <input name="login" type="text">
+      <input name="password" type="password">
+    </form>
+  `;
+  const fetch = createFetchMock(async () => htmlResponse(loginPageHtml));
   const fetcher = new BpaFrontendFetcher({ fetch });
   await assert.rejects(
     () => fetcher.collect([{ id: 1 }, { id: 2 }]),

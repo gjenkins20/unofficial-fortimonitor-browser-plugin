@@ -91,18 +91,26 @@ export function parseCreatedOn(html) {
 }
 
 /**
- * Heuristic: detect that the response is a FortiMonitor login page rather
- * than the EditUser content. Used to surface a clear auth-failure error
- * instead of returning null for every user.
+ * Heuristic: detect that the response is the FortiMonitor login page
+ * rather than the EditUser content. Used to surface a clear
+ * auth-failure error instead of returning null for every user.
+ *
+ * Detection key: the login page POSTs to `/login_handler` and has a
+ * username field named "login". EditUser pages also contain
+ * <input type="password"> elements (set-password / confirm-password
+ * widgets), so a generic "has a password input" check produces a false
+ * positive (FMN-135 live verification 2026-05-01). We require BOTH the
+ * specific form action and the username field to call it a login page.
  *
  * @param {string} html
  * @returns {boolean}
  */
 export function looksLikeLoginPage(html) {
   if (typeof html !== 'string' || html.length === 0) return false;
-  return /<form[^>]*(?:id|name)="?login/i.test(html)
-    || /name="password"/i.test(html)
-    || /<input[^>]*type="password"/i.test(html);
+  const hasLoginAction = /<form[^>]*action="\/login_handler"/i.test(html);
+  const hasLoginField = /<input[^>]*name="login"/i.test(html)
+    && /<input[^>]*name="password"/i.test(html);
+  return hasLoginAction && hasLoginField;
 }
 
 // =============================================================================
