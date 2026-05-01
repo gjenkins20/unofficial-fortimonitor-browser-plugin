@@ -63,8 +63,13 @@ test.describe('SD-WAN Report popup wiring (FMN-129)', () => {
     // toBeAttached, not toBeVisible: the tile is still hidden by the
     // default-off Beta flag, but its DOM is in place.
     await expect(name).toContainText('SD-WAN Report');
-    await expect(desc).toContainText('SNMP / agent / network-service');
-    await expect(desc).toContainText('CSV + JSON');
+    // applyToolGuards() rewrites the visible description text to a
+    // gating message ("Set an API key to enable") when no key is
+    // seeded - that's expected guard behavior. Assert against
+    // data-default-desc, the preserved registered copy that the guard
+    // restores once the gate clears.
+    await expect(desc).toHaveAttribute('data-default-desc', /SNMP \/ agent \/ network-service/);
+    await expect(desc).toHaveAttribute('data-default-desc', /CSV \+ JSON/);
     await page.close();
   });
 
