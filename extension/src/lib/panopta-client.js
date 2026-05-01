@@ -183,6 +183,26 @@ export class PanoptaClient {
     };
   }
 
+  /**
+   * Public single-shot GET helper. Returns the parsed JSON body. Used by
+   * tools (e.g. BPA Audit) that need to fetch arbitrary endpoints not
+   * covered by a dedicated wrapper. Errors surface as PanoptaError - 401
+   * is phase='auth', 404 throws status=404, 5xx throws status=5xx.
+   */
+  async getJson(path) {
+    const { body } = await this._request('GET', path);
+    return body;
+  }
+
+  /**
+   * Public paginated walk over `endpoint`. Thin alias for the internal
+   * _paginatedList so external modules don't have to reach into a name
+   * convention they shouldn't depend on. Same options.
+   */
+  async paginate(endpoint, opts = {}) {
+    return this._paginatedList(endpoint, opts);
+  }
+
   async _request(method, path, { body = null } = {}) {
     const url = path.startsWith('http') ? path : `${this.baseUrl}${path}`;
     const init = { method, headers: this._headers() };
