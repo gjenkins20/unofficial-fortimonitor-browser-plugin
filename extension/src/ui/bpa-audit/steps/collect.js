@@ -40,17 +40,13 @@ export function render({ container, store, navigate, events }) {
   const body = h('div', { class: 'body-section' });
   frame.appendChild(body);
 
-  // Counters row: elapsed time + endpoints assessed + API requests
-  const elapsedEl  = h('span', { class: 'counter-num', 'data-test': 'elapsed-counter' }, '0:00');
-  const endpointsEl = h('span', { class: 'counter-num', 'data-test': 'endpoints-counter' }, '0');
-  const requestEl   = h('span', { class: 'counter-num', 'data-test': 'request-counter' }, '0');
-  body.appendChild(h('div', {
-    style: 'display:flex;gap:2rem;flex-wrap:wrap;align-items:baseline;font-size:1.05rem;margin-bottom:0.4rem;'
-  },
-    h('div', {}, h('span', { style: 'font-weight:600;' }, 'Elapsed: '), elapsedEl),
-    h('div', {}, h('span', { style: 'font-weight:600;' }, 'Endpoints assessed: '), endpointsEl),
-    h('div', {}, h('span', { style: 'font-weight:600;' }, 'API requests: '), requestEl)
-  ));
+  // Counters live in the action bar's .left column (see actionBar below)
+  // so they inherit its 12px / muted styling. Bold prominent counters
+  // ride too high in the visual hierarchy for what is essentially run
+  // metadata (FMN-133 QA, 2026-05-01).
+  const elapsedEl  = h('span', { 'data-test': 'elapsed-counter' }, '0:00');
+  const endpointsEl = h('span', { 'data-test': 'endpoints-counter' }, '0');
+  const requestEl   = h('span', { 'data-test': 'request-counter' }, '0');
 
   const phaseLabel = h('div', {
     'data-test': 'phase-label',
@@ -76,9 +72,19 @@ export function render({ container, store, navigate, events }) {
   body.appendChild(errorList);
 
   const stateLabel = h('span', { class: 'execute-state muted' }, 'Starting…');
+  const countersLine = h('span', {},
+    elapsedEl, ' elapsed · ',
+    endpointsEl, ' endpoints · ',
+    requestEl, ' requests'
+  );
+  // Stack stateLabel + counters vertically inside the action bar's .left
+  // column so they share its 12px muted styling (FMN-133 QA feedback).
+  const leftStack = h('div', {
+    style: 'display:flex;flex-direction:column;align-items:flex-start;gap:2px;'
+  }, stateLabel, countersLine);
   const cancelBtn = h('button', { class: 'btn btn-secondary' }, 'Cancel');
   const actionBar = h('div', { class: 'action-bar' },
-    h('div', { class: 'left' }, stateLabel),
+    h('div', { class: 'left' }, leftStack),
     h('div', { class: 'right' }, cancelBtn)
   );
   frame.appendChild(actionBar);
