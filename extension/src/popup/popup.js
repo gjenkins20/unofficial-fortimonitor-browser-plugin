@@ -17,6 +17,8 @@ import {
   DEFAULT_LMSTUDIO_MODEL,
   isServerSearchEnabled,
   setServerSearchEnabled,
+  isSdwanReportEnabled,
+  setSdwanReportEnabled,
   isSidebarLauncherEnabled,
   setSidebarLauncherEnabled,
   isShowFeatureBadgesEnabled,
@@ -276,6 +278,11 @@ async function loadServerSearchIntoToggle() {
   toggle.checked = await isServerSearchEnabled();
 }
 
+async function loadSdwanReportIntoToggle() {
+  const toggle = document.getElementById('sdwan-report-toggle');
+  toggle.checked = await isSdwanReportEnabled();
+}
+
 async function loadSidebarLauncherIntoToggle() {
   const toggle = document.getElementById('sidebar-launcher-toggle');
   toggle.checked = await isSidebarLauncherEnabled();
@@ -305,6 +312,10 @@ async function applyExperimentalVisibility() {
   const serverSearchOn = await isServerSearchEnabled();
   for (const el of document.querySelectorAll('[data-experimental="server-search"]')) {
     el.hidden = !serverSearchOn;
+  }
+  const sdwanReportOn = await isSdwanReportEnabled();
+  for (const el of document.querySelectorAll('[data-experimental="sdwan-report"]')) {
+    el.hidden = !sdwanReportOn;
   }
 }
 
@@ -828,6 +839,7 @@ function init() {
     await loadProviderConfigIntoInputs('ollama');
     await loadProviderConfigIntoInputs('lmstudio');
     await loadServerSearchIntoToggle();
+    await loadSdwanReportIntoToggle();
     await loadSidebarLauncherIntoToggle();
     await loadShowFeatureBadgesIntoToggle();
     await loadWebguiColumnsIntoSettings();
@@ -884,6 +896,12 @@ function init() {
 
   document.getElementById('server-search-toggle').addEventListener('change', async (e) => {
     await setServerSearchEnabled(e.target.checked);
+    await applyExperimentalVisibility();
+    await refreshGuards();
+  });
+
+  document.getElementById('sdwan-report-toggle').addEventListener('change', async (e) => {
+    await setSdwanReportEnabled(e.target.checked);
     await applyExperimentalVisibility();
     await refreshGuards();
   });

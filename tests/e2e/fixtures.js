@@ -11,6 +11,13 @@
 // chrome.runtime.sendMessage. We pin headless=false. CI will need an
 // Xvfb-style display when we wire it up.
 //
+// Per memory playwright_offscreen_window.md, headed extension runs
+// must use `--window-position=-32000,-32000 --start-minimized` so the
+// Chromium window doesn't visibly intrude on the operator's display
+// during local runs. Both args are needed: the offscreen position
+// keeps the window off any monitor, the start-minimized flag prevents
+// a brief flash on creation.
+//
 // All extension-bound fixtures are worker-scoped (Playwright forbids
 // re-scoping the built-in `context` fixture, so we expose a parallel
 // `extensionContext` instead). With workers:1 (set in playwright.config.js)
@@ -35,7 +42,9 @@ export const test = base.extend({
       headless: false,
       args: [
         `--disable-extensions-except=${EXTENSION_PATH}`,
-        `--load-extension=${EXTENSION_PATH}`
+        `--load-extension=${EXTENSION_PATH}`,
+        '--window-position=-32000,-32000',
+        '--start-minimized'
       ]
     });
     await use(context);

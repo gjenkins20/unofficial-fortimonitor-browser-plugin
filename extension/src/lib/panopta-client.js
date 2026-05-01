@@ -622,6 +622,107 @@ export class PanoptaClient {
     return body;
   }
 
+  // ---- SD-WAN Report (FMN-129) -----------------------------------------
+  //
+  // Paginated walks of the per-server resource collections that the
+  // SD-WAN report classifies. Each method returns a flat array; pagination
+  // and envelope-key probing are handled internally so callers only deal
+  // with records.
+  //
+  // Pagination probes a fixed list of known wrapper keys because v2
+  // varies the envelope by endpoint (server_list, snmp_resource_list,
+  // agent_resource_list, network_services, objects, ...). The Python
+  // source does the same. _paginatedList handles that probing once.
+
+  /**
+   * Internal: page through `endpoint` and flatten records out of whatever
+   * envelope the server returns. Honors AbortSignal between pages.
+   */
+  async _paginatedList(endpoint, { pageSize = 100, maxPages = 200, signal } = {}) {
+    const KNOWN_KEYS = [
+      'server_list', 'snmp_resource_list', 'agent_resource_list',
+      'agent_resources', 'network_services', 'objects',
+      'server_group_list', 'outage_list', 'data', 'results', 'items'
+    ];
+    const out = [];
+    let offset = 0;
+    let total = Infinity;
+    for (let page = 0; page < maxPages; page++) {
+      if (signal?.aborted) {
+        const err = new Error('aborted'); err.name = 'AbortError'; throw err;
+      }
+      const sep = endpoint.includes('?') ? '&' : '?';
+      const path = `${endpoint}${sep}limit=${pageSize}&offset=${offset}`;
+      const { body } = await this._request('GET', path);
+      let list = null;
+      if (Array.isArray(body)) {
+        list = body;
+      } else if (body && typeof body === 'object') {
+        for (const k of KNOWN_KEYS) {
+          if (Array.isArray(body[k])) { list = body[k]; break; }
+        }
+        if (list === null) {
+          for (const [k, v] of Object.entries(body)) {
+            if (k === 'meta') continue;
+            if (Array.isArray(v)) { list = v; break; }
+          }
+        }
+      }
+      if (!Array.isArray(list)) list = [];
+      if (typeof body?.meta?.total_count === 'number') total = body.meta.total_count;
+      for (const r of list) out.push(r);
+      offset += list.length;
+      if (list.length === 0) break;
+      if (Number.isFinite(total) && offset >= total) break;
+    }
+    return out;
+  }
+
+  /**
+   * Page through every monitored server. Used by the SD-WAN report to
+   * crawl the full instance list.
+   *
+   * @returns {Promise<object[]>}
+   */
+  async listAllServers({ pageSize = 25, signal } = {}) {
+    return this._paginatedList('/server', { pageSize, signal });
+  }
+
+  /**
+   * Page through every server_group. Used as a non-fatal labelling pass
+   * for the SD-WAN report - if it fails, group labels are simply blank.
+   *
+   * @returns {Promise<object[]>}
+   */
+  async listAllServerGroups({ pageSize = 100, signal } = {}) {
+    return this._paginatedList('/server_group', { pageSize, signal });
+  }
+
+  /**
+   * Page through SNMP resources for a server. Larger page size since the
+   * server-side limit is generous and SNMP rows are small.
+   */
+  async listSnmpResourcesForServer(serverId, { pageSize = 200, signal } = {}) {
+    if (!serverId) throw new TypeError('listSnmpResourcesForServer: serverId is required');
+    return this._paginatedList(`/server/${encodeURIComponent(serverId)}/snmp_resource`, { pageSize, signal });
+  }
+
+  /**
+   * Page through agent_resources for a server.
+   */
+  async listAllAgentResourcesForServer(serverId, { pageSize = 100, signal } = {}) {
+    if (!serverId) throw new TypeError('listAllAgentResourcesForServer: serverId is required');
+    return this._paginatedList(`/server/${encodeURIComponent(serverId)}/agent_resource`, { pageSize, signal });
+  }
+
+  /**
+   * Page through network_service checks for a server.
+   */
+  async listNetworkServicesForServer(serverId, { pageSize = 100, signal } = {}) {
+    if (!serverId) throw new TypeError('listNetworkServicesForServer: serverId is required');
+    return this._paginatedList(`/server/${encodeURIComponent(serverId)}/network_service`, { pageSize, signal });
+  }
+
   async listFabricConnections({ limit = 50, offset = 0 } = {}) {
     const { body } = await this._request(
       'GET',

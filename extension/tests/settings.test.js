@@ -4,6 +4,9 @@ import {
   isDevModeEnabled,
   setDevModeEnabled,
   DEV_MODE_KEY,
+  isSdwanReportEnabled,
+  setSdwanReportEnabled,
+  SDWAN_REPORT_ENABLED_KEY,
   isShowFeatureBadgesEnabled,
   setShowFeatureBadgesEnabled,
   SHOW_FEATURE_BADGES_KEY,
@@ -94,6 +97,31 @@ test('setShowFeatureBadgesEnabled coerces non-boolean values to strict booleans'
 
 test('SHOW_FEATURE_BADGES_KEY uses the new storage key name', () => {
   assert.equal(SHOW_FEATURE_BADGES_KEY, 'fm:showFeatureBadges');
+});
+
+// ---------- FMN-129: SD-WAN Report visibility flag ----------
+
+test('isSdwanReportEnabled defaults to false on empty storage (tile hidden until opt-in)', async () => {
+  const storage = createStorageMock();
+  assert.equal(await isSdwanReportEnabled(storage), false);
+});
+
+test('setSdwanReportEnabled round-trips a true write', async () => {
+  const storage = createStorageMock();
+  await setSdwanReportEnabled(true, storage);
+  assert.equal(await isSdwanReportEnabled(storage), true);
+  assert.equal(storage.__raw()[SDWAN_REPORT_ENABLED_KEY], true);
+  await setSdwanReportEnabled(false, storage);
+  assert.equal(await isSdwanReportEnabled(storage), false);
+});
+
+test('isSdwanReportEnabled fails closed (returns false) on storage error', async () => {
+  const brokenStorage = { async get() { throw new Error('storage unavailable'); } };
+  assert.equal(await isSdwanReportEnabled(brokenStorage), false);
+});
+
+test('SDWAN_REPORT_ENABLED_KEY uses the sdwan-prefixed storage key', () => {
+  assert.equal(SDWAN_REPORT_ENABLED_KEY, 'fm:sdwanReportEnabled');
 });
 
 test('getAskClaudeToolTier defaults to readonly on empty storage (FMN-97)', async () => {

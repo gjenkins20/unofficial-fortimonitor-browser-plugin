@@ -159,6 +159,7 @@ html, body {
   font-family: inherit;
   font-size: 13px;
 }
+.tool-card[hidden] { display: none; }
 .tool-card:last-child { border-bottom: none; }
 .tool-card:hover:not(.disabled) {
   background: #fafbfc;

@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Harness: SD-WAN Report wizard (FMN-129)</title>
+<!--
+  Synthetic harness for src/ui/sdwan-report/app.html.
+
+  Stubs chrome.runtime.sendMessage to handle:
+    - sdwan:run-report -> walks a canned 5-server tenant, emits per-server
+                          progress events, and returns a JSON-shape
+                          response that matches the production handler.
+    - sdwan:abort      -> aborts the in-flight run and rejects with
+                          AbortError so the run.js cancel path is
+                          exercised.
+
+  Drives:
+    - the start step (configure + advanced overrides)
+    - the run step (servers/matched counters + Cancel button)
+    - the results step (preview table + CSV / JSON download buttons)
+
+  Heartbeat counter at the top right verifies the page event loop hasn't
+  frozen (regression guard for FMN-72-style mutation feedback loops).
+
+  Run:
+    1. From repo root: python3 -m http.server 8766 --bind 127.0.0.1
+    2. http://127.0.0.1:8766/docs/harnesses/sdwan-report-wizard.html
+-->
+<style>
+  body { font: 13px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    margin: 0; padding: 16px; background: #f4f5f7; color: #222; }
+  h1 { font-size: 16px; margin: 0 0 12px; }
+  .grid { display: grid; grid-template-columns: 560px 1fr; gap: 16px; align-items: flex-start; }
+  iframe { width: 560px; height: 880px; border: 1px solid #c4c8cf; border-radius: 6px;
+    background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+  .panel { background: #fff; border: 1px solid #d4d7dc; border-radius: 6px; padding: 12px;
+    margin-bottom: 12px; }
+  .panel h2 { font-size: 12px; margin: 0 0 8px; color: #555; text-transform: uppercase; letter-spacing: 0.04em; }
+  pre { font: 11.5px ui-monospace, Menlo, monospace; background: #f7f8fa;
+    border: 1px solid #e3e6eb; padding: 6px 8px; border-radius: 4px; white-space: pre-wrap;
+    word-break: break-all; max-height: 320px; overflow: auto; }
+  button { font: inherit; padding: 4px 10px; margin: 0 4px 4px 0; cursor: pointer;
+    background: #fff; border: 1px solid #c4c8cf; border-radius: 4px; }
+  button:hover { background: #f0f2f5; }
+  label { display: block; margin: 4px 0; font-size: 12px; }
+  input[type=number] { width: 60px; }
+  .small { color: #666; font-size: 11.5px; }
+  .heartbeat { display: inline-block; padding: 2px 6px; background: #e8f4ff; color: #134e89; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>SD-WAN Report harness <span class="small">(FMN-129)</span> · heartbeat <span id="heartbeat" class="heartbeat">0</span></h1>
+
+<div class="grid">
+  <iframe id="frame"></iframe>
+  <div>
+    <div class="panel">
+      <h2>Drive the iframe</h2>
+      <button id="reload-frame">Reload iframe</button>
+      <button id="goto-start">Go to /start</button>
+      <button id="seed-and-run">Seed default + click Run report</button>
+      <label>Per-server delay (ms): <input id="delay" type="number" value="120" min="0" max="5000"></label>
+      <label><input id="emit-error" type="checkbox"> Emit a server:error halfway through the run</label>
+      <label><input id="groups-fail" type="checkbox"> Make /server_group fetch fail (exercise groups:unavailable)</label>
+      <pre id="probe-output">(probe output)</pre>
+    </div>
+
+    <div class="panel">
+      <h2>Tenant fixture</h2>
+      <p class="small">5 canned servers. Server 100/200 are FortiGates with SD-WAN SLA SNMP metrics; server 300 has only generic agent metrics; servers 400/500 are noise (no SD-WAN metrics).</p>
+    </div>
+
+    <div class="panel">
+      <h2>Event log</h2>
+      <pre id="events">(none yet)</pre>
+    </div>
+  </div>
+</div>
+
+<script>
+  let hb = 0;
+  setInterval(function () { hb++; document.getElementById('heartbeat').textContent = String(hb); }, 500);
+
+  const STUBS = String.raw`
+    <script>
+      (function () {
+        const SERVERS = [
+          { id: 100, name: 'fgt-edge-01', fqdn: '10.0.0.10' },
+          { id: 200, name: 'fgt-core-02', fqdn: '10.0.0.20' },
+          { id: 300, name: 'fgt-branch-03', fqdn: '10.0.0.30' },
+          { id: 400, name: 'srv-other-04', fqdn: '10.0.0.40' },
+          { id: 500, name: 'srv-other-05', fqdn: '10.0.0.50' }
+        ];
+        const PER_SERVER_RECORDS = {
+          100: [
+            { server_id: '100', server_name: 'fgt-edge-01', server_fqdn: '10.0.0.10', server_group: 'Edge', interface_name: 'wan1', interface_type: 'underlay', metric_id: '1', metric_name: 'SD-WAN Link Latency target1 - wan1', metric_type: 'snmp_resource', metric_label: 'ms', metric_unit: 'ms', resource_url: '/server/100/snmp_resource/1', snmp_resource_id: '1', last_value: 24, last_status: 'ok', last_checked: '2026-05-01T10:00:00Z', sla_latency_ms: 24, sla_jitter_ms: null, sla_loss_pct: null, sla_status: '', classification: 'underlay', metric_type_oid: 'latency', source: 'snmp_resource' },
+            { server_id: '100', server_name: 'fgt-edge-01', server_fqdn: '10.0.0.10', server_group: 'Edge', interface_name: 'wan1', interface_type: 'underlay', metric_id: '2', metric_name: 'SD-WAN Link Loss target1 - wan1', metric_type: 'snmp_resource', metric_label: '%', metric_unit: '%', resource_url: '/server/100/snmp_resource/2', snmp_resource_id: '2', last_value: 1.2, last_status: 'ok', last_checked: '2026-05-01T10:00:00Z', sla_latency_ms: null, sla_jitter_ms: null, sla_loss_pct: 1.2, sla_status: '', classification: 'underlay', metric_type_oid: 'loss', source: 'snmp_resource' },
+            { server_id: '100', server_name: 'fgt-edge-01', server_fqdn: '10.0.0.10', server_group: 'Edge', interface_name: 'vpn0', interface_type: 'overlay', metric_id: '3', metric_name: 'Bandwidth in - vpn0', metric_type: 'agent_resource', metric_label: 'kb/s', metric_unit: 'kb/s', resource_url: '/server/100/agent_resource/3', snmp_resource_id: '', last_value: 8000, last_status: 'ok', last_checked: '', sla_latency_ms: null, sla_jitter_ms: null, sla_loss_pct: null, sla_status: '', classification: 'overlay', metric_type_oid: null, source: 'agent_resource' }
+          ],
+          200: [
+            { server_id: '200', server_name: 'fgt-core-02', server_fqdn: '10.0.0.20', server_group: 'Core', interface_name: 'mpls-cloud', interface_type: 'underlay', metric_id: '4', metric_name: 'TCP check', metric_type: 'network_service', metric_label: '', metric_unit: '', resource_url: '/server/200/network_service/4', snmp_resource_id: '', last_value: 1, last_status: 'ok', last_checked: '', sla_latency_ms: null, sla_jitter_ms: null, sla_loss_pct: null, sla_status: '', classification: 'underlay', metric_type_oid: null, source: 'network_service' }
+          ],
+          300: [
+            { server_id: '300', server_name: 'fgt-branch-03', server_fqdn: '10.0.0.30', server_group: 'Branch', interface_name: 'SD-WAN Health', interface_type: 'generic', metric_id: '5', metric_name: 'SD-WAN Health Check overall', metric_type: 'agent_resource', metric_label: '', metric_unit: '', resource_url: '/server/300/agent_resource/5', snmp_resource_id: '', last_value: 0, last_status: 'ok', last_checked: '', sla_latency_ms: null, sla_jitter_ms: null, sla_loss_pct: null, sla_status: '', classification: 'generic', metric_type_oid: null, source: 'agent_resource' }
+          ],
+          400: [],
+          500: []
+        };
+
+        let runAbort = null;
+        let driverConfig = { delay: 120, emitError: false, groupsFail: false };
+        // Allow the parent harness to update knobs at runtime.
+        window.__sdwanHarness = { setConfig: (cfg) => Object.assign(driverConfig, cfg) };
+
+        function emitEvent(event, payload) {
+          for (const cb of (window.__chromeMessageListeners || [])) {
+            try { cb({ type: '__event__', event, payload }, {}, () => {}); } catch (e) { /* ignore */ }
+          }
+        }
+
+        function sleep(ms, signal) {
+          return new Promise((res, rej) => {
+            const t = setTimeout(res, ms);
+            if (signal) signal.addEventListener('abort', () => { clearTimeout(t); const e = new Error('aborted'); e.name = 'AbortError'; rej(e); });
+          });
+        }
+
+        async function runReport(payload, signal) {
+          const startedAt = new Date().toISOString();
+          emitEvent('sdwan:progress', { phase: 'servers:fetch' });
+          await sleep(80, signal);
+          emitEvent('sdwan:progress', { phase: 'servers:fetched', totalServers: SERVERS.length });
+          if (driverConfig.groupsFail) {
+            emitEvent('sdwan:progress', { phase: 'groups:unavailable', error: 'simulated /server_group failure' });
+          }
+          const records = [];
+          let processed = 0;
+          for (const s of SERVERS) {
+            if (signal.aborted) { const e = new Error('aborted'); e.name = 'AbortError'; throw e; }
+            emitEvent('sdwan:progress', { phase: 'server:start', processed, totalServers: SERVERS.length, serverId: String(s.id), serverName: s.name, matched: records.length });
+            await sleep(driverConfig.delay, signal);
+            const perServer = PER_SERVER_RECORDS[s.id] || [];
+            for (const r of perServer) records.push(r);
+            processed += 1;
+            if (driverConfig.emitError && processed === 3) {
+              emitEvent('sdwan:progress', { phase: 'server:error', processed, totalServers: SERVERS.length, serverId: String(s.id), serverName: s.name, error: 'simulated SNMP fetch failure' });
+            }
+            emitEvent('sdwan:progress', { phase: 'server:done', processed, totalServers: SERVERS.length, serverId: String(s.id), serverName: s.name, matched: records.length });
+          }
+          return {
+            report_generated: new Date().toISOString(),
+            started_at: startedAt,
+            total_servers: SERVERS.length,
+            total_records: records.length,
+            records
+          };
+        }
+
+        function fakeChrome() {
+          const listeners = (window.__chromeMessageListeners = []);
+          window.chrome = window.chrome || {};
+          window.chrome.runtime = window.chrome.runtime || {};
+          window.chrome.runtime.lastError = null;
+          window.chrome.runtime.onMessage = {
+            addListener(cb) { listeners.push(cb); },
+            removeListener(cb) { const i = listeners.indexOf(cb); if (i >= 0) listeners.splice(i, 1); }
+          };
+          window.chrome.runtime.sendMessage = function (message, cb) {
+            if (typeof message !== 'object' || !message) {
+              cb && cb({ ok: false, error: 'malformed' });
+              return;
+            }
+            if (message.type === 'sdwan:run-report') {
+              if (runAbort) { cb && cb({ ok: false, error: 'A run is already in progress' }); return; }
+              runAbort = new AbortController();
+              runReport(message.payload, runAbort.signal).then(
+                (result) => { runAbort = null; cb && cb({ ok: true, result }); },
+                (err) => {
+                  runAbort = null;
+                  const isAbort = err && (err.name === 'AbortError' || /aborted/i.test(err.message));
+                  cb && cb({ ok: false, error: isAbort ? 'SD-WAN report cancelled' : (err && err.message) || String(err) });
+                }
+              );
+              return;
+            }
+            if (message.type === 'sdwan:abort') {
+              if (runAbort) { runAbort.abort(); cb && cb({ ok: true, result: { aborted: true } }); }
+              else cb && cb({ ok: true, result: { aborted: false, reason: 'no active run' } });
+              return;
+            }
+            cb && cb({ ok: false, error: 'unhandled type ' + message.type });
+          };
+        }
+        fakeChrome();
+      })();
+    <\/script>
+  `;
+
+  const PROBE = String.raw`
+    <script>
+      window.__probe = function probe() {
+        return {
+          hash: location.hash,
+          appText: (document.getElementById('app-root') || {}).textContent || '',
+          serversCounter: (document.querySelector('[data-test="servers-counter"]') || {}).textContent,
+          matchedCounter: (document.querySelector('[data-test="matched-counter"]') || {}).textContent,
+          currentLabel: (document.querySelector('[data-test="current-label"]') || {}).textContent,
+          stateLabel: (document.querySelector('.execute-state') || {}).textContent
+        };
+      };
+    <\/script>
+  `;
+
+  function reload() {
+    fetch('/extension/src/ui/sdwan-report/app.html')
+      .then((r) => r.text())
+      .then((html) => {
+        // Inline our chrome stubs BEFORE the app's <script type="module">
+        // so the messaging layer sees the fake chrome on first load.
+        const patched = html.replace(
+          /<head>/i,
+          '<head><base href="/extension/src/ui/sdwan-report/">' + STUBS + PROBE
+        );
+        const f = document.getElementById('frame');
+        f.srcdoc = patched;
+      })
+      .catch((err) => {
+        document.getElementById('probe-output').textContent = 'Reload failed: ' + (err && err.message);
+      });
+  }
+
+  function applyHarnessConfig() {
+    const f = document.getElementById('frame');
+    const w = f.contentWindow;
+    if (w && w.__sdwanHarness) {
+      w.__sdwanHarness.setConfig({
+        delay: Number(document.getElementById('delay').value),
+        emitError: document.getElementById('emit-error').checked,
+        groupsFail: document.getElementById('groups-fail').checked
+      });
+    }
+  }
+
+  document.getElementById('reload-frame').addEventListener('click', reload);
+  document.getElementById('goto-start').addEventListener('click', () => {
+    const f = document.getElementById('frame');
+    if (!f.contentWindow) return;
+    f.contentWindow.location.hash = '#/start';
+  });
+  document.getElementById('seed-and-run').addEventListener('click', () => {
+    applyHarnessConfig();
+    const f = document.getElementById('frame');
+    if (!f.contentDocument) return;
+    const btn = f.contentDocument.querySelector('button.btn-primary');
+    if (btn) btn.click();
+  });
+
+  // Live event log: poll iframe for the run.js page state.
+  setInterval(() => {
+    const f = document.getElementById('frame');
+    if (!f.contentWindow || !f.contentWindow.__probe) return;
+    try {
+      const p = f.contentWindow.__probe();
+      const out = JSON.stringify(p, null, 2);
+      const log = document.getElementById('events');
+      if (log.textContent !== out) log.textContent = out;
+    } catch (_) { /* mid-load */ }
+  }, 250);
+
+  reload();
+</script>
+</body>
+</html>
