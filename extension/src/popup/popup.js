@@ -17,6 +17,8 @@ import {
   DEFAULT_LMSTUDIO_MODEL,
   isServerSearchEnabled,
   setServerSearchEnabled,
+  isBpaBetaEnabled,
+  setBpaBetaEnabled,
   isSidebarLauncherEnabled,
   setSidebarLauncherEnabled,
   isShowFeatureBadgesEnabled,
@@ -276,6 +278,11 @@ async function loadServerSearchIntoToggle() {
   toggle.checked = await isServerSearchEnabled();
 }
 
+async function loadBpaBetaIntoToggle() {
+  const toggle = document.getElementById('bpa-beta-toggle');
+  toggle.checked = await isBpaBetaEnabled();
+}
+
 async function loadSidebarLauncherIntoToggle() {
   const toggle = document.getElementById('sidebar-launcher-toggle');
   toggle.checked = await isSidebarLauncherEnabled();
@@ -305,6 +312,10 @@ async function applyExperimentalVisibility() {
   const serverSearchOn = await isServerSearchEnabled();
   for (const el of document.querySelectorAll('[data-experimental="server-search"]')) {
     el.hidden = !serverSearchOn;
+  }
+  const bpaBetaOn = await isBpaBetaEnabled();
+  for (const el of document.querySelectorAll('[data-experimental="bpa-beta"]')) {
+    el.hidden = !bpaBetaOn;
   }
 }
 
@@ -828,6 +839,7 @@ function init() {
     await loadProviderConfigIntoInputs('ollama');
     await loadProviderConfigIntoInputs('lmstudio');
     await loadServerSearchIntoToggle();
+    await loadBpaBetaIntoToggle();
     await loadSidebarLauncherIntoToggle();
     await loadShowFeatureBadgesIntoToggle();
     await loadWebguiColumnsIntoSettings();
@@ -884,6 +896,12 @@ function init() {
 
   document.getElementById('server-search-toggle').addEventListener('change', async (e) => {
     await setServerSearchEnabled(e.target.checked);
+    await applyExperimentalVisibility();
+    await refreshGuards();
+  });
+
+  document.getElementById('bpa-beta-toggle').addEventListener('change', async (e) => {
+    await setBpaBetaEnabled(e.target.checked);
     await applyExperimentalVisibility();
     await refreshGuards();
   });

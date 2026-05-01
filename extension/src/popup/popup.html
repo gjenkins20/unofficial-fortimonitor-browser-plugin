@@ -177,6 +177,25 @@
         </div>
         <div class="chevron">›</div>
       </button>
+
+      <button class="tool-card"
+              data-group="reports"
+              data-tool="sdwan-report"
+              data-url="src/ui/sdwan-report/app.html"
+              data-api-key-required="true"
+              data-experimental="bpa-beta"
+              hidden
+              title="Requires a FortiMonitor v2 API key - configure in popup → Settings (⚙).">
+        <div class="tool-meta">
+          <div class="tool-name">
+            SD-WAN Report
+          </div>
+          <div class="tool-desc" data-default-desc="Crawl FortiGate SNMP / agent / network-service resources, classify SD-WAN overlay/underlay/generic metrics, and export CSV + JSON.">
+            Crawl FortiGate SNMP / agent / network-service resources, classify SD-WAN overlay/underlay/generic metrics, and export CSV + JSON.
+          </div>
+        </div>
+        <div class="chevron">›</div>
+      </button>
     </div>
 
     <div id="no-matches" class="empty-search" hidden>
@@ -383,6 +402,14 @@
       <label class="toggle-row">
         <input id="server-search-toggle" type="checkbox">
         <span>Show Search Servers</span>
+      </label>
+
+      <p class="settings-help" style="margin-top:0.75rem;">
+        <strong>BPA Beta tools</strong> ports the FortiMonitor BPA suite into the extension. SD-WAN Report (crawl + classify SD-WAN metrics, export CSV + JSON) is shipping first. Tag Applier and the multi-tab Audit viewer follow on the same flag. Read-only / write-bulk; hidden by default.
+      </p>
+      <label class="toggle-row">
+        <input id="bpa-beta-toggle" type="checkbox">
+        <span>Show BPA Beta tools (SD-WAN Report, Tag Applier, Audit)</span>
       </label>
     </div>
 

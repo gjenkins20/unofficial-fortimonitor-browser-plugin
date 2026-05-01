@@ -9,6 +9,10 @@ export const ASK_CLAUDE_TOOL_TIER_KEY = 'fm:askClaudeToolTier';
 export const SERVER_SEARCH_ENABLED_KEY = 'fm:serverSearchEnabled';
 export const SIDEBAR_LAUNCHER_ENABLED_KEY = 'fm:sidebarLauncherEnabled';
 export const SHOW_FEATURE_BADGES_KEY = 'fm:showFeatureBadges';
+// FMN-128 / FMN-129: shared Beta flag for the BPA suite (SD-WAN Report,
+// Tag Applier, Audit). Code merges to main; popup tiles only render
+// when the flag is on.
+export const BPA_BETA_ENABLED_KEY = 'fm:bpaBetaEnabled';
 
 export const ASK_CLAUDE_TOOL_TIERS = ['readonly', 'readwrite', 'all'];
 export const DEFAULT_ASK_CLAUDE_TOOL_TIER = 'readonly';
@@ -169,6 +173,33 @@ export async function isServerSearchEnabled(storage = defaultStorage()) {
  */
 export async function setServerSearchEnabled(enabled, storage = defaultStorage()) {
   await storage.set({ [SERVER_SEARCH_ENABLED_KEY]: Boolean(enabled) });
+}
+
+/**
+ * Read the BPA-suite Beta flag. Returns false by default so the
+ * SD-WAN Report / Tag Applier / Audit tiles stay hidden until the
+ * operator opts in via Settings. Storage errors fail closed so a
+ * transient blip never silently surfaces unfinished tools.
+ *
+ * @param {{ get: (key: string) => Promise<Record<string, any>> }} [storage]
+ */
+export async function isBpaBetaEnabled(storage = defaultStorage()) {
+  try {
+    const data = await storage.get(BPA_BETA_ENABLED_KEY);
+    return Boolean(data?.[BPA_BETA_ENABLED_KEY]);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Persist the BPA-suite Beta flag.
+ *
+ * @param {boolean} enabled
+ * @param {{ set: (obj: Record<string, any>) => Promise<void> }} [storage]
+ */
+export async function setBpaBetaEnabled(enabled, storage = defaultStorage()) {
+  await storage.set({ [BPA_BETA_ENABLED_KEY]: Boolean(enabled) });
 }
 
 /**
