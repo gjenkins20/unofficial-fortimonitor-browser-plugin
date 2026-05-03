@@ -4,7 +4,9 @@
 // Operates over deep-mode inventory (server_resources + server_resource_details).
 // Without those keys, returns { available: false, note }.
 
-import { counter, rowName } from './_helpers.js';
+import { counter, rowName, extractTrailingId } from './_helpers.js';
+
+const FORTIMONITOR_INSTANCE_URL = 'https://fortimonitor.forticloud.com/report/InstanceDetails?server_id=';
 
 const COMMON_THRESHOLD_PCT = 0.7;        // resource type must appear in >=70% of peers
 const MISSING_FINDING_LIMIT = 50;
@@ -134,6 +136,12 @@ function findMissingSettings(inventory) {
 /**
  * Resources collected without thresholds = collecting metrics with no
  * alerting value. Limit to top-20 worst-offender servers, then per-row cap.
+ *
+ * On real tenants `r.agent_resource_type` is a URL string pointing to
+ * /v2/agent_resource_type/{id}. We resolve that against the catalogue
+ * fetched as inventory.agent_resource_types so the row shows
+ * "Apache: Requests/sec (reqs/s)" rather than the raw API URL
+ * (FMN-135 follow-up #3, 2026-05-02).
  */
 function findValuelessMetrics(inventory) {
   const servers = Array.isArray(inventory.servers) ? inventory.servers : [];
@@ -143,6 +151,7 @@ function findValuelessMetrics(inventory) {
   }
   const serverResources = inventory.server_resources ?? {};
   const serverResourceDetails = inventory.server_resource_details ?? {};
+  const typeMap = buildAgentResourceTypeMap(inventory.agent_resource_types);
 
   const findings = [];
   for (const [sid, resources] of Object.entries(serverResources)) {
@@ -150,15 +159,18 @@ function findValuelessMetrics(inventory) {
     const sname = serverMap.get(sid) || sid;
     for (const r of resources) {
       const rid = String(r?.id ?? '');
-      const typeName = resourceTypeName(r);
+      const typeName = resourceTypeName(r, typeMap) || `Resource #${rid}`;
       const detail = serverResourceDetails[sid]?.[rid] ?? {};
       const thresholds = Array.isArray(detail.agent_resource_threshold)
         ? detail.agent_resource_threshold : [];
       if (thresholds.length === 0) {
         findings.push({
           server: sname,
-          metric: typeName || `Resource #${rid}`,
-          recommendation: 'No thresholds configured. Remove to improve performance or add thresholds for value.'
+          metric: typeName,
+          recommendation:
+            `No thresholds set. In FortiMonitor, open ${FORTIMONITOR_INSTANCE_URL}${sid} `
+            + `→ Monitoring Config tab → find "${typeName}" → Edit and set warning/critical `
+            + `thresholds, or Delete the metric if it is not valuable here.`
         });
       }
     }
@@ -180,11 +192,60 @@ function findValuelessMetrics(inventory) {
   return filtered.slice(0, VALUELESS_FINDING_LIMIT);
 }
 
-function resourceTypeName(r) {
+/**
+ * Build id -> {category, label, unit, platform} from the catalog.
+ * Each entry's id comes from the trailing path segment of `url`.
+ */
+function buildAgentResourceTypeMap(types) {
+  const map = new Map();
+  if (!Array.isArray(types)) return map;
+  for (const t of types) {
+    const id = extractTrailingId(t?.url);
+    if (!id) continue;
+    map.set(id, {
+      category: typeof t?.category === 'string' ? t.category : '',
+      label:    typeof t?.label === 'string'    ? t.label    : '',
+      unit:     typeof t?.unit === 'string'     ? t.unit     : '',
+      platform: typeof t?.platform === 'string' ? t.platform : ''
+    });
+  }
+  return map;
+}
+
+/**
+ * Resolve a server resource's `agent_resource_type` to a human label.
+ * Handles three shapes seen in the wild:
+ *   - object with .name        -> use .name (legacy / synthetic fixtures)
+ *   - object with .category/.label -> format as "Category: Label (unit)"
+ *   - URL string               -> look up in typeMap and format
+ * Returns '' when nothing usable is present.
+ */
+function resourceTypeName(r, typeMap) {
   const rt = r?.agent_resource_type;
-  if (rt && typeof rt === 'object') return String(rt.name ?? '');
-  if (rt != null) return String(rt);
+  if (!rt) return '';
+  if (typeof rt === 'object') {
+    if (typeof rt.name === 'string' && rt.name) return rt.name;
+    if (rt.category || rt.label) return formatTypeLabel(rt);
+    return '';
+  }
+  if (typeof rt === 'string') {
+    const id = extractTrailingId(rt);
+    if (id && typeMap && typeMap.has(id)) {
+      return formatTypeLabel(typeMap.get(id));
+    }
+    return '';
+  }
   return '';
+}
+
+function formatTypeLabel({ category, label, unit }) {
+  let head;
+  if (category && label) head = `${category}: ${label}`;
+  else if (label)        head = String(label);
+  else if (category)     head = String(category);
+  else                   head = '';
+  if (unit) return `${head} (${unit})`.trim();
+  return head;
 }
 
 function setDiff(a, b) {

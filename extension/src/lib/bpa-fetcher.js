@@ -187,7 +187,13 @@ const TOP_LEVEL_LIST_ENDPOINTS = [
   ['snmp_credentials',       '/snmp_credential',        'snmp_credential_list'],
   ['monitoring_nodes',       '/monitoring_node',        'monitoring_node_list'],
   // Users
-  ['users',                  '/user',                   'user_list']
+  ['users',                  '/user',                   'user_list'],
+  // Catalogue of metric type definitions. Each agent_resource_type
+  // record carries category + label + unit, so the InstanceAnalyzer can
+  // resolve the URL stored on a server's agent_resource into a friendly
+  // "Apache: Requests/sec" string instead of dumping the raw API URL
+  // (FMN-135 follow-up #3, 2026-05-02).
+  ['agent_resource_types',   '/agent_resource_type',    'agent_resource_type_list']
   // /v2/account_history dropped (FMN-135 follow-up, 2026-05-01): the
   // endpoint returns HTTP 500 consistently on production tenants and no
   // analyzer consumes the result. Re-add only if a tenant proves the
@@ -223,6 +229,7 @@ const ACTIVE_OUTAGE_LOG_CAP = 50;
  * @property {Object[]} snmp_credentials       /snmp_credential
  * @property {Object[]} monitoring_nodes       /monitoring_node
  * @property {Object[]} users                  /user
+ * @property {Object[]} agent_resource_types   /agent_resource_type (FMN-135 follow-up #3)
  *
  * (account_history dropped FMN-135 follow-up, 2026-05-01: v2 endpoint
  * returns HTTP 500 consistently on production tenants.)

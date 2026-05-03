@@ -411,6 +411,57 @@ test('analyzeInstances: valueless_metrics flags resources without thresholds', (
   const r = analyzeInstances(inv);
   const metrics = r.valueless_metrics.map((f) => f.metric).sort();
   assert.deepEqual(metrics, ['Disk', 'Memory']);
+  // Recommendation now points at the FortiMonitor InstanceDetails URL +
+  // Monitoring Config tab so the operator has a copy-pasteable workflow
+  // (FMN-135 follow-up #3, 2026-05-02).
+  for (const f of r.valueless_metrics) {
+    assert.match(f.recommendation, /Monitoring Config/);
+    assert.match(f.recommendation, /InstanceDetails\?server_id=1/);
+  }
+});
+
+test('analyzeInstances: valueless_metrics resolves agent_resource_type URL via catalog (FMN-135 #3)', () => {
+  // Real /v2/server/{sid}/agent_resource responses carry agent_resource_type
+  // as a URL string, not an object. The analyzer must look the id up in
+  // the inventory.agent_resource_types catalog and render a friendly
+  // "Category: Label (unit)" string instead of the raw API URL.
+  const inv = {
+    servers: [{ id: 1, name: 'A' }],
+    agent_resource_types: [
+      {
+        url: 'https://api2.panopta.com/v2/agent_resource_type/465',
+        category: 'Apache', label: 'Requests/sec', unit: 'reqs/s', platform: 'Linux'
+      },
+      {
+        url: 'https://api2.panopta.com/v2/agent_resource_type/100',
+        category: 'System', label: 'CPU % Used', unit: '%', platform: 'Linux'
+      }
+    ],
+    server_resources: {
+      '1': [
+        { id: 50, agent_resource_type: 'https://api2.panopta.com/v2/agent_resource_type/465' },
+        { id: 51, agent_resource_type: 'https://api2.panopta.com/v2/agent_resource_type/100' },
+        { id: 52, agent_resource_type: 'https://api2.panopta.com/v2/agent_resource_type/9999' } // unknown id
+      ]
+    },
+    server_resource_details: {
+      '1': {
+        '50': { agent_resource_threshold: [] },
+        '51': { agent_resource_threshold: [] },
+        '52': { agent_resource_threshold: [] }
+      }
+    }
+  };
+  const r = analyzeInstances(inv);
+  const metrics = r.valueless_metrics.map((f) => f.metric).sort();
+  // 465 -> "Apache: Requests/sec (reqs/s)"
+  // 100 -> "System: CPU % Used (%)"
+  // 9999 -> falls back to "Resource #52" (unknown id, no catalog hit)
+  assert.deepEqual(metrics, [
+    'Apache: Requests/sec (reqs/s)',
+    'Resource #52',
+    'System: CPU % Used (%)'
+  ]);
 });
 
 // =============================================================================
