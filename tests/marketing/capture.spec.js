@@ -353,11 +353,24 @@ test('hero flow: add fabric connection (4 frames)', async ({ extensionContext, e
   await stubV2Api(extensionContext);
   await stubFabricCreate(extensionContext);
 
+  // ---- Frame 1: Popup launcher ----
+  // Render the popup at hero viewport so the @media (min-width: 500px) rule
+  // engages: popup centers as a card on the backdrop, matching the wizard
+  // frames' visual language. Captures all tool tiles in one shot.
+  const popupPage = await extensionContext.newPage();
+  await popupPage.setViewportSize(TOOL_VIEWPORT);
+  await popupPage.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
+  await expect(popupPage.locator('.tool-card').first()).toBeVisible();
+  await expect(popupPage.locator('#session-strip.ok')).toBeVisible();
+  await popupPage.waitForTimeout(300);
+  await popupPage.screenshot({ path: frame('01-popup.png'), fullPage: true });
+  await popupPage.close();
+
   const page = await extensionContext.newPage();
   await page.setViewportSize(TOOL_VIEWPORT);
   await page.goto(`chrome-extension://${extensionId}/src/ui/fabric-connection/app.html`);
 
-  // ---- Step 1: Load devices ----
+  // ---- Frame 2: Load devices (wizard step 1, filled) ----
   // Wait for the dropdowns to populate (via stubbed list endpoints).
   await expect(page.locator('select.select').first()).toBeVisible({ timeout: 10_000 });
   await page.waitForFunction(() => {
@@ -382,26 +395,23 @@ test('hero flow: add fabric connection (4 frames)', async ({ extensionContext, e
   await sg.selectOption({ index: 1 });
   await page.waitForTimeout(300);
 
-  // Frame 1: Step 1 fully populated, Continue button enabled.
-  await page.screenshot({ path: frame('01-load.png'), fullPage: true });
+  await page.screenshot({ path: frame('02-load.png'), fullPage: true });
 
-  // ---- Step 2: Review ----
+  // ---- Frame 3: Review ----
   await page.locator('button.btn-primary', { hasText: 'Continue' }).click();
   await expect(page.locator('table.review-table')).toBeVisible({ timeout: 5_000 });
   await page.waitForTimeout(500);
-  await page.screenshot({ path: frame('02-review.png'), fullPage: true });
+  await page.screenshot({ path: frame('03-review.png'), fullPage: true });
 
-  // ---- Step 3: Execute (dry-run is default, just click Execute) ----
+  // ---- Frame 4: Results ----
+  // The Execute step auto-runs fc:create-batch on entry; dry-run is
+  // synchronous (no per-device delay) so the wizard auto-advances to
+  // Results faster than we can reliably capture an in-progress state.
+  // The hero shows the user-meaningful before/after instead.
   await page.locator('button.btn-primary', { hasText: 'Execute' }).click();
-  // Wait for the progress list to render rows for our 3 devices.
-  await expect(page.locator('.progress-row')).toHaveCount(3, { timeout: 5_000 });
-  // Let dry-run progress through (each device emits start/done quickly).
-  await page.waitForTimeout(1500);
-  await page.screenshot({ path: frame('03-execute.png'), fullPage: true });
-
-  // ---- Step 4: Results ----
-  // Dry-run typically auto-advances to results; if still on Execute, wait.
-  await expect(page.locator('table.review-table')).toBeVisible({ timeout: 10_000 });
+  // Detect Results step via its title, since both Review and Results
+  // render a .review-table - waiting on the table alone is ambiguous.
+  await expect(page.locator('.title-bar .subtitle', { hasText: /Results/ })).toBeVisible({ timeout: 10_000 });
   await page.waitForTimeout(500);
   await page.screenshot({ path: frame('04-results.png'), fullPage: true });
 });
