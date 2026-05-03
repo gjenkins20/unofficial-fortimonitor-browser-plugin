@@ -75,16 +75,11 @@ export function render({ container, store, navigate }) {
   deepInput.checked = Boolean(store.deep);
   body.appendChild(h('label', { class: 'toggle-row' }, deepInput, h('span', {}, 'Run per-server deep analysis')));
 
-  // FortiMonitor UI data toggle (FMN-135)
-  body.appendChild(h('h3', { class: 'subhead', style: 'margin-top:1rem;' }, 'Include FortiMonitor UI data'));
-  body.appendChild(h('p', { class: 'muted', style: 'font-size:0.85rem;margin:0 0 0.4rem;' },
-    'Off by default. When on, the assessment also walks each user\'s EditUser page to collect ',
-    'last-login and created-on dates that the v2 API does not expose. Requires you to be logged ',
-    'into FortiMonitor in another browser tab; one extra page fetch per user.'
-  ));
-  const frontendInput = h('input', { type: 'checkbox' });
-  frontendInput.checked = Boolean(store.includeFrontend);
-  body.appendChild(h('label', { class: 'toggle-row' }, frontendInput, h('span', {}, 'Include FortiMonitor UI data (last login, created on)')));
+  // FortiMonitor UI data is now always-on (FMN-135 follow-up,
+  // 2026-05-01). The opt-in toggle was original removed because the
+  // v2-only path needs no FortiMonitor session, but the BPA's value
+  // depends on last_login and the operator is by definition logged in
+  // when running this tool. No checkbox is needed.
 
   // Max-servers cap
   body.appendChild(h('h3', { class: 'subhead', style: 'margin-top:1rem;' }, 'Max servers (optional)'));
@@ -112,7 +107,7 @@ export function render({ container, store, navigate }) {
   runBtn.addEventListener('click', () => {
     store.customerName = nameInput.value.trim();
     store.deep = Boolean(deepInput.checked);
-    store.includeFrontend = Boolean(frontendInput.checked);
+    store.includeFrontend = true;     // always-on (FMN-135 follow-up)
     const m = Number(maxInput.value);
     store.maxServers = Number.isFinite(m) && m > 0 ? Math.floor(m) : 0;
     store.runResult = null;

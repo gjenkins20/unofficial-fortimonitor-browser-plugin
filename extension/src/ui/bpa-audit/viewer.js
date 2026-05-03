@@ -312,9 +312,11 @@ const TABS = [
           }
         },
         {
+          // FMN-135: derived from last_login age (Active / Stale /
+          // Inactive / Never / Unknown), no longer a manual entry.
           key: 'active_assessment',
-          header: 'Active Assessment (manual)',
-          annotation: { storeKey: 'user_active_assessment', rowKey: (r) => String(r.id) }
+          header: 'Active Assessment',
+          getter: (r) => r.active_assessment
         }
       ],
       rows: ({ analysis }) => analysis?.users?.details ?? []
@@ -366,20 +368,25 @@ const TABS = [
   },
 
   // 7. Template Recommendations ---------------------------------------------
+  // FMN-135 follow-up (2026-05-01): the default-only / cleanup / overlap
+  // analyses run on CUSTOM templates only. FortiMonitor's stock "Default
+  // Monitoring Templates" group is exempted - those templates get their
+  // own informational section with a soft recommendation to build custom
+  // templates rather than editing the stock ones.
   {
     id: 'template-recommendations',
     label: 'Template Recommendations',
     filenamePart: 'template-recommendations',
     sections: [
       {
-        label: 'Default-Only Templates',
+        label: 'Custom Templates Without Thresholds',
         columns: [
           { key: 'template',          header: 'Template',           getter: (r) => r.template },
-          { key: 'resource_count',    header: 'Resource Count',     getter: (r) => r.resource_count },
-          { key: 'network_service_count', header: 'Net. Services',  getter: (r) => r.network_service_count },
+          { key: 'resource_count',    header: 'Metric Count',       getter: (r) => r.resource_count },
           { key: 'rec',               header: 'Recommendation',     getter: (r) => r.recommendation }
         ],
-        rows: ({ analysis }) => analysis?.templates?.default_only_templates ?? []
+        rows: ({ analysis }) => analysis?.templates?.default_only_templates ?? [],
+        emptyText: 'No custom templates found without thresholds. Best practice: build custom templates with thresholds tuned to your environment - FortiMonitor stock templates provide metric coverage but no alerting on their own.'
       },
       {
         label: 'Manual Threshold Candidates',
@@ -391,21 +398,23 @@ const TABS = [
           { key: 'examples', header: 'Examples', getter: (r) => r.example_servers },
           { key: 'rec',    header: 'Recommendation', getter: (r) => r.recommendation }
         ],
-        rows: ({ analysis }) => analysis?.templates?.manual_threshold_candidates ?? []
+        rows: ({ analysis }) => analysis?.templates?.manual_threshold_candidates ?? [],
+        emptyText: 'No manual threshold candidates - no metric patterns indicate the tenant would benefit from manual thresholds. (Requires deep mode; if you ran a quick assessment, re-run with "Run per-server deep analysis" enabled to surface candidates.)'
       },
       {
-        label: 'Cleanup Candidates',
+        label: 'Custom Templates Cleanup Candidates',
         columns: [
           { key: 'template', header: 'Template',         getter: (r) => r.template },
-          { key: 'unchanged', header: 'Unchanged Metrics', getter: (r) => r.unchanged_metrics },
+          { key: 'unchanged', header: 'Unalerted Metrics', getter: (r) => r.unchanged_metrics },
           { key: 'total',    header: 'Total Metrics',    getter: (r) => r.total_metrics },
           { key: 'examples', header: 'Examples',         getter: (r) => r.examples },
           { key: 'rec',      header: 'Recommendation',   getter: (r) => r.recommendation }
         ],
-        rows: ({ analysis }) => analysis?.templates?.cleanup_candidates ?? []
+        rows: ({ analysis }) => analysis?.templates?.cleanup_candidates ?? [],
+        emptyText: 'No custom-template cleanup candidates - custom templates that carry alerts cover most of their metrics.'
       },
       {
-        label: 'Overlapping Templates',
+        label: 'Custom Template Overlap',
         columns: [
           { key: 't1',      header: 'Template 1',  getter: (r) => r.template_1 },
           { key: 't2',      header: 'Template 2',  getter: (r) => r.template_2 },
@@ -413,7 +422,19 @@ const TABS = [
           { key: 'shared',  header: 'Shared',      getter: (r) => r.shared_metrics },
           { key: 'rec',     header: 'Recommendation', getter: (r) => r.recommendation }
         ],
-        rows: ({ analysis }) => analysis?.templates?.overlapping_templates ?? []
+        rows: ({ analysis }) => analysis?.templates?.overlapping_templates ?? [],
+        emptyText: 'No overlapping custom templates - templates cover distinct metric sets without significant duplication.'
+      },
+      {
+        label: 'Default Templates (FortiMonitor stock)',
+        columns: [
+          { key: 'template', header: 'Template',     getter: (r) => r.template },
+          { key: 'metric_count', header: 'Metrics',  getter: (r) => r.metric_count },
+          { key: 'alerts_count', header: 'Alerts Set', getter: (r) => r.alerts_count },
+          { key: 'rec',      header: 'Recommendation', getter: (r) => r.recommendation }
+        ],
+        rows: ({ analysis }) => analysis?.templates?.default_templates ?? [],
+        emptyText: 'No FortiMonitor stock default templates detected. (The default group is identified by the name "Default Monitoring Templates"; if your tenant uses different naming, default templates appear under the custom sections above.)'
       }
     ]
   },

@@ -9,7 +9,15 @@ import {
   runAllAnalyzers
 } from '../src/lib/bpa-analyzers/index.js';
 import { trendLabel, extractCheckType } from '../src/lib/bpa-analyzers/incident.js';
-import { counter, mostCommon, parseTimestamp, extractTrailingId } from '../src/lib/bpa-analyzers/_helpers.js';
+import {
+  counter,
+  mostCommon,
+  parseTimestamp,
+  extractTrailingId,
+  userKeyOf,
+  contactIdOf,
+  deriveActiveAssessment
+} from '../src/lib/bpa-analyzers/_helpers.js';
 
 // =============================================================================
 // _helpers
@@ -36,6 +44,60 @@ test('extractTrailingId returns digit-string id from any v2-style url', () => {
   assert.equal(extractTrailingId('/v2/server/42024060'), '42024060');
   assert.equal(extractTrailingId('/v2/server/42024060/'), '42024060');
   assert.equal(extractTrailingId('not-a-url'), null);
+});
+
+test('userKeyOf prefers explicit id, falls back to /v2/user/{id} from url', () => {
+  assert.equal(userKeyOf({ id: 42 }), '42');
+  assert.equal(userKeyOf({ id: '42' }), '42');
+  assert.equal(userKeyOf({ url: 'https://api2.panopta.com/v2/user/308609' }), '308609');
+  assert.equal(userKeyOf({ resource_url: 'https://api2.panopta.com/v2/user/9999/' }), '9999');
+  assert.equal(userKeyOf({}), null);
+  assert.equal(userKeyOf(null), null);
+});
+
+test('contactIdOf parses contact_id from contact_info[].url', () => {
+  // Real shape from /v2/user list response.
+  const u = {
+    contact_info: [
+      { url: 'https://api2.panopta.com/v2/contact/545434/contact_info/527812' },
+      { url: 'https://api2.panopta.com/v2/contact/545434/contact_info/527813' }
+    ]
+  };
+  assert.equal(contactIdOf(u), '545434');
+});
+
+test('contactIdOf returns null when contact_info is missing or empty', () => {
+  assert.equal(contactIdOf({}), null);
+  assert.equal(contactIdOf({ contact_info: [] }), null);
+  assert.equal(contactIdOf({ contact_info: [{ url: 'not-a-contact-url' }] }), null);
+  assert.equal(contactIdOf(null), null);
+});
+
+test('deriveActiveAssessment buckets by age in days', () => {
+  const now = Date.UTC(2026, 4, 1); // 2026-05-01
+  // Active: <= 90 days
+  assert.equal(deriveActiveAssessment('2026-04-01', now), 'Active');
+  assert.equal(deriveActiveAssessment('2026-02-01', now), 'Active');
+  // Stale: 91..365 days
+  assert.equal(deriveActiveAssessment('2025-10-01', now), 'Stale');
+  assert.equal(deriveActiveAssessment('2025-06-01', now), 'Stale');
+  // Inactive: > 365 days
+  assert.equal(deriveActiveAssessment('2024-12-01', now), 'Inactive');
+  assert.equal(deriveActiveAssessment('2020-01-01', now), 'Inactive');
+});
+
+test('deriveActiveAssessment handles real EditUser format with TZ abbreviation', () => {
+  const now = Date.UTC(2026, 4, 1);
+  // FMN-135 capture format - day-precision parse drops the time + TZ.
+  assert.equal(deriveActiveAssessment('2025-07-30 17:27 PDT', now), 'Stale');
+});
+
+test('deriveActiveAssessment classifies absent / unparseable', () => {
+  assert.equal(deriveActiveAssessment(null), 'Never');
+  assert.equal(deriveActiveAssessment(''), 'Never');
+  assert.equal(deriveActiveAssessment(undefined), 'Never');
+  assert.equal(deriveActiveAssessment('never'), 'Unknown');
+  assert.equal(deriveActiveAssessment(42), 'Unknown');
 });
 
 // =============================================================================
@@ -178,15 +240,20 @@ test('analyzeUsers: builds detail rows, picks primary by contact methods, flags 
   // Sorted by created ASC -> first detail is the oldest.
   assert.equal(r.details[0].name, 'Alice');
   assert.equal(r.details[0].created, '2024-01-01');
-  // Issues: duplicate Alice (case-insensitive collapse), and 2 users with 0 contact methods.
-  assert.ok(r.issues.some((s) => /duplicate user.*alice/i.test(s)));
+  // FMN-135 follow-up (2026-05-01): the duplicate-name issue was dropped
+  // (false positives in real tenants where multi-alias test users share
+  // a display name). Only the no-contact-methods issue remains.
+  assert.ok(!r.issues.some((s) => /duplicate user/i.test(s)),
+    'duplicate-user issue should not be emitted');
   assert.ok(r.issues.some((s) => /2 user\(s\) have no contact methods/.test(s)));
   // FMN-135: with no frontend_user_data, last_login is empty and remains
-  // an engineer-fillable manual annotation.
+  // an engineer-fillable manual annotation. Active assessment derives
+  // from last_login age - 'Never' when there is no value.
   for (const d of r.details) {
     assert.equal(d.last_login, '');
     assert.equal(d.last_login_manual, true);
     assert.equal(d.created_on, '');
+    assert.equal(d.active_assessment, 'Never');
   }
 });
 
@@ -215,6 +282,65 @@ test('analyzeUsers: merges frontend_user_data when present (FMN-135)', () => {
   assert.equal(byName.Carol.last_login, '');
   assert.equal(byName.Carol.last_login_manual, true);
   assert.equal(byName.Carol.created_on, 'Mar 1, 2024');
+});
+
+test('analyzeUsers: keys frontend_user_data by userKeyOf, not raw u.id (FMN-135 QA)', () => {
+  // v2 user records carry only `url`, no `id` field. The fetcher and
+  // analyzer must agree on userKeyOf as the join key - if the analyzer
+  // reads u.id directly (undefined for v2 records), every row falls back
+  // to manual even when frontend_user_data is populated. This was the
+  // production failure on 2026-05-01.
+  const r = analyzeUsers({
+    users: [
+      {
+        url: 'https://api2.panopta.com/v2/user/308609',
+        display_name: 'Greg Jenkins',
+        email: 'g@x',
+        created: '2024-12-11',
+        contact_info: [{ url: 'https://api2.panopta.com/v2/contact/545434/contact_info/1' }]
+      }
+    ],
+    frontend_user_data: {
+      '308609': { last_login: '2025-07-30 17:27 PDT', created_on: '2025-07-30 17:27 PDT' }
+    }
+  });
+  assert.equal(r.details.length, 1);
+  assert.equal(r.details[0].last_login, '2025-07-30 17:27 PDT');
+  assert.equal(r.details[0].last_login_manual, false);
+  assert.equal(r.details[0].created_on, '2025-07-30 17:27 PDT');
+  assert.equal(r.details[0].id, '308609');
+});
+
+test('analyzeUsers: derives active_assessment from last_login age (FMN-135)', () => {
+  const now = Date.UTC(2026, 4, 1); // 2026-05-01
+  // Pin "now" by making each last_login relative. We can't pass `now` in,
+  // but Date.now() at test execution will be close to the actual present;
+  // pick last_login dates with very wide separations so the bucketing is
+  // stable regardless of the precise present.
+  const r = analyzeUsers({
+    users: [
+      { id: 'a', name: 'Recent',  contact_info: [{}], created: '2024-01-01' },
+      { id: 'b', name: 'Stale',   contact_info: [{}], created: '2024-01-01' },
+      { id: 'c', name: 'Ancient', contact_info: [{}], created: '2024-01-01' },
+      { id: 'd', name: 'Never',   contact_info: [{}], created: '2024-01-01' }
+    ],
+    frontend_user_data: {
+      // Within ~30 days of any plausible "now" -> Active
+      'a': { last_login: new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10), created_on: '' },
+      // ~180 days back -> Stale
+      'b': { last_login: new Date(Date.now() - 180 * 86400000).toISOString().slice(0, 10), created_on: '' },
+      // ~500 days back -> Inactive
+      'c': { last_login: new Date(Date.now() - 500 * 86400000).toISOString().slice(0, 10), created_on: '' },
+      // Null login -> Never
+      'd': { last_login: null, created_on: '' }
+    }
+  });
+  const byName = Object.fromEntries(r.details.map((d) => [d.name, d]));
+  assert.equal(byName.Recent.active_assessment, 'Active');
+  assert.equal(byName.Stale.active_assessment, 'Stale');
+  assert.equal(byName.Ancient.active_assessment, 'Inactive');
+  assert.equal(byName.Never.active_assessment, 'Never');
+  void now;
 });
 
 // =============================================================================
@@ -291,37 +417,42 @@ test('analyzeInstances: valueless_metrics flags resources without thresholds', (
 // TemplateAnalyzer
 // =============================================================================
 
-test('analyzeTemplates: without server_template_details returns available:false', () => {
+test('analyzeTemplates: without template_monitoring_configs returns available:false', () => {
   const r = analyzeTemplates({});
   assert.equal(r.available, false);
 });
 
-test('analyzeTemplates: default_only_templates flags templates that include metrics but no thresholds', () => {
+// FMN-135 follow-up (2026-05-01): the analyzer now reads metric+threshold
+// data from `template_monitoring_configs` (BpaFrontendFetcher) rather
+// than the metadata-only /v2/server_template/{id} response. These
+// fixtures mirror the parseMonitoringConfig output shape:
+//   { total_metrics, alerts_count, metric_names, metrics_without_alerts }
+
+test('analyzeTemplates: default_only_templates flags templates with metrics but zero alert thresholds (FMN-135)', () => {
   const r = analyzeTemplates({
-    server_template_details: {
-      '1': {
-        name: 'Default Linux',
-        agent_resource_type: [
-          { name: 'CPU', agent_resource_threshold: [] },
-          { name: 'Memory' }
-        ]
-      },
-      '2': {
-        name: 'Custom Linux',
-        agent_resource_type: [
-          { name: 'CPU', agent_resource_threshold: [{ warning: 80 }] }
-        ]
-      },
-      '3': { name: 'Empty Template' }                     // no metrics; should NOT flag
+    server_templates: [
+      { id: 1, name: 'Default Linux' },
+      { id: 2, name: 'Custom Linux' },
+      { id: 3, name: 'Empty Template' }
+    ],
+    template_monitoring_configs: {
+      // metrics defined but no alerts -> default-only
+      '1': { total_metrics: 2, alerts_count: 0, metric_names: ['CPU', 'Memory'], metrics_without_alerts: ['CPU', 'Memory'] },
+      // metrics with alerts -> NOT flagged
+      '2': { total_metrics: 1, alerts_count: 1, metric_names: ['CPU'], metrics_without_alerts: [] },
+      // empty template -> NOT flagged
+      '3': { total_metrics: 0, alerts_count: 0, metric_names: [], metrics_without_alerts: [] }
     }
   });
   const names = r.default_only_templates.map((t) => t.template);
   assert.deepEqual(names, ['Default Linux']);
 });
 
-test('analyzeTemplates: manual_threshold_candidates groups identical thresholds across servers', () => {
+test('analyzeTemplates: manual_threshold_candidates groups identical thresholds across servers (deep mode)', () => {
   const inv = {
-    server_template_details: { '0': { name: 'tmpl' } },   // forces analyzer to run
+    // Forces analyzer to run by providing template configs.
+    template_monitoring_configs: { '0': { total_metrics: 0, alerts_count: 0, metric_names: [], metrics_without_alerts: [] } },
+    server_templates: [{ id: 0, name: 'tmpl' }],
     servers: Array.from({ length: 4 }, (_, i) => ({ id: i + 1, name: `s${i + 1}` })),
     server_resource_details: {
       '1': { '10': { agent_resource_type: { name: 'CPU' }, agent_resource_threshold: [{ warning: 80, critical: 90 }] } },
@@ -338,45 +469,91 @@ test('analyzeTemplates: manual_threshold_candidates groups identical thresholds 
   assert.match(cpuPattern.example_servers, /s1.*s2.*s3/);
 });
 
-test('analyzeTemplates: cleanup_candidates flags templates >=50% unchanged', () => {
+test('analyzeTemplates: cleanup_candidates flags templates >=50% unalerted (FMN-135)', () => {
   const r = analyzeTemplates({
-    server_template_details: {
-      '1': {
-        name: 'Mostly Default',
-        agent_resource_type: [
-          { name: 'CPU', agent_resource_threshold: [] },
-          { name: 'Memory', agent_resource_threshold: [] },
-          { name: 'Disk', agent_resource_threshold: [{ warning: 90 }] }
-        ]
-      },
-      '2': {
-        name: 'All Tuned',
-        agent_resource_type: [
-          { name: 'CPU', agent_resource_threshold: [{ warning: 80 }] },
-          { name: 'Memory', agent_resource_threshold: [{ warning: 85 }] }
-        ]
-      }
+    server_templates: [
+      { id: 1, name: 'Mostly Default' },
+      { id: 2, name: 'All Tuned' },
+      { id: 3, name: 'No Alerts At All' }
+    ],
+    template_monitoring_configs: {
+      // 3 metrics, 1 alerted -> 2/3 unalerted -> >=50% -> flag
+      '1': { total_metrics: 3, alerts_count: 1, metric_names: ['CPU', 'Memory', 'Disk'], metrics_without_alerts: ['CPU', 'Memory'] },
+      // every metric alerted -> NOT flagged
+      '2': { total_metrics: 2, alerts_count: 2, metric_names: ['CPU', 'Memory'], metrics_without_alerts: [] },
+      // zero alerts -> handled by default_only, NOT cleanup
+      '3': { total_metrics: 4, alerts_count: 0, metric_names: ['A','B','C','D'], metrics_without_alerts: ['A','B','C','D'] }
     }
   });
   const flagged = r.cleanup_candidates.map((c) => c.template);
   assert.deepEqual(flagged, ['Mostly Default']);
 });
 
-test('analyzeTemplates: overlapping_templates flags Jaccard >= 0.6', () => {
+test('analyzeTemplates: default templates are exempt from default_only / cleanup / overlap (FMN-135 follow-up)', () => {
+  // Templates 1 and 2 belong to "Default Monitoring Templates" - they
+  // must NOT appear in default_only / cleanup / overlapping even when
+  // their config matches those criteria. Template 3 is custom and
+  // should be flagged as default-only.
   const r = analyzeTemplates({
-    server_template_details: {
-      '1': {
-        name: 'A',
-        agent_resource_type: [{ name: 'CPU' }, { name: 'Memory' }, { name: 'Disk' }]
-      },
-      '2': {
-        name: 'B',
-        agent_resource_type: [{ name: 'CPU' }, { name: 'Memory' }, { name: 'Disk' }, { name: 'Network' }]
-      },
-      '3': {
-        name: 'C',
-        agent_resource_type: [{ name: 'IPMI' }, { name: 'Power' }]   // disjoint from A/B
-      }
+    server_templates: [
+      { id: 1, name: 'Stock Linux',  server_group: 'https://api2.panopta.com/v2/server_group/100' },
+      { id: 2, name: 'Stock Windows', server_group: 'https://api2.panopta.com/v2/server_group/100' },
+      { id: 3, name: 'Custom Linux', server_group: 'https://api2.panopta.com/v2/server_group/200' }
+    ],
+    server_group_details: {
+      '100': { id: 100, name: 'Default Monitoring Templates' },
+      '200': { id: 200, name: 'tenant-templates' }
+    },
+    template_monitoring_configs: {
+      '1': { total_metrics: 5, alerts_count: 0, metric_names: ['CPU', 'Memory', 'Disk', 'Network', 'Uptime'], metrics_without_alerts: ['CPU', 'Memory', 'Disk', 'Network', 'Uptime'] },
+      '2': { total_metrics: 5, alerts_count: 0, metric_names: ['CPU', 'Memory', 'Disk', 'Network', 'Uptime'], metrics_without_alerts: ['CPU', 'Memory', 'Disk', 'Network', 'Uptime'] },
+      '3': { total_metrics: 2, alerts_count: 0, metric_names: ['CustomA', 'CustomB'], metrics_without_alerts: ['CustomA', 'CustomB'] }
+    }
+  });
+  // Custom default-only fires; stock defaults do not.
+  const flaggedDefaultOnly = r.default_only_templates.map((t) => t.template);
+  assert.deepEqual(flaggedDefaultOnly, ['Custom Linux']);
+  // Stock default templates would have overlapped (Jaccard 1.0) but are
+  // exempt from overlap analysis.
+  assert.equal(r.overlapping_templates.length, 0);
+  // Defaults appear in the dedicated section, sorted by name.
+  const defaults = r.default_templates.map((t) => t.template);
+  assert.deepEqual(defaults, ['Stock Linux', 'Stock Windows']);
+  // Recommendation steers toward custom templates.
+  for (const d of r.default_templates) {
+    assert.match(d.recommendation, /custom template/i);
+  }
+});
+
+test('analyzeTemplates: default templates with alerts get a different recommendation tone', () => {
+  const r = analyzeTemplates({
+    server_templates: [
+      { id: 1, name: 'Stock Tuned', server_group: 'https://api2.panopta.com/v2/server_group/100' }
+    ],
+    server_group_details: {
+      '100': { id: 100, name: 'Default Monitoring Templates' }
+    },
+    template_monitoring_configs: {
+      '1': { total_metrics: 4, alerts_count: 3, metric_names: ['A','B','C','D'], metrics_without_alerts: ['D'] }
+    }
+  });
+  assert.equal(r.default_templates.length, 1);
+  // Should mention the partial coverage and recommend custom-template
+  // approach rather than continuing to edit the stock one.
+  assert.match(r.default_templates[0].recommendation, /3 of 4|custom template/i);
+});
+
+test('analyzeTemplates: overlapping_templates flags Jaccard >= 0.6 (FMN-135)', () => {
+  const r = analyzeTemplates({
+    server_templates: [
+      { id: 1, name: 'A' },
+      { id: 2, name: 'B' },
+      { id: 3, name: 'C' }
+    ],
+    template_monitoring_configs: {
+      '1': { total_metrics: 3, alerts_count: 0, metric_names: ['CPU', 'Memory', 'Disk'], metrics_without_alerts: ['CPU', 'Memory', 'Disk'] },
+      '2': { total_metrics: 4, alerts_count: 0, metric_names: ['CPU', 'Memory', 'Disk', 'Network'], metrics_without_alerts: ['CPU', 'Memory', 'Disk', 'Network'] },
+      '3': { total_metrics: 2, alerts_count: 0, metric_names: ['IPMI', 'Power'], metrics_without_alerts: ['IPMI', 'Power'] }
     }
   });
   const ab = r.overlapping_templates.find(

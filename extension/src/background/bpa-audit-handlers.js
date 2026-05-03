@@ -93,7 +93,6 @@ export async function runBpaAudit({
   }
 
   if (includeFrontend) {
-    onProgress?.({ phase: 'frontend:start', total: Array.isArray(inventory.users) ? inventory.users.length : 0 });
     const baseFetch = frontendFetch ?? globalThis.fetch.bind(globalThis);
     const wrappedFetch = createBpaFetch(baseFetch);
     const frontendFetcher = new BpaFrontendFetcher({
@@ -101,6 +100,10 @@ export async function runBpaAudit({
       signal,
       onProgress: (evt) => onProgress?.({ phase: 'frontend:event', ...evt })
     });
+
+    // ---- Phase 3a: per-user activity (last_login + created_on) -----------
+    onProgress?.({ phase: 'frontend:start', total: Array.isArray(inventory.users) ? inventory.users.length : 0 });
+    let userPhaseFatal = false;
     try {
       const result = await frontendFetcher.collect(inventory.users);
       inventory.frontend_user_data = result.users;
@@ -116,6 +119,28 @@ export async function runBpaAudit({
       const reason = err?.message ?? String(err);
       if (Array.isArray(inventory.errors)) inventory.errors.push(`frontend: ${reason}`);
       onProgress?.({ phase: 'frontend:error', error: reason });
+      // If user phase failed on auth, the template phase will fail the
+      // same way - skip it to avoid spamming inventory.errors.
+      if (/session|auth/i.test(reason)) userPhaseFatal = true;
+    }
+
+    // ---- Phase 3b: per-template monitoring config (metrics + thresholds) -
+    if (!userPhaseFatal) {
+      const templates = Array.isArray(inventory.server_templates) ? inventory.server_templates : [];
+      onProgress?.({ phase: 'frontend-templates:start', total: templates.length });
+      try {
+        const result = await frontendFetcher.collectTemplateConfigs(templates);
+        inventory.template_monitoring_configs = result.configs;
+        if (Array.isArray(inventory.errors) && result.errors.length > 0) {
+          for (const e of result.errors) inventory.errors.push(`frontend: ${e}`);
+        }
+        onProgress?.({ phase: 'frontend-templates:done', stats: result.stats });
+      } catch (err) {
+        if (err?.name === 'AbortError') throw err;
+        const reason = err?.message ?? String(err);
+        if (Array.isArray(inventory.errors)) inventory.errors.push(`frontend: ${reason}`);
+        onProgress?.({ phase: 'frontend-templates:error', error: reason });
+      }
     }
   }
 

@@ -33,16 +33,20 @@ test('getTabs: returns the 11 tabs FMN-133 spec calls for, in order', () => {
   }
 });
 
-test('User Activity tab has annotation columns wired to the expected store keys', () => {
+test('User Activity tab: last_login is dual-mode, active_assessment is derived (FMN-135)', () => {
   const ua = getTabs().find((t) => t.id === 'user-activity');
   const cols = ua.sections[0].columns;
   const lastLogin = cols.find((c) => c.key === 'last_login');
   const assess = cols.find((c) => c.key === 'active_assessment');
+  // Last Login keeps its annotation (manual fallback for v2-only audits).
   assert.ok(lastLogin?.annotation);
   assert.equal(lastLogin.annotation.storeKey, 'user_last_login');
   assert.equal(typeof lastLogin.annotation.rowKey, 'function');
-  assert.ok(assess?.annotation);
-  assert.equal(assess.annotation.storeKey, 'user_active_assessment');
+  // Active Assessment is now derived data, not a manual annotation
+  // (FMN-135 scope refinement, 2026-05-01).
+  assert.equal(assess?.annotation, undefined);
+  assert.equal(typeof assess.getter, 'function');
+  assert.equal(assess.header, 'Active Assessment');
 });
 
 // =============================================================================
@@ -88,33 +92,36 @@ test('buildTabCsv: Raw Counts tab emits a section header + table', () => {
   assert.match(csv, /^"Fabric Connections","1"$/m);
 });
 
-test('buildTabCsv: User Activity includes annotation columns from ctx.annotations', () => {
+test('buildTabCsv: User Activity surfaces manual last_login annotation + derived active_assessment', () => {
   const tab = getTabs().find((t) => t.id === 'user-activity');
   const ctx = {
     inventory: {},
     analysis: {
       users: {
         total: 1,
-        details: [{ id: 7, name: 'Alice', email: 'a@x', created: '2024-01-01', contact_methods: 1 }],
+        details: [{
+          id: 7, name: 'Alice', email: 'a@x', created: '2024-01-01',
+          contact_methods: 1, last_login: '', last_login_manual: true,
+          active_assessment: 'Never', created_on: ''
+        }],
         primary_user: null,
         issues: []
       }
     },
     customer: '',
     annotations: {
-      user_last_login: { '7': '2026-04-15' },
-      user_active_assessment: { '7': 'active' }
+      user_last_login: { '7': '2026-04-15' }
     }
   };
   const csv = buildTabCsv(tab, ctx);
-  // Header includes the (still-manual) Active Assessment column. Last
-  // Login dropped its "(manual)" suffix in FMN-135 because the column
-  // can also be populated by the frontend fetcher.
+  // Last Login dropped its "(manual)" suffix because the column can also
+  // be populated by the frontend fetcher; Active Assessment dropped it
+  // in FMN-135 because it is now derived from last_login age.
   assert.match(csv, /Last Login/);
-  assert.match(csv, /Active Assessment \(manual\)/);
-  // Annotation values land in the row. created_on column (FMN-135) is
-  // empty here because no frontend_user_data was supplied.
-  assert.match(csv, /"Alice","a@x","2024-01-01","","1","2026-04-15","active"/);
+  assert.match(csv, /Active Assessment(?!\s*\(manual\))/);
+  // Manual-input value lands in last_login (annotation) and the derived
+  // value lands in active_assessment (getter).
+  assert.match(csv, /"Alice","a@x","2024-01-01","","1","2026-04-15","Never"/);
 });
 
 test('buildTabCsv: empty sections without alwaysIncludeHeader are skipped from the output', () => {

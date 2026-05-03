@@ -229,7 +229,6 @@ function makeStandardRoutes({
     { match: /\/snmp_credential\?limit=/,       respond: () => listResponse('snmp_credential_list', []) },
     { match: /\/monitoring_node\?limit=/,       respond: () => listResponse('monitoring_node_list', []) },
     { match: /\/user\?limit=/,                  respond: () => listResponse('user_list', []) },
-    { match: /\/account_history\?limit=/,       respond: () => listResponse('account_history_list', []) },
     // Outage stats
     { match: /\/outage_statistics\?days=7$/,    respond: () => jsonResponse(outageStats['7']) },
     { match: /\/outage_statistics\?days=30$/,   respond: () => jsonResponse(outageStats['30']) },
@@ -248,7 +247,7 @@ function makeStandardRoutes({
   ];
 }
 
-test('BpaFetcher.collectInventory returns all 20 top-level keys plus trending and details', async () => {
+test('BpaFetcher.collectInventory returns all 19 top-level keys plus trending and details', async () => {
   const fetch = routeFetch(makeStandardRoutes({
     servers: [{ id: 1, name: 's1' }, { id: 2, name: 's2' }],
     serverGroups: [{ id: 11, name: 'g1', url: '/v2/server_group/11' }],
@@ -268,7 +267,7 @@ test('BpaFetcher.collectInventory returns all 20 top-level keys plus trending an
     'compound_services', 'dem_applications', 'dashboards', 'status_pages',
     'contacts', 'contact_groups', 'notification_schedules', 'rotating_contacts',
     'maintenance_windows', 'onsights', 'fabric_connections', 'cloud_credentials',
-    'snmp_credentials', 'monitoring_nodes', 'users', 'account_history'
+    'snmp_credentials', 'monitoring_nodes', 'users'
   ]) {
     assert.ok(Array.isArray(inv[k]), `${k} should be an array`);
   }

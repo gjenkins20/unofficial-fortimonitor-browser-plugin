@@ -91,10 +91,10 @@ test.describe('BPA Audit popup wiring (FMN-133)', () => {
     await expect(appPage.locator('input[type="checkbox"]').first()).toBeVisible();
     await expect(appPage.locator('input[type="number"]')).toBeAttached();
     await expect(appPage.getByRole('button', { name: /Run assessment/ })).toBeVisible();
-    // FMN-135: "Include FortiMonitor UI data" toggle is a separate
-    // checkbox below the deep-mode one. The label calls out the two
-    // fields the EditUser page currently provides.
-    await expect(appPage.getByText(/Include FortiMonitor UI data \(last login, created on\)/)).toBeVisible();
+    // FMN-135 follow-up (2026-05-01): the "Include FortiMonitor UI data"
+    // toggle was removed - that fetch is always-on now. Confirm the
+    // checkbox is no longer present.
+    await expect(appPage.getByText(/Include FortiMonitor UI data/)).toHaveCount(0);
 
     await appPage.close();
     await page.close();

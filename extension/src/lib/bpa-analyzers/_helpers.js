@@ -83,6 +83,66 @@ export function rowName(s, fallback = '') {
 }
 
 /**
+ * Derive a stable, string-typed key for a v2 user record. The v2 API
+ * returns users with `url` (e.g. /v2/user/308609) but no `id` field;
+ * tests and some legacy callers attach `id` directly. Accept either.
+ * Returns null if nothing usable is present. Used as the join key
+ * between the v2 user list and the frontend fetcher's per-user data.
+ */
+export function userKeyOf(user) {
+  if (!user) return null;
+  if (user.id != null && user.id !== '') return String(user.id);
+  return extractTrailingId(user.url ?? user.resource_url);
+}
+
+/**
+ * Derive the FortiMonitor `contact_id` URL parameter that
+ * /users/users/EditUser expects. v2 users carry their contact id only
+ * inside contact_info[].url (the path segment after /v2/contact/). The
+ * contact_id namespace is distinct from the user id namespace; EditUser
+ * will not return useful data for a user id (FMN-135 QA, 2026-05-01).
+ *
+ * Returns the contact id as a string, or null if no contact_info entry
+ * yields one (the caller should record a per-user error and skip).
+ */
+export function contactIdOf(user) {
+  if (!user || !Array.isArray(user.contact_info)) return null;
+  for (const ci of user.contact_info) {
+    if (!ci || typeof ci.url !== 'string') continue;
+    const m = /\/contact\/(\d+)(?:\/|$)/.exec(ci.url);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+/**
+ * Bucket a user's `last_login` text into an activity classification.
+ * Day-precision parsing: we accept the leading YYYY-MM-DD and ignore
+ * timezone abbreviations (JS Date does not reliably handle named TZs
+ * like PDT across engines).
+ *
+ * Buckets:
+ *   'Active'   - logged in within last 90 days
+ *   'Stale'    - last login 91..365 days ago
+ *   'Inactive' - last login > 365 days ago
+ *   'Never'    - null/empty value (no login on record, or no frontend data)
+ *   'Unknown'  - non-empty value that does not contain a parseable date
+ */
+export function deriveActiveAssessment(lastLogin, now = Date.now()) {
+  if (lastLogin == null || lastLogin === '') return 'Never';
+  if (typeof lastLogin !== 'string') return 'Unknown';
+  const m = /(\d{4})-(\d{2})-(\d{2})/.exec(lastLogin);
+  if (!m) return 'Unknown';
+  const t = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  if (!Number.isFinite(t)) return 'Unknown';
+  const ageDays = Math.floor((now - t) / 86400000);
+  if (ageDays < 0) return 'Active';            // future / clock skew
+  if (ageDays <= 90) return 'Active';
+  if (ageDays <= 365) return 'Stale';
+  return 'Inactive';
+}
+
+/**
  * Group an array by a key function, returning a Map<key, T[]>. Matches
  * Python's defaultdict(list) idiom.
  */

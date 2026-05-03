@@ -72,7 +72,10 @@
       { id: 12, name: 'Dev', url: '/v2/server_group/12' }
     ],
     server_templates: [
-      { id: 9, name: 'Linux Standard', url: '/v2/server_template/9' }
+      { id: 9,  name: 'Linux Standard',  url: '/v2/server_template/9',
+        server_group: 'https://api2.panopta.com/v2/server_group/100' },        // FortiMonitor stock
+      { id: 10, name: 'Stock Windows',   url: '/v2/server_template/10' },     // custom (cleanup candidate)
+      { id: 11, name: 'Tuned Database',  url: '/v2/server_template/11' }      // custom (clean)
     ],
     outages: [
       { id: 5001, server_name: 'fgvm-prod-01', active: true, severity: 'critical', acknowledged: false, start_time: '2026-04-30T12:00:00Z' },
@@ -114,21 +117,27 @@
       '1': { last_login: '2026-04-30 12:34:56 UTC', created_on: 'Jan 1, 2024' },
       '2': { last_login: null, created_on: 'Jun 1, 2025' }
     },
-    account_history: [],
     server_group_details: {
       '11': { id: 11, name: 'Prod', server_template: { name: 'Linux Standard' }, server_list: [{ id: 1 }, { id: 2 }], parent: '/v2/server_group/100', notification_schedule: '/v2/notification_schedule/1' },
-      '12': { id: 12, name: 'Dev',  server_list: [{ id: 3 }] }
+      '12': { id: 12, name: 'Dev',  server_list: [{ id: 3 }] },
+      '100': { id: 100, name: 'Default Monitoring Templates' }     // stock-templates group (FMN-135 partition)
     },
     server_template_details: {
-      '9': {
-        id: 9,
-        name: 'Linux Standard',
-        agent_resource_type: [
-          { name: 'CPU', agent_resource_threshold: [] },
-          { name: 'Memory' }
-        ],
-        network_service: [{ name: 'icmp' }]
-      }
+      '9':  { id: 9,  name: 'Linux Standard' },
+      '10': { id: 10, name: 'Stock Windows' },
+      '11': { id: 11, name: 'Tuned Database' }
+    },
+    // FMN-135 follow-up (2026-05-01): /v2/server_template/{id} returns
+    // metadata only - threshold data lives at /report/get_monitoring_config_data.
+    // BpaFrontendFetcher.collectTemplateConfigs populates this map. Each
+    // value is the parseMonitoringConfig output: counts + metric names.
+    template_monitoring_configs: {
+      // 'Linux Standard': metrics defined but zero alerts -> default-only
+      '9':  { total_metrics: 5, alerts_count: 0, metric_names: ['CPU', 'Memory', 'Disk', 'Network', 'Uptime'], metrics_without_alerts: ['CPU', 'Memory', 'Disk', 'Network', 'Uptime'] },
+      // 'Stock Windows': partially tuned -> cleanup-candidate (1 of 4 alerted)
+      '10': { total_metrics: 4, alerts_count: 1, metric_names: ['CPU', 'Memory', 'Disk', 'Service'], metrics_without_alerts: ['Memory', 'Disk', 'Service'] },
+      // 'Tuned Database': fully tuned -> nothing to flag
+      '11': { total_metrics: 3, alerts_count: 3, metric_names: ['Connections', 'QueryTime', 'Locks'], metrics_without_alerts: [] }
     },
 
     // Deep-mode fixture data

@@ -98,16 +98,17 @@ test.describe('BPA Audit viewer harness (FMN-133)', () => {
     const aliceRow = table.locator('tr', { hasText: 'a@acme.com' });
 
     // Column order: 1=Name, 2=Email, 3=Created(API), 4=Created On(UI),
-    // 5=Contact Methods, 6=Last Login, 7=Active Assessment. The Last
-    // Login cell (6) should be plain text with the frontend value;
-    // Active Assessment (7) is still a manual-input column.
+    // 5=Contact Methods, 6=Last Login, 7=Active Assessment. Last Login
+    // (6) renders as plain text when the frontend fetcher populated it.
+    // Active Assessment (7) is now a derived read-only cell (FMN-135
+    // scope refinement, 2026-05-01) - no more annotation input.
     const aliceLastLoginCell = aliceRow.locator('td:nth-child(6)');
     await expect(aliceLastLoginCell).toContainText('2026-04-30 12:34:56 UTC');
     expect(await aliceLastLoginCell.locator('input.annotation-input').count()).toBe(0);
     const aliceCreatedOnCell = aliceRow.locator('td:nth-child(4)');
     await expect(aliceCreatedOnCell).toContainText('Jan 1, 2024');
-    // Active Assessment column is still an editable annotation.
-    expect(await aliceRow.locator('td:nth-child(7) input.annotation-input').count()).toBe(1);
+    // Active Assessment column is read-only (derived from last_login age).
+    expect(await aliceRow.locator('td:nth-child(7) input.annotation-input').count()).toBe(0);
 
     // The third user (Alice/alice2 - no frontend datum) should still
     // expose an annotation input in the Last Login cell.
