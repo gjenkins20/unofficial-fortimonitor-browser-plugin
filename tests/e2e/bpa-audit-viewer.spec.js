@@ -139,6 +139,49 @@ test.describe('BPA Audit viewer harness (FMN-133)', () => {
     await page.close();
   });
 
+  test('Combined PDF button mounts an iframe and invokes print() with all 11 tabs in the document (FMN-136)', async ({ extensionContext }) => {
+    const page = await extensionContext.newPage();
+    const errors = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+
+    await page.goto(HARNESS_URL);
+    await page.locator('[data-test="download-combined-pdf"]').click();
+    // Wait for the harness to record the print invocation.
+    await page.waitForFunction(() => (window.__pdfPrintCalls?.length ?? 0) > 0, null, { timeout: 5000 });
+
+    const calls = await page.evaluate(() => window.__pdfPrintCalls);
+    expect(calls.length).toBe(1);
+    const html = calls[0].html;
+    // Every tab id should appear as a section anchor.
+    for (const id of EXPECTED_TAB_IDS) {
+      expect(html).toContain(`id="tab-${id}"`);
+    }
+    // Customer name flows through to the printable header.
+    expect(html).toContain('Acme Corp (harness)');
+    // Default mode: no cover or TOC.
+    expect(html).not.toContain('class="cover"');
+    expect(html).not.toContain('class="toc"');
+    expect(errors).toEqual([]);
+    await page.close();
+  });
+
+  test('Cover/TOC checkbox: when on, PDF document includes cover + TOC anchor links (FMN-136)', async ({ extensionContext }) => {
+    const page = await extensionContext.newPage();
+    await page.goto(HARNESS_URL);
+    await page.locator('[data-test="pdf-cover-toggle"]').check();
+    await page.locator('[data-test="download-combined-pdf"]').click();
+    await page.waitForFunction(() => (window.__pdfPrintCalls?.length ?? 0) > 0, null, { timeout: 5000 });
+
+    const calls = await page.evaluate(() => window.__pdfPrintCalls);
+    const html = calls[0].html;
+    expect(html).toContain('class="cover"');
+    expect(html).toContain('class="toc"');
+    for (const id of EXPECTED_TAB_IDS) {
+      expect(html).toContain(`href="#tab-${id}"`);
+    }
+    await page.close();
+  });
+
   test('Filter input restricts visible rows in the active tab', async ({ extensionContext }) => {
     const page = await extensionContext.newPage();
     await page.goto(HARNESS_URL);
