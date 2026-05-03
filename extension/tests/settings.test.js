@@ -10,6 +10,9 @@ import {
   isBpaAuditEnabled,
   setBpaAuditEnabled,
   BPA_AUDIT_ENABLED_KEY,
+  isSsoConfigEnabled,
+  setSsoConfigEnabled,
+  SSO_CONFIG_ENABLED_KEY,
   isShowFeatureBadgesEnabled,
   setShowFeatureBadgesEnabled,
   SHOW_FEATURE_BADGES_KEY,
@@ -150,6 +153,31 @@ test('isBpaAuditEnabled fails closed (returns false) on storage error', async ()
 
 test('BPA_AUDIT_ENABLED_KEY uses the bpa-prefixed storage key', () => {
   assert.equal(BPA_AUDIT_ENABLED_KEY, 'fm:bpaAuditEnabled');
+});
+
+// ---------- FMN-139: SSO Configuration visibility flag ----------
+
+test('isSsoConfigEnabled defaults to false on empty storage (tile hidden until opt-in)', async () => {
+  const storage = createStorageMock();
+  assert.equal(await isSsoConfigEnabled(storage), false);
+});
+
+test('setSsoConfigEnabled round-trips a true write', async () => {
+  const storage = createStorageMock();
+  await setSsoConfigEnabled(true, storage);
+  assert.equal(await isSsoConfigEnabled(storage), true);
+  assert.equal(storage.__raw()[SSO_CONFIG_ENABLED_KEY], true);
+  await setSsoConfigEnabled(false, storage);
+  assert.equal(await isSsoConfigEnabled(storage), false);
+});
+
+test('isSsoConfigEnabled fails closed (returns false) on storage error', async () => {
+  const brokenStorage = { async get() { throw new Error('storage unavailable'); } };
+  assert.equal(await isSsoConfigEnabled(brokenStorage), false);
+});
+
+test('SSO_CONFIG_ENABLED_KEY uses the sso-prefixed storage key', () => {
+  assert.equal(SSO_CONFIG_ENABLED_KEY, 'fm:ssoConfigEnabled');
 });
 
 test('getAskClaudeToolTier defaults to readonly on empty storage (FMN-97)', async () => {

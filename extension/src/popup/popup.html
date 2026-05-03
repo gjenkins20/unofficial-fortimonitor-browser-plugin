@@ -215,6 +215,25 @@
         </div>
         <div class="chevron">›</div>
       </button>
+
+      <button class="tool-card"
+              data-group="sso"
+              data-tool="sso-config"
+              data-url="src/ui/sso-config/app.html"
+              data-experimental="sso-config"
+              hidden
+              title="Walks you through Okta SAML setup, then assembles the values you paste into FortiMonitor's Edit SSO Configuration form. Pure generator; you save in each admin UI yourself.">
+        <div class="tool-meta">
+          <div class="tool-name">
+            Generate SSO Configuration
+            <span class="badge beta">Beta</span>
+          </div>
+          <div class="tool-desc" data-default-desc="Walks you through Okta SAML setup, then emits a Markdown runbook with the exact values to paste into FortiMonitor's Edit SSO Configuration form (URL Fragment, Entity ID, Login URL, Certificate, role mappings) plus the Okta-side round-trip needed for FortiMonitor's SP values.">
+            Walks you through Okta SAML setup, then emits a Markdown runbook with the exact values to paste into FortiMonitor's Edit SSO Configuration form (URL Fragment, Entity ID, Login URL, Certificate, role mappings) plus the Okta-side round-trip needed for FortiMonitor's SP values.
+          </div>
+        </div>
+        <div class="chevron">›</div>
+      </button>
     </div>
 
     <div id="no-matches" class="empty-search" hidden>
@@ -437,6 +456,14 @@
       <label class="toggle-row">
         <input id="bpa-audit-toggle" type="checkbox">
         <span>Show Best-Practice Assessment</span>
+      </label>
+
+      <p class="settings-help" style="margin-top:0.75rem;">
+        <strong>Generate SSO Configuration</strong> walks you through Okta SAML setup, then emits a Markdown runbook with the exact values you paste into FortiMonitor's <em>Edit SSO Configuration</em> form. Pure generator; you save the actual config in each admin UI. Hidden by default.
+      </p>
+      <label class="toggle-row">
+        <input id="sso-config-toggle" type="checkbox">
+        <span>Show Generate SSO Configuration</span>
       </label>
     </div>
 

@@ -68,3 +68,6 @@ CLAU_Instructions.md
 
 # FMN-135 local probe artifacts (creds + persistent profile + ad-hoc probe scripts)
 fmn-135-*.mjs
+
+# FMN-138 SSO Discovery captures (contain session cookies + IdP cert material)
+tools/discovery/sso-capture-*.json
