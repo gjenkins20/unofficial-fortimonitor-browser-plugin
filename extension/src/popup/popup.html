@@ -215,6 +215,24 @@
         </div>
         <div class="chevron">›</div>
       </button>
+
+      <button class="tool-card"
+              data-group="sso"
+              data-tool="sso-config"
+              data-url="src/ui/sso-config/app.html"
+              data-experimental="sso-config"
+              hidden
+              title="Generates Okta SAML config (paste-into-Okta runbook + SP metadata XML); FortiMonitor-side save lands once FMN-138 Discovery is captured.">
+        <div class="tool-meta">
+          <div class="tool-name">
+            SSO Configuration (Okta)
+          </div>
+          <div class="tool-desc" data-default-desc="Paste your Okta IdP metadata XML; the plugin emits a step-by-step Okta admin runbook plus an SP metadata XML you can import into Okta in one shot.">
+            Paste your Okta IdP metadata XML; the plugin emits a step-by-step Okta admin runbook plus an SP metadata XML you can import into Okta in one shot.
+          </div>
+        </div>
+        <div class="chevron">›</div>
+      </button>
     </div>
 
     <div id="no-matches" class="empty-search" hidden>
@@ -437,6 +455,14 @@
       <label class="toggle-row">
         <input id="bpa-audit-toggle" type="checkbox">
         <span>Show Best-Practice Assessment</span>
+      </label>
+
+      <p class="settings-help" style="margin-top:0.75rem;">
+        <strong>SSO Configuration (Okta)</strong> takes your Okta IdP metadata XML and emits a step-by-step Okta admin runbook plus an SP metadata XML for one-shot Okta import. Currently dry-run only; FortiMonitor-side save lands when the SSO admin endpoint is captured (FMN-138). Hidden by default.
+      </p>
+      <label class="toggle-row">
+        <input id="sso-config-toggle" type="checkbox">
+        <span>Show SSO Configuration</span>
       </label>
     </div>
 

@@ -17,6 +17,10 @@ export const SDWAN_REPORT_ENABLED_KEY = 'fm:sdwanReportEnabled';
 // gating pattern as SD-WAN Report; the FMN-133 ticket explicitly calls
 // for "Same gating as FMN-129 / FMN-130. Tile hidden when off."
 export const BPA_AUDIT_ENABLED_KEY = 'fm:bpaAuditEnabled';
+// FMN-139: per-tool visibility flag for the SSO Configuration tile.
+// Beta-gated until FMN-138 (Discovery) lands and the FortiMonitor SSO
+// save endpoint is wired up; until then the wizard supports dry-run only.
+export const SSO_CONFIG_ENABLED_KEY = 'fm:ssoConfigEnabled';
 
 export const ASK_CLAUDE_TOOL_TIERS = ['readonly', 'readwrite', 'all'];
 export const DEFAULT_ASK_CLAUDE_TOOL_TIER = 'readonly';
@@ -231,6 +235,33 @@ export async function isBpaAuditEnabled(storage = defaultStorage()) {
  */
 export async function setBpaAuditEnabled(enabled, storage = defaultStorage()) {
   await storage.set({ [BPA_AUDIT_ENABLED_KEY]: Boolean(enabled) });
+}
+
+/**
+ * Read the SSO-Configuration-enabled flag (FMN-139). Returns false by
+ * default so the tile stays hidden until the operator opts in via
+ * Settings. Storage errors fail closed so a transient blip never silently
+ * surfaces a tool the operator hasn't asked for.
+ *
+ * @param {{ get: (key: string) => Promise<Record<string, any>> }} [storage]
+ */
+export async function isSsoConfigEnabled(storage = defaultStorage()) {
+  try {
+    const data = await storage.get(SSO_CONFIG_ENABLED_KEY);
+    return Boolean(data?.[SSO_CONFIG_ENABLED_KEY]);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Persist the SSO-Configuration-enabled flag.
+ *
+ * @param {boolean} enabled
+ * @param {{ set: (obj: Record<string, any>) => Promise<void> }} [storage]
+ */
+export async function setSsoConfigEnabled(enabled, storage = defaultStorage()) {
+  await storage.set({ [SSO_CONFIG_ENABLED_KEY]: Boolean(enabled) });
 }
 
 /**

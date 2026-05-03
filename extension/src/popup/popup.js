@@ -21,6 +21,8 @@ import {
   setSdwanReportEnabled,
   isBpaAuditEnabled,
   setBpaAuditEnabled,
+  isSsoConfigEnabled,
+  setSsoConfigEnabled,
   isSidebarLauncherEnabled,
   setSidebarLauncherEnabled,
   isShowFeatureBadgesEnabled,
@@ -290,6 +292,11 @@ async function loadBpaAuditIntoToggle() {
   toggle.checked = await isBpaAuditEnabled();
 }
 
+async function loadSsoConfigIntoToggle() {
+  const toggle = document.getElementById('sso-config-toggle');
+  toggle.checked = await isSsoConfigEnabled();
+}
+
 async function loadSidebarLauncherIntoToggle() {
   const toggle = document.getElementById('sidebar-launcher-toggle');
   toggle.checked = await isSidebarLauncherEnabled();
@@ -327,6 +334,10 @@ async function applyExperimentalVisibility() {
   const bpaAuditOn = await isBpaAuditEnabled();
   for (const el of document.querySelectorAll('[data-experimental="bpa-audit"]')) {
     el.hidden = !bpaAuditOn;
+  }
+  const ssoConfigOn = await isSsoConfigEnabled();
+  for (const el of document.querySelectorAll('[data-experimental="sso-config"]')) {
+    el.hidden = !ssoConfigOn;
   }
 }
 
@@ -852,6 +863,7 @@ function init() {
     await loadServerSearchIntoToggle();
     await loadSdwanReportIntoToggle();
     await loadBpaAuditIntoToggle();
+    await loadSsoConfigIntoToggle();
     await loadSidebarLauncherIntoToggle();
     await loadShowFeatureBadgesIntoToggle();
     await loadWebguiColumnsIntoSettings();
@@ -920,6 +932,12 @@ function init() {
 
   document.getElementById('bpa-audit-toggle').addEventListener('change', async (e) => {
     await setBpaAuditEnabled(e.target.checked);
+    await applyExperimentalVisibility();
+    await refreshGuards();
+  });
+
+  document.getElementById('sso-config-toggle').addEventListener('change', async (e) => {
+    await setSsoConfigEnabled(e.target.checked);
     await applyExperimentalVisibility();
     await refreshGuards();
   });
