@@ -14,7 +14,7 @@ const TOOL_NAME = 'Generate SSO Configuration';
 
 export function render({ container, store, navigate }) {
   const frame = h('div', { class: 'mockup-frame' });
-  frame.appendChild(titleBar('Review', { toolName: TOOL_NAME }));
+  frame.appendChild(titleBar('Review', { toolName: TOOL_NAME, beta: true }));
 
   frame.appendChild(h('div', { class: 'step-header' },
     ssoBreadcrumbs('review'),

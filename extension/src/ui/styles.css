@@ -1500,3 +1500,22 @@ tr.hidden-scope { display: none; }
   cursor: pointer;
 }
 .fmn-handoff-cancel:hover { color: #143458; }
+
+/* Beta badge for tool titleBars (FMN-139). Matches the popup.css
+   .badge.beta look so the popup tile and the wizard header read the
+   same. Used by lib/dom.js titleBar() when called with beta:true. */
+.title-bar h1 .badge {
+  font-size: 9.5px;
+  padding: 1px 6px;
+  border-radius: 100px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 600;
+  display: inline-block;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.title-bar h1 .badge.beta {
+  background: var(--warn-soft);
+  color: var(--warn);
+}

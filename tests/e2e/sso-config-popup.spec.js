@@ -50,7 +50,15 @@ test.describe('Generate SSO Configuration popup wiring (FMN-139)', () => {
     await page.locator('#settings-back').click();
     await expect(tile).toBeVisible();
     await expect(tile.locator('.tool-name')).toContainText('Generate SSO Configuration');
+    await expect(tile.locator('.tool-name .badge.beta')).toHaveText('Beta');
 
+    await page.close();
+  });
+
+  test('Wizard titleBar shows Beta badge on Step 1', async ({ extensionContext, extensionId }) => {
+    const page = await extensionContext.newPage();
+    await page.goto(`chrome-extension://${extensionId}/src/ui/sso-config/app.html`);
+    await expect(page.locator('.title-bar h1 .badge.beta')).toHaveText('Beta');
     await page.close();
   });
 

@@ -13,7 +13,7 @@ const TOOL_NAME = 'Generate SSO Configuration';
 
 export function render({ container, store, navigate }) {
   const frame = h('div', { class: 'mockup-frame' });
-  frame.appendChild(titleBar('Results', { toolName: TOOL_NAME }));
+  frame.appendChild(titleBar('Results', { toolName: TOOL_NAME, beta: true }));
 
   const result = store.runResult || { ok: false, message: 'No run result.' };
   const headlineClass = result.ok ? 'banner banner-ok' : 'banner banner-error';

@@ -31,7 +31,7 @@ export function ssoBreadcrumbs(active) {
 
 export function render({ container, store, navigate }) {
   const frame = h('div', { class: 'mockup-frame' });
-  frame.appendChild(titleBar('Set up Okta', { toolName: TOOL_NAME }));
+  frame.appendChild(titleBar('Set up Okta', { toolName: TOOL_NAME, beta: true }));
 
   frame.appendChild(h('div', { class: 'step-header' },
     ssoBreadcrumbs('okta'),

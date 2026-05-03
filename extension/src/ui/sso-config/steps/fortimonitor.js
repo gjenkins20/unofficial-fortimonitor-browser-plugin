@@ -39,7 +39,7 @@ function labeledRow(labelText, input, helpText = null) {
 
 export function render({ container, store, navigate }) {
   const frame = h('div', { class: 'mockup-frame' });
-  frame.appendChild(titleBar('Configure FortiMonitor', { toolName: TOOL_NAME }));
+  frame.appendChild(titleBar('Configure FortiMonitor', { toolName: TOOL_NAME, beta: true }));
 
   frame.appendChild(h('div', { class: 'step-header' },
     ssoBreadcrumbs('fortimonitor'),
