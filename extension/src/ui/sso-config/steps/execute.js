@@ -1,34 +1,29 @@
 // Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// SSO Configuration - Step 3 (Execute).
-// Dry-run path: assemble the runbook + SP metadata XML, store on the
-// run result, navigate to Results.
-// Real-run path: blocked until FMN-138 (Discovery) captures the
-// FortiMonitor SSO save endpoint. Surfaces a clear error.
+// SSO Configuration - Step 3 (Generate).
+// Pure generator: builds the runbook Markdown from the store, stores it on
+// runResult, and navigates to Results. No FortiMonitor save, no dry-run
+// distinction; the operator does both saves themselves with eyes-on.
 
 import { h, titleBar } from '../../../lib/dom.js';
-import { generateSpMetadata } from '../../../lib/saml-metadata.js';
-import { buildOktaRunbook } from '../../../lib/sso-runbook.js';
+import { buildSsoRunbook } from '../../../lib/sso-runbook.js';
 import { ssoBreadcrumbs } from './start.js';
 
-const TOOL_NAME = 'SSO Configuration (Okta IdP)';
+const TOOL_NAME = 'SSO Configuration (Okta)';
 
 export function render({ container, store, navigate }) {
   const frame = h('div', { class: 'mockup-frame' });
-  frame.appendChild(titleBar('Execute', { toolName: TOOL_NAME }));
+  frame.appendChild(titleBar('Generate', { toolName: TOOL_NAME }));
 
   frame.appendChild(h('div', { class: 'step-header' },
     ssoBreadcrumbs('execute'),
-    h('h2', {}, store.dryRun ? 'Dry run' : 'Real run'),
-    h('p', {}, store.dryRun
-      ? 'Building the runbook and SP metadata XML. No request is sent to FortiMonitor.'
-      : 'Saving the SSO configuration to FortiMonitor.'
-    )
+    h('h2', {}, 'Generating the runbook'),
+    h('p', {}, 'Assembling the Markdown runbook with your inputs and the parsed Okta IdP metadata.')
   ));
 
   const body = h('div', { class: 'body-section' });
   frame.appendChild(body);
 
-  const status = h('div', { class: 'parse-result' });
+  const status = h('div', { class: 'parse-result running' }, 'Working...');
   body.appendChild(status);
 
   const backBtn = h('button', { class: 'btn' }, 'Back');
@@ -38,56 +33,39 @@ export function render({ container, store, navigate }) {
 
   backBtn.addEventListener('click', () => navigate('/review'));
 
-  // Run on mount.
   setTimeout(() => run(), 0);
 
-  async function run() {
-    status.className = 'parse-result running';
-    status.textContent = store.dryRun ? 'Assembling artifacts...' : 'Saving to FortiMonitor...';
-
+  function run() {
     try {
-      const runbookMd = buildOktaRunbook({
-        spEntityId: store.spEntityId,
-        acsUrl: store.acsUrl,
-        nameIdFormat: store.nameIdFormat,
-        testLoginUrl: store.testLoginUrl || null,
-        attributes: store.attributes,
-        roleMapping: store.roleMapping,
-        ssoMode: store.ssoMode,
-        tenantLabel: store.tenantLabel || null
-      });
-      const spMetadataXml = generateSpMetadata({
-        entityId: store.spEntityId,
-        acsUrl: store.acsUrl,
-        nameIdFormat: store.nameIdFormat,
-        organization: store.tenantLabel ? { name: store.tenantLabel } : null
+      const runbookMd = buildSsoRunbook({
+        tenantLabel: store.tenantLabel || null,
+        fortimonitorBaseUrl: store.fortimonitorBaseUrl,
+        urlFragment: store.urlFragment,
+        domains: store.domains,
+        usernameField: store.usernameField,
+        loginBinding: store.loginBinding,
+        logoutUrl: store.logoutUrl,
+        logoutBinding: store.logoutBinding,
+        idp: store.idpParsed,
+        preventNonSsoLogins: store.preventNonSsoLogins,
+        autoCreateUsers: store.autoCreateUsers,
+        roleAssignmentMode: store.roleAssignmentMode,
+        roleMappings: store.roleMappings
       });
 
-      if (store.dryRun) {
-        store.runResult = {
-          ok: true,
-          dryRun: true,
-          message: 'Dry run complete. Artifacts ready to download in Results.',
-          runbookMd,
-          spMetadataXml
-        };
-        navigate('/results');
-        return;
-      }
-
-      // Real run: blocked pending Discovery (FMN-138).
-      throw new Error(
-        'FortiMonitor SSO save endpoint not yet wired up. Discovery (FMN-138) is the prerequisite; until it lands, run the wizard with dry-run on, then save the artifacts. See the runbook for paste-into-FortiMonitor instructions.'
-      );
+      store.runResult = {
+        ok: true,
+        message: 'Runbook ready. Download or copy from the Results step.',
+        runbookMd
+      };
+      navigate('/results');
     } catch (err) {
       status.className = 'parse-result error';
       status.textContent = err.message || String(err);
       store.runResult = {
         ok: false,
-        dryRun: store.dryRun,
         message: err.message || String(err),
-        runbookMd: null,
-        spMetadataXml: null
+        runbookMd: null
       };
     }
   }

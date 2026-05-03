@@ -5,10 +5,14 @@
 //   1. The SSO Configuration tile is [hidden] by default in the popup.
 //   2. Toggling "Show SSO Configuration" in Settings makes the tile visible.
 //   3. The Settings toggle copy is scoped to SSO Configuration only.
-//   4. The wizard app loads on the Configure (start) step with the
-//      expected sections and a disabled Continue button.
+//   4. The wizard app loads on Step 1 (Configure) with the expected
+//      sections matching FortiMonitor's actual Edit SSO Configuration form
+//      (FortiMonitor tenant, General, Okta IdP metadata XML, User
+//      Configuration) and a disabled Continue button.
 //   5. Pasting a known-good Okta IdP metadata XML parses successfully and
-//      surfaces the issuer and SSO URL in the parse-result panel.
+//      surfaces the Entity ID + Login URL in the parse-result panel.
+//   6. Filling the FortiMonitor SP-side fields plus pasting valid metadata
+//      enables the Continue button.
 //
 // Per memory verify_in_playwright_what_you_can.md: this is the verifiable
 // residue of the popup + wizard wiring. saml-metadata.js and
@@ -77,28 +81,25 @@ test.describe('SSO Configuration popup wiring (FMN-139)', () => {
     await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
     const tile = page.locator('.tool-card[data-tool="sso-config"]');
     await expect(tile.locator('.tool-name')).toContainText('SSO Configuration');
-    await expect(tile.locator('.tool-desc')).toHaveAttribute('data-default-desc', /Okta IdP metadata XML/);
+    await expect(tile.locator('.tool-desc')).toHaveAttribute('data-default-desc', /Edit SSO Configuration/);
     await page.close();
   });
 
-  test('SSO Config app loads on Configure (start) step with all sections and disabled Continue', async ({ extensionContext, extensionId }) => {
+  test('SSO Config app loads on Configure (start) step with expected sections and disabled Continue', async ({ extensionContext, extensionId }) => {
     const page = await extensionContext.newPage();
     await page.goto(`chrome-extension://${extensionId}/src/ui/sso-config/app.html`);
-    await expect(page.locator('.step-header h2')).toContainText('Build your SSO configuration');
-    // Section subheads
+    await expect(page.locator('.step-header h2')).toContainText('Build the FortiMonitor SSO config');
     const subheads = page.locator('.subhead');
-    await expect(subheads).toContainText(['FortiMonitor (Service Provider)']);
-    await expect(subheads).toContainText(['Okta (Identity Provider)']);
-    await expect(subheads).toContainText(['Attribute statements']);
-    await expect(subheads).toContainText(['Role mapping']);
-    await expect(subheads).toContainText(['SSO mode']);
-    // Continue is disabled until the form is valid.
+    await expect(subheads).toContainText(['FortiMonitor tenant']);
+    await expect(subheads).toContainText(['General']);
+    await expect(subheads).toContainText(['Okta IdP metadata XML']);
+    await expect(subheads).toContainText(['User Configuration']);
     const continueBtn = page.locator('button.primary', { hasText: 'Continue to Review' });
     await expect(continueBtn).toBeDisabled();
     await page.close();
   });
 
-  test('Pasting valid Okta IdP metadata parses and surfaces issuer + SSO URL', async ({ extensionContext, extensionId }) => {
+  test('Pasting valid Okta IdP metadata parses and surfaces Entity ID + Login URL', async ({ extensionContext, extensionId }) => {
     const page = await extensionContext.newPage();
     await page.goto(`chrome-extension://${extensionId}/src/ui/sso-config/app.html`);
 
@@ -111,24 +112,19 @@ test.describe('SSO Configuration popup wiring (FMN-139)', () => {
     await expect(parseResult).toContainText('http://www.okta.com/exk1abcdEFGHIJK0L1m2');
     await expect(parseResult).toContainText('https://example.okta.com/app/example_fortimonitor_1/exk1abcdEFGHIJK0L1m2/sso/saml');
 
-    // Continue is still disabled because spEntityId and acsUrl are empty.
+    // Continue still disabled because base URL and URL Fragment are empty.
     const continueBtn = page.locator('button.primary', { hasText: 'Continue to Review' });
     await expect(continueBtn).toBeDisabled();
 
     await page.close();
   });
 
-  test('Filling SP fields plus pasting metadata enables Continue', async ({ extensionContext, extensionId }) => {
+  test('Filling FortiMonitor base URL + URL Fragment plus pasting metadata enables Continue', async ({ extensionContext, extensionId }) => {
     const page = await extensionContext.newPage();
     await page.goto(`chrome-extension://${extensionId}/src/ui/sso-config/app.html`);
 
-    // Fill SP entity ID and ACS URL via the labeled inputs.
-    const spEntityIdInput = page.locator('label.form-row:has-text("SP Entity ID") input');
-    await spEntityIdInput.fill('https://acme.fortimonitor.com');
-    const acsInput = page.locator('label.form-row:has-text("Assertion Consumer Service") input');
-    await acsInput.fill('https://acme.fortimonitor.com/saml/acs');
-
-    // Paste metadata.
+    await page.locator('input[placeholder="https://my.us01.fortimonitor.com"]').fill('https://my.us01.fortimonitor.com');
+    await page.locator('input[placeholder="okta"]').fill('okta');
     await page.locator('textarea.paste-area').fill(FIXTURE_OKTA_METADATA);
 
     const continueBtn = page.locator('button.primary', { hasText: 'Continue to Review' });
@@ -143,8 +139,51 @@ test.describe('SSO Configuration popup wiring (FMN-139)', () => {
     await page.locator('textarea.paste-area').fill('not really xml at all');
     const parseResult = page.locator('.parse-result');
     await expect(parseResult).toHaveClass(/error/);
-    // Must not contain the success summary.
     await expect(parseResult).not.toContainText('IdP metadata parsed');
+    await page.close();
+  });
+
+  test('FortiMonitor System Roles surface as datalist suggestions for FortiMonitor role inputs', async ({ extensionContext, extensionId }) => {
+    const page = await extensionContext.newPage();
+    await page.goto(`chrome-extension://${extensionId}/src/ui/sso-config/app.html`);
+    // Ensure the SAML role mode is selected (default, but be explicit).
+    await page.locator('input[name="role-mode"][value="saml"]').check();
+    // Add a mapping row.
+    await page.locator('button', { hasText: '+ Add role mapping' }).click();
+    // Verify the datalist has the 11 System Roles.
+    const datalist = page.locator('datalist#fm-role-suggestions');
+    await expect(datalist).toBeAttached();
+    const optionValues = await datalist.locator('option').evaluateAll((els) => els.map((e) => e.value));
+    expect(optionValues).toContain('Account Admin');
+    expect(optionValues).toContain('Dashboard Admin');
+    expect(optionValues).toContain('Dashboard Viewer');
+    expect(optionValues).toContain('No Access');
+    expect(optionValues).toContain('Sub-Tenant Read-only');
+    expect(optionValues.length).toBe(11);
+    await page.close();
+  });
+
+  test('Full flow: Configure -> Review -> Generate -> Results renders runbook preview', async ({ extensionContext, extensionId }) => {
+    const page = await extensionContext.newPage();
+    await page.goto(`chrome-extension://${extensionId}/src/ui/sso-config/app.html`);
+
+    await page.locator('input[placeholder="https://my.us01.fortimonitor.com"]').fill('https://my.us01.fortimonitor.com');
+    await page.locator('input[placeholder="okta"]').fill('okta');
+    await page.locator('textarea.paste-area').fill(FIXTURE_OKTA_METADATA);
+
+    await page.locator('button.primary', { hasText: 'Continue to Review' }).click();
+    await expect(page.locator('.step-header h2')).toContainText('Review the values you will paste');
+
+    await page.locator('button.primary', { hasText: 'Generate runbook' }).click();
+    // Execute is brief; results either renders directly, or the user lands on /execute then auto-routes.
+    await expect(page.locator('.step-header h2')).toContainText('Runbook ready', { timeout: 5000 });
+
+    const preview = page.locator('pre.runbook-preview');
+    await expect(preview).toContainText('# Okta + FortiMonitor SSO setup runbook');
+    await expect(preview).toContainText('## Pass 2: Configure FortiMonitor SSO');
+    await expect(preview).toContainText('| URL Fragment | `okta` |');
+    await expect(preview).toContainText('http://www.okta.com/exk1abcdEFGHIJK0L1m2');
+
     await page.close();
   });
 });

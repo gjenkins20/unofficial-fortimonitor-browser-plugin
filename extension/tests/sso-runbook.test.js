@@ -3,139 +3,225 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildOktaRunbook } from '../src/lib/sso-runbook.js';
+import { buildSsoRunbook } from '../src/lib/sso-runbook.js';
 
 const BASE = {
-  spEntityId: 'https://acme.fortimonitor.com',
-  acsUrl: 'https://acme.fortimonitor.com/saml/acs',
-  nameIdFormat: 'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress',
-  testLoginUrl: 'https://acme.fortimonitor.com/login'
+  fortimonitorBaseUrl: 'https://my.us01.fortimonitor.com',
+  urlFragment: 'okta',
+  domains: ['@acme.com'],
+  usernameField: 'email',
+  loginBinding: 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST',
+  idp: {
+    issuer: 'http://www.okta.com/exk1abcdEFGHIJK0L1m2',
+    ssoUrlPost: 'https://acme.okta.com/app/acme_fortimonitor/exk1abcdEFGHIJK0L1m2/sso/saml',
+    x509Cert: 'MIIDqDCCApCgAwIBAgIGAYpHFAKEcert'
+  },
+  preventNonSsoLogins: false,
+  autoCreateUsers: true,
+  roleAssignmentMode: 'saml',
+  roleMappings: [
+    { samlField: 'admin_group', samlValue: 'fm_admins', fmRole: 'Dashboard Admin' },
+    { samlField: 'user_group',  samlValue: 'fm_users',  fmRole: 'Dashboard Viewer' }
+  ]
 };
 
-test('buildOktaRunbook: rejects missing required inputs', () => {
-  assert.throws(() => buildOktaRunbook({}), /spEntityId is required/);
-  assert.throws(() => buildOktaRunbook({ spEntityId: 'x' }), /acsUrl is required/);
-  assert.throws(() => buildOktaRunbook({ spEntityId: 'x', acsUrl: 'y' }), /nameIdFormat is required/);
+// ---------- Required-field validation ----------
+
+test('buildSsoRunbook: rejects missing fortimonitorBaseUrl', () => {
+  assert.throws(() => buildSsoRunbook({ ...BASE, fortimonitorBaseUrl: null }), /fortimonitorBaseUrl is required/);
 });
 
-test('buildOktaRunbook: emits all 7 numbered sections', () => {
-  const md = buildOktaRunbook(BASE);
-  assert.match(md, /^# Okta \+ FortiMonitor SSO setup runbook/);
-  assert.match(md, /## 1\. Values to paste into Okta/);
-  assert.match(md, /## 2\. Create the Okta SAML application/);
-  assert.match(md, /## 3\. Attribute statements/);
-  assert.match(md, /## 4\. Role mapping/);
-  assert.match(md, /## 5\. SSO mode/);
-  assert.match(md, /## 6\. Test the integration/);
-  assert.match(md, /## 7\. Troubleshooting/);
+test('buildSsoRunbook: rejects missing urlFragment', () => {
+  assert.throws(() => buildSsoRunbook({ ...BASE, urlFragment: null }), /urlFragment is required/);
 });
 
-test('buildOktaRunbook: SP values section includes entityID, ACS URL, NameID format', () => {
-  const md = buildOktaRunbook(BASE);
-  assert.match(md, /\| Audience URI \/ SP Entity ID \| `https:\/\/acme\.fortimonitor\.com` \|/);
-  assert.match(md, /\| Single sign on URL \/ ACS URL \| `https:\/\/acme\.fortimonitor\.com\/saml\/acs` \|/);
-  assert.match(md, /\| Name ID format \| `urn:oasis:names:tc:SAML:1\.1:nameid-format:emailAddress` \|/);
+test('buildSsoRunbook: rejects missing idp.issuer', () => {
+  assert.throws(() => buildSsoRunbook({ ...BASE, idp: { ...BASE.idp, issuer: null } }), /idp\.issuer is required/);
 });
 
-test('buildOktaRunbook: defaults attribute names to email/firstName/lastName/groups', () => {
-  const md = buildOktaRunbook(BASE);
-  assert.match(md, /\| `email` \| Basic \| `user\.email` \|/);
-  assert.match(md, /\| `firstName` \| Basic \| `user\.firstName` \|/);
-  assert.match(md, /\| `lastName` \| Basic \| `user\.lastName` \|/);
-  assert.match(md, /\| `groups` \| Basic \| Matches regex/);
+test('buildSsoRunbook: rejects missing idp.ssoUrlPost', () => {
+  assert.throws(() => buildSsoRunbook({ ...BASE, idp: { ...BASE.idp, ssoUrlPost: null } }), /idp\.ssoUrlPost is required/);
 });
 
-test('buildOktaRunbook: applies custom attribute names', () => {
-  const md = buildOktaRunbook({
+test('buildSsoRunbook: rejects missing idp.x509Cert', () => {
+  assert.throws(() => buildSsoRunbook({ ...BASE, idp: { ...BASE.idp, x509Cert: null } }), /idp\.x509Cert is required/);
+});
+
+// ---------- Section coverage ----------
+
+test('buildSsoRunbook: emits all top-level sections in order', () => {
+  const md = buildSsoRunbook(BASE);
+  const headings = md.match(/^## .+$/gm) || [];
+  assert.deepEqual(headings, [
+    '## Overview',
+    '## Pass 1: Create the Okta SAML application',
+    '## Pass 2: Configure FortiMonitor SSO',
+    '## Pass 3: Update Okta with FortiMonitor\'s SP-side values',
+    '## Pass 4: Test the integration',
+    '## Troubleshooting'
+  ]);
+});
+
+test('buildSsoRunbook: header includes tenant label when provided', () => {
+  const md = buildSsoRunbook({ ...BASE, tenantLabel: 'Acme Production' });
+  assert.match(md, /Tenant: \*\*Acme Production\*\*/);
+});
+
+test('buildSsoRunbook: header omits tenant line when no label provided', () => {
+  const md = buildSsoRunbook({ ...BASE, tenantLabel: null });
+  assert.doesNotMatch(md, /^Tenant:/m);
+});
+
+test('buildSsoRunbook: derives the SSO login URL from base + urlFragment', () => {
+  const md = buildSsoRunbook(BASE);
+  assert.match(md, /Login URL after setup: `https:\/\/my\.us01\.fortimonitor\.com\/sso\/okta`/);
+});
+
+test('buildSsoRunbook: handles base URL with trailing slash without doubling', () => {
+  const md = buildSsoRunbook({ ...BASE, fortimonitorBaseUrl: 'https://my.us01.fortimonitor.com/' });
+  assert.match(md, /Login URL after setup: `https:\/\/my\.us01\.fortimonitor\.com\/sso\/okta`/);
+});
+
+// ---------- Pass 2 (FortiMonitor) field rendering ----------
+
+test('Pass 2: renders the General table with all 8 fields', () => {
+  const md = buildSsoRunbook(BASE);
+  assert.match(md, /\| URL Fragment \| `okta` \|/);
+  assert.match(md, /\| Domains \| @acme\.com \|/);
+  assert.match(md, /\| Username Field \| `email` \|/);
+  assert.match(md, /\| Entity ID \| `http:\/\/www\.okta\.com\/exk1abcdEFGHIJK0L1m2` \|/);
+  assert.match(md, /\| Login URL \| `https:\/\/acme\.okta\.com\/app\/acme_fortimonitor\/exk1abcdEFGHIJK0L1m2\/sso\/saml` \|/);
+  assert.match(md, /\| Login Binding \| `urn:oasis:names:tc:SAML:2\.0:bindings:HTTP-POST` \|/);
+  assert.match(md, /\| Logout URL \| _\(blank\)_ \|/);
+  assert.match(md, /\| Logout Binding \| _\(blank\)_ \|/);
+});
+
+test('Pass 2: shows logout URL + binding when supplied', () => {
+  const md = buildSsoRunbook({
     ...BASE,
-    attributes: { email: 'mail', firstName: 'givenName', lastName: 'sn', groups: 'memberOf' }
+    logoutUrl: 'https://acme.okta.com/app/acme/exk1/slo/saml',
+    logoutBinding: 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST'
   });
-  assert.match(md, /\| `mail` \| Basic \| `user\.email` \|/);
-  assert.match(md, /\| `givenName` \| Basic \| `user\.firstName` \|/);
-  assert.match(md, /\| `sn` \| Basic \| `user\.lastName` \|/);
-  assert.match(md, /\| `memberOf` \| Basic \| Matches regex/);
+  assert.match(md, /\| Logout URL \| `https:\/\/acme\.okta\.com\/app\/acme\/exk1\/slo\/saml` \|/);
+  assert.doesNotMatch(md, /\| Logout URL \| _\(blank\)_ \|/);
 });
 
-test('buildOktaRunbook: role mapping section names default role', () => {
-  const md = buildOktaRunbook({
-    ...BASE,
-    roleMapping: { defaultRole: 'Editor', overrides: [] }
-  });
-  assert.match(md, /By default every signed-in Okta user lands in FortiMonitor as \*\*Editor\*\*\./);
-  assert.match(md, /No per-group overrides configured\./);
+test('Pass 2: joins multiple domains with ", "', () => {
+  const md = buildSsoRunbook({ ...BASE, domains: ['@acme.com', '@acme.net', '@acme.org'] });
+  assert.match(md, /\| Domains \| @acme\.com, @acme\.net, @acme\.org \|/);
 });
 
-test('buildOktaRunbook: role mapping renders overrides as a table', () => {
-  const md = buildOktaRunbook({
-    ...BASE,
-    roleMapping: {
-      defaultRole: 'Read-Only',
-      overrides: [
-        { group: 'FortiMonitor-Admins', role: 'Admin' },
-        { group: 'FortiMonitor-Editors', role: 'Editor' }
-      ]
-    }
-  });
-  assert.match(md, /\| `FortiMonitor-Admins` \| `Admin` \|/);
-  assert.match(md, /\| `FortiMonitor-Editors` \| `Editor` \|/);
-  assert.match(md, /Users not in any listed group fall back to \*\*Read-Only\*\*/);
+test('Pass 2: shows _(blank)_ when domains is empty', () => {
+  const md = buildSsoRunbook({ ...BASE, domains: [] });
+  assert.match(md, /\| Domains \| _\(blank\)_ \|/);
 });
 
-test('buildOktaRunbook: SSO-only mode includes lockout warning', () => {
-  const md = buildOktaRunbook({ ...BASE, ssoMode: 'sso-only' });
-  assert.match(md, /\*\*SSO-only\.\*\* Local password login is disabled/);
-  assert.match(md, /Lockout warning/);
+test('Pass 2: includes the X.509 certificate inside a fenced code block', () => {
+  const md = buildSsoRunbook(BASE);
+  assert.match(md, /```\nMIIDqDCCApCgAwIBAgIGAYpHFAKEcert\n```/);
 });
 
-test('buildOktaRunbook: SSO-with-password-fallback notes the cutover guidance', () => {
-  const md = buildOktaRunbook({ ...BASE, ssoMode: 'sso-with-password-fallback' });
-  assert.match(md, /\*\*SSO with password fallback\.\*\*/);
+test('Pass 2: User Configuration reflects preventNonSsoLogins=false with cutover note', () => {
+  const md = buildSsoRunbook({ ...BASE, preventNonSsoLogins: false });
+  assert.match(md, /\*\*Prevent non-SSO logins\*\*: unchecked/);
   assert.match(md, /Recommended during cutover/);
   assert.doesNotMatch(md, /Lockout warning/);
 });
 
-test('buildOktaRunbook: test section uses provided testLoginUrl', () => {
-  const md = buildOktaRunbook(BASE);
-  assert.match(md, /Open a private\/incognito window and visit: https:\/\/acme\.fortimonitor\.com\/login/);
+test('Pass 2: User Configuration reflects preventNonSsoLogins=true with lockout warning', () => {
+  const md = buildSsoRunbook({ ...BASE, preventNonSsoLogins: true });
+  assert.match(md, /\*\*Prevent non-SSO logins\*\*: \*\*checked\*\*/);
+  assert.match(md, /Lockout warning/);
 });
 
-test('buildOktaRunbook: test section falls back when no testLoginUrl is provided', () => {
-  const md = buildOktaRunbook({ ...BASE, testLoginUrl: null });
-  assert.match(md, /Open a private\/incognito window and visit your FortiMonitor login URL\./);
+test('Pass 2: User Configuration explains autoCreateUsers=false', () => {
+  const md = buildSsoRunbook({ ...BASE, autoCreateUsers: false });
+  assert.match(md, /\*\*Auto Create Users\*\*: unchecked \(an admin must approve new users/);
 });
 
-test('buildOktaRunbook: header includes tenant label when provided', () => {
-  const md = buildOktaRunbook({ ...BASE, tenantLabel: 'Acme Production' });
-  assert.match(md, /Tenant: \*\*Acme Production\*\*/);
+test('Pass 2: SAML role mode renders one row per mapping', () => {
+  const md = buildSsoRunbook(BASE);
+  assert.match(md, /Assign roles based on SAML mapping/);
+  assert.match(md, /\| `admin_group` \| `fm_admins` \| \*\*Dashboard Admin\*\* \|/);
+  assert.match(md, /\| `user_group` \| `fm_users` \| \*\*Dashboard Viewer\*\* \|/);
 });
 
-test('buildOktaRunbook: header omits tenant line when no label provided', () => {
-  const md = buildOktaRunbook(BASE);
-  assert.doesNotMatch(md, /Tenant:/);
+test('Pass 2: manual role mode skips the mapping table', () => {
+  const md = buildSsoRunbook({ ...BASE, roleAssignmentMode: 'manual', roleMappings: [] });
+  assert.match(md, /Assign roles manually/);
+  assert.doesNotMatch(md, /SAML Role Field \| SAML Role/);
 });
 
-test('buildOktaRunbook: deterministic output for fixed inputs', () => {
-  const inputs = {
+test('Pass 2: SAML role mode with empty mappings notes the missing config', () => {
+  const md = buildSsoRunbook({ ...BASE, roleAssignmentMode: 'saml', roleMappings: [] });
+  assert.match(md, /No role mappings configured/);
+});
+
+// ---------- Pass 3 (Okta-side updates) rendering ----------
+
+test('Pass 3: attribute statement table uses the configured usernameField', () => {
+  const md = buildSsoRunbook({ ...BASE, usernameField: 'mail' });
+  assert.match(md, /\| `mail` \| Basic \| `user\.email` \|/);
+});
+
+test('Pass 3: group attribute regex collapses to ^value$ for a single SAML field/value', () => {
+  const md = buildSsoRunbook({
     ...BASE,
-    roleMapping: {
-      defaultRole: 'Read-Only',
-      overrides: [{ group: 'FortiMonitor-Admins', role: 'Admin' }]
-    },
-    attributes: { email: 'email', firstName: 'firstName', lastName: 'lastName', groups: 'groups' },
-    ssoMode: 'sso-with-password-fallback',
-    tenantLabel: 'Acme'
-  };
-  const a = buildOktaRunbook(inputs);
-  const b = buildOktaRunbook(inputs);
+    roleMappings: [{ samlField: 'admin_group', samlValue: 'fm_admins', fmRole: 'Dashboard Admin' }]
+  });
+  assert.match(md, /\| `admin_group` \| Basic \| Matches regex: `\^fm_admins\$` \|/);
+});
+
+test('Pass 3: group attribute regex collapses to ^(a|b)$ when one field has multiple values', () => {
+  const md = buildSsoRunbook({
+    ...BASE,
+    roleMappings: [
+      { samlField: 'admin_group', samlValue: 'fm_admins',  fmRole: 'Dashboard Admin' },
+      { samlField: 'admin_group', samlValue: 'fm_billing', fmRole: 'Billing Admin' }
+    ]
+  });
+  assert.match(md, /\| `admin_group` \| Basic \| Matches regex: `\^\(fm_admins\|fm_billing\)\$` \|/);
+});
+
+test('Pass 3: emits one row per distinct SAML field across mappings', () => {
+  const md = buildSsoRunbook(BASE);
+  // Two distinct fields (admin_group, user_group) -> two rows.
+  const matches = (md.match(/Matches regex: `[^`]+`/g) || []).length;
+  assert.equal(matches, 2);
+});
+
+test('Pass 3: skips Group Attribute step when no role mappings', () => {
+  const md = buildSsoRunbook({ ...BASE, roleAssignmentMode: 'manual', roleMappings: [] });
+  assert.match(md, /No SAML role mappings were configured in Pass 2/);
+  assert.doesNotMatch(md, /Group Attribute Statements/);
+});
+
+// ---------- Pass 4 (test) rendering ----------
+
+test('Pass 4: visit URL is the SSO login URL', () => {
+  const md = buildSsoRunbook(BASE);
+  assert.match(md, /visit `https:\/\/my\.us01\.fortimonitor\.com\/sso\/okta`/);
+});
+
+test('Pass 4: notes manual role assignment when no mappings', () => {
+  const md = buildSsoRunbook({ ...BASE, roleAssignmentMode: 'manual', roleMappings: [] });
+  assert.match(md, /role assignment is manual; an admin must assign a role/);
+});
+
+test('Pass 4: with mappings, instructs operator to test one user per role', () => {
+  const md = buildSsoRunbook(BASE);
+  assert.match(md, /Repeat with one user per role mapping/);
+});
+
+// ---------- Troubleshooting + determinism ----------
+
+test('Troubleshooting: references the SSO login URL', () => {
+  const md = buildSsoRunbook(BASE);
+  assert.match(md, /Login URL the user visits is `https:\/\/my\.us01\.fortimonitor\.com\/sso\/okta`/);
+});
+
+test('buildSsoRunbook: deterministic output for fixed inputs', () => {
+  const a = buildSsoRunbook(BASE);
+  const b = buildSsoRunbook(BASE);
   assert.equal(a, b);
-});
-
-test('buildOktaRunbook: troubleshooting section references the ACS URL', () => {
-  const md = buildOktaRunbook(BASE);
-  assert.match(md, /POST to `https:\/\/acme\.fortimonitor\.com\/saml\/acs`/);
-});
-
-test('buildOktaRunbook: SSO-only mode adds extra cross-browser test step', () => {
-  const md = buildOktaRunbook({ ...BASE, ssoMode: 'sso-only' });
-  assert.match(md, /re-test from a different browser profile/);
 });

@@ -1,206 +1,258 @@
 // Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Markdown runbook generator for the SSO Configuration tool (FMN-139).
-// Renders a self-contained "how to set this up on Okta" doc the operator
-// can save and share. Deterministic for fixed inputs (no timestamps, no
-// random IDs) so the output is diffable and unit-testable.
-
-const DEFAULT_ATTRS = {
-  email: 'email',
-  firstName: 'firstName',
-  lastName: 'lastName',
-  groups: 'groups'
-};
+// Renders a paste-ready guide that mirrors FortiMonitor's actual SSO admin
+// form (Teams & Activity -> Integrations -> Edit SSO Configuration). Output
+// is deterministic for fixed inputs (no timestamps, no random IDs) so the
+// runbook is diffable and unit-testable.
+//
+// Two-pass setup. The user creates an Okta SAML app with placeholder URLs
+// in Pass 1, configures FortiMonitor in Pass 2 (FortiMonitor surfaces the
+// SP Entity ID + ACS URL on save), then returns to Okta in Pass 3 to swap
+// the placeholders for the real FortiMonitor SP values. There is no way
+// for this tool to know FortiMonitor's SP-side values in advance.
 
 /**
- * Build the operator-facing Okta admin runbook.
+ * Build the operator-facing Okta + FortiMonitor SSO runbook.
  *
  * Inputs:
- *   spEntityId       - SP entity ID (typically the FortiMonitor base URL)
- *   acsUrl           - Assertion Consumer Service URL
- *   nameIdFormat     - SAML NameID format URN (e.g. emailAddress)
- *   testLoginUrl     - URL the operator visits to test the integration
- *   attributes       - { email, firstName, lastName, groups } SAML attribute names
- *   roleMapping      - { defaultRole: string, overrides: [{ group, role }] }
- *   ssoMode          - 'sso-only' | 'sso-with-password-fallback'
- *   tenantLabel      - human label for this FortiMonitor tenant (display only)
- *   appName          - suggested Okta SAML app name (display only)
- *
- * Returns the Markdown string.
+ *   tenantLabel         - Display label for the FortiMonitor tenant.
+ *   fortimonitorBaseUrl - e.g. https://my.us01.fortimonitor.com
+ *   urlFragment         - The "URL Fragment" field value, e.g. "okta"
+ *   domains             - List of email domains, e.g. ['@company.com']
+ *   usernameField       - SAML attribute name matched to the user's email
+ *   loginBinding        - SAML binding URN; defaults to HTTP-POST
+ *   logoutUrl, logoutBinding - optional
+ *   idp                 - Parsed IdP metadata: { issuer, ssoUrlPost, x509Cert }
+ *   preventNonSsoLogins - boolean
+ *   autoCreateUsers     - boolean
+ *   roleAssignmentMode  - 'manual' | 'saml'
+ *   roleMappings        - [{ samlField, samlValue, fmRole }]
+ *   appName             - Suggested Okta SAML app name (display only)
  */
-export function buildOktaRunbook({
-  spEntityId,
-  acsUrl,
-  nameIdFormat,
-  testLoginUrl = null,
-  attributes = {},
-  roleMapping = { defaultRole: 'Read-Only', overrides: [] },
-  ssoMode = 'sso-with-password-fallback',
+export function buildSsoRunbook({
   tenantLabel = null,
+  fortimonitorBaseUrl,
+  urlFragment,
+  domains = [],
+  usernameField = 'email',
+  loginBinding = 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST',
+  logoutUrl = '',
+  logoutBinding = '',
+  idp = {},
+  preventNonSsoLogins = false,
+  autoCreateUsers = true,
+  roleAssignmentMode = 'saml',
+  roleMappings = [],
   appName = 'FortiMonitor'
 } = {}) {
-  if (!spEntityId) throw new Error('spEntityId is required.');
-  if (!acsUrl) throw new Error('acsUrl is required.');
-  if (!nameIdFormat) throw new Error('nameIdFormat is required.');
+  if (!fortimonitorBaseUrl) throw new Error('fortimonitorBaseUrl is required.');
+  if (!urlFragment) throw new Error('urlFragment is required.');
+  if (!idp || !idp.issuer) throw new Error('idp.issuer is required.');
+  if (!idp.ssoUrlPost) throw new Error('idp.ssoUrlPost is required.');
+  if (!idp.x509Cert) throw new Error('idp.x509Cert is required.');
 
-  const attrs = { ...DEFAULT_ATTRS, ...(attributes || {}) };
-  const sections = [];
+  const ssoLoginUrl = stripTrailingSlash(fortimonitorBaseUrl) + '/sso/' + urlFragment;
 
-  sections.push(buildHeader({ tenantLabel, appName }));
-  sections.push(buildSpValuesSection({ spEntityId, acsUrl, nameIdFormat }));
-  sections.push(buildOktaAppSection({ appName, spEntityId, acsUrl, nameIdFormat }));
-  sections.push(buildAttributeSection({ attrs }));
-  sections.push(buildRoleMappingSection({ roleMapping, attrs }));
-  sections.push(buildSsoModeSection({ ssoMode }));
-  sections.push(buildTestLoginSection({ testLoginUrl, ssoMode }));
-  sections.push(buildTroubleshootingSection({ acsUrl }));
+  const sections = [
+    buildHeader({ tenantLabel, appName, ssoLoginUrl }),
+    buildOverview(),
+    buildPass1Section({ appName }),
+    buildPass2Section({
+      urlFragment, domains, usernameField, loginBinding, logoutUrl, logoutBinding,
+      idp, preventNonSsoLogins, autoCreateUsers, roleAssignmentMode, roleMappings
+    }),
+    buildPass3Section({ usernameField, roleMappings, ssoLoginUrl }),
+    buildTestSection({ ssoLoginUrl, roleMappings }),
+    buildTroubleshootingSection({ ssoLoginUrl })
+  ];
 
   return sections.join('\n\n') + '\n';
 }
 
-function buildHeader({ tenantLabel, appName }) {
-  const lines = [`# Okta + FortiMonitor SSO setup runbook`];
-  if (tenantLabel) {
-    lines.push('');
-    lines.push(`Tenant: **${tenantLabel}**  `);
-    lines.push(`Okta app: **${appName}**`);
-  } else {
-    lines.push('');
-    lines.push(`Okta app: **${appName}**`);
-  }
+function buildHeader({ tenantLabel, appName, ssoLoginUrl }) {
+  const lines = ['# Okta + FortiMonitor SSO setup runbook', ''];
+  if (tenantLabel) lines.push(`Tenant: **${tenantLabel}**  `);
+  lines.push(`Okta app: **${appName}**  `);
+  lines.push(`Login URL after setup: \`${ssoLoginUrl}\``);
   lines.push('');
-  lines.push('Generated by the Unofficial FortiMonitor Toolkit. Follow the steps top to bottom; each section corresponds to one screen in the Okta admin UI.');
+  lines.push('Generated by the Unofficial FortiMonitor Toolkit. Two-pass setup: create the Okta app with placeholder URLs (Pass 1), configure FortiMonitor (Pass 2), then update Okta with FortiMonitor\'s SP-side values that surface on save (Pass 3).');
   return lines.join('\n');
 }
 
-function buildSpValuesSection({ spEntityId, acsUrl, nameIdFormat }) {
+function buildOverview() {
   return [
-    '## 1. Values to paste into Okta',
+    '## Overview',
     '',
-    'These are the SP-side values FortiMonitor expects. You will paste them into the Okta SAML app config in the next section.',
+    '| Pass | Where | What |',
+    '|---|---|---|',
+    '| 1 | Okta admin | Create SAML 2.0 app with placeholder ACS URL + Audience URI. |',
+    '| 2 | FortiMonitor admin | Paste the IdP metadata values (Entity ID, Login URL, Cert, role mappings). Save. |',
+    '| 3 | Okta admin | Replace the placeholders with FortiMonitor\'s SP-side values that the integration page now displays. Save. |',
+    '| 4 | Browser | Test login from a private window for each role.|'
+  ].join('\n');
+}
+
+function buildPass1Section({ appName }) {
+  return [
+    '## Pass 1: Create the Okta SAML application',
+    '',
+    '1. Sign in to your Okta admin console as an admin who can create applications.',
+    '2. **Applications -> Applications -> Create App Integration**.',
+    '3. Pick **SAML 2.0**, click **Next**.',
+    `4. App name: \`${appName}\`. Click **Next**.`,
+    '5. On the **SAML Settings** screen, fill in **placeholder** values for now (you will update them in Pass 3 once FortiMonitor surfaces the real SP values):',
+    '   - **Single sign on URL**: `https://placeholder.example/acs`',
+    '   - Check **Use this for Recipient URL and Destination URL**',
+    '   - **Audience URI (SP Entity ID)**: `https://placeholder.example`',
+    '   - **Name ID format**: **EmailAddress**',
+    '   - **Application username**: **Email**',
+    '6. Click **Next**, then **Finish** to save the app.',
+    '7. On the app\'s **Sign On** tab, click **View SAML setup instructions** and download the **Identity Provider metadata XML**. You will paste this XML into the wizard\'s Step 1 (and feed values from it into FortiMonitor in Pass 2).'
+  ].join('\n');
+}
+
+function buildPass2Section({
+  urlFragment, domains, usernameField, loginBinding, logoutUrl, logoutBinding,
+  idp, preventNonSsoLogins, autoCreateUsers, roleAssignmentMode, roleMappings
+}) {
+  const domainsCell = domains && domains.length ? domains.join(', ') : '_(blank)_';
+  const logoutUrlCell = logoutUrl ? `\`${logoutUrl}\`` : '_(blank)_';
+  const logoutBindingCell = logoutBinding ? `\`${logoutBinding}\`` : '_(blank)_';
+
+  const lines = [
+    '## Pass 2: Configure FortiMonitor SSO',
+    '',
+    'In FortiMonitor: **Teams & Activity -> Integrations -> Add (or Edit existing) SSO Configuration**.',
+    '',
+    '### General',
     '',
     '| Field | Value |',
     '|---|---|',
-    `| Audience URI / SP Entity ID | \`${spEntityId}\` |`,
-    `| Single sign on URL / ACS URL | \`${acsUrl}\` |`,
-    `| Name ID format | \`${nameIdFormat}\` |`,
-    `| Application username | \`Email\` (Okta user.email) |`
-  ].join('\n');
+    `| URL Fragment | \`${urlFragment}\` |`,
+    `| Domains | ${domainsCell} |`,
+    `| Username Field | \`${usernameField}\` |`,
+    `| Entity ID | \`${idp.issuer}\` |`,
+    `| Login URL | \`${idp.ssoUrlPost}\` |`,
+    `| Login Binding | \`${loginBinding}\` |`,
+    `| Logout URL | ${logoutUrlCell} |`,
+    `| Logout Binding | ${logoutBindingCell} |`,
+    '',
+    '### Certificate',
+    '',
+    'Paste the X.509 signing certificate as a single base64 block (no `BEGIN`/`END` markers, no whitespace):',
+    '',
+    '```',
+    idp.x509Cert,
+    '```'
+  ];
+
+  // User Configuration
+  lines.push('');
+  lines.push('### User Configuration');
+  lines.push('');
+  lines.push(`- **Prevent non-SSO logins**: ${preventNonSsoLogins ? '**checked**' : 'unchecked'}.`);
+  if (preventNonSsoLogins) {
+    lines.push('  > Lockout warning: leave this unchecked until you have confirmed end-to-end login works for at least one admin account.');
+  } else {
+    lines.push('  > Recommended during cutover. Tighten to checked after the integration has been stable for a few days.');
+  }
+  lines.push(`- **Auto Create Users**: ${autoCreateUsers ? '**checked**' : 'unchecked'} (${autoCreateUsers ? 'first-time SSO users are created automatically' : 'an admin must approve new users before they can log in'}).`);
+
+  if (roleAssignmentMode === 'manual') {
+    lines.push('- **Default Roles for New Users**: **Assign roles manually**. New users will land with no role until an admin assigns one.');
+  } else {
+    lines.push('- **Default Roles for New Users**: **Assign roles based on SAML mapping**.');
+    if (roleMappings.length) {
+      lines.push('');
+      lines.push('Add one **SAML Role Mapping** block per row in the table below (use **Add Role Mapping** for each):');
+      lines.push('');
+      lines.push('| SAML Role Field | SAML Role | FortiMonitor roles to assign |');
+      lines.push('|---|---|---|');
+      for (const m of roleMappings) {
+        lines.push(`| \`${m.samlField}\` | \`${m.samlValue}\` | **${m.fmRole}** |`);
+      }
+    } else {
+      lines.push('  > No role mappings configured. Users will land without a role until an admin assigns one.');
+    }
+  }
+
+  lines.push('');
+  lines.push('Click **Save**. FortiMonitor will return to the Integrations page and the new (or updated) integration row will display your tenant\'s SP-side SSO values - you need these in Pass 3.');
+
+  return lines.join('\n');
 }
 
-function buildOktaAppSection({ appName, spEntityId, acsUrl, nameIdFormat }) {
-  return [
-    '## 2. Create the Okta SAML application',
+function buildPass3Section({ usernameField, roleMappings, ssoLoginUrl }) {
+  const lines = [
+    '## Pass 3: Update Okta with FortiMonitor\'s SP-side values',
     '',
-    '1. Sign in to your Okta admin console as an admin with permission to create applications.',
-    '2. Go to **Applications -> Applications -> Create App Integration**.',
-    '3. Pick **SAML 2.0** and click **Next**.',
-    `4. App name: \`${appName}\`. Click **Next**.`,
-    '5. On the **SAML Settings** screen, fill in:',
-    `   - **Single sign on URL**: \`${acsUrl}\``,
-    '   - Check **Use this for Recipient URL and Destination URL**',
-    `   - **Audience URI (SP Entity ID)**: \`${spEntityId}\``,
-    `   - **Name ID format**: select the option matching \`${nameIdFormat}\` (typically *EmailAddress*).`,
-    '   - **Application username**: **Email**.',
+    'On FortiMonitor\'s **Integrations** page, click your new SSO integration to view the SP-side details. Note the values FortiMonitor displays (their exact paths vary by tenant; the integration row also shows your login URL: ' + `\`${ssoLoginUrl}\`).`,
     '',
-    'Leave the rest at default for now; the next section adds attribute statements before you save.'
-  ].join('\n');
-}
-
-function buildAttributeSection({ attrs }) {
-  return [
-    '## 3. Attribute statements',
-    '',
-    'Still on the SAML Settings screen, add the following **Attribute Statements**. These are what Okta sends in the SAML assertion; FortiMonitor reads them to populate user records.',
+    '1. Return to your Okta SAML app -> **General** -> **SAML Settings** -> **Edit**.',
+    '2. Replace the placeholders:',
+    '   - **Single sign on URL**: paste FortiMonitor\'s **Assertion Consumer Service URL**.',
+    '   - **Audience URI (SP Entity ID)**: paste FortiMonitor\'s **SP Entity ID**.',
+    '3. **Attribute Statements** - add the user-attribute statement that maps to FortiMonitor\'s "Username Field":',
     '',
     '| Name | Name format | Value |',
     '|---|---|---|',
-    `| \`${attrs.email}\` | Basic | \`user.email\` |`,
-    `| \`${attrs.firstName}\` | Basic | \`user.firstName\` |`,
-    `| \`${attrs.lastName}\` | Basic | \`user.lastName\` |`,
-    '',
-    '### Group attribute statement',
-    '',
-    'Add one **Group Attribute Statement** so role mapping works:',
-    '',
-    '| Name | Name format | Filter |',
-    '|---|---|---|',
-    `| \`${attrs.groups}\` | Basic | Matches regex: \`.*\` (or narrow to specific group prefixes) |`,
-    '',
-    'A `.*` regex sends every group the user is in. If your Okta tenant has many unrelated groups, narrow to the prefix you use for FortiMonitor access (e.g. `^FortiMonitor-.*`).',
-    '',
-    'Click **Next** then **Finish** to save the app.'
-  ].join('\n');
-}
-
-function buildRoleMappingSection({ roleMapping, attrs }) {
-  const lines = [
-    '## 4. Role mapping',
-    '',
-    `By default every signed-in Okta user lands in FortiMonitor as **${roleMapping.defaultRole}**.`
+    `| \`${usernameField}\` | Basic | \`user.email\` |`,
+    ''
   ];
 
-  const overrides = Array.isArray(roleMapping.overrides) ? roleMapping.overrides : [];
-  if (overrides.length) {
+  if (roleMappings.length) {
+    lines.push('4. **Group Attribute Statements** - add one per distinct SAML Role Field used in your FortiMonitor role mappings:');
     lines.push('');
-    lines.push('Group-based overrides (highest priority match wins):');
-    lines.push('');
-    lines.push('| Okta group | FortiMonitor role |');
-    lines.push('|---|---|');
-    for (const o of overrides) {
-      lines.push(`| \`${o.group}\` | \`${o.role}\` |`);
+    lines.push('| Name | Name format | Filter |');
+    lines.push('|---|---|---|');
+    const seenFields = new Set();
+    for (const m of roleMappings) {
+      if (seenFields.has(m.samlField)) continue;
+      seenFields.add(m.samlField);
+      const matchingValues = roleMappings.filter((x) => x.samlField === m.samlField).map((x) => x.samlValue);
+      const filterRegex = matchingValues.length > 1
+        ? `^(${matchingValues.join('|')})$`
+        : `^${matchingValues[0]}$`;
+      lines.push(`| \`${m.samlField}\` | Basic | Matches regex: \`${filterRegex}\` |`);
     }
     lines.push('');
-    lines.push(`These overrides require the \`${attrs.groups}\` attribute statement from the previous section. Users not in any listed group fall back to **${roleMapping.defaultRole}**.`);
+    lines.push('   The regex limits the attribute to *exactly* the role-defining group names FortiMonitor checks for. You can broaden it later if your role-naming convention changes.');
   } else {
-    lines.push('');
-    lines.push('No per-group overrides configured. Add them later in the FortiMonitor admin UI if you need finer-grained role assignment.');
+    lines.push('4. No SAML role mappings were configured in Pass 2; skip the Group Attribute Statement step.');
   }
+
+  lines.push('');
+  lines.push('5. Click **Next**, then **Save**.');
+  lines.push('6. On the Okta app\'s **Assignments** tab, assign the users (or groups of users) who should be able to sign in to FortiMonitor.');
 
   return lines.join('\n');
 }
 
-function buildSsoModeSection({ ssoMode }) {
-  if (ssoMode === 'sso-only') {
-    return [
-      '## 5. SSO mode',
-      '',
-      '**SSO-only.** Local password login is disabled. Every user (including admins) must authenticate through Okta.',
-      '',
-      '> **Lockout warning.** Verify the integration end-to-end with at least one admin account before turning off password login. If Okta SAML breaks, no one can sign in.'
-    ].join('\n');
-  }
-  return [
-    '## 5. SSO mode',
-    '',
-    '**SSO with password fallback.** Users can sign in with either Okta SAML or a local FortiMonitor password. Recommended during cutover; tighten to SSO-only once the integration has been stable for a week.'
-  ].join('\n');
-}
-
-function buildTestLoginSection({ testLoginUrl, ssoMode }) {
-  const lines = ['## 6. Test the integration', ''];
-  if (testLoginUrl) {
-    lines.push(`1. Open a private/incognito window and visit: ${testLoginUrl}`);
+function buildTestSection({ ssoLoginUrl, roleMappings }) {
+  const lines = ['## Pass 4: Test the integration', ''];
+  lines.push(`1. Open a private / incognito browser window and visit \`${ssoLoginUrl}\`.`);
+  lines.push('2. Authenticate as an Okta-assigned user; you should land back in FortiMonitor.');
+  if (roleMappings.length) {
+    lines.push('3. Confirm the user landed with the **expected FortiMonitor role** based on their Okta group membership. Repeat with one user per role mapping.');
   } else {
-    lines.push('1. Open a private/incognito window and visit your FortiMonitor login URL.');
+    lines.push('3. Confirm the user landed in FortiMonitor (role assignment is manual; an admin must assign a role before the user has access).');
   }
-  lines.push('2. Click the SSO option; you should land on Okta.');
-  lines.push('3. Authenticate as a user assigned to the new SAML app.');
-  lines.push('4. Confirm you land back in FortiMonitor with the expected role.');
-  if (ssoMode === 'sso-only') {
-    lines.push('5. **Before flipping SSO-only on**: re-test from a different browser profile to confirm a non-cached path works too.');
-  }
+  lines.push('4. After end-to-end login works for at least one admin, optionally turn on **Prevent non-SSO logins** in FortiMonitor to disable local password fallback.');
   return lines.join('\n');
 }
 
-function buildTroubleshootingSection({ acsUrl }) {
+function buildTroubleshootingSection({ ssoLoginUrl }) {
   return [
-    '## 7. Troubleshooting',
+    '## Troubleshooting',
     '',
-    '- **Browser shows the Okta login then redirects back to Okta on success**: ACS URL mismatch. Re-paste the ACS value above into Okta exactly; trailing slashes matter.',
-    '- **FortiMonitor shows "user not provisioned"**: the email attribute is not arriving. Re-check the attribute statement names match what FortiMonitor expects.',
-    '- **User lands as Read-Only despite group override**: the group attribute statement is missing or filtering too narrowly. Verify the regex matches the group name in Okta (case sensitive).',
-    `- **Signature verification failure**: Okta rotated its signing cert. Re-run this tool with the latest Okta metadata XML and re-save FortiMonitor's SSO config.`,
-    '',
-    `If the issue persists, capture the full SAML response from your browser's network tab (POST to \`${acsUrl}\`) and decode the base64 \`SAMLResponse\` form field for inspection.`
+    '- **Okta shows "App is not assigned to this user"**: assign the user (or their group) under the Okta app\'s **Assignments** tab.',
+    '- **FortiMonitor shows "user not provisioned"**: the **Username Field** attribute is missing from the SAML payload, or it does not match what FortiMonitor expects. Re-check the attribute statement name in Okta against the **Username Field** value in FortiMonitor.',
+    '- **User signs in but lands without a role**: the SAML Role Field / SAML Role values do not match what your Group Attribute Statement is sending. Open the Okta admin console -> **Reports -> SAML attribute view** to inspect what Okta actually sent for that user.',
+    '- **Signature verification failure**: Okta rotated its signing certificate. Re-download the Okta IdP metadata, run this tool again, and re-paste the new certificate into FortiMonitor.',
+    `- **Browser shows the Okta login then redirects back to Okta on success**: the **Single sign on URL** in Okta does not match FortiMonitor\'s ACS URL. Trailing slashes matter. The Login URL the user visits is \`${ssoLoginUrl}\`; the ACS URL is the one FortiMonitor displays on the Integrations page.`
   ].join('\n');
+}
+
+function stripTrailingSlash(s) {
+  return s.endsWith('/') ? s.slice(0, -1) : s;
 }

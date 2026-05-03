@@ -1,12 +1,15 @@
 // Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // SSO Configuration - Step 4 (Results).
-// Renders the run outcome and provides downloads for the Okta admin runbook
-// (Markdown) and the SP metadata XML for one-shot Okta import.
+// Renders the runbook outcome, offers a download, and shows a Markdown
+// preview. The runbook is the only artifact: SP metadata XML for Okta
+// import is intentionally not generated because FortiMonitor's SP-side
+// values (ACS URL, SP Entity ID) are determined per tenant and only
+// surface after the operator saves the FortiMonitor SSO config.
 
 import { h, titleBar } from '../../../lib/dom.js';
 import { ssoBreadcrumbs } from './start.js';
 
-const TOOL_NAME = 'SSO Configuration (Okta IdP)';
+const TOOL_NAME = 'SSO Configuration (Okta)';
 
 export function render({ container, store, navigate }) {
   const frame = h('div', { class: 'mockup-frame' });
@@ -14,9 +17,7 @@ export function render({ container, store, navigate }) {
 
   const result = store.runResult || { ok: false, message: 'No run result.' };
   const headlineClass = result.ok ? 'banner banner-ok' : 'banner banner-error';
-  const headlineText = result.ok
-    ? (result.dryRun ? 'Dry run complete' : 'Configuration saved')
-    : 'Run failed';
+  const headlineText = result.ok ? 'Runbook ready' : 'Generation failed';
 
   frame.appendChild(h('div', { class: 'step-header' },
     ssoBreadcrumbs('results'),
@@ -28,23 +29,24 @@ export function render({ container, store, navigate }) {
   frame.appendChild(body);
 
   if (result.ok && result.runbookMd) {
-    body.appendChild(h('h3', { class: 'subhead' }, 'Downloads'));
+    body.appendChild(h('h3', { class: 'subhead' }, 'Download'));
     body.appendChild(h('p', { class: 'help-text' },
-      'Save the runbook for whoever sets up Okta; import the SP metadata XML on the Okta side instead of pasting fields one by one.'
+      'Save the runbook for whoever sets up Okta + FortiMonitor; it covers all four passes (Okta-side create, FortiMonitor-side configure, Okta-side update, test).'
     ));
 
     const downloads = h('div', { class: 'download-row' });
     downloads.appendChild(downloadButton(
-      'Download Okta admin runbook (Markdown)',
+      'Download runbook (Markdown)',
       result.runbookMd,
-      filename('okta-admin-runbook.md', store)
+      filenameFor(store, 'sso-setup-runbook.md')
     ));
-    downloads.appendChild(downloadButton(
-      'Download SP metadata XML (Okta import)',
-      result.spMetadataXml,
-      filename('sp-metadata.xml', store),
-      'application/xml'
-    ));
+    const copyBtn = h('button', { class: 'btn' }, 'Copy to clipboard');
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(result.runbookMd).catch(() => {});
+      copyBtn.textContent = 'Copied ✓';
+      setTimeout(() => { copyBtn.textContent = 'Copy to clipboard'; }, 1200);
+    });
+    downloads.appendChild(copyBtn);
     body.appendChild(downloads);
 
     body.appendChild(h('h3', { class: 'subhead' }, 'Runbook preview'));
@@ -82,8 +84,8 @@ function downloadButton(label, content, filename, mime = 'text/markdown') {
   return btn;
 }
 
-function filename(suffix, store) {
-  const base = (store.tenantLabel || 'fortimonitor')
+function filenameFor(store, suffix) {
+  const base = (store.tenantLabel || store.urlFragment || 'fortimonitor')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');

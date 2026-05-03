@@ -1,8 +1,9 @@
 // Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Top-level UI controller for the SSO Configuration tool (FMN-139).
 // Mirrors fabric-connection's 4-step pattern (hash router, in-memory store).
-// Step 3 (Execute) currently runs dry-run only; the FortiMonitor-side save
-// is stubbed pending Discovery (FMN-138).
+// Pure generator: no FortiMonitor session-auth, no v2 API. The tool emits a
+// paste-ready runbook that walks the operator through configuring Okta and
+// FortiMonitor from both sides; the operator does the actual saves.
 
 import * as start from './steps/start.js';
 import * as review from './steps/review.js';
@@ -13,35 +14,32 @@ import { onEvent } from '../../lib/messaging.js';
 document.documentElement.dataset.toolMode = 'sso-config';
 
 const store = {
-  // Step 1 (Start) inputs:
-  spEntityId: '',          // FortiMonitor SP entity ID
-  acsUrl: '',              // Assertion Consumer Service URL
-  testLoginUrl: '',        // Optional: login URL for the runbook test step
-  tenantLabel: '',         // Optional: human label for the tenant
-  idpMetadataXml: '',      // Pasted Okta IdP metadata XML
-  idpParsed: null,         // { issuer, ssoUrlPost, ssoUrlRedirect, x509Cert, nameIdFormats }
-  idpParseError: null,     // String error from parseIdpMetadata, if any
+  // FortiMonitor SSO admin form (Teams & Activity -> Integrations -> Edit
+  // SSO Configuration). Field names mirror the FortiMonitor labels exactly.
+  fortimonitorBaseUrl: '',     // e.g. https://my.us01.fortimonitor.com (region-specific)
+  urlFragment: '',             // e.g. "okta" -> /sso/okta login URL
+  domains: [],                 // e.g. ['@company.com']
+  usernameField: 'email',      // SAML attribute matched to the user's FortiMonitor login email
+  loginBinding: 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST',
+  logoutUrl: '',               // optional
+  logoutBinding: '',           // optional
 
-  attributes: {            // SAML attribute statement names
-    email: 'email',
-    firstName: 'firstName',
-    lastName: 'lastName',
-    groups: 'groups'
-  },
+  // User Configuration block of FortiMonitor's SSO admin form.
+  preventNonSsoLogins: false,  // FortiMonitor field; maps to the v2 user.allow_non_sso_login flag
+  autoCreateUsers: true,
+  roleAssignmentMode: 'saml',  // 'manual' | 'saml'
+  roleMappings: [],            // [{ samlField, samlValue, fmRole }]
 
-  roleMapping: {
-    defaultRole: 'Read-Only',
-    overrides: []          // [{ group, role }]
-  },
+  // Okta IdP metadata (parsed from XML the operator pastes in Step 1).
+  idpMetadataXml: '',
+  idpParsed: null,             // { issuer, ssoUrlPost, ssoUrlRedirect, x509Cert, nameIdFormats }
+  idpParseError: null,
 
-  ssoMode: 'sso-with-password-fallback', // 'sso-only' | 'sso-with-password-fallback'
-  nameIdFormat: 'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress',
+  // Display only.
+  tenantLabel: '',
 
-  // Step 2 (Review):
-  dryRun: true,
-
-  // Step 3 (Execute) outputs:
-  runResult: null          // { ok, dryRun, message, runbookMd, spMetadataXml }
+  // Step 3 output.
+  runResult: null              // { ok, message, runbookMd }
 };
 
 const eventListeners = new Set();
@@ -82,8 +80,8 @@ function navigate(to) {
 function canEnter(route) {
   if (route === '/start') return true;
   if (route === '/review') {
-    return !!store.spEntityId
-      && !!store.acsUrl
+    return !!store.fortimonitorBaseUrl
+      && !!store.urlFragment
       && !!store.idpParsed;
   }
   if (route === '/execute') return canEnter('/review');
