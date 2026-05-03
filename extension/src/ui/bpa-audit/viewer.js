@@ -12,6 +12,7 @@
 
 import { h, downloadBlob } from '../../lib/dom.js';
 import { downloadZip } from '../../lib/zip.js';
+import { printReport, pdfFilename } from '../../lib/bpa-pdf.js';
 import {
   buildExecutiveSummary,
   buildFeatureUtilization,
@@ -57,7 +58,7 @@ export function buildTabCsv(tab, ctx, { generatedAt = new Date().toISOString(), 
   return lines.join('\n');
 }
 
-function csvCellValue(col, row, ctx) {
+export function csvCellValue(col, row, ctx) {
   // FMN-135: when annotation.skipIf returns true for this row, treat the
   // column as a plain getter column. This lets a column be both an
   // editable manual-entry field (when no data) and a populated read-only
@@ -559,7 +560,7 @@ export function renderViewer({ root, store }) {
     annotations: store.annotations
   });
 
-  // Top action bar: combined-report download (one ZIP containing all 11 tabs)
+  // Top action bar: combined-report download (ZIP + PDF)
   const filenameStatus = h('span', { class: 'muted', style: 'font-size:0.85rem;margin-left:0.6rem;' }, '');
   const combinedBtn = h('button', {
     class: 'btn btn-primary',
@@ -571,13 +572,36 @@ export function renderViewer({ root, store }) {
     downloadZip(fname, entries);
     filenameStatus.textContent = `Saved ${fname}`;
   });
+
+  // FMN-136: PDF print via hidden iframe + browser print dialog. The
+  // cover-page checkbox is opt-in; default behavior is a plain print of
+  // all 11 sections without a cover or TOC.
+  const coverCheckbox = h('input', {
+    type: 'checkbox',
+    'data-test': 'pdf-cover-toggle',
+    style: 'margin-right:0.3rem;'
+  });
+  const coverLabel = h('label', {
+    style: 'font-size:0.85rem;display:inline-flex;align-items:center;cursor:pointer;'
+  }, coverCheckbox, 'Cover page + TOC');
+  const pdfBtn = h('button', {
+    class: 'btn btn-secondary',
+    'data-test': 'download-combined-pdf'
+  }, 'Download PDF (Full Report)');
+  pdfBtn.addEventListener('click', () => {
+    printReport(ctx(), { customer, coverPage: coverCheckbox.checked });
+    filenameStatus.textContent = `Opening print dialog (suggested: ${pdfFilename(customer)})`;
+  });
+
   root.appendChild(h('div', {
     class: 'viewer-toolbar',
     style: 'display:flex;align-items:center;gap:0.6rem;margin-bottom:0.6rem;flex-wrap:wrap;'
   },
     combinedBtn,
+    pdfBtn,
+    coverLabel,
     h('span', { class: 'muted', style: 'font-size:0.85rem;' },
-      'One zip with all 11 tabs as separate CSVs plus a README. Or download a single tab below.'
+      'ZIP packs all 11 tabs as CSVs plus a README. PDF opens the print dialog - choose "Save as PDF" as destination.'
     ),
     filenameStatus
   ));

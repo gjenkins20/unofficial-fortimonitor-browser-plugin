@@ -45,6 +45,31 @@
 <p class="muted">FMN-133 - synthetic 11-tab render against a fixture inventory + analysis. The heartbeat ticks every second to confirm the page isn't frozen.</p>
 <div id="harness-host" class="frame"></div>
 
+<script>
+  // FMN-136: capture window.print() invocations from the BPA PDF iframe
+  // so the Playwright spec can assert against the printable HTML without
+  // a real print dialog blocking the test.
+  //
+  // Technique: wrap the HTMLIFrameElement srcdoc setter and inject a
+  // <script> at the top of the printable body that swaps window.print
+  // for a recorder before printReport's load handler invokes it.
+  window.__pdfPrintCalls = [];
+  (function patchSrcdoc() {
+    const desc = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'srcdoc');
+    if (!desc || !desc.set) return;
+    Object.defineProperty(HTMLIFrameElement.prototype, 'srcdoc', {
+      configurable: true,
+      get: desc.get,
+      set(v) {
+        if (this.dataset && this.dataset.test === 'bpa-pdf-iframe' && typeof v === 'string') {
+          const stub = '<script>window.print = function () { try { window.parent.__pdfPrintCalls.push({ html: document.documentElement.outerHTML, ts: Date.now() }); } catch (e) {} };<\/script>';
+          v = v.replace('<body>', '<body>' + stub);
+        }
+        return desc.set.call(this, v);
+      }
+    });
+  })();
+</script>
 <script type="module">
   import { renderViewer, getTabs } from '../../extension/src/ui/bpa-audit/viewer.js';
   import { runAllAnalyzers } from '../../extension/src/lib/bpa-analyzers/index.js';
