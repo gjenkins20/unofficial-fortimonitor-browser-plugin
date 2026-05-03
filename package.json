@@ -8,7 +8,8 @@
     "test:e2e": "playwright test --config tests/e2e/playwright.config.js --grep-invert='live -'",
     "test:e2e:live": "playwright test --config tests/e2e/playwright.config.js --grep='live -'",
     "test:e2e:ollama-live": "OLLAMA_LIVE=1 playwright test --config tests/e2e/playwright.config.js --grep='live - Ask AI'",
-    "test:e2e:all": "playwright test --config tests/e2e/playwright.config.js"
+    "test:e2e:all": "playwright test --config tests/e2e/playwright.config.js",
+    "capture:marketing": "playwright test --config tests/marketing/playwright.config.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1"
