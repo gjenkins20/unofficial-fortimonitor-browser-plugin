@@ -1,46 +1,48 @@
 #!/usr/bin/env bash
 # FMN-127: assemble docs/marketing/hero.gif from frame PNGs.
-# Captured by the 'hero flow' Playwright test in capture.spec.js.
+#
+# Inputs are the captioned frames produced by capture.spec.js's
+# 'hero captions' test (under docs/marketing/frames/captioned/), already
+# normalized to a uniform 1024x960 with a caption band burned in. This
+# script's only job is to chain them through cross-fade transitions and
+# encode the GIF.
+#
+# Captions and normalization happen in Playwright (not ImageMagick)
+# because the local ImageMagick build lacks Freetype, and the local
+# ffmpeg lacks drawtext.
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
-FRAMES=docs/marketing/frames
+SRC=docs/marketing/frames/captioned
 OUT=docs/marketing/hero.gif
-WORK=$(mktemp -d)
-trap 'rm -rf "$WORK"' EXIT
 
-# Source frames are captured at the wizard's natural fullPage size, which
-# varies per step (popup 1280x900, load 1265x1110, review 1265x956,
-# results 1280x900). ffmpeg's concat demuxer + palette pipeline produces
-# 1x1-delta output (silent regression: GIF appears static) when input
-# frames have heterogeneous dimensions, even with scale+crop in the
-# filtergraph. Pre-normalize each frame to 1024x880 with ImageMagick so
-# concat sees uniform inputs.
-for name in 01-popup 02-load 03-review 04-results; do
-  magick "$FRAMES/$name.png" -resize 1024x880^ -gravity center -extent 1024x880 "$WORK/$name.png"
-done
+# Cross-fade timing. Each phase is fully visible for `Hn` seconds, then a
+# 0.5s fade overlaps into the next phase. xfade output length = offset +
+# input2_duration; chained offsets are cumulative phase holds.
+FADE=0.5
+H0=3 ; H1=3 ; H2=3 ; H3=4
+# Each input loops for hold + fade so the trailing fade has frames to
+# bleed from. The final input has no trailing fade, so it gets hold only.
+L0=$(echo "$H0 + $FADE" | bc)
+L1=$(echo "$H1 + $FADE" | bc)
+L2=$(echo "$H2 + $FADE" | bc)
+L3=$H3
+OFF1=$H0
+OFF2=$(echo "$OFF1 + $H1" | bc)
+OFF3=$(echo "$OFF2 + $H2" | bc)
 
-# Concat list with per-frame durations. Popup launcher -> load -> review
-# -> results. Results holds longer so the "all succeeded" payoff lands.
-# The trailing duplicate is a concat-demuxer requirement: the last entry's
-# duration is ignored, so duplicating the last frame gives it a held tail.
-LIST="$WORK/concat.txt"
-cat > "$LIST" <<EOF
-file '$WORK/01-popup.png'
-duration 3
-file '$WORK/02-load.png'
-duration 3
-file '$WORK/03-review.png'
-duration 3
-file '$WORK/04-results.png'
-duration 4
-file '$WORK/04-results.png'
-EOF
-
-# Static slideshow: each frame holds for the duration declared in the
-# concat list. fps=2 gives smooth-enough timing.
-ffmpeg -y -f concat -safe 0 -i "$LIST" \
-  -vf "fps=2,split[a][b];[a]palettegen=max_colors=96[p];[b][p]paletteuse=dither=none" \
+ffmpeg -y \
+  -loop 1 -t "$L0" -i "$SRC/01-popup.png" \
+  -loop 1 -t "$L1" -i "$SRC/02-load.png" \
+  -loop 1 -t "$L2" -i "$SRC/03-review.png" \
+  -loop 1 -t "$L3" -i "$SRC/04-results.png" \
+  -filter_complex "\
+    [0:v][1:v]xfade=transition=fade:duration=${FADE}:offset=${OFF1}[v01]; \
+    [v01][2:v]xfade=transition=fade:duration=${FADE}:offset=${OFF2}[v012]; \
+    [v012][3:v]xfade=transition=fade:duration=${FADE}:offset=${OFF3}[final]; \
+    [final]fps=15,split[a][b]; \
+    [a]palettegen=stats_mode=full[p]; \
+    [b][p]paletteuse=dither=bayer:bayer_scale=5" \
   -loop 0 \
   "$OUT"
 

@@ -415,3 +415,68 @@ test('hero flow: add fabric connection (4 frames)', async ({ extensionContext, e
   await page.waitForTimeout(500);
   await page.screenshot({ path: frame('04-results.png'), fullPage: true });
 });
+
+// Bake caption bands into the four hero frames so the GIF self-narrates
+// what each phase is. Implemented in Playwright (not ImageMagick) because
+// the local ImageMagick build lacks Freetype, and ffmpeg lacks drawtext.
+// Output goes to docs/marketing/frames/captioned/ and feeds the xfade
+// pipeline in build-hero-gif.sh.
+const CAPTIONED_DIR = path.resolve(__dirname, '../../docs/marketing/frames/captioned');
+const HERO_W = 1024;
+const HERO_H = 960;
+const FRAME_H = 880;
+const CAP_H = 80;
+
+const HERO_PHASES = [
+  { name: '01-popup',   caption: 'Open the toolkit' },
+  { name: '02-load',    caption: 'Paste your FortiGate devices' },
+  { name: '03-review',  caption: 'Review the planned changes' },
+  { name: '04-results', caption: 'All 3 succeeded' }
+];
+
+baseTest('hero captions: bake caption band into source frames', async () => {
+  const fs = await import('node:fs/promises');
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const ctx = await browser.newContext({ viewport: { width: HERO_W, height: HERO_H } });
+    const page = await ctx.newPage();
+    for (const { name, caption } of HERO_PHASES) {
+      // setContent serves from chrome-error://chromewebdata which can't
+      // load file:// images. Embed the PNG as a base64 data URL so the
+      // page is self-contained.
+      const srcBytes = await fs.readFile(path.resolve(FRAMES_DIR, `${name}.png`));
+      const srcUrl = `data:image/png;base64,${srcBytes.toString('base64')}`;
+      // Frames are larger than HERO_W x FRAME_H. object-fit: cover scales
+      // the source so it fills the frame area without distortion; center
+      // gravity keeps the wizard card / popup card in view. Caption band
+      // is a flexbox row at the bottom.
+      const html = `<!doctype html><html><head><meta charset="utf-8"><style>
+        html, body { margin: 0; padding: 0; background: #f4f5f7; }
+        .frame { width: ${HERO_W}px; height: ${FRAME_H}px; overflow: hidden; background: #f4f5f7; }
+        .frame img { width: 100%; height: 100%; object-fit: cover; object-position: center top; display: block; }
+        .caption { width: ${HERO_W}px; height: ${CAP_H}px; box-sizing: border-box;
+          background: #0e1525; color: white; display: flex; align-items: center; justify-content: center;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+          font-size: 30px; font-weight: 700; letter-spacing: 0.01em; }
+      </style></head><body>
+        <div class="frame"><img src="${srcUrl}"></div>
+        <div class="caption">${caption}</div>
+      </body></html>`;
+      await page.setContent(html);
+      await page.evaluate(() => document.fonts && document.fonts.ready);
+      // Wait for the <img> to actually decode so it's painted before the
+      // screenshot. An undecoded img renders as a blank box.
+      await page.waitForFunction(() => {
+        const img = document.querySelector('.frame img');
+        return img && img.complete && img.naturalWidth > 0;
+      }, { timeout: 5_000 });
+      await page.waitForTimeout(100);
+      await page.screenshot({
+        path: path.resolve(CAPTIONED_DIR, `${name}.png`),
+        clip: { x: 0, y: 0, width: HERO_W, height: HERO_H }
+      });
+    }
+  } finally {
+    await browser.close();
+  }
+});
