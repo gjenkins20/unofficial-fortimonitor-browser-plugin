@@ -65,3 +65,6 @@ docs/qa_review.md
 Thumbs.db
 AGENT_BEHAVIOR.md
 CLAU_Instructions.md
+
+# FMN-135 local probe artifacts (creds + persistent profile + ad-hoc probe scripts)
+fmn-135-*.mjs

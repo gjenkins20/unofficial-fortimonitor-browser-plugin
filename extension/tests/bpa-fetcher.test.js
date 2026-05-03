@@ -229,7 +229,7 @@ function makeStandardRoutes({
     { match: /\/snmp_credential\?limit=/,       respond: () => listResponse('snmp_credential_list', []) },
     { match: /\/monitoring_node\?limit=/,       respond: () => listResponse('monitoring_node_list', []) },
     { match: /\/user\?limit=/,                  respond: () => listResponse('user_list', []) },
-    { match: /\/account_history\?limit=/,       respond: () => listResponse('account_history_list', []) },
+    { match: /\/agent_resource_type\?limit=/,   respond: () => listResponse('agent_resource_type_list', []) },
     // Outage stats
     { match: /\/outage_statistics\?days=7$/,    respond: () => jsonResponse(outageStats['7']) },
     { match: /\/outage_statistics\?days=30$/,   respond: () => jsonResponse(outageStats['30']) },
@@ -268,7 +268,7 @@ test('BpaFetcher.collectInventory returns all 20 top-level keys plus trending an
     'compound_services', 'dem_applications', 'dashboards', 'status_pages',
     'contacts', 'contact_groups', 'notification_schedules', 'rotating_contacts',
     'maintenance_windows', 'onsights', 'fabric_connections', 'cloud_credentials',
-    'snmp_credentials', 'monitoring_nodes', 'users', 'account_history'
+    'snmp_credentials', 'monitoring_nodes', 'users', 'agent_resource_types'
   ]) {
     assert.ok(Array.isArray(inv[k]), `${k} should be an array`);
   }

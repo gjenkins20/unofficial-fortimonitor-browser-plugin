@@ -58,11 +58,16 @@ export function buildTabCsv(tab, ctx, { generatedAt = new Date().toISOString(), 
 }
 
 function csvCellValue(col, row, ctx) {
-  if (col.annotation) {
+  // FMN-135: when annotation.skipIf returns true for this row, treat the
+  // column as a plain getter column. This lets a column be both an
+  // editable manual-entry field (when no data) and a populated read-only
+  // field (when an upstream source filled it in).
+  const skipAnnotation = col.annotation?.skipIf?.(row) === true;
+  if (col.annotation && !skipAnnotation) {
     const rowKey = col.annotation.rowKey(row);
     return ctx.annotations?.[col.annotation.storeKey]?.[rowKey] ?? '';
   }
-  return col.getter(row);
+  return col.getter ? col.getter(row) : '';
 }
 
 function timestampPart(d = new Date()) {
@@ -287,17 +292,31 @@ const TABS = [
       columns: [
         { key: 'name',    header: 'Name',           getter: (r) => r.name },
         { key: 'email',   header: 'Email',          getter: (r) => r.email },
-        { key: 'created', header: 'Created',        getter: (r) => r.created },
+        { key: 'created', header: 'Created (API)',  getter: (r) => r.created },
+        { key: 'created_on', header: 'Created On (UI)', getter: (r) => r.created_on || '' },
         { key: 'methods', header: 'Contact Methods',getter: (r) => r.contact_methods },
         {
+          // FMN-135: column is now dual-mode. When the frontend fetcher
+          // populated last_login (UI toggle on, EditUser walked
+          // successfully), the cell renders as plain text from the
+          // getter. When it didn't, the cell falls back to the original
+          // manual-annotation input behavior, so engineers can still
+          // hand-fill the column for v2-only audits.
           key: 'last_login',
-          header: 'Last Login (manual)',
-          annotation: { storeKey: 'user_last_login', rowKey: (r) => String(r.id) }
+          header: 'Last Login',
+          getter: (r) => r.last_login,
+          annotation: {
+            storeKey: 'user_last_login',
+            rowKey: (r) => String(r.id),
+            skipIf: (r) => Boolean(r.last_login && !r.last_login_manual)
+          }
         },
         {
+          // FMN-135: derived from last_login age (Active / Stale /
+          // Inactive / Never / Unknown), no longer a manual entry.
           key: 'active_assessment',
-          header: 'Active Assessment (manual)',
-          annotation: { storeKey: 'user_active_assessment', rowKey: (r) => String(r.id) }
+          header: 'Active Assessment',
+          getter: (r) => r.active_assessment
         }
       ],
       rows: ({ analysis }) => analysis?.users?.details ?? []
@@ -320,10 +339,11 @@ const TABS = [
       {
         label: 'Missing Settings (peer-comparison)',
         columns: [
-          { key: 'server',  header: 'Server',         getter: (r) => r.server },
-          { key: 'missing', header: 'Missing',        getter: (r) => r.missing },
-          { key: 'type',    header: 'Type',           getter: (r) => r.type },
-          { key: 'rec',     header: 'Recommendation', getter: (r) => r.recommendation }
+          { key: 'server_id',   header: 'Server ID',      getter: (r) => r.server_id },
+          { key: 'server_name', header: 'Server Name',    getter: (r) => r.server_name },
+          { key: 'missing',     header: 'Missing',        getter: (r) => r.missing },
+          { key: 'type',        header: 'Type',           getter: (r) => r.type },
+          { key: 'rec',         header: 'Recommendation', getter: (r) => r.recommendation }
         ],
         rows: ({ analysis }) => {
           const inst = analysis?.instances;
@@ -335,9 +355,10 @@ const TABS = [
       {
         label: 'Valueless Metrics',
         columns: [
-          { key: 'server', header: 'Server',         getter: (r) => r.server },
-          { key: 'metric', header: 'Metric',         getter: (r) => r.metric },
-          { key: 'rec',    header: 'Recommendation', getter: (r) => r.recommendation }
+          { key: 'server_id',   header: 'Server ID',      getter: (r) => r.server_id },
+          { key: 'server_name', header: 'Server Name',    getter: (r) => r.server_name },
+          { key: 'metric',      header: 'Metric',         getter: (r) => r.metric },
+          { key: 'rec',         header: 'Recommendation', getter: (r) => r.recommendation }
         ],
         rows: ({ analysis }) => {
           const inst = analysis?.instances;
@@ -349,20 +370,25 @@ const TABS = [
   },
 
   // 7. Template Recommendations ---------------------------------------------
+  // FMN-135 follow-up (2026-05-01): the default-only / cleanup / overlap
+  // analyses run on CUSTOM templates only. FortiMonitor's stock "Default
+  // Monitoring Templates" group is exempted - those templates get their
+  // own informational section with a soft recommendation to build custom
+  // templates rather than editing the stock ones.
   {
     id: 'template-recommendations',
     label: 'Template Recommendations',
     filenamePart: 'template-recommendations',
     sections: [
       {
-        label: 'Default-Only Templates',
+        label: 'Custom Templates Without Thresholds',
         columns: [
           { key: 'template',          header: 'Template',           getter: (r) => r.template },
-          { key: 'resource_count',    header: 'Resource Count',     getter: (r) => r.resource_count },
-          { key: 'network_service_count', header: 'Net. Services',  getter: (r) => r.network_service_count },
+          { key: 'resource_count',    header: 'Metric Count',       getter: (r) => r.resource_count },
           { key: 'rec',               header: 'Recommendation',     getter: (r) => r.recommendation }
         ],
-        rows: ({ analysis }) => analysis?.templates?.default_only_templates ?? []
+        rows: ({ analysis }) => analysis?.templates?.default_only_templates ?? [],
+        emptyText: 'No custom templates found without thresholds. Best practice: build custom templates with thresholds tuned to your environment - FortiMonitor stock templates provide metric coverage but no alerting on their own.'
       },
       {
         label: 'Manual Threshold Candidates',
@@ -374,21 +400,23 @@ const TABS = [
           { key: 'examples', header: 'Examples', getter: (r) => r.example_servers },
           { key: 'rec',    header: 'Recommendation', getter: (r) => r.recommendation }
         ],
-        rows: ({ analysis }) => analysis?.templates?.manual_threshold_candidates ?? []
+        rows: ({ analysis }) => analysis?.templates?.manual_threshold_candidates ?? [],
+        emptyText: 'No manual threshold candidates - no metric patterns indicate the tenant would benefit from manual thresholds. (Requires deep mode; if you ran a quick assessment, re-run with "Run per-server deep analysis" enabled to surface candidates.)'
       },
       {
-        label: 'Cleanup Candidates',
+        label: 'Custom Templates Cleanup Candidates',
         columns: [
           { key: 'template', header: 'Template',         getter: (r) => r.template },
-          { key: 'unchanged', header: 'Unchanged Metrics', getter: (r) => r.unchanged_metrics },
+          { key: 'unchanged', header: 'Unalerted Metrics', getter: (r) => r.unchanged_metrics },
           { key: 'total',    header: 'Total Metrics',    getter: (r) => r.total_metrics },
           { key: 'examples', header: 'Examples',         getter: (r) => r.examples },
           { key: 'rec',      header: 'Recommendation',   getter: (r) => r.recommendation }
         ],
-        rows: ({ analysis }) => analysis?.templates?.cleanup_candidates ?? []
+        rows: ({ analysis }) => analysis?.templates?.cleanup_candidates ?? [],
+        emptyText: 'No custom-template cleanup candidates - custom templates that carry alerts cover most of their metrics.'
       },
       {
-        label: 'Overlapping Templates',
+        label: 'Custom Template Overlap',
         columns: [
           { key: 't1',      header: 'Template 1',  getter: (r) => r.template_1 },
           { key: 't2',      header: 'Template 2',  getter: (r) => r.template_2 },
@@ -396,7 +424,19 @@ const TABS = [
           { key: 'shared',  header: 'Shared',      getter: (r) => r.shared_metrics },
           { key: 'rec',     header: 'Recommendation', getter: (r) => r.recommendation }
         ],
-        rows: ({ analysis }) => analysis?.templates?.overlapping_templates ?? []
+        rows: ({ analysis }) => analysis?.templates?.overlapping_templates ?? [],
+        emptyText: 'No overlapping custom templates - templates cover distinct metric sets without significant duplication.'
+      },
+      {
+        label: 'Default Templates (FortiMonitor stock)',
+        columns: [
+          { key: 'template', header: 'Template',     getter: (r) => r.template },
+          { key: 'metric_count', header: 'Metrics',  getter: (r) => r.metric_count },
+          { key: 'alerts_count', header: 'Alerts Set', getter: (r) => r.alerts_count },
+          { key: 'rec',      header: 'Recommendation', getter: (r) => r.recommendation }
+        ],
+        rows: ({ analysis }) => analysis?.templates?.default_templates ?? [],
+        emptyText: 'No FortiMonitor stock default templates detected. (The default group is identified by the name "Default Monitoring Templates"; if your tenant uses different naming, default templates appear under the custom sections above.)'
       }
     ]
   },
@@ -665,7 +705,8 @@ function renderTable(section, rows, store) {
 }
 
 function renderCell(col, row, store) {
-  if (col.annotation) {
+  const skipAnnotation = col.annotation?.skipIf?.(row) === true;
+  if (col.annotation && !skipAnnotation) {
     const rowKey = col.annotation.rowKey(row);
     const storeBucket = store.annotations[col.annotation.storeKey] ?? {};
     if (!store.annotations[col.annotation.storeKey]) {
@@ -682,7 +723,7 @@ function renderCell(col, row, store) {
     });
     return h('td', {}, input);
   }
-  const v = col.getter(row);
+  const v = col.getter ? col.getter(row) : '';
   return h('td', {}, fmtCell(v));
 }
 

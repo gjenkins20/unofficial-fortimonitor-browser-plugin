@@ -88,9 +88,13 @@ test.describe('BPA Audit popup wiring (FMN-133)', () => {
     await expect(appPage).toHaveURL(/\/src\/ui\/bpa-audit\/app\.html(#\/start)?$/);
     // Configure copy + deep-mode toggle + max-servers input all present.
     await expect(appPage.getByRole('heading', { name: /FortiMonitor Best-Practice Assessment/i })).toBeVisible();
-    await expect(appPage.locator('input[type="checkbox"]')).toBeVisible();
+    await expect(appPage.locator('input[type="checkbox"]').first()).toBeVisible();
     await expect(appPage.locator('input[type="number"]')).toBeAttached();
     await expect(appPage.getByRole('button', { name: /Run assessment/ })).toBeVisible();
+    // FMN-135 follow-up (2026-05-01): the "Include FortiMonitor UI data"
+    // toggle was removed - that fetch is always-on now. Confirm the
+    // checkbox is no longer present.
+    await expect(appPage.getByText(/Include FortiMonitor UI data/)).toHaveCount(0);
 
     await appPage.close();
     await page.close();

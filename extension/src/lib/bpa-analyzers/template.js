@@ -1,12 +1,42 @@
 // Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// TemplateAnalyzer port (FMN-132). Source: fortimonitor_audit.py / class TemplateAnalyzer.
+// TemplateAnalyzer (FMN-132 + FMN-135 follow-up).
+//
+// Pre-FMN-135 the analyzer read template metrics out of
+// `inventory.server_template_details` (populated by /v2/server_template/{id}).
+// That endpoint returns metadata only (name, group, tags, applied_servers)
+// - no agent_resource_type and no thresholds. As a result every analyzer
+// path returned [] on real tenants and the operator saw four empty
+// "No rows" sections (FMN-135 QA, 2026-05-01).
+//
+// Now we read from `inventory.template_monitoring_configs`, populated by
+// BpaFrontendFetcher.collectTemplateConfigs() hitting
+// /report/get_monitoring_config_data?server_id={template_id}. Each entry
+// is { total_metrics, alerts_count, metric_names, metrics_without_alerts }.
+//
+// Default vs custom partitioning (FMN-135 follow-up #2, 2026-05-01):
+// FortiMonitor ships stock templates inside a server group named exactly
+// "Default Monitoring Templates" on every tenant. The operator wants
+// these exempted from the default-only / cleanup / overlap analyses
+// because they're stock and not subject to the same scrutiny - those
+// findings should target customer-built templates only. Stock templates
+// still get listed in their own section with a soft recommendation to
+// either set thresholds or, preferably, build a custom template.
+//
+// findManualThresholdPatterns is unchanged - it still reads
+// `inventory.server_resource_details` (deep mode only). That covers
+// thresholds set on individual server instances, which is the lookup the
+// operator confirmed is wanted as a deep-mode option.
 
-import { counter } from './_helpers.js';
+import { extractTrailingId } from './_helpers.js';
 
 const PATTERN_TOP_LIMIT = 20;
 const PATTERN_MIN_OCCURRENCES = 3;
-const CLEANUP_RATIO = 0.5;             // >=50% of metrics unchanged
+const CLEANUP_RATIO = 0.5;             // >=50% of metrics unalerted
 const OVERLAP_RATIO = 0.6;             // Jaccard >=60% flags as overlapping
+
+// FortiMonitor's stock templates ship in a server group with this exact
+// name on every tenant. Match is case-insensitive but otherwise exact.
+const DEFAULT_TEMPLATE_GROUP_NAME = 'default monitoring templates';
 
 /**
  * @typedef {Object} TemplateResult
@@ -19,43 +49,205 @@ const OVERLAP_RATIO = 0.6;             // Jaccard >=60% flags as overlapping
  */
 
 export function analyzeTemplates(inventory = {}) {
-  const td = inventory.server_template_details;
-  if (!td || typeof td !== 'object' || Object.keys(td).length === 0) {
-    return { available: false, note: 'No template details available.' };
+  const monitoringConfigs = inventory.template_monitoring_configs;
+  const templates = Array.isArray(inventory.server_templates) ? inventory.server_templates : [];
+  const groupDetails = inventory.server_group_details ?? {};
+
+  const haveConfigs = monitoringConfigs
+    && typeof monitoringConfigs === 'object'
+    && Object.keys(monitoringConfigs).length > 0;
+
+  if (!haveConfigs) {
+    // No template monitoring config data fetched - the template-driven
+    // analyses cannot run. The manual_threshold path still can if deep
+    // mode populated server_resource_details.
+    return {
+      available: false,
+      note: 'No template monitoring configs available. The frontend fetcher must be enabled to surface template recommendations.',
+      manual_threshold_candidates: findManualThresholdPatterns(inventory)
+    };
   }
+
+  const nameById = buildTemplateNameMap(templates);
+
+  // Partition templates by membership in the "Default Monitoring
+  // Templates" group. Custom templates feed the urgent-fix analyses;
+  // default templates get their own informational section.
+  const defaultTids = new Set();
+  for (const t of templates) {
+    if (isDefaultTemplate(t, groupDetails)) {
+      const tid = (t?.id != null && t.id !== '') ? String(t.id) : extractTrailingId(t?.url);
+      if (tid) defaultTids.add(tid);
+    }
+  }
+  const customConfigs = {};
+  for (const [tid, cfg] of Object.entries(monitoringConfigs)) {
+    if (!defaultTids.has(tid)) customConfigs[tid] = cfg;
+  }
+
   return {
     available: true,
-    default_only_templates:      findDefaultOnlyTemplates(td),
+    default_only_templates:      findDefaultOnlyTemplates(customConfigs, nameById),
     manual_threshold_candidates: findManualThresholdPatterns(inventory),
-    cleanup_candidates:          findCleanupCandidates(td),
-    overlapping_templates:       findOverlapping(td)
+    cleanup_candidates:          findCleanupCandidates(customConfigs, nameById),
+    overlapping_templates:       findOverlapping(customConfigs, nameById),
+    default_templates:           buildDefaultTemplatesOverview(monitoringConfigs, nameById, defaultTids)
   };
 }
 
 /**
- * Templates that include metrics but have no custom thresholds set on
- * any of them.
+ * A template is "default" (FortiMonitor stock) when it belongs to a
+ * server group named "Default Monitoring Templates" - the canonical
+ * group name FortiMonitor seeds on every tenant. We look the group up
+ * via inventory.server_group_details (already populated by BpaFetcher's
+ * group-details pass).
  */
-function findDefaultOnlyTemplates(templateDetails) {
-  const results = [];
-  for (const [tid, detail] of Object.entries(templateDetails)) {
-    const name = detail?.name || `Template #${tid}`;
-    const artList = Array.isArray(detail?.agent_resource_type) ? detail.agent_resource_type : [];
-    const nsList = Array.isArray(detail?.network_service) ? detail.network_service : [];
+function isDefaultTemplate(template, groupDetails) {
+  const groupUrl = template?.server_group;
+  if (typeof groupUrl !== 'string' || !groupUrl) return false;
+  const gid = extractTrailingId(groupUrl);
+  if (!gid) return false;
+  const detail = groupDetails?.[gid];
+  if (!detail || typeof detail.name !== 'string') return false;
+  return detail.name.trim().toLowerCase() === DEFAULT_TEMPLATE_GROUP_NAME;
+}
 
-    let hasCustomization = false;
-    for (const art of artList) {
-      const thresholds = Array.isArray(art?.agent_resource_threshold) ? art.agent_resource_threshold : [];
-      if (thresholds.length > 0) { hasCustomization = true; break; }
+/**
+ * Inform-don't-scrutinize listing of FortiMonitor's stock default
+ * templates. Tells the operator which defaults exist and whether they
+ * carry alerts; recommendation steers them toward building custom
+ * templates rather than editing the stock ones.
+ */
+function buildDefaultTemplatesOverview(monitoringConfigs, nameById, defaultTids) {
+  const results = [];
+  for (const tid of defaultTids) {
+    const cfg = monitoringConfigs[tid];
+    if (!cfg) continue;
+    const total = cfg.total_metrics ?? 0;
+    const alerts = cfg.alerts_count ?? 0;
+    let recommendation;
+    if (total === 0) {
+      recommendation = 'Stock template has no metrics defined. No action required - this template provides metadata only.';
+    } else if (alerts === 0) {
+      recommendation = 'Stock template ships without thresholds. Best practice: build a custom template with thresholds tuned to your environment, rather than editing the stock default. If you do not have time to build a custom template, set thresholds on this one for proper alerting.';
+    } else {
+      recommendation = `${alerts} of ${total} metrics carry thresholds. Best practice: keep stock templates as-is and create custom templates for tenant-specific tuning.`;
     }
-    if (!hasCustomization && (artList.length > 0 || nsList.length > 0)) {
+    results.push({
+      template: nameById.get(tid) || `Template #${tid}`,
+      id: tid,
+      metric_count: total,
+      alerts_count: alerts,
+      recommendation
+    });
+  }
+  // Stable order: name asc.
+  results.sort((a, b) => String(a.template).localeCompare(String(b.template)));
+  return results;
+}
+
+/**
+ * Build a tid -> display name lookup from inventory.server_templates.
+ * Templates carry their numeric id in the URL path; ids without an
+ * entry in this map fall back to "Template #{tid}" downstream.
+ */
+function buildTemplateNameMap(templates) {
+  const out = new Map();
+  for (const t of templates) {
+    const tid = (t?.id != null && t.id !== '') ? String(t.id) : extractTrailingId(t?.url);
+    if (!tid) continue;
+    if (typeof t?.name === 'string' && t.name) out.set(tid, t.name);
+  }
+  return out;
+}
+
+/**
+ * Templates that include metrics but have zero alert thresholds set.
+ * These are the canonical "default-only" candidates - the FortiMonitor
+ * stock template ships with metric definitions but no alerting, so no
+ * incidents will fire on a server until thresholds are added.
+ */
+function findDefaultOnlyTemplates(monitoringConfigs, nameById) {
+  const results = [];
+  for (const [tid, cfg] of Object.entries(monitoringConfigs)) {
+    if (!cfg) continue;
+    const total = cfg.total_metrics ?? 0;
+    const alerts = cfg.alerts_count ?? 0;
+    if (total > 0 && alerts === 0) {
       results.push({
-        template: name,
+        template: nameById.get(tid) || `Template #${tid}`,
         id: tid,
-        resource_count: artList.length,
-        network_service_count: nsList.length,
-        recommendation: 'Template has metrics but no custom thresholds. Add thresholds to provide alerting value.'
+        resource_count: total,
+        network_service_count: 0,
+        recommendation: 'Template has metrics but no alerting thresholds. Add thresholds so it produces actionable alerts when applied.'
       });
+    }
+  }
+  return results;
+}
+
+/**
+ * Templates where a majority of metrics carry no alert threshold.
+ * Caught templates have *some* configured alerts but most metrics still
+ * lack them - usually a partially-customized stock template that the
+ * operator started tuning and never finished.
+ */
+function findCleanupCandidates(monitoringConfigs, nameById) {
+  const results = [];
+  for (const [tid, cfg] of Object.entries(monitoringConfigs)) {
+    if (!cfg) continue;
+    const total = cfg.total_metrics ?? 0;
+    const alerts = cfg.alerts_count ?? 0;
+    if (total === 0 || alerts === 0) continue;                // not a "partial" - covered by default-only
+    const unalerted = total - alerts;
+    if (unalerted < total * CLEANUP_RATIO) continue;
+    const examples = Array.isArray(cfg.metrics_without_alerts) ? cfg.metrics_without_alerts.slice(0, 5) : [];
+    results.push({
+      template: nameById.get(tid) || `Template #${tid}`,
+      id: tid,
+      unchanged_metrics: unalerted,
+      total_metrics: total,
+      examples: examples.join(', '),
+      recommendation: 'Most metrics on this template have no thresholds. Either add thresholds or remove the unalerted metrics to reduce noise.'
+    });
+  }
+  return results;
+}
+
+/**
+ * Templates whose metric-name sets overlap substantially. Jaccard
+ * similarity on metric names; >=60% suggests the templates duplicate
+ * coverage and could be consolidated.
+ */
+function findOverlapping(monitoringConfigs, nameById) {
+  /** @type {Map<string, Set<string>>} tid -> metric name set */
+  const templateMetrics = new Map();
+  for (const [tid, cfg] of Object.entries(monitoringConfigs)) {
+    if (!cfg) continue;
+    const names = Array.isArray(cfg.metric_names) ? cfg.metric_names : [];
+    if (names.length === 0) continue;
+    templateMetrics.set(tid, new Set(names));
+  }
+
+  const results = [];
+  const tids = [...templateMetrics.keys()];
+  for (let i = 0; i < tids.length; i++) {
+    for (let j = i + 1; j < tids.length; j++) {
+      const t1 = tids[i], t2 = tids[j];
+      const m1 = templateMetrics.get(t1) ?? new Set();
+      const m2 = templateMetrics.get(t2) ?? new Set();
+      if (m1.size === 0 || m2.size === 0) continue;
+      const overlap = intersectSize(m1, m2);
+      const union = m1.size + m2.size - overlap;
+      if (union > 0 && overlap / union >= OVERLAP_RATIO) {
+        results.push({
+          template_1: nameById.get(t1) || `Template #${t1}`,
+          template_2: nameById.get(t2) || `Template #${t2}`,
+          overlap_pct: `${Math.round((overlap / union) * 100)}%`,
+          shared_metrics: overlap,
+          recommendation: `Consider merging - ${overlap}/${union} metrics overlap.`
+        });
+      }
     }
   }
   return results;
@@ -65,6 +257,10 @@ function findDefaultOnlyTemplates(templateDetails) {
  * Across all servers' resource details, count threshold patterns
  * (resource_type, warning, critical). Patterns that recur on >=3 servers
  * are candidates for promotion to a template.
+ *
+ * Reads inventory.server_resource_details which is only populated when
+ * the BPA was run with deep mode on. Returns [] otherwise (the viewer
+ * shows the "no patterns detected" empty-state).
  */
 function findManualThresholdPatterns(inventory) {
   const srd = inventory.server_resource_details;
@@ -112,74 +308,6 @@ function findManualThresholdPatterns(inventory) {
       example_servers: p.servers.slice(0, 5).join(', '),
       recommendation: `Create a template with ${p.type} thresholds (warn=${p.warn}, crit=${p.crit}) - used on ${p.count} servers.`
     });
-  }
-  return results;
-}
-
-function findCleanupCandidates(templateDetails) {
-  const results = [];
-  for (const [tid, detail] of Object.entries(templateDetails)) {
-    const name = detail?.name || `Template #${tid}`;
-    const artList = Array.isArray(detail?.agent_resource_type) ? detail.agent_resource_type : [];
-    if (artList.length === 0) continue;
-    const unchanged = [];
-    for (const art of artList) {
-      const artName = art?.name || 'Unknown';
-      const thresholds = Array.isArray(art?.agent_resource_threshold) ? art.agent_resource_threshold : [];
-      if (thresholds.length === 0) unchanged.push(artName);
-    }
-    if (unchanged.length > 0 && unchanged.length >= artList.length * CLEANUP_RATIO) {
-      results.push({
-        template: name,
-        id: tid,
-        unchanged_metrics: unchanged.length,
-        total_metrics: artList.length,
-        examples: unchanged.slice(0, 5).join(', '),
-        recommendation: 'Remove unchanged default metrics to speed up template application and avoid unintended changes.'
-      });
-    }
-  }
-  return results;
-}
-
-function findOverlapping(templateDetails) {
-  /** @type {Map<string, Set<string>>} tid -> metric name set */
-  const templateMetrics = new Map();
-  /** @type {Map<string, string>} */
-  const templateNames = new Map();
-
-  for (const [tid, detail] of Object.entries(templateDetails)) {
-    const name = detail?.name || `Template #${tid}`;
-    templateNames.set(tid, name);
-    const artList = Array.isArray(detail?.agent_resource_type) ? detail.agent_resource_type : [];
-    const metrics = new Set();
-    for (const art of artList) {
-      const artName = art?.name;
-      if (artName) metrics.add(artName);
-    }
-    templateMetrics.set(tid, metrics);
-  }
-
-  const results = [];
-  const tids = [...templateMetrics.keys()];
-  for (let i = 0; i < tids.length; i++) {
-    for (let j = i + 1; j < tids.length; j++) {
-      const t1 = tids[i], t2 = tids[j];
-      const m1 = templateMetrics.get(t1) ?? new Set();
-      const m2 = templateMetrics.get(t2) ?? new Set();
-      if (m1.size === 0 || m2.size === 0) continue;
-      const overlap = intersectSize(m1, m2);
-      const union = m1.size + m2.size - overlap;
-      if (union > 0 && overlap / union >= OVERLAP_RATIO) {
-        results.push({
-          template_1: templateNames.get(t1),
-          template_2: templateNames.get(t2),
-          overlap_pct: `${Math.round((overlap / union) * 100)}%`,
-          shared_metrics: overlap,
-          recommendation: `Consider merging - ${overlap}/${union} metrics overlap.`
-        });
-      }
-    }
   }
   return results;
 }

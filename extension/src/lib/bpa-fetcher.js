@@ -188,7 +188,16 @@ const TOP_LEVEL_LIST_ENDPOINTS = [
   ['monitoring_nodes',       '/monitoring_node',        'monitoring_node_list'],
   // Users
   ['users',                  '/user',                   'user_list'],
-  ['account_history',        '/account_history',        'account_history_list']
+  // Catalogue of metric type definitions. Each agent_resource_type
+  // record carries category + label + unit, so the InstanceAnalyzer can
+  // resolve the URL stored on a server's agent_resource into a friendly
+  // "Apache: Requests/sec" string instead of dumping the raw API URL
+  // (FMN-135 follow-up #3, 2026-05-02).
+  ['agent_resource_types',   '/agent_resource_type',    'agent_resource_type_list']
+  // /v2/account_history dropped (FMN-135 follow-up, 2026-05-01): the
+  // endpoint returns HTTP 500 consistently on production tenants and no
+  // analyzer consumes the result. Re-add only if a tenant proves the
+  // endpoint is healthy and an analyzer actually needs the data.
 ];
 
 const OUTAGE_STATS_DAYS = [7, 30, 60];
@@ -220,7 +229,10 @@ const ACTIVE_OUTAGE_LOG_CAP = 50;
  * @property {Object[]} snmp_credentials       /snmp_credential
  * @property {Object[]} monitoring_nodes       /monitoring_node
  * @property {Object[]} users                  /user
- * @property {Object[]} account_history        /account_history
+ * @property {Object[]} agent_resource_types   /agent_resource_type (FMN-135 follow-up #3)
+ *
+ * (account_history dropped FMN-135 follow-up, 2026-05-01: v2 endpoint
+ * returns HTTP 500 consistently on production tenants.)
  *
  * @property {Object[]} outages_recent         /outage (paged again, kept for parity)
  * @property {Object|{}} outage_stats_7d       /outage_statistics?days=7
@@ -237,6 +249,17 @@ const ACTIVE_OUTAGE_LOG_CAP = 50;
  *   /server/{id}/agent_resource/{rid} (deep)
  * @property {Object<string, Object[]>} [server_network_services]     /server/{id}/network_service (deep)
  * @property {Object<string, Object[]>} [server_attributes]           /server/{id}/attribute (deep)
+ *
+ * @property {Object<string, {last_login:string|null, created_on:string|null}>} [frontend_user_data]
+ *   Enrichment from BpaFrontendFetcher (FMN-135). Keyed by user id (string).
+ *   Always populated by the wizard now (FMN-135 follow-up, 2026-05-01).
+ * @property {Object<string, {total_metrics:number, alerts_count:number,
+ *                            metric_names:string[], metrics_without_alerts:string[]}>} [template_monitoring_configs]
+ *   Per-template monitoring config from /report/get_monitoring_config_data
+ *   (FMN-135 follow-up, 2026-05-01). Keyed by template id (string).
+ *   The TemplateAnalyzer reads this to find default-only / cleanup-candidate
+ *   / overlapping templates - the v2 /server_template/{id} endpoint
+ *   returns metadata only and cannot drive these analyses.
  *
  * @property {string[]} errors  Per-endpoint error strings ("name: reason"); collection continues on each.
  * @property {{requests:number, deep:boolean, maxServers:number, durationMs:number}} stats

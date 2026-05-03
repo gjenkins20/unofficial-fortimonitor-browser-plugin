@@ -24,6 +24,7 @@ import { PanoptaError } from '../lib/panopta-client.js';
 import { BpaFetcher, createBpaFetch } from '../lib/bpa-fetcher.js';
 import { PanoptaClient } from '../lib/panopta-client.js';
 import { runAllAnalyzers } from '../lib/bpa-analyzers/index.js';
+import { BpaFrontendFetcher } from '../lib/bpa-frontend-fetcher.js';
 
 export const BPA_RUN_KEY = 'bpa.lastRun';
 
@@ -53,6 +54,17 @@ async function defaultClientFactory({ fetch, storage } = {}) {
  * @param {PanoptaClient} options.client
  * @param {boolean} [options.deep]
  * @param {number} [options.maxServers]
+ * @param {boolean} [options.includeFrontend]
+ *   FMN-135: when true, after BpaFetcher finishes, walk the FortiMonitor
+ *   UI's EditUser page per user (session-auth, requires the operator to
+ *   be logged in) to collect last_login and created_on. Errors are
+ *   recorded under inventory.errors and do not abort the run, except
+ *   that "not logged in" on the very first user is fatal so the operator
+ *   isn't told 50 times in a row to log in.
+ * @param {typeof fetch} [options.frontendFetch]
+ *   Test seam for the session-auth fetch. Production callers omit;
+ *   globalThis.fetch is used and the SW's host_permissions +
+ *   credentials:'include' attach the session cookie.
  * @param {AbortSignal} [options.signal]
  * @param {(evt:object) => void} [options.onProgress]
  */
@@ -60,6 +72,8 @@ export async function runBpaAudit({
   client,
   deep = false,
   maxServers = 0,
+  includeFrontend = false,
+  frontendFetch,
   signal,
   onProgress
 } = {}) {
@@ -78,6 +92,58 @@ export async function runBpaAudit({
     const err = new Error('aborted'); err.name = 'AbortError'; throw err;
   }
 
+  if (includeFrontend) {
+    const baseFetch = frontendFetch ?? globalThis.fetch.bind(globalThis);
+    const wrappedFetch = createBpaFetch(baseFetch);
+    const frontendFetcher = new BpaFrontendFetcher({
+      fetch: wrappedFetch,
+      signal,
+      onProgress: (evt) => onProgress?.({ phase: 'frontend:event', ...evt })
+    });
+
+    // ---- Phase 3a: per-user activity (last_login + created_on) -----------
+    onProgress?.({ phase: 'frontend:start', total: Array.isArray(inventory.users) ? inventory.users.length : 0 });
+    let userPhaseFatal = false;
+    try {
+      const result = await frontendFetcher.collect(inventory.users);
+      inventory.frontend_user_data = result.users;
+      if (Array.isArray(inventory.errors) && result.errors.length > 0) {
+        for (const e of result.errors) inventory.errors.push(`frontend: ${e}`);
+      }
+      onProgress?.({ phase: 'frontend:done', stats: result.stats });
+    } catch (err) {
+      if (err?.name === 'AbortError') throw err;
+      // Fatal-on-first-failure (auth) bubbles up here. Record on
+      // inventory.errors so the analyzer can run on the v2-only data,
+      // but emit a phase event so the UI shows what happened.
+      const reason = err?.message ?? String(err);
+      if (Array.isArray(inventory.errors)) inventory.errors.push(`frontend: ${reason}`);
+      onProgress?.({ phase: 'frontend:error', error: reason });
+      // If user phase failed on auth, the template phase will fail the
+      // same way - skip it to avoid spamming inventory.errors.
+      if (/session|auth/i.test(reason)) userPhaseFatal = true;
+    }
+
+    // ---- Phase 3b: per-template monitoring config (metrics + thresholds) -
+    if (!userPhaseFatal) {
+      const templates = Array.isArray(inventory.server_templates) ? inventory.server_templates : [];
+      onProgress?.({ phase: 'frontend-templates:start', total: templates.length });
+      try {
+        const result = await frontendFetcher.collectTemplateConfigs(templates);
+        inventory.template_monitoring_configs = result.configs;
+        if (Array.isArray(inventory.errors) && result.errors.length > 0) {
+          for (const e of result.errors) inventory.errors.push(`frontend: ${e}`);
+        }
+        onProgress?.({ phase: 'frontend-templates:done', stats: result.stats });
+      } catch (err) {
+        if (err?.name === 'AbortError') throw err;
+        const reason = err?.message ?? String(err);
+        if (Array.isArray(inventory.errors)) inventory.errors.push(`frontend: ${reason}`);
+        onProgress?.({ phase: 'frontend-templates:error', error: reason });
+      }
+    }
+  }
+
   onProgress?.({ phase: 'analyze:start' });
   const analysis = runAllAnalyzers(inventory);
   onProgress?.({ phase: 'analyze:done' });
@@ -88,6 +154,7 @@ export async function runBpaAudit({
     finished_at: finishedAt,
     deep,
     max_servers: maxServers,
+    include_frontend: includeFrontend,
     inventory,
     analysis
   };
@@ -145,6 +212,7 @@ export function createBpaAuditHandlers({
           client,
           deep: Boolean(payload?.deep),
           maxServers: Number.isFinite(payload?.maxServers) ? payload.maxServers : 0,
+          includeFrontend: Boolean(payload?.includeFrontend),
           signal: ac.signal,
           onProgress: (evt) => emit('bpa:progress', evt)
         });
