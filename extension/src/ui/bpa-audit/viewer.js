@@ -339,10 +339,11 @@ const TABS = [
       {
         label: 'Missing Settings (peer-comparison)',
         columns: [
-          { key: 'server',  header: 'Server',         getter: (r) => r.server },
-          { key: 'missing', header: 'Missing',        getter: (r) => r.missing },
-          { key: 'type',    header: 'Type',           getter: (r) => r.type },
-          { key: 'rec',     header: 'Recommendation', getter: (r) => r.recommendation }
+          { key: 'server_id',   header: 'Server ID',      getter: (r) => r.server_id },
+          { key: 'server_name', header: 'Server Name',    getter: (r) => r.server_name },
+          { key: 'missing',     header: 'Missing',        getter: (r) => r.missing },
+          { key: 'type',        header: 'Type',           getter: (r) => r.type },
+          { key: 'rec',         header: 'Recommendation', getter: (r) => r.recommendation }
         ],
         rows: ({ analysis }) => {
           const inst = analysis?.instances;
@@ -354,9 +355,10 @@ const TABS = [
       {
         label: 'Valueless Metrics',
         columns: [
-          { key: 'server', header: 'Server',         getter: (r) => r.server },
-          { key: 'metric', header: 'Metric',         getter: (r) => r.metric },
-          { key: 'rec',    header: 'Recommendation', getter: (r) => r.recommendation }
+          { key: 'server_id',   header: 'Server ID',      getter: (r) => r.server_id },
+          { key: 'server_name', header: 'Server Name',    getter: (r) => r.server_name },
+          { key: 'metric',      header: 'Metric',         getter: (r) => r.metric },
+          { key: 'rec',         header: 'Recommendation', getter: (r) => r.recommendation }
         ],
         rows: ({ analysis }) => {
           const inst = analysis?.instances;

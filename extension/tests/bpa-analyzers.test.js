@@ -385,9 +385,41 @@ test('analyzeInstances: missing_settings flags peers in same template group', ()
   };
   const r = analyzeInstances(inv);
   assert.equal(r.available, true);
-  const cMissing = r.missing_settings.find((f) => f.server === 'C' && f.missing === 'Memory');
+  // FMN-135 follow-up #4 (2026-05-02): findings now carry server_id +
+  // server_name as separate fields with 'n/a' fallback. C has both id=3
+  // and name='C', so server_name is 'C' here.
+  const cMissing = r.missing_settings.find((f) => f.server_name === 'C' && f.missing === 'Memory');
   assert.ok(cMissing, 'expected C to be flagged as missing Memory');
+  assert.equal(cMissing.server_id, '3');
   assert.equal(cMissing.type, 'Resource');
+});
+
+test('analyzeInstances: server_id and server_name use n/a fallback when either is missing (FMN-135 #4)', () => {
+  // Three peers share a template - one has only an id (no name/fqdn).
+  // The other two have both. The "missing" detection still works; the
+  // ambiguity is only in how the row identifies the server.
+  const inv = {
+    servers: [
+      { id: 1, name: 'Alpha', server_template: '/v2/server_template/9' },
+      { id: 2, name: 'Beta',  server_template: '/v2/server_template/9' },
+      { id: 3,                server_template: '/v2/server_template/9' }   // no name, no fqdn
+    ],
+    server_resources: {
+      '1': [{ id: 11, agent_resource_type: { name: 'CPU' } }, { id: 12, agent_resource_type: { name: 'Memory' } }],
+      '2': [{ id: 21, agent_resource_type: { name: 'CPU' } }, { id: 22, agent_resource_type: { name: 'Memory' } }],
+      '3': [{ id: 31, agent_resource_type: { name: 'CPU' } }]                // missing Memory
+    },
+    server_resource_details: {
+      '1': { '11': {}, '12': {} },
+      '2': { '21': {}, '22': {} },
+      '3': { '31': {} }
+    }
+  };
+  const r = analyzeInstances(inv);
+  const finding = r.missing_settings.find((f) => f.server_id === '3' && f.missing === 'Memory');
+  assert.ok(finding, 'expected server id 3 flagged for missing Memory');
+  assert.equal(finding.server_id, '3');
+  assert.equal(finding.server_name, 'n/a');
 });
 
 test('analyzeInstances: valueless_metrics flags resources without thresholds', () => {

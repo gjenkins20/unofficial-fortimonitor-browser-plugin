@@ -29,19 +29,28 @@ export function analyzeInstances(inventory = {}) {
       note: 'Run with deep mode (deep:true) for full instance analysis.'
     };
   }
+  // Build the agent_resource_type catalog map once for both finders so
+  // the URL-form r.agent_resource_type resolves to a friendly label
+  // (FMN-135 follow-up #3, 2026-05-02).
+  const typeMap = buildAgentResourceTypeMap(inventory.agent_resource_types);
   return {
     available: true,
-    missing_settings: findMissingSettings(inventory),
-    valueless_metrics: findValuelessMetrics(inventory)
+    missing_settings: findMissingSettings(inventory, typeMap),
+    valueless_metrics: findValuelessMetrics(inventory, typeMap)
   };
 }
+
+// Marker for empty values in the Server ID / Server Name columns. Used
+// per the 2026-05-02 operator request to surface the column meaning
+// unambiguously rather than falling back to a numeric id under either.
+const NA = 'n/a';
 
 /**
  * Group servers by template URL. Within each group of >=2 servers, find
  * resource types that >=70% of peers have but this server is missing,
  * AND threshold sets that most peers have configured.
  */
-function findMissingSettings(inventory) {
+function findMissingSettings(inventory, typeMap) {
   const servers = Array.isArray(inventory.servers) ? inventory.servers : [];
   const serverResources = inventory.server_resources ?? {};
   const serverResourceDetails = inventory.server_resource_details ?? {};
@@ -74,7 +83,7 @@ function findMissingSettings(inventory) {
       const resTypes = new Set();
       const threshTypes = new Set();
       for (const r of resources) {
-        const typeName = resourceTypeName(r);
+        const typeName = resourceTypeName(r, typeMap);
         if (typeName) resTypes.add(typeName);
         const rid = String(r?.id ?? '');
         const detail = serverResourceDetails[sid]?.[rid] ?? {};
@@ -104,14 +113,16 @@ function findMissingSettings(inventory) {
 
     for (const s of groupServers) {
       const sid = String(s?.id ?? '');
-      const sname = rowName(s, sid);
+      const sidLabel  = sid || NA;
+      const snameLabel = rowName(s, '') || NA;
       const myRes = resourceSets.get(sid) ?? new Set();
       const myThresh = thresholdSets.get(sid) ?? new Set();
       const missingRes = setDiff(commonTypes, myRes);
       const missingThresh = setDiff(commonThresholds, myThresh);
       for (const mr of missingRes) {
         findings.push({
-          server: sname,
+          server_id: sidLabel,
+          server_name: snameLabel,
           missing: mr,
           type: 'Resource',
           recommendation: `Add '${mr}' monitoring to match peers in the same template group.`
@@ -120,7 +131,8 @@ function findMissingSettings(inventory) {
       for (const mt of missingThresh) {
         if (missingRes.has(mt)) continue;
         findings.push({
-          server: sname,
+          server_id: sidLabel,
+          server_name: snameLabel,
           missing: `${mt} (threshold)`,
           type: 'Threshold',
           recommendation: `Configure thresholds for '${mt}' to match peers.`
@@ -129,7 +141,12 @@ function findMissingSettings(inventory) {
     }
   }
 
-  findings.sort((a, b) => a.server < b.server ? -1 : a.server > b.server ? 1 : 0);
+  // Stable order: by server name (with id as the tiebreaker so 'n/a'
+  // collisions still sort deterministically).
+  findings.sort((a, b) => {
+    if (a.server_name !== b.server_name) return a.server_name < b.server_name ? -1 : 1;
+    return a.server_id < b.server_id ? -1 : a.server_id > b.server_id ? 1 : 0;
+  });
   return findings.slice(0, MISSING_FINDING_LIMIT);
 }
 
@@ -143,20 +160,20 @@ function findMissingSettings(inventory) {
  * "Apache: Requests/sec (reqs/s)" rather than the raw API URL
  * (FMN-135 follow-up #3, 2026-05-02).
  */
-function findValuelessMetrics(inventory) {
+function findValuelessMetrics(inventory, typeMap) {
   const servers = Array.isArray(inventory.servers) ? inventory.servers : [];
-  const serverMap = new Map();
+  const nameById = new Map();
   for (const s of servers) {
-    serverMap.set(String(s?.id ?? ''), rowName(s, ''));
+    nameById.set(String(s?.id ?? ''), rowName(s, ''));
   }
   const serverResources = inventory.server_resources ?? {};
   const serverResourceDetails = inventory.server_resource_details ?? {};
-  const typeMap = buildAgentResourceTypeMap(inventory.agent_resource_types);
 
   const findings = [];
   for (const [sid, resources] of Object.entries(serverResources)) {
     if (!Array.isArray(resources)) continue;
-    const sname = serverMap.get(sid) || sid;
+    const sidLabel = sid || NA;
+    const snameLabel = (nameById.get(sid) || '') || NA;
     for (const r of resources) {
       const rid = String(r?.id ?? '');
       const typeName = resourceTypeName(r, typeMap) || `Resource #${rid}`;
@@ -165,7 +182,8 @@ function findValuelessMetrics(inventory) {
         ? detail.agent_resource_threshold : [];
       if (thresholds.length === 0) {
         findings.push({
-          server: sname,
+          server_id: sidLabel,
+          server_name: snameLabel,
           metric: typeName,
           recommendation:
             `No thresholds set. In FortiMonitor, open ${FORTIMONITOR_INSTANCE_URL}${sid} `
@@ -176,17 +194,20 @@ function findValuelessMetrics(inventory) {
     }
   }
 
-  // Cap to the 20 servers with the most valueless metrics.
-  const perServer = counter(findings, (f) => f.server);
+  // Cap to the 20 servers with the most valueless metrics, keyed on
+  // server_id (the stable identifier - server_name can collide on 'n/a'
+  // across distinct servers).
+  const perServer = counter(findings, (f) => f.server_id);
   const topServers = new Set(
     [...perServer.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, VALUELESS_TOP_SERVERS)
       .map(([s]) => s)
   );
-  const filtered = findings.filter((f) => topServers.has(f.server));
+  const filtered = findings.filter((f) => topServers.has(f.server_id));
   filtered.sort((a, b) => {
-    if (a.server !== b.server) return a.server < b.server ? -1 : 1;
+    if (a.server_name !== b.server_name) return a.server_name < b.server_name ? -1 : 1;
+    if (a.server_id   !== b.server_id)   return a.server_id   < b.server_id   ? -1 : 1;
     return a.metric < b.metric ? -1 : a.metric > b.metric ? 1 : 0;
   });
   return filtered.slice(0, VALUELESS_FINDING_LIMIT);
