@@ -1,18 +1,18 @@
 // Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// SSO Configuration - Step 1 (Configure).
-// Field labels and order mirror FortiMonitor's "Edit SSO Configuration"
-// admin form (Teams & Activity -> Integrations). The operator pastes their
-// Okta IdP metadata XML; the wizard parses out Entity ID + Login URL +
-// Cert and combines them with the operator's other inputs to render a
-// paste-ready runbook in Step 4.
+// Generate SSO Configuration - Step 2 (Configure FortiMonitor).
+// Shows the values extracted from the Okta IdP metadata (Step 1) as
+// read-only references, then collects the FortiMonitor-tenant-specific
+// inputs (URL Fragment, Domains, role mappings, User Configuration).
+// Field labels mirror FortiMonitor's "Edit SSO Configuration" admin form
+// (Teams & Activity -> Integrations).
 
 import { h, titleBar } from '../../../lib/dom.js';
-import { parseIdpMetadata } from '../../../lib/saml-metadata.js';
+import { ssoBreadcrumbs } from './okta.js';
 
-const TOOL_NAME = 'SSO Configuration (Okta)';
+const TOOL_NAME = 'Generate SSO Configuration';
 
-// FortiMonitor System Roles (visible at /roles -> Access Control).
-// Used as <datalist> suggestions; users with custom roles can free-type.
+// FortiMonitor System Roles (visible at /roles -> Access Control). Used
+// as <datalist> suggestions; users with custom roles can free-type.
 const SYSTEM_ROLE_SUGGESTIONS = [
   'Account Admin',
   'API Full Access',
@@ -37,48 +37,60 @@ function labeledRow(labelText, input, helpText = null) {
   );
 }
 
-export function ssoBreadcrumbs(active) {
-  const steps = [
-    { id: 'start', label: '1. Configure' },
-    { id: 'review', label: '2. Review' },
-    { id: 'execute', label: '3. Generate' },
-    { id: 'results', label: '4. Results' }
-  ];
-  const order = steps.findIndex((s) => s.id === active);
-  return h('div', { class: 'step-breadcrumbs' },
-    steps.flatMap((s, i) => {
-      const cls = i < order ? 'step done' : i === order ? 'step active' : 'step';
-      const label = i < order ? `${s.label} ✓` : s.label;
-      const item = h('span', { class: cls }, label);
-      return i === 0 ? [item] : [h('span', { class: 'arrow' }, '›'), item];
-    })
-  );
-}
-
 export function render({ container, store, navigate }) {
   const frame = h('div', { class: 'mockup-frame' });
-  frame.appendChild(titleBar('Configure', { toolName: TOOL_NAME }));
+  frame.appendChild(titleBar('Configure FortiMonitor', { toolName: TOOL_NAME }));
 
   frame.appendChild(h('div', { class: 'step-header' },
-    ssoBreadcrumbs('start'),
-    h('h2', {}, 'Build the FortiMonitor SSO config'),
-    h('p', {}, 'Paste your Okta IdP metadata XML and fill in the values FortiMonitor\'s Edit SSO Configuration form expects. The wizard generates a paste-ready Markdown runbook covering both sides; you save the actual config in the FortiMonitor and Okta admin UIs.')
+    ssoBreadcrumbs('fortimonitor'),
+    h('h2', {}, 'Step 2: Configure FortiMonitor'),
+    h('p', {}, 'These are the values you will paste into FortiMonitor\'s Edit SSO Configuration form (Teams & Activity -> Integrations). The wizard fills the Okta-derived fields automatically; you provide the tenant-specific values for your environment.')
   ));
 
   const body = h('div', { class: 'body-section' });
   frame.appendChild(body);
 
-  const continueBtn = h('button', { class: 'btn primary', disabled: true }, 'Continue to Review');
+  const idp = store.idpParsed || {};
+  const continueBtn = h('button', { class: 'btn primary' }, 'Continue to Review');
 
-  // ---- Datalist for role suggestions (shared across all role inputs) ----
+  // ---- Datalist for role suggestions ----
   const roleDatalist = h('datalist', { id: 'fm-role-suggestions' });
   for (const r of SYSTEM_ROLE_SUGGESTIONS) roleDatalist.appendChild(h('option', { value: r }));
   body.appendChild(roleDatalist);
 
   // ============================================================
+  // Section: From your Okta IdP metadata (read-only)
+  // ============================================================
+  body.appendChild(h('h3', { class: 'subhead' }, 'From your Okta IdP metadata (auto-filled)'));
+  body.appendChild(h('p', { class: 'help-text' },
+    'These three values come straight from the metadata XML you pasted in Step 1. They go into FortiMonitor as Entity ID, Login URL, and the Certificate field.'
+  ));
+
+  const ro = h('table', { class: 'kv-table' });
+  ro.appendChild(h('tbody', {},
+    h('tr', {},
+      h('th', { scope: 'row' }, 'Entity ID'),
+      h('td', {}, h('code', {}, idp.issuer || '(missing)'))
+    ),
+    h('tr', {},
+      h('th', { scope: 'row' }, 'Login URL'),
+      h('td', {}, h('code', {}, idp.ssoUrlPost || idp.ssoUrlRedirect || '(missing)'))
+    ),
+    h('tr', {},
+      h('th', { scope: 'row' }, 'Signing certificate'),
+      h('td', {}, h('code', {},
+        idp.x509Cert
+          ? idp.x509Cert.slice(0, 40) + '... (' + idp.x509Cert.length + ' chars)'
+          : '(missing)'
+      ))
+    )
+  ));
+  body.appendChild(ro);
+
+  // ============================================================
   // Section: FortiMonitor tenant
   // ============================================================
-  body.appendChild(h('h3', { class: 'subhead' }, 'FortiMonitor tenant'));
+  body.appendChild(h('h3', { class: 'subhead' }, 'Your FortiMonitor tenant'));
 
   const baseUrlInput = h('input', {
     type: 'text', spellcheck: 'false', autocomplete: 'off',
@@ -86,7 +98,7 @@ export function render({ container, store, navigate }) {
   });
   baseUrlInput.value = store.fortimonitorBaseUrl;
   body.appendChild(labeledRow('FortiMonitor base URL', baseUrlInput,
-    'The region-specific host where you log in (the URL FortiMonitor displays for your tenant). Login URL becomes <base>/sso/<URL Fragment>.'));
+    'The region-specific host where you log in to FortiMonitor. The SSO login URL becomes <base>/sso/<URL Fragment>.'));
 
   const tenantLabelInput = h('input', { type: 'text', placeholder: 'Acme Production', spellcheck: 'false' });
   tenantLabelInput.value = store.tenantLabel;
@@ -94,11 +106,9 @@ export function render({ container, store, navigate }) {
     'Friendly name shown in the runbook header. Display only.'));
 
   // ============================================================
-  // Section: General (FortiMonitor Edit SSO Configuration -> General)
+  // Section: General (FortiMonitor's Edit SSO Configuration -> General)
   // ============================================================
-  body.appendChild(h('h3', { class: 'subhead' }, 'General'));
-  body.appendChild(h('p', { class: 'help-text' },
-    'These map 1:1 to fields in FortiMonitor\'s Edit SSO Configuration form. Required fields are starred there; the wizard validates the same set.'));
+  body.appendChild(h('h3', { class: 'subhead' }, 'General (FortiMonitor: Edit SSO Configuration -> General)'));
 
   const urlFragmentInput = h('input', {
     type: 'text', spellcheck: 'false', autocomplete: 'off',
@@ -106,7 +116,7 @@ export function render({ container, store, navigate }) {
   });
   urlFragmentInput.value = store.urlFragment;
   body.appendChild(labeledRow('URL Fragment *', urlFragmentInput,
-    'Custom slug appended to /sso/. Pick something tenant-specific so multiple SSO integrations do not collide. Text only; lowercase recommended.'));
+    'Custom slug appended to /sso/. Pick something tenant-specific so multiple SSO integrations do not collide. Lowercase recommended.'));
 
   const domainsInput = h('input', {
     type: 'text', spellcheck: 'false', autocomplete: 'off',
@@ -119,7 +129,7 @@ export function render({ container, store, navigate }) {
   const usernameFieldInput = h('input', { type: 'text', spellcheck: 'false' });
   usernameFieldInput.value = store.usernameField;
   body.appendChild(labeledRow('Username Field *', usernameFieldInput,
-    'Name of the SAML attribute statement carrying the user\'s email. Default "email" works with the standard Okta attribute mapping.'));
+    'Name of the SAML attribute carrying the user\'s email - default "email" matches the Okta attribute statement you set up in Step 1.'));
 
   const loginBindingInput = h('input', { type: 'text', spellcheck: 'false' });
   loginBindingInput.value = store.loginBinding || DEFAULT_LOGIN_BINDING;
@@ -141,25 +151,6 @@ export function render({ container, store, navigate }) {
   logoutBindingInput.value = store.logoutBinding;
   body.appendChild(labeledRow('Logout Binding (optional)', logoutBindingInput,
     'Required only if you set a Logout URL.'));
-
-  // ============================================================
-  // Section: IdP metadata paste (provides Entity ID, Login URL, Cert)
-  // ============================================================
-  body.appendChild(h('h3', { class: 'subhead' }, 'Okta IdP metadata XML'));
-  body.appendChild(h('p', { class: 'help-text' },
-    'Paste the Identity Provider metadata XML you downloaded from your Okta SAML app (Sign On tab -> View SAML setup instructions). The wizard extracts the Entity ID, Login URL, and signing certificate that go into FortiMonitor\'s General section + Certificate field.'));
-
-  const idpPaste = h('textarea', {
-    class: 'paste-area',
-    rows: 8,
-    spellcheck: 'false',
-    placeholder: '<?xml version="1.0" encoding="UTF-8"?>\n<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="...">\n  <md:IDPSSODescriptor ...>\n    ...\n  </md:IDPSSODescriptor>\n</md:EntityDescriptor>'
-  });
-  idpPaste.value = store.idpMetadataXml;
-  body.appendChild(idpPaste);
-
-  const parseStatus = h('div', { class: 'parse-result empty' });
-  body.appendChild(parseStatus);
 
   // ============================================================
   // Section: User Configuration (FortiMonitor's User Configuration block)
@@ -207,7 +198,7 @@ export function render({ container, store, navigate }) {
     if (modeManual.checked) return;
     mappingsSection.appendChild(h('h4', { class: 'subhead-sub' }, 'Role mappings'));
     mappingsSection.appendChild(h('p', { class: 'help-text' },
-      'One row per FortiMonitor role assignment. SAML Role Field is the attribute name FortiMonitor checks; SAML Role is the exact value (case sensitive) that triggers the mapping. If multiple rows match, FortiMonitor checks them in order.'));
+      'One row per FortiMonitor role assignment. SAML Role Field is the attribute name FortiMonitor checks; SAML Role is the exact value (case-sensitive) that triggers the mapping. The "FortiMonitor role" suggestions are FortiMonitor\'s built-in System Roles - free-type any custom role you have created in your tenant.'));
     if (!store.roleMappings.length) {
       mappingsSection.appendChild(h('p', { class: 'help-text' },
         'No role mappings yet. Click below to add one.'));
@@ -220,7 +211,7 @@ export function render({ container, store, navigate }) {
       fieldInput.value = m.samlField;
       fieldInput.addEventListener('input', () => {
         store.roleMappings[i].samlField = fieldInput.value.trim();
-        recomputeContinue();
+        recompute();
       });
       const valueInput = h('input', {
         type: 'text', placeholder: 'fm_admins', spellcheck: 'false'
@@ -228,7 +219,7 @@ export function render({ container, store, navigate }) {
       valueInput.value = m.samlValue;
       valueInput.addEventListener('input', () => {
         store.roleMappings[i].samlValue = valueInput.value.trim();
-        recomputeContinue();
+        recompute();
       });
       const fmRoleInput = h('input', {
         type: 'text', placeholder: 'Dashboard Admin', list: 'fm-role-suggestions', spellcheck: 'false'
@@ -236,14 +227,14 @@ export function render({ container, store, navigate }) {
       fmRoleInput.value = m.fmRole;
       fmRoleInput.addEventListener('input', () => {
         store.roleMappings[i].fmRole = fmRoleInput.value.trim();
-        recomputeContinue();
+        recompute();
       });
       const removeBtn = h('button', {
         class: 'btn', type: 'button', title: 'Remove this mapping',
         onClick: () => {
           store.roleMappings.splice(i, 1);
           renderMappings();
-          recomputeContinue();
+          recompute();
         }
       }, '×');
       mappingsSection.appendChild(h('div', { class: 'role-mapping-row' },
@@ -258,7 +249,7 @@ export function render({ container, store, navigate }) {
       onClick: () => {
         store.roleMappings.push({ samlField: '', samlValue: '', fmRole: '' });
         renderMappings();
-        recomputeContinue();
+        recompute();
       }
     }, '+ Add role mapping');
     mappingsSection.appendChild(addBtn);
@@ -266,7 +257,8 @@ export function render({ container, store, navigate }) {
   renderMappings();
 
   // ---- Footer ----
-  const footer = h('div', { class: 'step-footer' }, continueBtn);
+  const backBtn = h('button', { class: 'btn' }, 'Back');
+  const footer = h('div', { class: 'step-footer' }, backBtn, continueBtn);
   frame.appendChild(footer);
   container.appendChild(frame);
 
@@ -280,74 +272,34 @@ export function render({ container, store, navigate }) {
     store.loginBinding = loginBindingInput.value.trim() || DEFAULT_LOGIN_BINDING;
     store.logoutUrl = logoutUrlInput.value.trim();
     store.logoutBinding = logoutBindingInput.value.trim();
-    store.idpMetadataXml = idpPaste.value;
     store.preventNonSsoLogins = preventNonSsoCheck.checked;
     store.autoCreateUsers = autoCreateCheck.checked;
     store.roleAssignmentMode = modeManual.checked ? 'manual' : 'saml';
-    // store.roleMappings already kept in sync via per-row listeners.
   }
 
-  function reparseMetadata() {
-    const xml = idpPaste.value;
-    if (!xml.trim()) {
-      store.idpParsed = null;
-      store.idpParseError = null;
-      parseStatus.className = 'parse-result empty';
-      parseStatus.textContent = '';
-      return;
-    }
-    try {
-      store.idpParsed = parseIdpMetadata(xml);
-      store.idpParseError = null;
-      parseStatus.className = 'parse-result ok';
-      parseStatus.innerHTML = '';
-      parseStatus.appendChild(h('div', { class: 'parse-summary' },
-        h('strong', {}, 'IdP metadata parsed'),
-        h('div', {}, 'Entity ID (IdP issuer): ', h('code', {}, store.idpParsed.issuer)),
-        h('div', {}, 'Login URL (HTTP-POST): ', h('code', {}, store.idpParsed.ssoUrlPost || '(none)')),
-        h('div', {}, 'Signing cert: ', h('code', {}, store.idpParsed.x509Cert.slice(0, 32) + '... (' + store.idpParsed.x509Cert.length + ' chars)'))
-      ));
-    } catch (err) {
-      store.idpParsed = null;
-      store.idpParseError = err.message || String(err);
-      parseStatus.className = 'parse-result error';
-      parseStatus.textContent = store.idpParseError;
-    }
-  }
-
-  function recomputeContinue() {
+  function recompute() {
     syncStore();
     const baseUrlValid = /^https?:\/\//i.test(store.fortimonitorBaseUrl);
     const fragmentValid = !!store.urlFragment && /^[a-zA-Z0-9_\-]+$/.test(store.urlFragment);
-    const idpValid = !!store.idpParsed && !!store.idpParsed.issuer && !!store.idpParsed.ssoUrlPost;
+    const idpValid = !!idp.issuer && !!idp.ssoUrlPost && !!idp.x509Cert;
     const rolesValid = store.roleAssignmentMode === 'manual'
       || store.roleMappings.every((m) => m.samlField && m.samlValue && m.fmRole);
     continueBtn.disabled = !(baseUrlValid && fragmentValid && idpValid && rolesValid);
   }
 
-  // Live wiring
   for (const el of [
     baseUrlInput, tenantLabelInput, urlFragmentInput, domainsInput,
     usernameFieldInput, loginBindingInput, logoutUrlInput, logoutBindingInput
   ]) {
-    el.addEventListener('input', recomputeContinue);
+    el.addEventListener('input', recompute);
   }
-  preventNonSsoCheck.addEventListener('change', recomputeContinue);
-  autoCreateCheck.addEventListener('change', recomputeContinue);
-  modeManual.addEventListener('change', () => { renderMappings(); recomputeContinue(); });
-  modeSaml.addEventListener('change', () => { renderMappings(); recomputeContinue(); });
-  idpPaste.addEventListener('input', () => { reparseMetadata(); recomputeContinue(); });
+  preventNonSsoCheck.addEventListener('change', recompute);
+  autoCreateCheck.addEventListener('change', recompute);
+  modeManual.addEventListener('change', () => { renderMappings(); recompute(); });
+  modeSaml.addEventListener('change', () => { renderMappings(); recompute(); });
 
-  continueBtn.addEventListener('click', () => {
-    syncStore();
-    if (!store.idpParsed) {
-      reparseMetadata();
-      if (!store.idpParsed) return;
-    }
-    navigate('/review');
-  });
+  backBtn.addEventListener('click', () => navigate('/okta'));
+  continueBtn.addEventListener('click', () => { syncStore(); navigate('/review'); });
 
-  // First render: parse pre-existing XML, sync derived state.
-  if (store.idpMetadataXml) reparseMetadata();
-  recomputeContinue();
+  recompute();
 }

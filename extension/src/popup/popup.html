@@ -222,13 +222,13 @@
               data-url="src/ui/sso-config/app.html"
               data-experimental="sso-config"
               hidden
-              title="Generates a paste-ready runbook for setting up Okta SSO with FortiMonitor (Teams & Activity → Integrations → Edit SSO Configuration). No FortiMonitor save is performed; you paste the values into the admin form yourself.">
+              title="Walks you through Okta SAML setup, then assembles the values you paste into FortiMonitor's Edit SSO Configuration form. Pure generator; you save in each admin UI yourself.">
         <div class="tool-meta">
           <div class="tool-name">
-            SSO Configuration (Okta)
+            Generate SSO Configuration
           </div>
-          <div class="tool-desc" data-default-desc="Paste your Okta IdP metadata XML; the plugin emits a Markdown runbook with the exact values to paste into FortiMonitor's Edit SSO Configuration form, plus the Okta-side steps to round-trip the SP values.">
-            Paste your Okta IdP metadata XML; the plugin emits a Markdown runbook with the exact values to paste into FortiMonitor's Edit SSO Configuration form, plus the Okta-side steps to round-trip the SP values.
+          <div class="tool-desc" data-default-desc="Walks you through Okta SAML setup, then emits a Markdown runbook with the exact values to paste into FortiMonitor's Edit SSO Configuration form (URL Fragment, Entity ID, Login URL, Certificate, role mappings) plus the Okta-side round-trip needed for FortiMonitor's SP values.">
+            Walks you through Okta SAML setup, then emits a Markdown runbook with the exact values to paste into FortiMonitor's Edit SSO Configuration form (URL Fragment, Entity ID, Login URL, Certificate, role mappings) plus the Okta-side round-trip needed for FortiMonitor's SP values.
           </div>
         </div>
         <div class="chevron">›</div>
@@ -458,11 +458,11 @@
       </label>
 
       <p class="settings-help" style="margin-top:0.75rem;">
-        <strong>SSO Configuration (Okta)</strong> generates a Markdown runbook walking through both sides of an Okta + FortiMonitor SSO setup: the values to paste into FortiMonitor's <em>Edit SSO Configuration</em> form, plus the Okta SAML app config (with the round-trip needed for FortiMonitor's SP-side values). Pure generator; you save the actual config in each admin UI. Hidden by default.
+        <strong>Generate SSO Configuration</strong> walks you through Okta SAML setup, then emits a Markdown runbook with the exact values you paste into FortiMonitor's <em>Edit SSO Configuration</em> form. Pure generator; you save the actual config in each admin UI. Hidden by default.
       </p>
       <label class="toggle-row">
         <input id="sso-config-toggle" type="checkbox">
-        <span>Show SSO Configuration</span>
+        <span>Show Generate SSO Configuration</span>
       </label>
     </div>
 

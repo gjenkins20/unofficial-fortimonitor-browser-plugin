@@ -7,9 +7,9 @@
 // surface after the operator saves the FortiMonitor SSO config.
 
 import { h, titleBar } from '../../../lib/dom.js';
-import { ssoBreadcrumbs } from './start.js';
+import { ssoBreadcrumbs } from './okta.js';
 
-const TOOL_NAME = 'SSO Configuration (Okta)';
+const TOOL_NAME = 'Generate SSO Configuration';
 
 export function render({ container, store, navigate }) {
   const frame = h('div', { class: 'mockup-frame' });
@@ -62,9 +62,10 @@ export function render({ container, store, navigate }) {
   container.appendChild(frame);
 
   backBtn.addEventListener('click', () => navigate('/review'));
+  // No /start route anymore; restart goes back to /okta.
   restartBtn.addEventListener('click', () => {
     store.runResult = null;
-    navigate('/start');
+    navigate('/okta');
   });
 }
 

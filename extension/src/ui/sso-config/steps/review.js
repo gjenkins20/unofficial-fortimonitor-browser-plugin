@@ -1,13 +1,16 @@
 // Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// SSO Configuration - Step 2 (Review).
-// Side-by-side preview: the FortiMonitor "Edit SSO Configuration" form
-// values the operator will paste, plus the Okta-side notes for the
-// runbook. No save happens here or anywhere; this is a generator-only tool.
+// Generate SSO Configuration - Step 3 (Review).
+// Side-by-side preview of the FortiMonitor Edit SSO Configuration values
+// + the Okta-side notes that the runbook will document. The "Generate
+// runbook" button is the terminal action of this step: it builds the
+// Markdown runbook and routes to Results. There is no separate Generate
+// step (the build is synchronous).
 
 import { h, titleBar } from '../../../lib/dom.js';
-import { ssoBreadcrumbs } from './start.js';
+import { ssoBreadcrumbs } from './okta.js';
+import { buildSsoRunbook } from '../../../lib/sso-runbook.js';
 
-const TOOL_NAME = 'SSO Configuration (Okta)';
+const TOOL_NAME = 'Generate SSO Configuration';
 
 export function render({ container, store, navigate }) {
   const frame = h('div', { class: 'mockup-frame' });
@@ -15,7 +18,7 @@ export function render({ container, store, navigate }) {
 
   frame.appendChild(h('div', { class: 'step-header' },
     ssoBreadcrumbs('review'),
-    h('h2', {}, 'Review the values you will paste'),
+    h('h2', {}, 'Step 3: Review the values you will paste'),
     h('p', {}, 'Left: every field FortiMonitor\'s Edit SSO Configuration form expects, mapped to your inputs and the parsed Okta metadata. Right: what to expect on the Okta side. The full step-by-step lands as a downloadable runbook in the next step.')
   ));
 
@@ -32,7 +35,7 @@ export function render({ container, store, navigate }) {
 
   const fmCol = h('div', { class: 'review-col' });
   fmCol.appendChild(h('h3', { class: 'subhead' }, 'FortiMonitor: Edit SSO Configuration'));
-  fmCol.appendChild(h('p', { class: 'help-text' }, `Open Teams & Activity -> Integrations -> Add (or edit) SSO Configuration. Paste these values; copy buttons are on the right.`));
+  fmCol.appendChild(h('p', { class: 'help-text' }, 'Open Teams & Activity -> Integrations -> Add (or edit) SSO Configuration. Paste these values; copy buttons are on the right.'));
 
   fmCol.appendChild(h('h4', { class: 'subhead-sub' }, 'General'));
   fmCol.appendChild(buildKvTable([
@@ -49,8 +52,7 @@ export function render({ container, store, navigate }) {
   fmCol.appendChild(h('h4', { class: 'subhead-sub' }, 'Certificate'));
   fmCol.appendChild(h('p', { class: 'help-text' }, 'Paste this single base64 block (no BEGIN/END markers, no whitespace) into FortiMonitor\'s Certificate field.'));
   const certBlock = h('div', { class: 'cert-block' });
-  const certText = h('code', { class: 'cert-text' }, idp.x509Cert || '(unparsed)');
-  certBlock.appendChild(certText);
+  certBlock.appendChild(h('code', { class: 'cert-text' }, idp.x509Cert || '(unparsed)'));
   if (idp.x509Cert) {
     const copyBtn = h('button', { class: 'btn copy-btn', title: 'Copy', type: 'button' }, '⧉');
     copyBtn.addEventListener('click', () => {
@@ -63,21 +65,20 @@ export function render({ container, store, navigate }) {
   fmCol.appendChild(certBlock);
 
   fmCol.appendChild(h('h4', { class: 'subhead-sub' }, 'User Configuration'));
-  const userConfigRows = [
+  fmCol.appendChild(buildKvTable([
     ['Prevent non-SSO logins', store.preventNonSsoLogins ? 'checked' : 'unchecked'],
     ['Auto Create Users', store.autoCreateUsers ? 'checked' : 'unchecked'],
     ['Default Roles', store.roleAssignmentMode === 'manual' ? 'Assign roles manually' : 'Assign roles based on SAML mapping']
-  ];
-  fmCol.appendChild(buildKvTable(userConfigRows));
+  ]));
 
   if (store.roleAssignmentMode === 'saml' && store.roleMappings.length) {
     fmCol.appendChild(h('h4', { class: 'subhead-sub' }, 'Role mappings'));
     const t = h('table', { class: 'kv-table' });
-    const thead = h('thead', {}, h('tr', {},
+    t.appendChild(h('thead', {}, h('tr', {},
       h('th', { scope: 'col' }, 'SAML Role Field'),
       h('th', { scope: 'col' }, 'SAML Role'),
       h('th', { scope: 'col' }, 'FortiMonitor role')
-    ));
+    )));
     const tbody = h('tbody', {});
     for (const m of store.roleMappings) {
       tbody.appendChild(h('tr', {},
@@ -86,7 +87,6 @@ export function render({ container, store, navigate }) {
         h('td', {}, h('code', {}, m.fmRole))
       ));
     }
-    t.appendChild(thead);
     t.appendChild(tbody);
     fmCol.appendChild(t);
   }
@@ -95,12 +95,12 @@ export function render({ container, store, navigate }) {
   // ---- Okta side notes ----
   const oktaCol = h('div', { class: 'review-col' });
   oktaCol.appendChild(h('h3', { class: 'subhead' }, 'Okta: SAML app config'));
-  oktaCol.appendChild(h('p', { class: 'help-text' }, 'Two-pass setup: create the Okta SAML app with placeholders before saving FortiMonitor; come back to update Okta with the SP-side values FortiMonitor displays after save. The runbook walks both passes.'));
+  oktaCol.appendChild(h('p', { class: 'help-text' }, 'You created the Okta SAML app with placeholder URLs in Step 1. After saving FortiMonitor, you will return to Okta to replace those placeholders with the SP-side values FortiMonitor displays on its integration row. The runbook walks both passes.'));
 
-  oktaCol.appendChild(h('h4', { class: 'subhead-sub' }, 'Pass 1 (placeholders)'));
+  oktaCol.appendChild(h('h4', { class: 'subhead-sub' }, 'Pass 1 (placeholders, already done)'));
   oktaCol.appendChild(buildKvTable([
-    ['Single sign on URL', 'https://placeholder.example/acs (replaced in Pass 3)'],
-    ['Audience URI', 'https://placeholder.example (replaced in Pass 3)'],
+    ['Single sign on URL', 'https://placeholder.example/acs (replaced after FortiMonitor save)'],
+    ['Audience URI', 'https://placeholder.example (replaced after FortiMonitor save)'],
     ['Name ID format', 'EmailAddress'],
     ['Application username', 'Email']
   ]));
@@ -126,20 +126,51 @@ export function render({ container, store, navigate }) {
     oktaCol.appendChild(buildKvTable(rows));
   }
 
-  oktaCol.appendChild(h('h4', { class: 'subhead-sub' }, 'Pass 3 (after FortiMonitor save)'));
-  oktaCol.appendChild(h('p', { class: 'help-text' }, `Replace the Pass 1 placeholders with the SP Entity ID and ACS URL FortiMonitor displays on the integration row. Login URL the user will visit: ${ssoLoginUrl}`));
+  oktaCol.appendChild(h('h4', { class: 'subhead-sub' }, 'After FortiMonitor save'));
+  oktaCol.appendChild(h('p', { class: 'help-text' }, `Replace the Pass 1 placeholders with the SP Entity ID and ACS URL FortiMonitor displays on the integration row. The login URL the user will visit: ${ssoLoginUrl}`));
 
   grid.appendChild(oktaCol);
 
   // ---- Footer ----
   const backBtn = h('button', { class: 'btn' }, 'Back');
-  const goBtn = h('button', { class: 'btn primary' }, 'Generate runbook');
-  const footer = h('div', { class: 'step-footer' }, backBtn, goBtn);
+  const generateBtn = h('button', { class: 'btn primary' }, 'Generate runbook');
+  const footer = h('div', { class: 'step-footer' }, backBtn, generateBtn);
   frame.appendChild(footer);
   container.appendChild(frame);
 
-  backBtn.addEventListener('click', () => navigate('/start'));
-  goBtn.addEventListener('click', () => navigate('/execute'));
+  backBtn.addEventListener('click', () => navigate('/fortimonitor'));
+  generateBtn.addEventListener('click', () => {
+    try {
+      const runbookMd = buildSsoRunbook({
+        tenantLabel: store.tenantLabel || null,
+        fortimonitorBaseUrl: store.fortimonitorBaseUrl,
+        urlFragment: store.urlFragment,
+        domains: store.domains,
+        usernameField: store.usernameField,
+        loginBinding: store.loginBinding,
+        logoutUrl: store.logoutUrl,
+        logoutBinding: store.logoutBinding,
+        idp: store.idpParsed,
+        preventNonSsoLogins: store.preventNonSsoLogins,
+        autoCreateUsers: store.autoCreateUsers,
+        roleAssignmentMode: store.roleAssignmentMode,
+        roleMappings: store.roleMappings
+      });
+      store.runResult = {
+        ok: true,
+        message: 'Runbook ready. Download or copy from the Results step.',
+        runbookMd
+      };
+      navigate('/results');
+    } catch (err) {
+      store.runResult = {
+        ok: false,
+        message: err.message || String(err),
+        runbookMd: null
+      };
+      navigate('/results');
+    }
+  });
 }
 
 function buildKvTable(rows, { copy = false } = {}) {

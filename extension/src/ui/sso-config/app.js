@@ -1,39 +1,41 @@
 // Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// Top-level UI controller for the SSO Configuration tool (FMN-139).
-// Mirrors fabric-connection's 4-step pattern (hash router, in-memory store).
-// Pure generator: no FortiMonitor session-auth, no v2 API. The tool emits a
-// paste-ready runbook that walks the operator through configuring Okta and
-// FortiMonitor from both sides; the operator does the actual saves.
+// Top-level UI controller for the Generate SSO Configuration tool (FMN-139).
+// Pure generator: no FortiMonitor session-auth, no v2 API. Wizard reads
+// Okta-first-then-FortiMonitor:
+//   /okta         (Step 1) walkthrough + IdP metadata XML paste
+//   /fortimonitor (Step 2) FortiMonitor-tenant inputs (read-only Okta values shown inline)
+//   /review       (Step 3) side-by-side preview, "Generate runbook" button
+//   /results      (Step 4) download Markdown runbook
 
-import * as start from './steps/start.js';
+import * as okta from './steps/okta.js';
+import * as fortimonitor from './steps/fortimonitor.js';
 import * as review from './steps/review.js';
-import * as execute from './steps/execute.js';
 import * as results from './steps/results.js';
 import { onEvent } from '../../lib/messaging.js';
 
 document.documentElement.dataset.toolMode = 'sso-config';
 
 const store = {
+  // Okta IdP metadata (parsed from XML the operator pastes in Step 1).
+  idpMetadataXml: '',
+  idpParsed: null,             // { issuer, ssoUrlPost, ssoUrlRedirect, x509Cert, nameIdFormats }
+  idpParseError: null,
+
   // FortiMonitor SSO admin form (Teams & Activity -> Integrations -> Edit
   // SSO Configuration). Field names mirror the FortiMonitor labels exactly.
   fortimonitorBaseUrl: '',     // e.g. https://my.us01.fortimonitor.com (region-specific)
   urlFragment: '',             // e.g. "okta" -> /sso/okta login URL
   domains: [],                 // e.g. ['@company.com']
-  usernameField: 'email',      // SAML attribute matched to the user's FortiMonitor login email
+  usernameField: 'email',
   loginBinding: 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST',
-  logoutUrl: '',               // optional
-  logoutBinding: '',           // optional
+  logoutUrl: '',
+  logoutBinding: '',
 
-  // User Configuration block of FortiMonitor's SSO admin form.
-  preventNonSsoLogins: false,  // FortiMonitor field; maps to the v2 user.allow_non_sso_login flag
+  // FortiMonitor User Configuration block.
+  preventNonSsoLogins: false,
   autoCreateUsers: true,
   roleAssignmentMode: 'saml',  // 'manual' | 'saml'
   roleMappings: [],            // [{ samlField, samlValue, fmRole }]
-
-  // Okta IdP metadata (parsed from XML the operator pastes in Step 1).
-  idpMetadataXml: '',
-  idpParsed: null,             // { issuer, ssoUrlPost, ssoUrlRedirect, x509Cert, nameIdFormats }
-  idpParseError: null,
 
   // Display only.
   tenantLabel: '',
@@ -61,14 +63,14 @@ const events = {
 };
 
 const routes = {
-  '/start': start,
+  '/okta': okta,
+  '/fortimonitor': fortimonitor,
   '/review': review,
-  '/execute': execute,
   '/results': results
 };
 
 function currentHash() {
-  const h = window.location.hash || '#/start';
+  const h = window.location.hash || '#/okta';
   return h.startsWith('#') ? h.slice(1) : h;
 }
 
@@ -78,13 +80,13 @@ function navigate(to) {
 }
 
 function canEnter(route) {
-  if (route === '/start') return true;
+  if (route === '/okta') return true;
+  if (route === '/fortimonitor') return !!store.idpParsed;
   if (route === '/review') {
-    return !!store.fortimonitorBaseUrl
-      && !!store.urlFragment
-      && !!store.idpParsed;
+    return !!store.idpParsed
+      && !!store.fortimonitorBaseUrl
+      && !!store.urlFragment;
   }
-  if (route === '/execute') return canEnter('/review');
   if (route === '/results') return !!store.runResult;
   return false;
 }
@@ -94,8 +96,8 @@ function render() {
   const route = currentHash();
   const mod = routes[route];
   if (!mod || !canEnter(route)) {
-    if (route !== '/start') navigate('/start');
-    else mountRoute('/start', start);
+    if (route !== '/okta') navigate('/okta');
+    else mountRoute('/okta', okta);
     return;
   }
   mountRoute(route, mod);
