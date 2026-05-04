@@ -379,6 +379,20 @@ test('hero flow: add fabric connection (4 frames)', async ({ extensionContext, e
   await stubV2Api(extensionContext);
   await stubFabricCreate(extensionContext);
 
+  // FMN-142: enable the three Beta tiles so the popup phase of the
+  // hero GIF reflects the full 11-tile toolkit, matching the README's
+  // Screenshots gallery (FMN-141). The wizard frames don't render the
+  // popup, so they're unaffected.
+  const heroSw = extensionContext.serviceWorkers()[0]
+    ?? await extensionContext.waitForEvent('serviceworker', { timeout: 10_000 });
+  await heroSw.evaluate(async () => {
+    await chrome.storage.local.set({
+      'fm:sdwanReportEnabled': true,
+      'fm:bpaAuditEnabled': true,
+      'fm:ssoConfigEnabled': true
+    });
+  });
+
   // ---- Frame 1: Popup launcher ----
   // Render the popup at hero viewport so the @media (min-width: 500px) rule
   // engages: popup centers as a card on the backdrop, matching the wizard
