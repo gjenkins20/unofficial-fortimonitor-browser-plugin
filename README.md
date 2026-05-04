@@ -64,6 +64,22 @@ Click the extension's toolbar icon to open the launcher and pick a tool. Each to
 
 <img src="docs/marketing/screenshots/tool-find-servers.png" alt="Find Servers tool entry view" width="900">
 
+### Beta tools
+
+Hidden by default; opt in via popup → ⚙ Settings → Experimental tools.
+
+**Best-Practice Assessment** (Beta)
+
+<img src="docs/marketing/screenshots/tool-bpa-audit.png" alt="Best-Practice Assessment tool entry view" width="900">
+
+**SD-WAN Report** (Beta)
+
+<img src="docs/marketing/screenshots/tool-sdwan-report.png" alt="SD-WAN Report tool entry view" width="900">
+
+**Generate SSO Configuration** (Beta)
+
+<img src="docs/marketing/screenshots/tool-sso-config.png" alt="Generate SSO Configuration tool entry view" width="900">
+
 </details>
 
 ### Cross-tool handoff

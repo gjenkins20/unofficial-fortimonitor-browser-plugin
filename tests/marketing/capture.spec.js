@@ -42,13 +42,32 @@ async function seedConfiguredState(extensionContext) {
   await sw.evaluate(async () => {
     await chrome.storage.local.set({
       'panopta.apiKey': 'marketing-fake-key',
-      'claude.apiKey': 'marketing-fake-claude-key'
+      'claude.apiKey': 'marketing-fake-claude-key',
+      // FMN-141: storage persists across tests in the worker-scoped
+      // extension context. Explicitly default Beta-tile flags to off so
+      // each test starts from the always-on tile set; the popup-launcher
+      // test re-enables them right before its capture.
+      'fm:sdwanReportEnabled': false,
+      'fm:bpaAuditEnabled': false,
+      'fm:ssoConfigEnabled': false
     });
   });
 }
 
 test('popup launcher (configured state)', async ({ extensionContext, extensionId }) => {
   await seedConfiguredState(extensionContext);
+  // FMN-141: enable the three Beta tiles so the launcher capture
+  // reflects the full toolkit. Scoped to this test (not seedConfiguredState)
+  // so the hero flow's frame 01 keeps showing the always-on tile set.
+  const sw = extensionContext.serviceWorkers()[0]
+    ?? await extensionContext.waitForEvent('serviceworker', { timeout: 10_000 });
+  await sw.evaluate(async () => {
+    await chrome.storage.local.set({
+      'fm:sdwanReportEnabled': true,
+      'fm:bpaAuditEnabled': true,
+      'fm:ssoConfigEnabled': true
+    });
+  });
   const page = await extensionContext.newPage();
   // Popup CSS pins .popup width to 360px. Use a viewport just wider so
   // there's no horizontal whitespace from the body, and tall enough so
@@ -154,7 +173,14 @@ const TOOLS = [
   { name: 'add-fabric-connection', path: 'src/ui/fabric-connection/app.html',          ready: '#app-root *' },
   { name: 'manage-attributes',     path: 'src/ui/attribute-management/app.html',       ready: '#app-root *' },
   { name: 'manage-templates',      path: 'src/ui/template-management/app.html',        ready: '#app-root *' },
-  { name: 'server-id-lookup',      path: 'src/ui/server-lookup/app.html',              ready: '#app-root *' }
+  { name: 'server-id-lookup',      path: 'src/ui/server-lookup/app.html',              ready: '#app-root *' },
+  // FMN-141: Beta-flagged tool entry-state captures. Tool routes render
+  // unconditionally when navigated to directly (the per-tool storage
+  // flag only gates popup-tile visibility), so these need no extra
+  // seeding beyond seedConfiguredState.
+  { name: 'bpa-audit',             path: 'src/ui/bpa-audit/app.html',                  ready: '#app-root *' },
+  { name: 'sdwan-report',          path: 'src/ui/sdwan-report/app.html',               ready: '#app-root *' },
+  { name: 'sso-config',            path: 'src/ui/sso-config/app.html',                 ready: '#app-root *' }
   // Ask AI and Find Servers are captured separately below:
   //   - Ask AI: needs a sample conversation injected (empty chat is a
   //     weak marketing shot).
