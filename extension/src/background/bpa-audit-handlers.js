@@ -93,19 +93,20 @@ export async function runBpaAudit({
     const err = new Error('aborted'); err.name = 'AbortError'; throw err;
   }
 
+  // FMN-144: resolve the tenant origin once, up front, so it's available
+  // both to the frontend fetcher (FMN-144) and to the result blob for
+  // viewer-side link construction (FMN-147). frontendOrigin is a string
+  // OR an async thunk returning one; both forms supported.
+  let resolvedOrigin;
+  if (typeof frontendOrigin === 'function') {
+    try { resolvedOrigin = await frontendOrigin(); } catch { resolvedOrigin = undefined; }
+  } else if (typeof frontendOrigin === 'string' && frontendOrigin.length > 0) {
+    resolvedOrigin = frontendOrigin;
+  }
+
   if (includeFrontend) {
     const baseFetch = frontendFetch ?? globalThis.fetch.bind(globalThis);
     const wrappedFetch = createBpaFetch(baseFetch);
-    // FMN-144: route through the SW's tenant-origin resolver. Sessions
-    // live on the regional my.<region>.fortimonitor.com host, not the
-    // federation URL. frontendOrigin is a string OR a thunk returning
-    // one; if absent, BpaFrontendFetcher falls back to its default.
-    let resolvedOrigin;
-    if (typeof frontendOrigin === 'function') {
-      try { resolvedOrigin = await frontendOrigin(); } catch { resolvedOrigin = undefined; }
-    } else if (typeof frontendOrigin === 'string' && frontendOrigin.length > 0) {
-      resolvedOrigin = frontendOrigin;
-    }
     const frontendFetcher = new BpaFrontendFetcher({
       fetch: wrappedFetch,
       origin: resolvedOrigin,
@@ -167,6 +168,9 @@ export async function runBpaAudit({
     deep,
     max_servers: maxServers,
     include_frontend: includeFrontend,
+    // FMN-147: viewer uses this to build links to the FortiMonitor
+    // template-edit pages. Null when no resolver is wired.
+    tenant_origin: resolvedOrigin ?? null,
     inventory,
     analysis
   };
