@@ -63,20 +63,14 @@ function buildDetail(u, frontend, now) {
   const created = u?.created ?? 'Unknown';
   let contactMethods = 0;
   if (Array.isArray(u?.contact_info)) contactMethods = u.contact_info.length;
-  // FMN-135: when frontend (session-auth) data is present, prefer the
-  // EditUser page's last_login / created_on values over the v2 fields
-  // and the manual-entry fallback. v2 API exposes neither field; the
-  // join key (userKeyOf) must match the fetcher's keying or every row
-  // silently falls back to manual.
+  // FMN-135 / FMN-143: source last_login + created_on from the
+  // session-auth frontend fetcher. v2 API exposes neither field. The
+  // join key (userKeyOf) must match the fetcher's keying. Empty string
+  // when unavailable; the viewer renders 'N/A' (no manual fallback).
   const idStr = userKeyOf(u);
   const fe = frontend && idStr && frontend[idStr] ? frontend[idStr] : null;
   const last_login = fe?.last_login ?? '';
-  const last_login_manual = !fe?.last_login;
   const created_on_frontend = fe?.created_on ?? '';
-  // Active Assessment is derived from last_login age - 'Active' (<=90d),
-  // 'Stale' (91..365d), 'Inactive' (>365d), 'Never' (no login on record).
-  // Used to be a manual-entry annotation; now sourced from extension
-  // data per FMN-135 scope refinement (operator, 2026-05-01).
   return {
     name,
     email,
@@ -85,7 +79,6 @@ function buildDetail(u, frontend, now) {
     contact_methods: contactMethods,
     id: u?.id ?? idStr ?? '?',
     last_login,
-    last_login_manual,
     roles: Array.isArray(u?.roles) ? u.roles : [],
     active_assessment: deriveActiveAssessment(last_login || null, now)
   };

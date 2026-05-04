@@ -33,20 +33,35 @@ test('getTabs: returns the 11 tabs FMN-133 spec calls for, in order', () => {
   }
 });
 
-test('User Activity tab: last_login is dual-mode, active_assessment is derived (FMN-135)', () => {
+test('User Activity tab: last_login is read-only with N/A fallback, active_assessment is derived (FMN-143)', () => {
   const ua = getTabs().find((t) => t.id === 'user-activity');
   const cols = ua.sections[0].columns;
   const lastLogin = cols.find((c) => c.key === 'last_login');
   const assess = cols.find((c) => c.key === 'active_assessment');
-  // Last Login keeps its annotation (manual fallback for v2-only audits).
-  assert.ok(lastLogin?.annotation);
-  assert.equal(lastLogin.annotation.storeKey, 'user_last_login');
-  assert.equal(typeof lastLogin.annotation.rowKey, 'function');
-  // Active Assessment is now derived data, not a manual annotation
-  // (FMN-135 scope refinement, 2026-05-01).
+  // Last Login is read-only - no annotation / manual-entry input.
+  assert.equal(lastLogin?.annotation, undefined);
+  assert.equal(typeof lastLogin.getter, 'function');
+  // When the analyzer produced an empty last_login (frontend fetch
+  // unavailable), the column renders 'N/A' rather than blank or '-'.
+  assert.equal(lastLogin.getter({ last_login: '' }), 'N/A');
+  assert.equal(lastLogin.getter({ last_login: null }), 'N/A');
+  assert.equal(lastLogin.getter({ last_login: '2026-04-30 12:00 UTC' }), '2026-04-30 12:00 UTC');
+  // Active Assessment is derived (no annotation).
   assert.equal(assess?.annotation, undefined);
   assert.equal(typeof assess.getter, 'function');
   assert.equal(assess.header, 'Active Assessment');
+});
+
+test('User Activity tab: Active Assessment legend section enumerates all five buckets (FMN-143)', () => {
+  const ua = getTabs().find((t) => t.id === 'user-activity');
+  const legend = ua.sections.find((s) => s.label === 'Active Assessment Legend');
+  assert.ok(legend, 'expected legend section');
+  const rows = legend.rows();
+  const statuses = rows.map((r) => r.status);
+  assert.deepEqual(statuses, ['Active', 'Stale', 'Inactive', 'Never', 'Unknown']);
+  for (const r of rows) {
+    assert.ok(r.definition && r.definition.length > 0, `${r.status} should have a definition`);
+  }
 });
 
 // =============================================================================
@@ -92,36 +107,43 @@ test('buildTabCsv: Raw Counts tab emits a section header + table', () => {
   assert.match(csv, /^"Fabric Connections","1"$/m);
 });
 
-test('buildTabCsv: User Activity surfaces manual last_login annotation + derived active_assessment', () => {
+test('buildTabCsv: User Activity renders N/A for missing last_login, real value when populated (FMN-143)', () => {
   const tab = getTabs().find((t) => t.id === 'user-activity');
   const ctx = {
     inventory: {},
     analysis: {
       users: {
-        total: 1,
-        details: [{
-          id: 7, name: 'Alice', email: 'a@x', created: '2024-01-01',
-          contact_methods: 1, last_login: '', last_login_manual: true,
-          active_assessment: 'Never', created_on: ''
-        }],
+        total: 2,
+        details: [
+          {
+            id: 7, name: 'Alice', email: 'a@x', created: '2024-01-01',
+            contact_methods: 1, last_login: '', active_assessment: 'Never', created_on: ''
+          },
+          {
+            id: 8, name: 'Bob', email: 'b@x', created: '2024-02-01',
+            contact_methods: 2, last_login: '2026-04-30 12:00 UTC',
+            active_assessment: 'Active', created_on: 'Jan 1, 2024'
+          }
+        ],
         primary_user: null,
         issues: []
       }
     },
     customer: '',
-    annotations: {
-      user_last_login: { '7': '2026-04-15' }
-    }
+    annotations: {}
   };
   const csv = buildTabCsv(tab, ctx);
-  // Last Login dropped its "(manual)" suffix because the column can also
-  // be populated by the frontend fetcher; Active Assessment dropped it
-  // in FMN-135 because it is now derived from last_login age.
   assert.match(csv, /Last Login/);
-  assert.match(csv, /Active Assessment(?!\s*\(manual\))/);
-  // Manual-input value lands in last_login (annotation) and the derived
-  // value lands in active_assessment (getter).
-  assert.match(csv, /"Alice","a@x","2024-01-01","","1","2026-04-15","Never"/);
+  assert.match(csv, /Active Assessment/);
+  // Alice has no last_login - N/A in the column.
+  assert.match(csv, /"Alice","a@x","2024-01-01","","1","N\/A","Never"/);
+  // Bob has a last_login - verbatim value, no N/A.
+  assert.match(csv, /"Bob","b@x","2024-02-01","Jan 1, 2024","2","2026-04-30 12:00 UTC","Active"/);
+  // Legend section appears in the CSV with a comment header + table.
+  assert.match(csv, /# Active Assessment Legend/);
+  assert.match(csv, /"Status","Definition"/);
+  assert.match(csv, /"Active","Logged in within the last 90 days\."/);
+  assert.match(csv, /"Never","No login on record, or upstream data unavailable\."/);
 });
 
 test('buildTabCsv: empty sections without alwaysIncludeHeader are skipped from the output', () => {

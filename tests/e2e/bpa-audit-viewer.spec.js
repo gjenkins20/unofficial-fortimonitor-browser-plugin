@@ -55,22 +55,16 @@ test.describe('BPA Audit viewer harness (FMN-133)', () => {
     await page.close();
   });
 
-  test('User Activity tab exposes annotation inputs that persist values into the store', async ({ extensionContext }) => {
+  test('User Activity tab has no manual-entry inputs (FMN-143: read-only display)', async ({ extensionContext }) => {
     const page = await extensionContext.newPage();
     await page.goto(HARNESS_URL);
 
     await page.locator('button[data-tab="user-activity"]').click();
+    // FMN-143: the Last Login column was previously a dual-mode cell that
+    // fell back to a manual <input>. Operator confirmed the column is
+    // read-only: no annotation inputs anywhere on the tab.
     const inputs = page.locator('[data-test="tab-pane"] input.annotation-input');
-    await expect(inputs.first()).toBeAttached();
-    await inputs.first().fill('2026-04-15');
-    await expect(inputs.first()).toHaveValue('2026-04-15');
-
-    // Switch tabs + back. The harness rebuilds the section on tab change,
-    // so input values come from the store, not the DOM. Round-trip.
-    await page.locator('button[data-tab="raw-counts"]').click();
-    await page.locator('button[data-tab="user-activity"]').click();
-    await expect(page.locator('[data-test="tab-pane"] input.annotation-input').first())
-      .toHaveValue('2026-04-15');
+    expect(await inputs.count()).toBe(0);
     await page.close();
   });
 
@@ -85,36 +79,45 @@ test.describe('BPA Audit viewer harness (FMN-133)', () => {
     await page.close();
   });
 
-  test('User Activity tab: FMN-135 frontend data renders Last Login + Created On (UI) read-only when populated', async ({ extensionContext }) => {
+  test('User Activity tab: Last Login renders value when populated, N/A when missing (FMN-143)', async ({ extensionContext }) => {
     const page = await extensionContext.newPage();
     await page.goto(HARNESS_URL);
     await page.locator('button[data-tab="user-activity"]').click();
 
-    // The Created On (UI) column header should exist.
     await expect(page.locator('[data-test="tab-pane"] th', { hasText: 'Created On (UI)' })).toBeVisible();
 
-    // Locate the Users table (first table on the tab) and find Alice's row.
     const table = page.locator('[data-test="tab-pane"] table.review-table').first();
     const aliceRow = table.locator('tr', { hasText: 'a@acme.com' });
 
     // Column order: 1=Name, 2=Email, 3=Created(API), 4=Created On(UI),
     // 5=Contact Methods, 6=Last Login, 7=Active Assessment. Last Login
-    // (6) renders as plain text when the frontend fetcher populated it.
-    // Active Assessment (7) is now a derived read-only cell (FMN-135
-    // scope refinement, 2026-05-01) - no more annotation input.
+    // is now read-only (FMN-143).
     const aliceLastLoginCell = aliceRow.locator('td:nth-child(6)');
     await expect(aliceLastLoginCell).toContainText('2026-04-30 12:34:56 UTC');
-    expect(await aliceLastLoginCell.locator('input.annotation-input').count()).toBe(0);
     const aliceCreatedOnCell = aliceRow.locator('td:nth-child(4)');
     await expect(aliceCreatedOnCell).toContainText('Jan 1, 2024');
-    // Active Assessment column is read-only (derived from last_login age).
-    expect(await aliceRow.locator('td:nth-child(7) input.annotation-input').count()).toBe(0);
 
-    // The third user (Alice/alice2 - no frontend datum) should still
-    // expose an annotation input in the Last Login cell.
+    // alice2 has no frontend datum: cell renders 'N/A', no input.
     const alice2Row = table.locator('tr', { hasText: 'alice2@acme.com' });
-    expect(await alice2Row.locator('td:nth-child(6) input.annotation-input').count()).toBe(1);
+    const alice2LastLoginCell = alice2Row.locator('td:nth-child(6)');
+    await expect(alice2LastLoginCell).toHaveText('N/A');
+    expect(await alice2LastLoginCell.locator('input').count()).toBe(0);
 
+    await page.close();
+  });
+
+  test('User Activity tab: Active Assessment legend section renders all five buckets (FMN-143)', async ({ extensionContext }) => {
+    const page = await extensionContext.newPage();
+    await page.goto(HARNESS_URL);
+    await page.locator('button[data-tab="user-activity"]').click();
+
+    const legendHeading = page.locator('[data-test="tab-pane"] h3', { hasText: 'Active Assessment Legend' });
+    await expect(legendHeading).toBeVisible();
+
+    const tabPane = page.locator('[data-test="tab-pane"]');
+    for (const status of ['Active', 'Stale', 'Inactive', 'Never', 'Unknown']) {
+      await expect(tabPane.locator('td', { hasText: new RegExp(`^${status}$`) }).first()).toBeVisible();
+    }
     await page.close();
   });
 
