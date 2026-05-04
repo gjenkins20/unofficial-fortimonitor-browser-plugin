@@ -74,6 +74,7 @@ export async function runBpaAudit({
   maxServers = 0,
   includeFrontend = false,
   frontendFetch,
+  frontendOrigin,
   signal,
   onProgress
 } = {}) {
@@ -95,8 +96,19 @@ export async function runBpaAudit({
   if (includeFrontend) {
     const baseFetch = frontendFetch ?? globalThis.fetch.bind(globalThis);
     const wrappedFetch = createBpaFetch(baseFetch);
+    // FMN-144: route through the SW's tenant-origin resolver. Sessions
+    // live on the regional my.<region>.fortimonitor.com host, not the
+    // federation URL. frontendOrigin is a string OR a thunk returning
+    // one; if absent, BpaFrontendFetcher falls back to its default.
+    let resolvedOrigin;
+    if (typeof frontendOrigin === 'function') {
+      try { resolvedOrigin = await frontendOrigin(); } catch { resolvedOrigin = undefined; }
+    } else if (typeof frontendOrigin === 'string' && frontendOrigin.length > 0) {
+      resolvedOrigin = frontendOrigin;
+    }
     const frontendFetcher = new BpaFrontendFetcher({
       fetch: wrappedFetch,
+      origin: resolvedOrigin,
       signal,
       onProgress: (evt) => onProgress?.({ phase: 'frontend:event', ...evt })
     });
@@ -190,6 +202,7 @@ function summarizeResult(result) {
 export function createBpaAuditHandlers({
   events = {},
   getClient,
+  resolveOrigin,
   storage
 } = {}) {
   const emit = events.emit ?? (() => {});
@@ -213,6 +226,7 @@ export function createBpaAuditHandlers({
           deep: Boolean(payload?.deep),
           maxServers: Number.isFinite(payload?.maxServers) ? payload.maxServers : 0,
           includeFrontend: Boolean(payload?.includeFrontend),
+          frontendOrigin: resolveOrigin,
           signal: ac.signal,
           onProgress: (evt) => emit('bpa:progress', evt)
         });
