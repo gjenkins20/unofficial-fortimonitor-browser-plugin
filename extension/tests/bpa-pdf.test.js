@@ -24,7 +24,7 @@ function fixtureCtx({ annotations = {} } = {}) {
       users: {
         details: [
           { id: 1, name: 'Alice', email: 'a@x', created: '2024-01-01',
-            contact_methods: 1, last_login: '', last_login_manual: true,
+            contact_methods: 1, last_login: '',
             active_assessment: 'Never', created_on: '' }
         ],
         issues: []
@@ -78,11 +78,12 @@ test('buildPrintableHtml: customer name is HTML-escaped to defend against inject
   assert.match(html, /Acme &lt;script&gt;alert\(1\)&lt;\/script&gt; &amp; Co/);
 });
 
-test('buildPrintableHtml: User Activity manual annotation flows into the printable cell (csvCellValue parity)', () => {
-  const ctx = fixtureCtx({ annotations: { user_last_login: { '1': '2026-04-15' } } });
+test('buildPrintableHtml: User Activity Last Login renders N/A when missing (FMN-143)', () => {
+  const ctx = fixtureCtx();
   const html = buildPrintableHtml(ctx);
-  // The Last Login annotation should appear in the rendered table.
-  assert.match(html, /2026-04-15/);
+  // Alice has no last_login - cell value is 'N/A' (not a manual-input
+  // annotation - that path was removed in FMN-143).
+  assert.match(html, /<td[^>]*>N\/A<\/td>/);
 });
 
 test('buildPrintableHtml: empty section without alwaysIncludeHeader still renders its emptyText hint', () => {

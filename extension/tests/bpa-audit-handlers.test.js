@@ -216,7 +216,8 @@ test('runBpaAudit: includeFrontend walks EditUser pages and enriches inventory (
   const alice = r.analysis.users.details.find((d) => d.id === 42);
   assert.ok(alice, 'analyzer detail for user 42 missing');
   assert.equal(alice.last_login, '2026-04-30 12:34:56 UTC');
-  assert.equal(alice.last_login_manual, false);
+  // FMN-143: last_login_manual was removed (no manual fallback).
+  assert.equal(alice.last_login_manual, undefined);
   assert.equal(alice.created_on, 'Jan 1, 2024');
   // Frontend lifecycle events fired (both the user phase and the
   // template phase fire on every includeFrontend run).

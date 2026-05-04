@@ -297,20 +297,14 @@ const TABS = [
         { key: 'created_on', header: 'Created On (UI)', getter: (r) => r.created_on || '' },
         { key: 'methods', header: 'Contact Methods',getter: (r) => r.contact_methods },
         {
-          // FMN-135: column is now dual-mode. When the frontend fetcher
-          // populated last_login (UI toggle on, EditUser walked
-          // successfully), the cell renders as plain text from the
-          // getter. When it didn't, the cell falls back to the original
-          // manual-annotation input behavior, so engineers can still
-          // hand-fill the column for v2-only audits.
+          // FMN-143: read-only display of upstream last_login. When
+          // the frontend fetcher could not populate the field, render
+          // 'N/A'. Manual-entry input was deliberately removed (operator
+          // 2026-05-04): the cell mirrors source-of-truth data and
+          // never accepts hand-typed values.
           key: 'last_login',
           header: 'Last Login',
-          getter: (r) => r.last_login,
-          annotation: {
-            storeKey: 'user_last_login',
-            rowKey: (r) => String(r.id),
-            skipIf: (r) => Boolean(r.last_login && !r.last_login_manual)
-          }
+          getter: (r) => (r.last_login ? r.last_login : 'N/A')
         },
         {
           // FMN-135: derived from last_login age (Active / Stale /
@@ -321,6 +315,20 @@ const TABS = [
         }
       ],
       rows: ({ analysis }) => analysis?.users?.details ?? []
+    }, {
+      label: 'Active Assessment Legend',
+      columns: [
+        { key: 'status',     header: 'Status',     getter: (r) => r.status },
+        { key: 'definition', header: 'Definition', getter: (r) => r.definition }
+      ],
+      rows: () => [
+        { status: 'Active',   definition: 'Logged in within the last 90 days.' },
+        { status: 'Stale',    definition: 'Last login was 91 to 365 days ago.' },
+        { status: 'Inactive', definition: 'Last login was more than 365 days ago.' },
+        { status: 'Never',    definition: 'No login on record, or upstream data unavailable.' },
+        { status: 'Unknown',  definition: 'Last login value present but not parseable as a date.' }
+      ],
+      alwaysIncludeHeader: true
     }, {
       label: 'Issues',
       columns: [

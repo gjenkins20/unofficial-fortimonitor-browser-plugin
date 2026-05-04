@@ -246,12 +246,12 @@ test('analyzeUsers: builds detail rows, picks primary by contact methods, flags 
   assert.ok(!r.issues.some((s) => /duplicate user/i.test(s)),
     'duplicate-user issue should not be emitted');
   assert.ok(r.issues.some((s) => /2 user\(s\) have no contact methods/.test(s)));
-  // FMN-135: with no frontend_user_data, last_login is empty and remains
-  // an engineer-fillable manual annotation. Active assessment derives
-  // from last_login age - 'Never' when there is no value.
+  // FMN-143: with no frontend_user_data, last_login is empty.
+  // Active assessment derives from last_login age - 'Never' when no value.
+  // The viewer renders 'N/A' for empty last_login (no manual fallback).
   for (const d of r.details) {
     assert.equal(d.last_login, '');
-    assert.equal(d.last_login_manual, true);
+    assert.equal(d.last_login_manual, undefined);
     assert.equal(d.created_on, '');
     assert.equal(d.active_assessment, 'Never');
   }
@@ -272,16 +272,17 @@ test('analyzeUsers: merges frontend_user_data when present (FMN-135)', () => {
   });
   const byName = Object.fromEntries(r.details.map((d) => [d.name, d]));
   assert.equal(byName.Alice.last_login, '2026-04-30 12:00 UTC');
-  assert.equal(byName.Alice.last_login_manual, false);
   assert.equal(byName.Alice.created_on, 'Jan 1, 2024');
-  // Bob falls back to manual since no frontend datum was provided.
+  // Bob: no frontend datum. last_login empty (viewer renders 'N/A').
   assert.equal(byName.Bob.last_login, '');
-  assert.equal(byName.Bob.last_login_manual, true);
   assert.equal(byName.Bob.created_on, '');
-  // Carol: frontend datum exists but last_login is null - manual fallback.
+  // Carol: frontend datum exists but last_login is null.
   assert.equal(byName.Carol.last_login, '');
-  assert.equal(byName.Carol.last_login_manual, true);
   assert.equal(byName.Carol.created_on, 'Mar 1, 2024');
+  // FMN-143: last_login_manual flag was removed (no manual fallback).
+  for (const d of r.details) {
+    assert.equal(d.last_login_manual, undefined);
+  }
 });
 
 test('analyzeUsers: keys frontend_user_data by userKeyOf, not raw u.id (FMN-135 QA)', () => {
@@ -306,7 +307,7 @@ test('analyzeUsers: keys frontend_user_data by userKeyOf, not raw u.id (FMN-135 
   });
   assert.equal(r.details.length, 1);
   assert.equal(r.details[0].last_login, '2025-07-30 17:27 PDT');
-  assert.equal(r.details[0].last_login_manual, false);
+  assert.equal(r.details[0].last_login_manual, undefined);
   assert.equal(r.details[0].created_on, '2025-07-30 17:27 PDT');
   assert.equal(r.details[0].id, '308609');
 });
