@@ -130,14 +130,14 @@ test('SDWAN_REPORT_ENABLED_KEY uses the sdwan-prefixed storage key', () => {
   assert.equal(SDWAN_REPORT_ENABLED_KEY, 'fm:sdwanReportEnabled');
 });
 
-// ---------- FMN-133: BPA Audit visibility flag ----------
+// ---------- FMN-133 / FMN-145: BPA Audit visibility flag ----------
 
-test('isBpaAuditEnabled defaults to false on empty storage (tile hidden until opt-in)', async () => {
+test('isBpaAuditEnabled defaults to true on empty storage (FMN-145: visible by default)', async () => {
   const storage = createStorageMock();
-  assert.equal(await isBpaAuditEnabled(storage), false);
+  assert.equal(await isBpaAuditEnabled(storage), true);
 });
 
-test('setBpaAuditEnabled round-trips a true write', async () => {
+test('setBpaAuditEnabled round-trips both true and false writes', async () => {
   const storage = createStorageMock();
   await setBpaAuditEnabled(true, storage);
   assert.equal(await isBpaAuditEnabled(storage), true);
@@ -146,9 +146,9 @@ test('setBpaAuditEnabled round-trips a true write', async () => {
   assert.equal(await isBpaAuditEnabled(storage), false);
 });
 
-test('isBpaAuditEnabled fails closed (returns false) on storage error', async () => {
+test('isBpaAuditEnabled fails open (returns true) on storage error (FMN-145)', async () => {
   const brokenStorage = { async get() { throw new Error('storage unavailable'); } };
-  assert.equal(await isBpaAuditEnabled(brokenStorage), false);
+  assert.equal(await isBpaAuditEnabled(brokenStorage), true);
 });
 
 test('BPA_AUDIT_ENABLED_KEY uses the bpa-prefixed storage key', () => {

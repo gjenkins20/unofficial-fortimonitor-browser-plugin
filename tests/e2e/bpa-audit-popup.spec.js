@@ -17,28 +17,27 @@ import { test, expect } from './fixtures.js';
 import { seedApiKey } from './seed-api-key.js';
 
 test.describe('BPA Audit popup wiring (FMN-133)', () => {
-  test('Tile is hidden by default; appears when BPA Audit toggle is enabled', async ({ extensionContext, extensionId }) => {
+  test('Tile is visible by default; toggle hides and re-shows it (FMN-145)', async ({ extensionContext, extensionId }) => {
     const page = await extensionContext.newPage();
     await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
 
     const tile = page.locator('.tool-card[data-tool="bpa-audit"]');
     await expect(tile).toBeAttached();
-    await expect(tile).toBeHidden();
+    await expect(tile).toBeVisible();
 
     await page.locator('#settings-toggle').click();
     const toggle = page.locator('#bpa-audit-toggle');
     await expect(toggle).toBeAttached();
-    await expect(toggle).not.toBeChecked();
-
-    await toggle.check();
     await expect(toggle).toBeChecked();
-    await page.locator('#settings-back').click();
-    await expect(tile).toBeVisible();
 
-    await page.locator('#settings-toggle').click();
     await toggle.uncheck();
     await page.locator('#settings-back').click();
     await expect(tile).toBeHidden();
+
+    await page.locator('#settings-toggle').click();
+    await toggle.check();
+    await page.locator('#settings-back').click();
+    await expect(tile).toBeVisible();
 
     await page.close();
   });
@@ -71,10 +70,7 @@ test.describe('BPA Audit popup wiring (FMN-133)', () => {
 
     const page = await extensionContext.newPage();
     await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
-    await page.locator('#settings-toggle').click();
-    await page.locator('#bpa-audit-toggle').check();
-    await page.locator('#settings-back').click();
-
+    // FMN-145: tile is visible by default now; no toggle dance needed.
     const tile = page.locator('.tool-card[data-tool="bpa-audit"]');
     await expect(tile).toBeVisible();
 
