@@ -211,19 +211,20 @@ export async function setSdwanReportEnabled(enabled, storage = defaultStorage())
 }
 
 /**
- * Read the BPA-Audit-enabled flag. Returns false by default so the
- * tile stays hidden until the operator opts in via Settings. Storage
- * errors fail closed so a transient blip never silently surfaces a
- * tool the operator hasn't asked for.
+ * Read the BPA-Audit-enabled flag. Defaults to true (FMN-145) since the
+ * Best-Practice Assessment is no longer Beta-gated; the toggle remains
+ * available so operators can hide the tile on shared installs. Storage
+ * errors fail open to the default (visible).
  *
  * @param {{ get: (key: string) => Promise<Record<string, any>> }} [storage]
  */
 export async function isBpaAuditEnabled(storage = defaultStorage()) {
   try {
     const data = await storage.get(BPA_AUDIT_ENABLED_KEY);
-    return Boolean(data?.[BPA_AUDIT_ENABLED_KEY]);
+    const v = data?.[BPA_AUDIT_ENABLED_KEY];
+    return v === undefined ? true : Boolean(v);
   } catch {
-    return false;
+    return true;
   }
 }
 

@@ -568,8 +568,23 @@ export function renderViewer({ root, store }) {
     annotations: store.annotations
   });
 
-  // Top action bar: combined-report download (ZIP + PDF)
+  // Top action bar: combined-report download (ZIP + PDF) + per-tab CSV
+  // (FMN-145: CSV consolidated into the toolbar; previously sat next
+  // to the active tab's H2 title which read as disjoint).
   const filenameStatus = h('span', { class: 'muted', style: 'font-size:0.85rem;margin-left:0.6rem;' }, '');
+  // Closure-tracked active tab so the CSV button always targets the
+  // tab the operator is currently viewing.
+  let activeTab = TABS[0];
+  const csvBtn = h('button', {
+    class: 'btn btn-secondary',
+    'data-test': 'download-tab-csv'
+  }, 'Download CSV');
+  csvBtn.addEventListener('click', () => {
+    const csv = buildTabCsv(activeTab, ctx(), { customer });
+    const fname = tabFilename(activeTab, customer);
+    downloadBlob(fname, 'text/csv', csv);
+    filenameStatus.textContent = `Saved ${fname}`;
+  });
   const combinedBtn = h('button', {
     class: 'btn btn-primary',
     'data-test': 'download-combined-report'
@@ -607,9 +622,10 @@ export function renderViewer({ root, store }) {
   },
     combinedBtn,
     pdfBtn,
+    csvBtn,
     coverLabel,
     h('span', { class: 'muted', style: 'font-size:0.85rem;' },
-      'ZIP packs all 11 tabs as CSVs plus a README. PDF opens the print dialog - choose "Save as PDF" as destination.'
+      'ZIP packs all 11 tabs as CSVs plus a README. PDF opens the print dialog - choose "Save as PDF" as destination. CSV exports the active tab.'
     ),
     filenameStatus
   ));
@@ -638,6 +654,7 @@ export function renderViewer({ root, store }) {
 
   function activate(id) {
     const tab = TABS.find((t) => t.id === id) ?? TABS[0];
+    activeTab = tab;
     for (const [otherId, btn] of tabButtons) {
       const isActive = otherId === tab.id;
       btn.style.background = isActive ? '#1f4e79' : '#fff';
@@ -645,7 +662,7 @@ export function renderViewer({ root, store }) {
       btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
     }
     pane.innerHTML = '';
-    pane.appendChild(renderTab(tab, ctx, store, filenameStatus, customer));
+    pane.appendChild(renderTab(tab, ctx, store));
   }
 
   root.appendChild(strip);
@@ -655,25 +672,13 @@ export function renderViewer({ root, store }) {
   return () => { /* no-op teardown - DOM lives inside container */ };
 }
 
-function renderTab(tab, ctx, store, filenameStatus, customer) {
+function renderTab(tab, ctx, store) {
   const wrap = h('div', {});
   const ctxNow = ctx();
 
-  // Header bar with title + Download CSV
-  const downloadBtn = h('button', { class: 'btn btn-secondary' }, 'Download CSV');
-  downloadBtn.addEventListener('click', () => {
-    const csv = buildTabCsv(tab, ctx(), { customer });
-    const fname = tabFilename(tab, customer);
-    downloadBlob(fname, 'text/csv', csv);
-    filenameStatus.textContent = `Saved ${fname}`;
-  });
-
-  wrap.appendChild(h('div', {
-    style: 'display:flex;align-items:center;justify-content:space-between;margin-bottom:0.6rem;'
-  },
-    h('h2', { style: 'margin:0;' }, tab.label),
-    downloadBtn
-  ));
+  // FMN-145: Download CSV button moved to the top toolbar where it
+  // sits beside ZIP + PDF; the tab body now leads with just the title.
+  wrap.appendChild(h('h2', { style: 'margin:0 0 0.6rem;' }, tab.label));
 
   // Optional global filter input - applies to every section's first column
   const filterInput = h('input', {
@@ -733,7 +738,12 @@ function renderTable(section, rows, store) {
   }
   table.appendChild(thead);
   table.appendChild(tbody);
-  return table;
+  // FMN-145: wrap each table in its own horizontal-scroll container.
+  // The shared .mockup-frame has overflow:hidden + max-width:820px, so
+  // wide tables (User Activity at 7 columns is the worst case) clip
+  // their rightmost columns silently. The wrap lets the table reach
+  // its intrinsic width and scroll horizontally inside the frame.
+  return h('div', { class: 'review-table-wrap' }, table);
 }
 
 function renderCell(col, row, store) {

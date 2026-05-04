@@ -30,8 +30,10 @@
   h1 { margin: 0 0 0.5rem; }
   .heartbeat { color: #888; font-size: 0.85rem; }
   .frame { border: 1px solid #ccc; border-radius: 6px; padding: 1rem; margin-top: 1rem; }
-  .review-table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
-  .review-table th, .review-table td { border: 1px solid #ddd; padding: 0.3rem 0.5rem; text-align: left; vertical-align: top; }
+  .review-table-wrap { overflow-x: auto; margin-bottom: 16px; }
+  .review-table { border-collapse: collapse; min-width: 100%; font-size: 0.9rem; }
+  .review-table-wrap > .review-table { margin-bottom: 0; }
+  .review-table th, .review-table td { border: 1px solid #ddd; padding: 0.3rem 0.5rem; text-align: left; vertical-align: top; white-space: nowrap; }
   .review-table th { background: #f3f5f9; }
   .subhead { font-size: 1rem; margin-top: 0.3rem; }
   .muted { color: #777; }

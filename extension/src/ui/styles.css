@@ -1003,12 +1003,19 @@ tr.hidden-scope { display: none; }
   margin-bottom: 16px;
 }
 
-.review-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
+.review-table-wrap {
+  overflow-x: auto;
   margin-bottom: 16px;
 }
+.review-table {
+  /* min-width:100% (not width:100%) so tables grow to their intrinsic
+     width when content is wider than the container; the wrapper then
+     scrolls horizontally instead of clipping (FMN-145). */
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.review-table-wrap > .review-table { margin-bottom: 0; }
 .review-table th, .review-table td {
   text-align: left;
   padding: 6px 8px;

@@ -185,6 +185,37 @@ test.describe('BPA Audit viewer harness (FMN-133)', () => {
     await page.close();
   });
 
+  test('User Activity tab: tables wrap in horizontal-scroll container that activates when content exceeds pane (FMN-145)', async ({ extensionContext }) => {
+    const page = await extensionContext.newPage();
+    await page.goto(HARNESS_URL);
+    await page.locator('button[data-tab="user-activity"]').click();
+
+    // Each table is now wrapped in .review-table-wrap so wide content
+    // becomes horizontally scrollable instead of clipping at the
+    // .mockup-frame edge in production.
+    const wraps = page.locator('[data-test="tab-pane"] .review-table-wrap');
+    expect(await wraps.count()).toBeGreaterThan(0);
+
+    // Each wrap has overflow-x: auto so a narrow viewport produces a
+    // scrollable area (scrollWidth > clientWidth).
+    await page.evaluate(() => { document.getElementById('harness-host').style.maxWidth = '400px'; });
+    const overflows = await page.evaluate(() => {
+      const els = Array.from(document.querySelectorAll('[data-test="tab-pane"] .review-table-wrap'));
+      return els.map((el) => ({
+        scrollWidth: el.scrollWidth,
+        clientWidth: el.clientWidth,
+        overflowX: getComputedStyle(el).overflowX
+      }));
+    });
+    expect(overflows.length).toBeGreaterThan(0);
+    expect(overflows.every((o) => o.overflowX === 'auto' || o.overflowX === 'scroll')).toBe(true);
+    // At least one wrap (the Users table) should be wider than the
+    // narrowed container, confirming scroll is engaged rather than
+    // clipped.
+    expect(overflows.some((o) => o.scrollWidth > o.clientWidth)).toBe(true);
+    await page.close();
+  });
+
   test('Filter input restricts visible rows in the active tab', async ({ extensionContext }) => {
     const page = await extensionContext.newPage();
     await page.goto(HARNESS_URL);
