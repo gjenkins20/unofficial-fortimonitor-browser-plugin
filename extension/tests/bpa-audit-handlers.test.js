@@ -228,6 +228,80 @@ test('runBpaAudit: includeFrontend walks EditUser pages and enriches inventory (
   assert.ok(phases.includes('frontend-templates:done'));
 });
 
+test('runBpaAudit: frontendOrigin (string) routes session-auth fetches to the resolved tenant host (FMN-144)', async () => {
+  const REGIONAL = 'https://my.us02.fortimonitor.com';
+  const seenUrls = [];
+  const v2Fetch = createFetchMock(async (url) => {
+    if (/\/v2\/user\b/.test(url)) {
+      return listResponse('user_list', [{
+        id: 7, name: 'Pat', contact_info: [{ url: 'https://api2.panopta.com/v2/contact/55/contact_info/1' }]
+      }]);
+    }
+    if (/\/server_attribute_type/.test(url)) return listResponse('server_attribute_type_list', []);
+    return jsonResponse({});
+  });
+  const frontendFetch = createFetchMock(async (url) => {
+    seenUrls.push(url);
+    if (/\/users\/users\/get_edit_user_data/.test(url)) {
+      return jsonRes({ success: true, data: {
+        user_id: 7, contact_id: 55,
+        config_data: { last_login: '2026-04-30 11:00 UTC', created_on: 'Jan 1, 2024' }
+      }});
+    }
+    if (/\/report\/get_monitoring_config_data/.test(url)) {
+      return jsonRes({ success: true, categories: { added: [], detected: [] } });
+    }
+    throw new Error('unexpected frontend URL: ' + url);
+  });
+  const client = new PanoptaClient({ apiKey: 'k', fetch: v2Fetch });
+  const r = await runBpaAudit({
+    client,
+    includeFrontend: true,
+    frontendFetch,
+    frontendOrigin: REGIONAL
+  });
+  // Every frontend URL must hit the resolved regional origin, never
+  // the federation URL.
+  assert.ok(seenUrls.length > 0, 'frontend phase should have made requests');
+  for (const u of seenUrls) {
+    assert.ok(u.startsWith(REGIONAL), `expected URL on ${REGIONAL}, got ${u}`);
+    assert.equal(u.startsWith('https://fortimonitor.forticloud.com'), false);
+  }
+  // Data still flows through (sanity).
+  assert.equal(r.analysis.users.details[0].last_login, '2026-04-30 11:00 UTC');
+});
+
+test('runBpaAudit: frontendOrigin (thunk) is awaited and applied (FMN-144)', async () => {
+  const REGIONAL = 'https://my.us03.fortimonitor.com';
+  let resolverCalls = 0;
+  const v2Fetch = createFetchMock(async (url) => {
+    if (/\/v2\/user\b/.test(url)) return listResponse('user_list', [
+      { id: 1, name: 'A', contact_info: [{ url: 'https://api2.panopta.com/v2/contact/10/contact_info/1' }] }
+    ]);
+    if (/\/server_attribute_type/.test(url)) return listResponse('server_attribute_type_list', []);
+    return jsonResponse({});
+  });
+  const frontendFetch = createFetchMock(async (url) => {
+    if (/\/users\/users\/get_edit_user_data/.test(url)) {
+      assert.ok(url.startsWith(REGIONAL), `expected ${REGIONAL}, got ${url}`);
+      return jsonRes({ success: true, data: { user_id: 1, contact_id: 10,
+        config_data: { last_login: '2026-04-30 09:00 UTC', created_on: 'x' } } });
+    }
+    if (/\/report\/get_monitoring_config_data/.test(url)) {
+      return jsonRes({ success: true, categories: { added: [], detected: [] } });
+    }
+    throw new Error('unexpected frontend URL: ' + url);
+  });
+  const client = new PanoptaClient({ apiKey: 'k', fetch: v2Fetch });
+  await runBpaAudit({
+    client,
+    includeFrontend: true,
+    frontendFetch,
+    frontendOrigin: async () => { resolverCalls += 1; return REGIONAL; }
+  });
+  assert.equal(resolverCalls, 1, 'thunk should be awaited exactly once');
+});
+
 test('runBpaAudit: includeFrontend always walks template configs (FMN-135 follow-up)', async () => {
   const v2Fetch = createFetchMock(async (url) => {
     if (/\/v2\/user\b/.test(url)) return listResponse('user_list', []);

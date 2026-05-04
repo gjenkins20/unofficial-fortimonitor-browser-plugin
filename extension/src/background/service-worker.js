@@ -45,7 +45,7 @@ const handlers = {
   ...createServerLookupHandlers({ events: { emit } }),
   ...createServerSearchHandlers({ events: { emit } }),
   ...createSdwanReportHandlers({ events: { emit } }),
-  ...createBpaAuditHandlers({ events: { emit } }),
+  ...createBpaAuditHandlers({ events: { emit }, resolveOrigin }),
   ...createClaudeChatHandlers({ events: { emit } })
 };
 

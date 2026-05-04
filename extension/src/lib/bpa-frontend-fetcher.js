@@ -209,8 +209,9 @@ export class BpaFrontendFetcher {
         // unhelpful "session expired" errors.
         if (idx === 0 && /not logged in|session|auth/i.test(reason)) {
           throw new Error(
-            'FortiMonitor session not detected. Open https://fortimonitor.forticloud.com '
-            + 'in another tab and log in, then retry the assessment.'
+            `FortiMonitor session not detected at ${this.origin}. `
+            + 'Open your tenant URL (e.g. https://my.<region>.fortimonitor.com) '
+            + 'in another tab, sign in, then retry the assessment.'
           );
         }
       }
@@ -262,8 +263,9 @@ export class BpaFrontendFetcher {
         this._emit({ type: 'frontend-template-error', index: idx + 1, total: list.length, id: tid, error: reason });
         if (idx === 0 && /not logged in|session|auth/i.test(reason)) {
           throw new Error(
-            'FortiMonitor session not detected. Open https://fortimonitor.forticloud.com '
-            + 'in another tab and log in, then retry the assessment.'
+            `FortiMonitor session not detected at ${this.origin}. `
+            + 'Open your tenant URL (e.g. https://my.<region>.fortimonitor.com) '
+            + 'in another tab, sign in, then retry the assessment.'
           );
         }
       }
