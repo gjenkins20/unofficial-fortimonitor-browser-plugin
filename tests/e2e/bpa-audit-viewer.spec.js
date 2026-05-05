@@ -55,15 +55,16 @@ test.describe('BPA Audit viewer harness (FMN-133)', () => {
     await page.close();
   });
 
-  test('User Activity tab has no manual-entry inputs (FMN-143: read-only display)', async ({ extensionContext }) => {
+  test('User Activity tab has no manual-entry inputs (FMN-143 / FMN-148 regression guard)', async ({ extensionContext }) => {
     const page = await extensionContext.newPage();
     await page.goto(HARNESS_URL);
 
     await page.locator('button[data-tab="user-activity"]').click();
-    // FMN-143: the Last Login column was previously a dual-mode cell that
-    // fell back to a manual <input>. Operator confirmed the column is
-    // read-only: no annotation inputs anywhere on the tab.
-    const inputs = page.locator('[data-test="tab-pane"] input.annotation-input');
+    // FMN-143 dropped the Last Login manual <input>; FMN-148 removed
+    // the entire annotation infrastructure. Guard against any future
+    // re-introduction of editable cells inside the data tables (the
+    // tab's filter <input type="search"> lives outside .review-table).
+    const inputs = page.locator('[data-test="tab-pane"] table.review-table input');
     expect(await inputs.count()).toBe(0);
     await page.close();
   });

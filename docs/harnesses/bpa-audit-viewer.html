@@ -39,7 +39,6 @@
   .muted { color: #777; }
   .btn { padding: 0.35rem 0.8rem; border: 1px solid #1f4e79; border-radius: 4px; background: #fff; cursor: pointer; }
   .btn-secondary { background: #fff; color: #1f4e79; }
-  .annotation-input { font: inherit; }
 </style>
 </head>
 <body>
@@ -195,8 +194,7 @@
     customerName: 'Acme Corp (harness)',
     deep: true,
     maxServers: 0,
-    runResult: { inventory, analysis, deep: true },
-    annotations: {}
+    runResult: { inventory, analysis, deep: true }
   };
 
   renderViewer({ root: document.getElementById('harness-host'), store });
