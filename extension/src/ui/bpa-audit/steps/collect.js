@@ -257,7 +257,14 @@ export function render({ container, store, navigate, events }) {
         // FMN-135 follow-up: always-on - the BPA's user-activity value
         // depends on this data and the operator is by definition logged
         // into FortiMonitor when running the wizard.
-        includeFrontend: true
+        includeFrontend: true,
+        // FMN-146: section selection from the Configure step. Default
+        // ["all"] preserves today's full-report behavior; non-all values
+        // are captured by the SW but ignored for routing in this ticket
+        // (FMN-149 is the umbrella that wires the scoping logic).
+        sections: Array.isArray(store.sections) && store.sections.length > 0
+          ? store.sections
+          : ['all']
       });
       // The run handler stages the multi-megabyte result in chrome.storage.session
       // and returns a small handle. Pull the full payload back via a separate

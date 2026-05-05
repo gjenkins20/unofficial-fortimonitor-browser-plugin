@@ -25,6 +25,7 @@ import { BpaFetcher, createBpaFetch } from '../lib/bpa-fetcher.js';
 import { PanoptaClient } from '../lib/panopta-client.js';
 import { runAllAnalyzers } from '../lib/bpa-analyzers/index.js';
 import { BpaFrontendFetcher } from '../lib/bpa-frontend-fetcher.js';
+import { sanitize as sanitizeSections } from '../ui/bpa-audit/section-selection.js';
 
 export const BPA_RUN_KEY = 'bpa.lastRun';
 
@@ -73,12 +74,17 @@ export async function runBpaAudit({
   deep = false,
   maxServers = 0,
   includeFrontend = false,
+  sections,
   frontendFetch,
   frontendOrigin,
   signal,
   onProgress
 } = {}) {
   if (!client) throw new TypeError('runBpaAudit: client is required');
+  // FMN-146: capture-and-stage only. The selection round-trips back to the
+  // viewer via result.sections; the fetcher / analyzer / viewer cuts that
+  // actually act on it land with FMN-149's downstream commits.
+  const stagedSections = sanitizeSections(sections);
   const startedAt = new Date().toISOString();
 
   onProgress?.({ phase: 'collect:start', deep, maxServers });
@@ -168,6 +174,7 @@ export async function runBpaAudit({
     deep,
     max_servers: maxServers,
     include_frontend: includeFrontend,
+    sections: stagedSections,
     // FMN-147: viewer uses this to build links to the FortiMonitor
     // template-edit pages. Null when no resolver is wired.
     tenant_origin: resolvedOrigin ?? null,
@@ -230,6 +237,7 @@ export function createBpaAuditHandlers({
           deep: Boolean(payload?.deep),
           maxServers: Number.isFinite(payload?.maxServers) ? payload.maxServers : 0,
           includeFrontend: Boolean(payload?.includeFrontend),
+          sections: payload?.sections,
           frontendOrigin: resolveOrigin,
           signal: ac.signal,
           onProgress: (evt) => emit('bpa:progress', evt)

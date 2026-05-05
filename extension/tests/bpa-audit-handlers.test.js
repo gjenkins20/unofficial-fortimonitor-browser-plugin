@@ -145,6 +145,39 @@ test('runBpaAudit: returns inventory + analysis on a tiny baseline fetch', async
   assert.ok(phases.includes('analyze:done'));
 });
 
+test('runBpaAudit: stages sanitized result.sections (default ["all"]) (FMN-146)', async () => {
+  const fetch = buildBaselineFetch();
+  const client = new PanoptaClient({ apiKey: 'k', fetch });
+  const r = await runBpaAudit({ client });
+  assert.deepEqual(r.sections, ['all']);
+});
+
+test('runBpaAudit: passes through analyzer-scoped sections selection (FMN-146)', async () => {
+  const fetch = buildBaselineFetch();
+  const client = new PanoptaClient({ apiKey: 'k', fetch });
+  const r = await runBpaAudit({ client, sections: ['user-activity'] });
+  assert.deepEqual(r.sections, ['user-activity']);
+});
+
+test('runBpaAudit: invalid sections values are sanitized to ["all"] (FMN-146)', async () => {
+  const fetch = buildBaselineFetch();
+  const client = new PanoptaClient({ apiKey: 'k', fetch });
+  const r = await runBpaAudit({ client, sections: ['bogus', 'also-bogus'] });
+  assert.deepEqual(r.sections, ['all']);
+});
+
+test('createBpaAuditHandlers: bpa:run-audit forwards payload.sections to the staged result (FMN-146)', async () => {
+  const storage = createStorageMock();
+  const handlers = createBpaAuditHandlers({
+    events: { emit: () => {} },
+    getClient: async () => new PanoptaClient({ apiKey: 'k', fetch: buildBaselineFetch() }),
+    storage
+  });
+  await handlers['bpa:run-audit']({ sections: ['template-recommendations', 'monitoring-policy'] });
+  const stored = storage.__raw()[BPA_RUN_KEY];
+  assert.deepEqual(stored.sections, ['template-recommendations', 'monitoring-policy']);
+});
+
 test('runBpaAudit: 401 from any endpoint propagates as PanoptaError(auth)', async () => {
   const fetch = createFetchMock(async () => errorResponse(401));
   const client = new PanoptaClient({ apiKey: 'bad', fetch });

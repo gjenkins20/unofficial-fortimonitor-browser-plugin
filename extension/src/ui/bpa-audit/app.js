@@ -7,6 +7,7 @@ import * as collect from './steps/collect.js';
 import * as analyze from './steps/analyze.js';
 import * as review from './steps/review.js';
 import { onEvent } from '../../lib/messaging.js';
+import { defaultSelection } from './section-selection.js';
 
 document.documentElement.dataset.toolMode = 'bpa-audit';
 
@@ -15,6 +16,7 @@ const store = {
   customerName: '',
   deep: false,
   maxServers: 0,
+  sections: defaultSelection(),    // FMN-146: ["all"] or analyzer-scoped subset
 
   // Steps 2-3 - filled as the run progresses
   runResult: null,       // { inventory, analysis, started_at, finished_at, deep, max_servers }

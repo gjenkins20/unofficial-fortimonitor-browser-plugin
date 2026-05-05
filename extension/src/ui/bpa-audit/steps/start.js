@@ -7,8 +7,23 @@
 // expensive option - clearly labelled as such.
 
 import { h, titleBar } from '../../../lib/dom.js';
+import {
+  ALL_SECTION_ID,
+  defaultSelection,
+  nextSectionsSelection,
+  sanitize as sanitizeSections
+} from '../section-selection.js';
 
 const TOOL_NAME = 'Best-Practice Assessment';
+
+const SECTION_PILLS = [
+  { id: ALL_SECTION_ID, label: 'All' },
+  { id: 'incidents', label: 'Incidents' },
+  { id: 'user-activity', label: 'User Activity' },
+  { id: 'instance-analysis', label: 'Instances' },
+  { id: 'template-recommendations', label: 'Templates' },
+  { id: 'monitoring-policy', label: 'Monitoring Policy' }
+];
 
 export function reportBreadcrumbs(active) {
   const steps = [
@@ -81,6 +96,47 @@ export function render({ container, store, navigate }) {
   // depends on last_login and the operator is by definition logged in
   // when running this tool. No checkbox is needed.
 
+  // Section selector (FMN-146)
+  body.appendChild(h('h3', { class: 'subhead', style: 'margin-top:1rem;' }, 'Sections'));
+  body.appendChild(h('p', { class: 'muted', style: 'font-size:0.85rem;margin:0 0 0.4rem;' },
+    'Default is the full report. Click a single section to scope the run; ',
+    'shift-click to combine sections. Cross-cutting sections (Executive Summary, ',
+    'Feature Utilization, Recommendations, Recommended Labs, Raw Counts) require ',
+    'a full run and are not standalone-deliverable.'
+  ));
+  let selectedSections = sanitizeSections(store.sections ?? defaultSelection());
+  const pillRow = h('div', {
+    class: 'bpa-section-pills',
+    role: 'group',
+    'aria-label': 'Sections',
+    'data-test': 'bpa-section-pills'
+  });
+  const pillButtons = new Map();
+  for (const pill of SECTION_PILLS) {
+    const btn = h('button', {
+      type: 'button',
+      class: 'bpa-pill',
+      'data-section': pill.id,
+      'data-test': `bpa-section-pill-${pill.id}`
+    }, pill.label);
+    btn.addEventListener('click', (event) => {
+      selectedSections = nextSectionsSelection(selectedSections, pill.id, { shift: event.shiftKey });
+      paintPills();
+    });
+    pillRow.appendChild(btn);
+    pillButtons.set(pill.id, btn);
+  }
+  function paintPills() {
+    const active = new Set(selectedSections);
+    for (const [id, btn] of pillButtons) {
+      const on = active.has(id);
+      btn.classList.toggle('bpa-pill-active', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+  }
+  paintPills();
+  body.appendChild(pillRow);
+
   // Max-servers cap
   body.appendChild(h('h3', { class: 'subhead', style: 'margin-top:1rem;' }, 'Max servers (optional)'));
   body.appendChild(h('p', { class: 'muted', style: 'font-size:0.85rem;margin:0 0 0.4rem;' },
@@ -108,6 +164,7 @@ export function render({ container, store, navigate }) {
     store.customerName = nameInput.value.trim();
     store.deep = Boolean(deepInput.checked);
     store.includeFrontend = true;     // always-on (FMN-135 follow-up)
+    store.sections = sanitizeSections(selectedSections);
     const m = Number(maxInput.value);
     store.maxServers = Number.isFinite(m) && m > 0 ? Math.floor(m) : 0;
     store.runResult = null;

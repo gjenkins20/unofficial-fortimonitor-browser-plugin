@@ -95,4 +95,70 @@ test.describe('BPA Audit popup wiring (FMN-133)', () => {
     await appPage.close();
     await page.close();
   });
+
+  test('Configure step shows the section-selector pill row with [All] selected by default (FMN-146)', async ({ extensionContext, extensionId }) => {
+    const appPage = await extensionContext.newPage();
+    await appPage.goto(`chrome-extension://${extensionId}/src/ui/bpa-audit/app.html#/start`);
+
+    const pillRow = appPage.locator('[data-test="bpa-section-pills"]');
+    await expect(pillRow).toBeVisible();
+
+    // All six pills present, in order.
+    const expected = [
+      ['all', 'All'],
+      ['incidents', 'Incidents'],
+      ['user-activity', 'User Activity'],
+      ['instance-analysis', 'Instances'],
+      ['template-recommendations', 'Templates'],
+      ['monitoring-policy', 'Monitoring Policy']
+    ];
+    for (const [id, label] of expected) {
+      const pill = appPage.locator(`[data-test="bpa-section-pill-${id}"]`);
+      await expect(pill).toBeVisible();
+      await expect(pill).toHaveText(label);
+    }
+
+    // Default: [All] is the only active pill.
+    await expect(appPage.locator('[data-test="bpa-section-pill-all"]')).toHaveAttribute('aria-pressed', 'true');
+    for (const [id] of expected.slice(1)) {
+      await expect(appPage.locator(`[data-test="bpa-section-pill-${id}"]`)).toHaveAttribute('aria-pressed', 'false');
+    }
+
+    await appPage.close();
+  });
+
+  test('Clicking an analyzer pill selects only that section; clicking [All] resets (FMN-146)', async ({ extensionContext, extensionId }) => {
+    const appPage = await extensionContext.newPage();
+    await appPage.goto(`chrome-extension://${extensionId}/src/ui/bpa-audit/app.html#/start`);
+
+    const allPill = appPage.locator('[data-test="bpa-section-pill-all"]');
+    const templatesPill = appPage.locator('[data-test="bpa-section-pill-template-recommendations"]');
+    const policyPill = appPage.locator('[data-test="bpa-section-pill-monitoring-policy"]');
+
+    await templatesPill.click();
+    await expect(allPill).toHaveAttribute('aria-pressed', 'false');
+    await expect(templatesPill).toHaveAttribute('aria-pressed', 'true');
+    await expect(policyPill).toHaveAttribute('aria-pressed', 'false');
+
+    // Shift-click adds Monitoring Policy.
+    await policyPill.click({ modifiers: ['Shift'] });
+    await expect(templatesPill).toHaveAttribute('aria-pressed', 'true');
+    await expect(policyPill).toHaveAttribute('aria-pressed', 'true');
+
+    // Shift-click on Templates removes it.
+    await templatesPill.click({ modifiers: ['Shift'] });
+    await expect(templatesPill).toHaveAttribute('aria-pressed', 'false');
+    await expect(policyPill).toHaveAttribute('aria-pressed', 'true');
+
+    // Shift-click on Monitoring Policy is a no-op (would empty selection).
+    await policyPill.click({ modifiers: ['Shift'] });
+    await expect(policyPill).toHaveAttribute('aria-pressed', 'true');
+
+    // Clicking [All] resets.
+    await allPill.click();
+    await expect(allPill).toHaveAttribute('aria-pressed', 'true');
+    await expect(policyPill).toHaveAttribute('aria-pressed', 'false');
+
+    await appPage.close();
+  });
 });
