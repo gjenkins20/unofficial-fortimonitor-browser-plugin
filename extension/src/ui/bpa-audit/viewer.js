@@ -3,12 +3,9 @@
 //
 // Each tab declares a list of "sections" (a section is a labelled
 // table). The viewer renders each section as an HTML <table>; the
-// per-tab "Download CSV" button concatenates every section into a
-// single CSV with a comment-style section header line per section.
-//
-// Annotation columns (the operator-editable cells on User Activity)
-// flow into store.annotations.{storeKey}.{rowKey} and are exported
-// alongside the rest of the row.
+// "Download CSV" toolbar button concatenates every section of the
+// active tab into a single CSV with a comment-style section header
+// per section.
 
 import { h, downloadBlob } from '../../lib/dom.js';
 import { downloadZip } from '../../lib/zip.js';
@@ -50,7 +47,7 @@ export function buildTabCsv(tab, ctx, { generatedAt = new Date().toISOString(), 
     const cols = section.columns;
     lines.push(cols.map((c) => csvEscape(c.header)).join(','));
     for (const row of rows) {
-      const cells = cols.map((c) => csvEscape(csvCellValue(c, row, ctx)));
+      const cells = cols.map((c) => csvEscape(csvCellValue(c, row)));
       lines.push(cells.join(','));
     }
     lines.push('');
@@ -58,16 +55,7 @@ export function buildTabCsv(tab, ctx, { generatedAt = new Date().toISOString(), 
   return lines.join('\n');
 }
 
-export function csvCellValue(col, row, ctx) {
-  // FMN-135: when annotation.skipIf returns true for this row, treat the
-  // column as a plain getter column. This lets a column be both an
-  // editable manual-entry field (when no data) and a populated read-only
-  // field (when an upstream source filled it in).
-  const skipAnnotation = col.annotation?.skipIf?.(row) === true;
-  if (col.annotation && !skipAnnotation) {
-    const rowKey = col.annotation.rowKey(row);
-    return ctx.annotations?.[col.annotation.storeKey]?.[rowKey] ?? '';
-  }
+export function csvCellValue(col, row) {
   return col.getter ? col.getter(row) : '';
 }
 
@@ -90,7 +78,7 @@ export function tabFilename(tab, customer) {
  * Build the entries list for the combined ZIP download. One CSV per tab,
  * named so the operator can extract and rename without ambiguity.
  *
- * @param {object} ctx     viewer context: { inventory, analysis, customer, annotations }
+ * @param {object} ctx     viewer context: { inventory, analysis, customer }
  * @param {{ generatedAt?: string, customer?: string }} [options]
  * @returns {{ filename: string, content: string }[]}
  */
@@ -150,7 +138,7 @@ export function combinedZipFilename(customer) {
 //     filenamePart,    // CSV filename middle slot
 //     sections: [{
 //       label?,        // optional h3 + CSV section comment
-//       columns: [{ key, header, getter, annotation? }],
+//       columns: [{ key, header, getter }],
 //       rows: (ctx) => Row[],
 //       emptyText?,    // shown when rows is empty
 //       alwaysIncludeHeader?: bool   // include in CSV even when empty
@@ -552,21 +540,15 @@ export function getTabs() {
  *
  * @param {object} args
  * @param {HTMLElement} args.root
- * @param {object} args.store - the wizard store (provides annotations + customerName + runResult)
+ * @param {object} args.store - the wizard store (customerName + runResult)
  */
 export function renderViewer({ root, store }) {
   const result = store.runResult ?? {};
   const inventory = result.inventory ?? {};
   const analysis = result.analysis ?? {};
   const customer = store.customerName ?? '';
-  if (!store.annotations || typeof store.annotations !== 'object') store.annotations = {};
 
-  const ctx = () => ({
-    inventory,
-    analysis,
-    customer,
-    annotations: store.annotations
-  });
+  const ctx = () => ({ inventory, analysis, customer });
 
   // Top action bar: combined-report download (ZIP + PDF) + per-tab CSV
   // (FMN-145: CSV consolidated into the toolbar; previously sat next
@@ -708,7 +690,7 @@ function renderTab(tab, ctx, store) {
         sectionsWrap.appendChild(block);
         continue;
       }
-      block.appendChild(renderTable(section, rows, store));
+      block.appendChild(renderTable(section, rows));
       sectionsWrap.appendChild(block);
     }
   }
@@ -721,20 +703,18 @@ function renderTab(tab, ctx, store) {
 
 function sectionMatchesFilter(section, row, filter) {
   for (const col of section.columns) {
-    const v = col.annotation
-      ? '' // annotations aren't filtered (they're user-typed scratch)
-      : col.getter(row);
+    const v = col.getter(row);
     if (v != null && String(v).toLowerCase().includes(filter)) return true;
   }
   return false;
 }
 
-function renderTable(section, rows, store) {
+function renderTable(section, rows) {
   const table = h('table', { class: 'review-table' });
   const thead = h('thead', {}, h('tr', {}, ...section.columns.map((c) => h('th', {}, c.header))));
   const tbody = h('tbody', {});
   for (const row of rows) {
-    tbody.appendChild(h('tr', {}, ...section.columns.map((c) => renderCell(c, row, store))));
+    tbody.appendChild(h('tr', {}, ...section.columns.map((c) => renderCell(c, row))));
   }
   table.appendChild(thead);
   table.appendChild(tbody);
@@ -746,25 +726,7 @@ function renderTable(section, rows, store) {
   return h('div', { class: 'review-table-wrap' }, table);
 }
 
-function renderCell(col, row, store) {
-  const skipAnnotation = col.annotation?.skipIf?.(row) === true;
-  if (col.annotation && !skipAnnotation) {
-    const rowKey = col.annotation.rowKey(row);
-    const storeBucket = store.annotations[col.annotation.storeKey] ?? {};
-    if (!store.annotations[col.annotation.storeKey]) {
-      store.annotations[col.annotation.storeKey] = storeBucket;
-    }
-    const input = h('input', {
-      type: 'text',
-      class: 'annotation-input',
-      style: 'min-width:0;width:100%;padding:0.2rem 0.4rem;border:1px solid #ccc;border-radius:3px;'
-    });
-    input.value = storeBucket[rowKey] ?? '';
-    input.addEventListener('input', () => {
-      storeBucket[rowKey] = input.value;
-    });
-    return h('td', {}, input);
-  }
+function renderCell(col, row) {
   const v = col.getter ? col.getter(row) : '';
   return h('td', {}, fmtCell(v));
 }

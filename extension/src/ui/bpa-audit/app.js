@@ -19,12 +19,7 @@ const store = {
   // Steps 2-3 - filled as the run progresses
   runResult: null,       // { inventory, analysis, started_at, finished_at, deep, max_servers }
   runError: null,        // null | string
-  runCancelled: false,
-
-  // Step 4 - per-cell annotations the operator may edit on the User
-  // Activity tab. Persists across hash navigation in this tab; lost on
-  // tab close (per FMN-133 "in-session"). Shape: { [storeKey]: { [rowKey]: string } }.
-  annotations: {}
+  runCancelled: false
 };
 
 const eventListeners = new Set();

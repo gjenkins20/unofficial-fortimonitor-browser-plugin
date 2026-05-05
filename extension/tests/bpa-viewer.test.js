@@ -94,8 +94,7 @@ test('buildTabCsv: Raw Counts tab emits a section header + table', () => {
   const ctx = {
     inventory: { servers: [{ status: 'active' }], fabric_connections: [{}] },
     analysis: {},
-    customer: 'Acme',
-    annotations: {}
+    customer: 'Acme'
   };
   const csv = buildTabCsv(tab, ctx, { generatedAt: '2026-05-01T00:00:00Z', customer: 'Acme' });
   assert.match(csv, /^# Unofficial FortiMonitor Toolkit - Best-Practice Assessment/);
@@ -129,8 +128,7 @@ test('buildTabCsv: User Activity renders N/A for missing last_login, real value 
         issues: []
       }
     },
-    customer: '',
-    annotations: {}
+    customer: ''
   };
   const csv = buildTabCsv(tab, ctx);
   assert.match(csv, /Last Login/);
@@ -151,8 +149,7 @@ test('buildTabCsv: empty sections without alwaysIncludeHeader are skipped from t
   const csv = buildTabCsv(tab, {
     inventory: {},
     analysis: { incidents: { active_details: [] } },
-    customer: '',
-    annotations: {}
+    customer: ''
   });
   // Should still have the header preamble but no Active Incidents body rows.
   assert.match(csv, /# Tab: Incidents/);
@@ -176,8 +173,7 @@ test('buildCombinedZipEntries: emits one CSV per tab + a README, all 12 entries'
   const ctx = {
     inventory: { servers: [{ id: 1, status: 'active' }] },
     analysis: { incidents: { active_details: [], top_by_instance: [], top_by_type: [], noisy_metrics: [], trending: {} }, users: { details: [] } },
-    customer: 'Acme',
-    annotations: {}
+    customer: 'Acme'
   };
   const entries = buildCombinedZipEntries(ctx, { generatedAt: '2026-05-01T00:00:00Z', customer: 'Acme' });
   assert.equal(entries.length, getTabs().length + 1, 'expected 11 tabs + 1 README');
@@ -193,7 +189,7 @@ test('buildCombinedZipEntries: emits one CSV per tab + a README, all 12 entries'
 });
 
 test('buildCombinedZipEntries: README lists every tab with its label', () => {
-  const entries = buildCombinedZipEntries({ inventory: {}, analysis: {}, customer: '', annotations: {} });
+  const entries = buildCombinedZipEntries({ inventory: {}, analysis: {}, customer: '' });
   const readme = entries[0].content;
   for (const tab of getTabs()) {
     assert.match(readme, new RegExp(`${tab.filenamePart}\\.csv\\s+-\\s+${tab.label.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}`));
@@ -205,8 +201,7 @@ test('buildTabCsv: Recommendations tab serializes priority + text rows', () => {
   const csv = buildTabCsv(tab, {
     inventory: { contact_groups: [], compound_services: [] },
     analysis: {},
-    customer: 'Acme',
-    annotations: {}
+    customer: 'Acme'
   });
   assert.match(csv, /"Priority","Recommendation"/);
   assert.match(csv, /^"CRITICAL","Create Contact Groups: No groups exist to route alerts to teams\."$/m);

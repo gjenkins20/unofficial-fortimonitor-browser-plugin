@@ -11,9 +11,9 @@
 //   printReport(ctx, { customer, coverPage: false });
 //
 // The PDF mirrors the CSV exactly: same TABS model, same cell-value
-// resolution (including FMN-135 dual-mode annotations), same "skip
-// empty section unless alwaysIncludeHeader" rule. The only difference
-// is that CSV is per-tab and PDF is the combined report.
+// resolution, same "skip empty section unless alwaysIncludeHeader"
+// rule. The only difference is that CSV is per-tab and PDF is the
+// combined report.
 
 import { getTabs, csvCellValue } from '../ui/bpa-audit/viewer.js';
 
@@ -114,7 +114,7 @@ const PRINT_STYLES = `
 /**
  * Build a self-contained printable HTML document for the BPA report.
  *
- * @param {object} ctx - viewer context: { inventory, analysis, customer, annotations }
+ * @param {object} ctx - viewer context: { inventory, analysis, customer }
  * @param {object} [options]
  * @param {boolean} [options.coverPage=false] - emit a cover page + TOC before the sections
  * @param {string}  [options.customer='']     - customer name (escaped before insertion)
@@ -209,7 +209,7 @@ function renderTable(section, rows, ctx) {
   const head = section.columns.map((c) => `<th>${esc(c.header)}</th>`).join('');
   const body = rows.map((row) => {
     const cells = section.columns.map((col) => {
-      const value = csvCellValue(col, row, ctx);
+      const value = csvCellValue(col, row);
       const isEmpty = value === '' || value == null;
       const cls = isEmpty ? ' class="cell-empty"' : '';
       return `<td${cls}>${isEmpty ? '-' : esc(value)}</td>`;

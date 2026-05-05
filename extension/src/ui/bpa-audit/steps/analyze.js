@@ -83,7 +83,6 @@ export function render({ container, store, navigate }) {
     store.runResult = null;
     store.runError = null;
     store.runCancelled = false;
-    store.annotations = {};
     navigate('/start');
   });
 }

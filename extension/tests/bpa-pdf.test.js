@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { buildPrintableHtml, pdfFilename } from '../src/lib/bpa-pdf.js';
 import { getTabs } from '../src/ui/bpa-audit/viewer.js';
 
-function fixtureCtx({ annotations = {} } = {}) {
+function fixtureCtx() {
   return {
     inventory: {
       servers: [{ id: 1, status: 'active' }, { id: 2, status: 'active' }],
@@ -30,8 +30,7 @@ function fixtureCtx({ annotations = {} } = {}) {
         issues: []
       }
     },
-    customer: 'Acme',
-    annotations
+    customer: 'Acme'
   };
 }
 
