@@ -240,7 +240,11 @@ function findOverlapping(monitoringConfigs, nameById) {
       const overlap = intersectSize(m1, m2);
       const union = m1.size + m2.size - overlap;
       if (union > 0 && overlap / union >= OVERLAP_RATIO) {
+        // FMN-147: carry both template IDs so the viewer can show them
+        // and link to the template-edit page on the resolved tenant.
         results.push({
+          id_1: t1,
+          id_2: t2,
           template_1: nameById.get(t1) || `Template #${t1}`,
           template_2: nameById.get(t2) || `Template #${t2}`,
           overlap_pct: `${Math.round((overlap / union) * 100)}%`,

@@ -64,6 +64,89 @@ test('User Activity tab: Active Assessment legend section enumerates all five bu
   }
 });
 
+test('Template Recommendations: every analyzer-driven section exposes an ID column (FMN-147)', () => {
+  const tr = getTabs().find((t) => t.id === 'template-recommendations');
+  // Sections that target a single template (skip Manual Threshold
+  // Candidates - those rows are server-side patterns, not templates).
+  const idHavingLabels = [
+    'Custom Templates Without Thresholds',
+    'Custom Templates Cleanup Candidates',
+    'Default Templates (FortiMonitor stock)'
+  ];
+  for (const label of idHavingLabels) {
+    const s = tr.sections.find((x) => x.label === label);
+    assert.ok(s, `expected section "${label}"`);
+    const idCol = s.columns.find((c) => c.key === 'id');
+    assert.ok(idCol, `${label} should expose an ID column`);
+    assert.equal(idCol.header, 'ID');
+    assert.equal(idCol.getter({ id: '42' }), '42');
+  }
+});
+
+test('Template Recommendations: overlap section exposes BOTH template IDs (FMN-147)', () => {
+  const tr = getTabs().find((t) => t.id === 'template-recommendations');
+  const overlap = tr.sections.find((s) => s.label === 'Custom Template Overlap');
+  assert.ok(overlap);
+  const id1 = overlap.columns.find((c) => c.key === 'id_1');
+  const id2 = overlap.columns.find((c) => c.key === 'id_2');
+  assert.ok(id1 && id2, 'overlap should have id_1 and id_2 columns');
+  assert.equal(id1.header, 'ID 1');
+  assert.equal(id2.header, 'ID 2');
+  assert.equal(id1.getter({ id_1: '7', id_2: '8' }), '7');
+  assert.equal(id2.getter({ id_1: '7', id_2: '8' }), '8');
+});
+
+test('Template Recommendations: template-name columns carry a cellRenderer for HTML linking (FMN-147)', () => {
+  const tr = getTabs().find((t) => t.id === 'template-recommendations');
+  const labels = [
+    'Custom Templates Without Thresholds',
+    'Custom Templates Cleanup Candidates',
+    'Default Templates (FortiMonitor stock)',
+    'Custom Template Overlap'
+  ];
+  for (const label of labels) {
+    const s = tr.sections.find((x) => x.label === label);
+    const nameCols = s.columns.filter((c) => typeof c.cellRenderer === 'function');
+    assert.ok(nameCols.length > 0, `${label} should have at least one cellRenderer column`);
+    // CSV path still goes through getter (text-only); renderer is HTML-only.
+    for (const col of nameCols) {
+      assert.equal(typeof col.getter, 'function');
+    }
+  }
+});
+
+test('buildTabCsv: template ID column flows into CSV output (FMN-147)', () => {
+  const tab = getTabs().find((t) => t.id === 'template-recommendations');
+  const ctx = {
+    inventory: {},
+    analysis: {
+      templates: {
+        available: true,
+        default_only_templates: [
+          { id: '99', template: 'Custom-Linux', resource_count: 4, recommendation: 'Add thresholds.' }
+        ],
+        manual_threshold_candidates: [],
+        cleanup_candidates: [],
+        overlapping_templates: [
+          { id_1: '1', id_2: '2', template_1: 'A', template_2: 'B',
+            overlap_pct: '75%', shared_metrics: 3,
+            recommendation: 'Consider merging - 3/4 metrics overlap.' }
+        ],
+        default_templates: []
+      }
+    },
+    customer: '',
+    annotations: {}
+  };
+  const csv = buildTabCsv(tab, ctx);
+  // Without-Thresholds section: ID column header + value present.
+  assert.match(csv, /"ID","Template","Metric Count","Recommendation"/);
+  assert.match(csv, /^"99","Custom-Linux","4","Add thresholds\."$/m);
+  // Overlap section: both ID headers + values aligned with their templates.
+  assert.match(csv, /"ID 1","Template 1","ID 2","Template 2","Overlap %","Shared","Recommendation"/);
+  assert.match(csv, /^"1","A","2","B","75%","3","Consider merging - 3\/4 metrics overlap\."$/m);
+});
+
 // =============================================================================
 // CSV helpers
 // =============================================================================

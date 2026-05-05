@@ -646,6 +646,14 @@ test('analyzeTemplates: overlapping_templates flags Jaccard >= 0.6 (FMN-135)', (
   );
   assert.ok(ab, 'A vs B should overlap');
   assert.equal(ab.shared_metrics, 3);
+  // FMN-147: rows now carry both template IDs so the viewer can link
+  // to the FortiMonitor template-edit page.
+  const ids = new Set([String(ab.id_1), String(ab.id_2)]);
+  assert.deepEqual([...ids].sort(), ['1', '2']);
+  // template_1 / id_1 are aligned (same template) - i.e. swapping
+  // template_1 with id_1 stays consistent, not crossed.
+  if (ab.template_1 === 'A') assert.equal(String(ab.id_1), '1');
+  else assert.equal(String(ab.id_1), '2');
   // No A-vs-C or B-vs-C overlap.
   assert.equal(r.overlapping_templates.length, 1);
 });

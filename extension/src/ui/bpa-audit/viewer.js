@@ -145,6 +145,30 @@ export function combinedZipFilename(customer) {
 //     }]
 //   }
 
+/**
+ * FMN-147: build a link cell that points at the FortiMonitor template-edit
+ * page for the given numeric template id. Falls back to a plain text node
+ * when ctx.tenantOrigin is not available (no resolver wired, or the
+ * resolver returned nothing usable).
+ *
+ * Templates and servers share the /report/Instance/{id}/details namespace
+ * (verified via content-script PAGE_RE in template-edit-soft-refresh.js
+ * and CLAUDE.md FMN-71 input-format docs).
+ */
+function templateLinkCell(id, label, ctx) {
+  const text = String(label ?? '');
+  if (!ctx?.tenantOrigin || id == null || id === '') {
+    return text;
+  }
+  const href = `${ctx.tenantOrigin}/report/Instance/${encodeURIComponent(id)}/details`;
+  const a = document.createElement('a');
+  a.href = href;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  a.textContent = text;
+  return a;
+}
+
 const TABS = [
   // 1. Executive Summary -----------------------------------------------------
   {
@@ -380,7 +404,12 @@ const TABS = [
       {
         label: 'Custom Templates Without Thresholds',
         columns: [
-          { key: 'template',          header: 'Template',           getter: (r) => r.template },
+          { key: 'id',                header: 'ID',                 getter: (r) => r.id },
+          {
+            key: 'template', header: 'Template',
+            getter: (r) => r.template,
+            cellRenderer: (r, ctx) => templateLinkCell(r.id, r.template, ctx)
+          },
           { key: 'resource_count',    header: 'Metric Count',       getter: (r) => r.resource_count },
           { key: 'rec',               header: 'Recommendation',     getter: (r) => r.recommendation }
         ],
@@ -403,7 +432,12 @@ const TABS = [
       {
         label: 'Custom Templates Cleanup Candidates',
         columns: [
-          { key: 'template', header: 'Template',         getter: (r) => r.template },
+          { key: 'id',       header: 'ID',                getter: (r) => r.id },
+          {
+            key: 'template', header: 'Template',
+            getter: (r) => r.template,
+            cellRenderer: (r, ctx) => templateLinkCell(r.id, r.template, ctx)
+          },
           { key: 'unchanged', header: 'Unalerted Metrics', getter: (r) => r.unchanged_metrics },
           { key: 'total',    header: 'Total Metrics',    getter: (r) => r.total_metrics },
           { key: 'examples', header: 'Examples',         getter: (r) => r.examples },
@@ -415,8 +449,18 @@ const TABS = [
       {
         label: 'Custom Template Overlap',
         columns: [
-          { key: 't1',      header: 'Template 1',  getter: (r) => r.template_1 },
-          { key: 't2',      header: 'Template 2',  getter: (r) => r.template_2 },
+          { key: 'id_1',    header: 'ID 1',         getter: (r) => r.id_1 },
+          {
+            key: 't1', header: 'Template 1',
+            getter: (r) => r.template_1,
+            cellRenderer: (r, ctx) => templateLinkCell(r.id_1, r.template_1, ctx)
+          },
+          { key: 'id_2',    header: 'ID 2',         getter: (r) => r.id_2 },
+          {
+            key: 't2', header: 'Template 2',
+            getter: (r) => r.template_2,
+            cellRenderer: (r, ctx) => templateLinkCell(r.id_2, r.template_2, ctx)
+          },
           { key: 'overlap', header: 'Overlap %',   getter: (r) => r.overlap_pct },
           { key: 'shared',  header: 'Shared',      getter: (r) => r.shared_metrics },
           { key: 'rec',     header: 'Recommendation', getter: (r) => r.recommendation }
@@ -427,7 +471,12 @@ const TABS = [
       {
         label: 'Default Templates (FortiMonitor stock)',
         columns: [
-          { key: 'template', header: 'Template',     getter: (r) => r.template },
+          { key: 'id',       header: 'ID',          getter: (r) => r.id },
+          {
+            key: 'template', header: 'Template',
+            getter: (r) => r.template,
+            cellRenderer: (r, ctx) => templateLinkCell(r.id, r.template, ctx)
+          },
           { key: 'metric_count', header: 'Metrics',  getter: (r) => r.metric_count },
           { key: 'alerts_count', header: 'Alerts Set', getter: (r) => r.alerts_count },
           { key: 'rec',      header: 'Recommendation', getter: (r) => r.recommendation }
@@ -547,8 +596,14 @@ export function renderViewer({ root, store }) {
   const inventory = result.inventory ?? {};
   const analysis = result.analysis ?? {};
   const customer = store.customerName ?? '';
+  // FMN-147: tenant_origin is set by runBpaAudit so the viewer can
+  // build links to the FortiMonitor template-edit pages without
+  // re-resolving (the viewer is sync; resolver is async).
+  const tenantOrigin = typeof result.tenant_origin === 'string' && result.tenant_origin.length > 0
+    ? result.tenant_origin
+    : null;
 
-  const ctx = () => ({ inventory, analysis, customer });
+  const ctx = () => ({ inventory, analysis, customer, tenantOrigin });
 
   // Top action bar: combined-report download (ZIP + PDF) + per-tab CSV
   // (FMN-145: CSV consolidated into the toolbar; previously sat next
@@ -690,7 +745,7 @@ function renderTab(tab, ctx, store) {
         sectionsWrap.appendChild(block);
         continue;
       }
-      block.appendChild(renderTable(section, rows));
+      block.appendChild(renderTable(section, rows, ctxNow));
       sectionsWrap.appendChild(block);
     }
   }
@@ -709,12 +764,12 @@ function sectionMatchesFilter(section, row, filter) {
   return false;
 }
 
-function renderTable(section, rows) {
+function renderTable(section, rows, ctx) {
   const table = h('table', { class: 'review-table' });
   const thead = h('thead', {}, h('tr', {}, ...section.columns.map((c) => h('th', {}, c.header))));
   const tbody = h('tbody', {});
   for (const row of rows) {
-    tbody.appendChild(h('tr', {}, ...section.columns.map((c) => renderCell(c, row))));
+    tbody.appendChild(h('tr', {}, ...section.columns.map((c) => renderCell(c, row, ctx))));
   }
   table.appendChild(thead);
   table.appendChild(tbody);
@@ -726,7 +781,13 @@ function renderTable(section, rows) {
   return h('div', { class: 'review-table-wrap' }, table);
 }
 
-function renderCell(col, row) {
+function renderCell(col, row, ctx) {
+  // FMN-147: column-level cellRenderer wins over getter when present.
+  // Used for HTML-flavored cells (anchors); CSV + PDF still flow
+  // through the plain getter via csvCellValue. ctx exposes tenantOrigin.
+  if (typeof col.cellRenderer === 'function') {
+    return h('td', {}, col.cellRenderer(row, ctx ?? {}));
+  }
   const v = col.getter ? col.getter(row) : '';
   return h('td', {}, fmtCell(v));
 }

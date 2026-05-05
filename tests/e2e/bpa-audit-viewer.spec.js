@@ -217,6 +217,36 @@ test.describe('BPA Audit viewer harness (FMN-133)', () => {
     await page.close();
   });
 
+  test('Template Recommendations: ID columns and name-as-link to template-edit page on resolved tenant origin (FMN-147)', async ({ extensionContext }) => {
+    const page = await extensionContext.newPage();
+    await page.goto(HARNESS_URL);
+    await page.locator('button[data-tab="template-recommendations"]').click();
+
+    const tabPane = page.locator('[data-test="tab-pane"]');
+
+    // ID column appears in headers for each section that targets a single template.
+    const idHeaders = tabPane.locator('th', { hasText: /^ID$/ });
+    expect(await idHeaders.count()).toBeGreaterThanOrEqual(1);
+
+    // Overlap section gets two ID columns, one per template.
+    await expect(tabPane.locator('th', { hasText: 'ID 1' })).toBeVisible();
+    await expect(tabPane.locator('th', { hasText: 'ID 2' })).toBeVisible();
+
+    // Template-name cells render as anchors targeting the resolved
+    // tenant origin, not the federation URL.
+    const links = tabPane.locator('a[href*="/report/Instance/"]');
+    expect(await links.count()).toBeGreaterThan(0);
+    const sample = await links.first().getAttribute('href');
+    expect(sample).toMatch(/^https:\/\/my\.us02\.fortimonitor\.com\/report\/Instance\/\d+\/details$/);
+    expect(sample).not.toContain('fortimonitor.forticloud.com');
+
+    // Links open in a new tab.
+    expect(await links.first().getAttribute('target')).toBe('_blank');
+    expect(await links.first().getAttribute('rel')).toBe('noopener noreferrer');
+
+    await page.close();
+  });
+
   test('Filter input restricts visible rows in the active tab', async ({ extensionContext }) => {
     const page = await extensionContext.newPage();
     await page.goto(HARNESS_URL);
