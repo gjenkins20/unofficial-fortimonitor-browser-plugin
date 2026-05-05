@@ -666,11 +666,11 @@ function buildAugCard(aug, columns) {
   reset.appendChild(resetBtn);
   card.appendChild(reset);
 
-  renderColumnRows(list, aug.id, columns);
+  renderColumnRows(list, aug.id, columns, aug.reorderable !== false);
   return card;
 }
 
-function renderColumnRows(listEl, augId, columns) {
+function renderColumnRows(listEl, augId, columns, reorderable) {
   listEl.innerHTML = '';
   const reg = getRegistry(augId);
   if (!reg) return;
@@ -681,31 +681,38 @@ function renderColumnRows(listEl, augId, columns) {
     if (!meta) return;
     const row = document.createElement('div');
     row.className = 'col-row';
-    row.setAttribute('draggable', 'true');
+    if (reorderable) row.setAttribute('draggable', 'true');
     row.dataset.idx = String(idx);
     if (col.hidden) row.classList.add('is-hidden');
     if (meta.lockedVisible) row.classList.add('is-locked');
+    if (!reorderable) row.classList.add('is-fixed-order');
 
-    const handle = document.createElement('span');
-    handle.className = 'drag-handle';
-    handle.textContent = '⋮⋮';
-    handle.title = 'Drag to reorder';
+    if (reorderable) {
+      const handle = document.createElement('span');
+      handle.className = 'drag-handle';
+      handle.textContent = '⋮⋮';
+      handle.title = 'Drag to reorder';
 
-    const upBtn = document.createElement('button');
-    upBtn.className = 'icon-btn';
-    upBtn.type = 'button';
-    upBtn.textContent = '↑';
-    upBtn.title = 'Move up';
-    upBtn.disabled = idx === 0;
-    upBtn.addEventListener('click', () => moveColumn(augId, idx, idx - 1));
+      const upBtn = document.createElement('button');
+      upBtn.className = 'icon-btn';
+      upBtn.type = 'button';
+      upBtn.textContent = '↑';
+      upBtn.title = 'Move up';
+      upBtn.disabled = idx === 0;
+      upBtn.addEventListener('click', () => moveColumn(augId, idx, idx - 1));
 
-    const downBtn = document.createElement('button');
-    downBtn.className = 'icon-btn';
-    downBtn.type = 'button';
-    downBtn.textContent = '↓';
-    downBtn.title = 'Move down';
-    downBtn.disabled = idx === columns.length - 1;
-    downBtn.addEventListener('click', () => moveColumn(augId, idx, idx + 1));
+      const downBtn = document.createElement('button');
+      downBtn.className = 'icon-btn';
+      downBtn.type = 'button';
+      downBtn.textContent = '↓';
+      downBtn.title = 'Move down';
+      downBtn.disabled = idx === columns.length - 1;
+      downBtn.addEventListener('click', () => moveColumn(augId, idx, idx + 1));
+
+      row.appendChild(handle);
+      row.appendChild(upBtn);
+      row.appendChild(downBtn);
+    }
 
     const name = document.createElement('div');
     name.className = 'col-name';
@@ -721,13 +728,10 @@ function renderColumnRows(listEl, augId, columns) {
     eyeBtn.disabled = !!meta.lockedVisible;
     eyeBtn.addEventListener('click', () => toggleColumnVisibility(augId, idx));
 
-    row.appendChild(handle);
-    row.appendChild(upBtn);
-    row.appendChild(downBtn);
     row.appendChild(name);
     row.appendChild(eyeBtn);
 
-    attachRowDrag(row, augId);
+    if (reorderable) attachRowDrag(row, augId);
     listEl.appendChild(row);
   });
 }

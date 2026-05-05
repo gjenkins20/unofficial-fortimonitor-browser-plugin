@@ -271,3 +271,92 @@ test('getRegistry returns null for unknown augmentation', () => {
   assert.equal(getRegistry('nope'), null);
   assert.ok(getRegistry(AUG));
 });
+
+// FMN-123: hide/show registry for FortiMonitor's native DataTables columns.
+const NATIVE = 'instances-list-native';
+
+test('instances-list-native is registered with the right shape', () => {
+  const list = listAugmentations();
+  const native = list.find((a) => a.id === NATIVE);
+  assert.ok(native, 'instances-list-native should be registered');
+  assert.equal(native.context, '/report/ListServers');
+  assert.equal(native.label, 'Instances list (native columns)');
+  assert.equal(native.reorderable, false, 'reorder is gated on FMN-122 ColReorder probe');
+  assert.equal(native.columns.length, 6);
+  const ids = native.columns.map((c) => c.id);
+  assert.deepEqual(ids, [
+    'instance', 'parentGroup', 'alertTimeline', 'tags', 'agentVersion', 'heartbeat',
+  ]);
+});
+
+test('listAugmentations defaults reorderable to true for legacy entries', () => {
+  const list = listAugmentations();
+  const ipDns = list.find((a) => a.id === AUG);
+  assert.equal(ipDns.reorderable, true, 'legacy entry without explicit flag stays reorderable');
+});
+
+test('instances-list-native: defaultOrder is all visible', () => {
+  assert.deepEqual(defaultOrder(NATIVE), [
+    { id: 'instance', hidden: false },
+    { id: 'parentGroup', hidden: false },
+    { id: 'alertTimeline', hidden: false },
+    { id: 'tags', hidden: false },
+    { id: 'agentVersion', hidden: false },
+    { id: 'heartbeat', hidden: false },
+  ]);
+});
+
+test('instances-list-native: Instance is locked-visible (cannot be hidden)', () => {
+  const out = normalize(NATIVE, [
+    { id: 'instance', hidden: true },
+    { id: 'parentGroup', hidden: true },
+    { id: 'tags', hidden: true },
+  ]);
+  const inst = out.find((c) => c.id === 'instance');
+  assert.equal(inst.hidden, false, 'Instance must stay visible regardless of persisted state');
+  const parentGroup = out.find((c) => c.id === 'parentGroup');
+  assert.equal(parentGroup.hidden, true, 'non-locked columns retain their hidden state');
+  const tags = out.find((c) => c.id === 'tags');
+  assert.equal(tags.hidden, true);
+});
+
+test('instances-list-native: normalize fills missing entries in registry order', () => {
+  const out = normalize(NATIVE, [{ id: 'tags', hidden: true }]);
+  assert.deepEqual(out, [
+    { id: 'tags', hidden: true },
+    { id: 'instance', hidden: false },
+    { id: 'parentGroup', hidden: false },
+    { id: 'alertTimeline', hidden: false },
+    { id: 'agentVersion', hidden: false },
+    { id: 'heartbeat', hidden: false },
+  ]);
+});
+
+test('instances-list-native: setColumnOrder + getColumnOrder roundtrip', async () => {
+  const storage = createStorageMock();
+  await setColumnOrder(NATIVE, [
+    { id: 'instance', hidden: false },
+    { id: 'parentGroup', hidden: true },
+    { id: 'alertTimeline', hidden: false },
+    { id: 'tags', hidden: true },
+    { id: 'agentVersion', hidden: true },
+    { id: 'heartbeat', hidden: false },
+  ], storage);
+  const out = await getColumnOrder(NATIVE, storage);
+  assert.deepEqual(out.map((c) => [c.id, c.hidden]), [
+    ['instance', false],
+    ['parentGroup', true],
+    ['alertTimeline', false],
+    ['tags', true],
+    ['agentVersion', true],
+    ['heartbeat', false],
+  ]);
+});
+
+test('getAllColumnOrders includes both registered augmentations', async () => {
+  const storage = createStorageMock();
+  const all = await getAllColumnOrders(storage);
+  assert.ok(all[AUG], 'instances-ip-dns-columns present');
+  assert.ok(all[NATIVE], 'instances-list-native present');
+  assert.equal(all[NATIVE].length, 6);
+});

@@ -27,6 +27,24 @@ export const COLUMN_REGISTRY = {
       { id: 'os',          label: 'OS',         lockedVisible: false },
     ],
   },
+  // FMN-123: hide/show for FortiMonitor's native DataTables columns on
+  // /report/ListServers. Reorder is intentionally NOT supported here; it is
+  // gated on the FMN-122 ColReorder probe outcome. Columns are matched in
+  // the live DOM by header text (matchText). Empty-header columns
+  // (checkbox, status icon, filler) are intentionally omitted.
+  'instances-list-native': {
+    label: 'Instances list (native columns)',
+    context: '/report/ListServers',
+    reorderable: false,
+    columns: [
+      { id: 'instance',      label: 'Instance',         lockedVisible: true,  matchText: 'Instance'         },
+      { id: 'parentGroup',   label: 'Parent Group',     lockedVisible: false, matchText: 'Parent Group'     },
+      { id: 'alertTimeline', label: 'Alert Timeline',   lockedVisible: false, matchText: 'Alert Timeline'   },
+      { id: 'tags',          label: 'Tags',             lockedVisible: false, matchText: 'Tags'             },
+      { id: 'agentVersion',  label: 'Agent Version',    lockedVisible: false, matchText: 'Agent Version'    },
+      { id: 'heartbeat',     label: 'Device Heartbeat', lockedVisible: false, matchText: 'Device Heartbeat' },
+    ],
+  },
 };
 
 export function listAugmentations() {
@@ -34,6 +52,7 @@ export function listAugmentations() {
     id,
     label: def.label,
     context: def.context,
+    reorderable: def.reorderable !== false,
     columns: def.columns.slice(),
   }));
 }

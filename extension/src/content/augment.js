@@ -251,6 +251,200 @@
     },
   });
 
+  // FMN-123: hide/show for FortiMonitor's native DataTables columns on
+  // /report/ListServers. Reorder is intentionally NOT implemented here -
+  // it is gated on FMN-122's ColReorder probe outcome. Hide/show via
+  // display:none on paired TH+TDs does not change DataTables' aoColumns
+  // cardinality, so sort/AJAX redraw/width-sync continue to work.
+  //
+  // Mirror of the 'instances-list-native' entry in src/lib/column-order.js.
+  // The ids and matchText values must stay in sync.
+  const NATIVE_AUG_ID = 'instances-list-native';
+  const NATIVE_HIDDEN_ATTR = 'data-fmn-native-hidden';
+  const NATIVE_STYLE_ID = 'fmn-native-column-styles';
+  const NATIVE_COLUMN_DEFS = [
+    { id: 'instance',      lockedVisible: true,  matchText: 'Instance' },
+    { id: 'parentGroup',   lockedVisible: false, matchText: 'Parent Group' },
+    { id: 'alertTimeline', lockedVisible: false, matchText: 'Alert Timeline' },
+    { id: 'tags',          lockedVisible: false, matchText: 'Tags' },
+    { id: 'agentVersion',  lockedVisible: false, matchText: 'Agent Version' },
+    { id: 'heartbeat',     lockedVisible: false, matchText: 'Device Heartbeat' },
+  ];
+  const NATIVE_DEFAULT_COL_IDS = NATIVE_COLUMN_DEFS.map((c) => c.id);
+  const NATIVE_META_BY_ID = new Map(NATIVE_COLUMN_DEFS.map((c) => [c.id, c]));
+
+  let currentNativeColumns = defaultNativeColumnOrder();
+  let nativeColumnOrderLoaded = false;
+
+  function defaultNativeColumnOrder() {
+    return NATIVE_DEFAULT_COL_IDS.map((id) => ({ id, hidden: false }));
+  }
+
+  function normalizeNativeColumnOrder(persisted) {
+    const seen = new Set();
+    const out = [];
+    if (Array.isArray(persisted)) {
+      for (const entry of persisted) {
+        if (!entry || typeof entry.id !== 'string') continue;
+        const meta = NATIVE_META_BY_ID.get(entry.id);
+        if (!meta) continue;
+        if (seen.has(entry.id)) continue;
+        seen.add(entry.id);
+        out.push({
+          id: entry.id,
+          hidden: meta.lockedVisible ? false : Boolean(entry.hidden),
+        });
+      }
+    }
+    for (const id of NATIVE_DEFAULT_COL_IDS) {
+      if (!seen.has(id)) out.push({ id, hidden: false });
+    }
+    return out;
+  }
+
+  async function loadNativeColumnOrder() {
+    try {
+      const data = await chrome.storage.local.get(WEBGUI_COLUMNS_KEY);
+      const all = (data && data[WEBGUI_COLUMNS_KEY]) || {};
+      currentNativeColumns = normalizeNativeColumnOrder(all[NATIVE_AUG_ID]);
+    } catch {
+      currentNativeColumns = defaultNativeColumnOrder();
+    }
+    nativeColumnOrderLoaded = true;
+  }
+
+  function subscribeNativeColumnOrder() {
+    if (!chrome.storage || !chrome.storage.onChanged) return;
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName && areaName !== 'local') return;
+      const change = changes && changes[WEBGUI_COLUMNS_KEY];
+      if (!change) return;
+      const newAll = (change.newValue) || {};
+      const next = normalizeNativeColumnOrder(newAll[NATIVE_AUG_ID]);
+      if (sameOrder(currentNativeColumns, next)) return;
+      currentNativeColumns = next;
+      applyNativeHideShowToAll();
+      requestDataTablesAdjust();
+    });
+  }
+
+  function ensureNativeColumnStyles() {
+    if (document.getElementById(NATIVE_STYLE_ID)) return;
+    const style = document.createElement('style');
+    style.id = NATIVE_STYLE_ID;
+    // display:none on paired TH+TDs is the safe operation per FMN-93's
+    // analysis: aoColumns cardinality is preserved, sort/AJAX redraw/
+    // width-sync keep working, the column is just visually absent.
+    style.textContent = `
+      table.pa-table_outage th[${NATIVE_HIDDEN_ATTR}],
+      table.pa-table_outage td[${NATIVE_HIDDEN_ATTR}] {
+        display: none !important;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  // For each table on the page (scroll-head clone + body table when
+  // DataTables fixed-header layout is active, single table otherwise),
+  // build a column-index → header-text map from thead, then for every
+  // hidden column id in currentNativeColumns mark TH and matching-index
+  // TDs with the hidden attribute. Idempotent: only mutates the
+  // attribute when the desired value differs from the current one, so
+  // re-runs do not trigger MutationObserver feedback loops.
+  function applyNativeHideShowToAll() {
+    if (!nativeColumnOrderLoaded) return;
+    const tables = document.querySelectorAll('table.pa-table_outage');
+    if (tables.length === 0) return;
+    ensureNativeColumnStyles();
+    for (const table of tables) {
+      applyNativeHideShowToTable(table);
+    }
+  }
+
+  function applyNativeHideShowToTable(table) {
+    const thead = table.querySelector('thead');
+    if (!thead) return;
+    const headerRow = thead.querySelector('tr');
+    if (!headerRow) return;
+    const headerCells = Array.from(headerRow.children);
+    if (headerCells.length === 0) return;
+
+    // Map registry id → column index, by trimmed-text TH match.
+    const idToIndex = new Map();
+    for (const def of NATIVE_COLUMN_DEFS) {
+      const match = def.matchText.toLowerCase();
+      for (let i = 0; i < headerCells.length; i++) {
+        const text = (headerCells[i].textContent || '').trim().toLowerCase();
+        if (text === match || text.startsWith(match)) {
+          if (!idToIndex.has(def.id)) idToIndex.set(def.id, i);
+        }
+      }
+    }
+    if (idToIndex.size === 0) return;
+
+    for (const col of currentNativeColumns) {
+      const idx = idToIndex.get(col.id);
+      if (idx == null) continue;
+      const meta = NATIVE_META_BY_ID.get(col.id);
+      // Locked-visible columns can never be hidden, even if storage
+      // says otherwise. normalize() also enforces this; defense in depth.
+      const wantHidden = !meta?.lockedVisible && Boolean(col.hidden);
+      const headerCell = headerCells[idx];
+      if (headerCell) setHiddenAttr(headerCell, wantHidden);
+      const bodyRows = table.querySelectorAll('tbody > tr');
+      for (const row of bodyRows) {
+        const cell = row.children[idx];
+        if (cell) setHiddenAttr(cell, wantHidden);
+      }
+    }
+  }
+
+  function setHiddenAttr(el, wantHidden) {
+    const has = el.hasAttribute(NATIVE_HIDDEN_ATTR);
+    if (wantHidden && !has) el.setAttribute(NATIVE_HIDDEN_ATTR, '1');
+    else if (!wantHidden && has) el.removeAttribute(NATIVE_HIDDEN_ATTR);
+  }
+
+  // After visibility changes, ask DataTables to re-fit remaining columns.
+  // Best-effort: jQuery / DataTables may not be exposed on every tenant.
+  // Guard every dereference; failures are silent.
+  function requestDataTablesAdjust() {
+    try {
+      const $ = window.jQuery;
+      if (!$ || typeof $ !== 'function') return;
+      const $tables = $('table.pa-table_outage');
+      $tables.each(function () {
+        const $t = $(this);
+        if (typeof $t.DataTable !== 'function') return;
+        const dt = $t.DataTable();
+        if (!dt) return;
+        if (typeof dt.columns === 'function') {
+          const cols = dt.columns();
+          if (cols && typeof cols.adjust === 'function') cols.adjust();
+        }
+      });
+    } catch {
+      // jQuery / DataTables absent or threw - hide/show still worked
+      // visually via CSS; sort/scroll behavior may be slightly off until
+      // the next native draw. Acceptable.
+    }
+  }
+
+  register({
+    id: NATIVE_AUG_ID,
+    mount() {
+      if (location.pathname !== INSTANCES_PATH) return;
+      // Same DataTables-init gate as instances-ip-dns-columns: bail
+      // until tbody has at least one data row. This keeps us from
+      // touching thead before DataTables has read aoColumns.
+      const hasDataRows = !!document.querySelector(
+        'table.pa-table_outage tbody tr input.pa-table-row-checkbox'
+      );
+      if (!hasDataRows) return;
+      applyNativeHideShowToAll();
+    },
+  });
+
   function ensureColumnStyles() {
     if (document.getElementById('fmn-ip-column-styles')) return;
     const style = document.createElement('style');
@@ -1171,6 +1365,7 @@
     // subscription helpers compare against module-level state that has a
     // safe default, so attaching before the initial load is safe.
     subscribeColumnOrder();
+    subscribeNativeColumnOrder();
     subscribeSidebarLauncherFlag();
 
     // Load persisted column order and the sidebar-launcher flag before the
@@ -1180,6 +1375,7 @@
     // ribbons respect the operator's setting on the very first paint.
     Promise.all([
       loadColumnOrder(),
+      loadNativeColumnOrder(),
       loadSidebarLauncherFlag(),
       loadShowFeatureBadgesFlag(),
     ]).finally(() => {
