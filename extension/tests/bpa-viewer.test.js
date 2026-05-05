@@ -1,10 +1,48 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { getTabs, buildTabCsv, csvEscape, tabFilename, buildCombinedZipEntries, combinedZipFilename } from '../src/ui/bpa-audit/viewer.js';
+import { getTabs, getVisibleTabs, buildTabCsv, csvEscape, tabFilename, buildCombinedZipEntries, combinedZipFilename } from '../src/ui/bpa-audit/viewer.js';
 
 // =============================================================================
 // Tab definitions sanity
 // =============================================================================
+
+test('getVisibleTabs(["all"]) returns all 11 tabs (FMN-149)', () => {
+  assert.equal(getVisibleTabs(['all']).length, 11);
+});
+
+test('getVisibleTabs(undefined) returns all 11 tabs (FMN-149)', () => {
+  assert.equal(getVisibleTabs(undefined).length, 11);
+});
+
+test('getVisibleTabs(["user-activity"]) returns only User Activity + Raw Counts (FMN-149)', () => {
+  const ids = getVisibleTabs(['user-activity']).map((t) => t.id);
+  assert.deepEqual(ids, ['user-activity', 'raw-counts']);
+});
+
+test('getVisibleTabs(["incidents"]) returns Incident Summary + Incidents + Raw Counts (FMN-149)', () => {
+  const ids = getVisibleTabs(['incidents']).map((t) => t.id);
+  assert.deepEqual(ids, ['incident-summary', 'incidents', 'raw-counts']);
+});
+
+test('getVisibleTabs(["template-recommendations","monitoring-policy"]) returns both analyzer-scoped tabs + Raw Counts (FMN-149)', () => {
+  const ids = getVisibleTabs(['template-recommendations', 'monitoring-policy']).map((t) => t.id);
+  assert.deepEqual(ids, ['template-recommendations', 'monitoring-policy', 'raw-counts']);
+});
+
+test('getVisibleTabs hides cross-cutting tabs in non-all mode (FMN-149)', () => {
+  const ids = getVisibleTabs(['user-activity']).map((t) => t.id);
+  for (const crossCutting of ['executive-summary', 'feature-utilization', 'recommendations', 'recommended-labs']) {
+    assert.equal(ids.includes(crossCutting), false, `${crossCutting} must be hidden in non-all mode`);
+  }
+});
+
+test('buildCombinedZipEntries: sections=["user-activity"] produces only the 1 active tab CSV + README (FMN-149)', () => {
+  const ctx = { inventory: {}, analysis: { users: { details: [] } }, customer: 'Acme' };
+  const entries = buildCombinedZipEntries(ctx, { sections: ['user-activity'] });
+  // README + user-activity + raw-counts = 3 entries.
+  const filenames = entries.map((e) => e.filename).sort();
+  assert.deepEqual(filenames, ['README.txt', 'raw-counts.csv', 'user-activity.csv']);
+});
 
 test('getTabs: returns the 11 tabs FMN-133 spec calls for, in order', () => {
   const tabs = getTabs();

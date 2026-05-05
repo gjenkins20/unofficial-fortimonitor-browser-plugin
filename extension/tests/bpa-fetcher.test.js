@@ -473,6 +473,145 @@ test('BpaFetcher.collectInventory: onProgress events fire for endpoint lifecycle
   }
 });
 
+// =============================================================================
+// FMN-149: per-section scoping
+// =============================================================================
+
+function countingRoutes(base) {
+  const counts = new Map();
+  const wrapped = base.map(({ match, respond }) => ({
+    match,
+    respond: (url) => {
+      const key = match instanceof RegExp ? match.source : String(match);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+      return respond(url);
+    }
+  }));
+  return { routes: wrapped, hits: counts };
+}
+
+test('BpaFetcher.collectInventory ["all"] preserves today\'s full crawl (FMN-149)', async () => {
+  const { routes, hits } = countingRoutes(makeStandardRoutes({
+    serverGroups: [{ id: 11, url: '/v2/server_group/11' }],
+    serverTemplates: [{ id: 101, url: '/v2/server_template/101' }],
+    groupDetails: { 11: { id: 11 } },
+    templateDetails: { 101: { id: 101 } }
+  }));
+  const client = new PanoptaClient({ apiKey: 'k', fetch: routeFetch(routes) });
+  const fetcher = new BpaFetcher({ client });
+  const inv = await fetcher.collectInventory({ sections: ['all'] });
+  // Every top-level list endpoint must have been hit at least once.
+  for (const path of [
+    '/server', '/server_group', '/server_template', '/outage', '/compound_service',
+    '/dashboard', '/contact', '/user', '/agent_resource_type'
+  ]) {
+    const matched = [...hits.keys()].some((k) => k.includes(path.replaceAll('/', '\\/')));
+    assert.ok(matched, `${path} must have been called in "all" mode`);
+  }
+  assert.ok(Array.isArray(inv.outages_recent));
+  assert.equal(inv.server_group_details['11'].id, 11);
+  assert.equal(inv.server_template_details['101'].id, 101);
+});
+
+test('BpaFetcher.collectInventory ["user-activity"] only walks /user (FMN-149)', async () => {
+  const { routes, hits } = countingRoutes(makeStandardRoutes());
+  const client = new PanoptaClient({ apiKey: 'k', fetch: routeFetch(routes) });
+  const fetcher = new BpaFetcher({ client });
+  const inv = await fetcher.collectInventory({ sections: ['user-activity'] });
+
+  // /user must have been hit; nothing else.
+  const userHit = [...hits.entries()].find(([k]) => k.includes('user\\?limit'));
+  assert.ok(userHit, '/user?limit= must have been called');
+  for (const k of hits.keys()) {
+    if (k.includes('user\\?limit')) continue;
+    assert.equal(hits.get(k), 0, `unexpected fetch for pattern: ${k}`);
+  }
+  // No outage trending, no group/template details.
+  assert.equal(inv.outages_recent, undefined);
+  assert.equal(inv.server_group_details, undefined);
+  assert.equal(inv.server_template_details, undefined);
+  // Untouched top-level keys are absent (not empty arrays).
+  assert.equal(inv.servers, undefined);
+  assert.equal(inv.outages, undefined);
+});
+
+test('BpaFetcher.collectInventory ["incidents"] walks /outage + trending block, nothing else (FMN-149)', async () => {
+  const { routes, hits } = countingRoutes(makeStandardRoutes({
+    outages: [{ id: 5001, active: false }]
+  }));
+  const client = new PanoptaClient({ apiKey: 'k', fetch: routeFetch(routes) });
+  const fetcher = new BpaFetcher({ client });
+  const inv = await fetcher.collectInventory({ sections: ['incidents'] });
+
+  // /outage must have been hit (at least twice: top-level + outages_recent).
+  const outageListCount = [...hits.entries()]
+    .filter(([k]) => k.includes('outage\\?limit'))
+    .reduce((acc, [, v]) => acc + v, 0);
+  assert.ok(outageListCount >= 2, '/outage?limit= must have been called at least twice (top-level + outages_recent)');
+  // Outage_statistics must have been hit for each window.
+  for (const days of [7, 30, 60]) {
+    const hit = [...hits.entries()].some(([k, v]) => k.includes(`days=${days}`) && v > 0);
+    assert.ok(hit, `/outage_statistics?days=${days} must have been called`);
+  }
+  // Trending block populated.
+  assert.ok(Array.isArray(inv.outages_recent));
+  assert.deepEqual(inv.outage_stats_7d, {});
+  // No /server, /user, /server_template etc.
+  assert.equal(inv.servers, undefined);
+  assert.equal(inv.users, undefined);
+  assert.equal(inv.server_templates, undefined);
+});
+
+test('BpaFetcher.collectInventory ["template-recommendations","monitoring-policy"] shares fetched lists without duplication (FMN-149)', async () => {
+  const { routes, hits } = countingRoutes(makeStandardRoutes({
+    servers: [{ id: 1, name: 's1' }],
+    serverGroups: [{ id: 11, url: '/v2/server_group/11' }],
+    serverTemplates: [{ id: 101, url: '/v2/server_template/101' }],
+    groupDetails: { 11: { id: 11 } },
+    templateDetails: { 101: { id: 101 } }
+  }));
+  const client = new PanoptaClient({ apiKey: 'k', fetch: routeFetch(routes) });
+  const fetcher = new BpaFetcher({ client });
+  await fetcher.collectInventory({ sections: ['template-recommendations', 'monitoring-policy'] });
+
+  // server_groups + server_templates are each consumed by both sections;
+  // the shared top-level pass means each ?limit= endpoint runs once.
+  const groupListHits = [...hits.entries()]
+    .filter(([k]) => k.includes('server_group\\?limit'))
+    .reduce((acc, [, v]) => acc + v, 0);
+  const templateListHits = [...hits.entries()]
+    .filter(([k]) => k.includes('server_template\\?limit'))
+    .reduce((acc, [, v]) => acc + v, 0);
+  assert.equal(groupListHits, 1, '/server_group?limit= must be called exactly once');
+  assert.equal(templateListHits, 1, '/server_template?limit= must be called exactly once');
+
+  // /outage must NOT have been called (incidents not selected).
+  const outageHit = [...hits.entries()].some(([k, v]) => k.includes('outage\\?limit') && v > 0);
+  assert.equal(outageHit, false, '/outage?limit= must not be called when incidents is not selected');
+});
+
+test('BpaFetcher.collectInventory ["instance-analysis"] enables deep dive even without operator deep flag (FMN-149)', async () => {
+  const seenUrls = [];
+  const baseRoutes = [
+    ...makeStandardRoutes({ servers: [{ id: 7, name: 'sN' }] }),
+    { match: /\/server\/7$/,                          respond: () => jsonResponse({ id: 7, name: 'sN' }) },
+    { match: /\/server\/7\/agent_resource\?limit=/,   respond: () => listResponse('agent_resource_list', []) },
+    { match: /\/server\/7\/network_service\?limit=/,  respond: () => listResponse('network_service_list', []) },
+    { match: /\/server\/7\/attribute\?limit=/,        respond: () => listResponse('server_attribute_list', []) }
+  ];
+  const trackingRoutes = baseRoutes.map(({ match, respond }) => ({
+    match,
+    respond: (url) => { seenUrls.push(url); return respond(url); }
+  }));
+  const client = new PanoptaClient({ apiKey: 'k', fetch: routeFetch(trackingRoutes) });
+  const fetcher = new BpaFetcher({ client });
+  // deep flag is false here; instance-analysis selection should still
+  // trigger the deep dive (the planning-doc rule).
+  const inv = await fetcher.collectInventory({ sections: ['instance-analysis'], deep: false });
+  assert.equal(inv.stats.deep, true);
+  assert.ok(seenUrls.some((u) => /\/server\/7$/.test(u)), '/server/7 detail must have been called');
+});
+
 test('BpaFetcher constructor rejects non-PanoptaClient inputs', () => {
   assert.throws(() => new BpaFetcher({}), /requires a PanoptaClient/);
   assert.throws(() => new BpaFetcher({ client: { getJson: () => {} } }), /requires a PanoptaClient/);

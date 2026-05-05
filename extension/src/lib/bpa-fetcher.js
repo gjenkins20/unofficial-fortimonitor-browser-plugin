@@ -22,6 +22,13 @@
 // No UI, no flag wiring. Operator QA gated by FMN-132 landing.
 
 import { PanoptaClient, PanoptaError } from './panopta-client.js';
+import {
+  topLevelKeysForSections,
+  needsOutageTrending,
+  needsGroupDetails,
+  needsTemplateDetails,
+  needsDeepDive
+} from './bpa-section-deps.js';
 
 // Default request budget. The Python source uses these exact values; do
 // not change without re-running against a live tenant.
@@ -305,35 +312,58 @@ export class BpaFetcher {
     this._requestCount = 0;
   }
 
-  /** Collect the full inventory and return a {@link BpaInventory}. */
-  async collectInventory({ deep = false, maxServers = 0 } = {}) {
+  /**
+   * Collect the inventory and return a {@link BpaInventory}.
+   *
+   * @param {object} [options]
+   * @param {boolean} [options.deep]
+   * @param {number} [options.maxServers]
+   * @param {string[]} [options.sections]
+   *   FMN-149: when present and not ["all"], skip top-level lists +
+   *   trending / group-detail / template-detail / deep-dive blocks that
+   *   no requested section consumes (per docs/planning/bpa-per-section-delivery.md
+   *   §2 dep map). Default ["all"] preserves today's full crawl.
+   */
+  async collectInventory({ deep = false, maxServers = 0, sections } = {}) {
     const started = Date.now();
     /** @type {Partial<BpaInventory> & {errors: string[]}} */
     const data = { errors: [] };
-    this._emit({ type: 'collect-start', deep });
+    const keyFilter = topLevelKeysForSections(sections);    // null -> no filter
+    const wantTrending = needsOutageTrending(sections);
+    const wantGroupDetails = needsGroupDetails(sections);
+    const wantTemplateDetails = needsTemplateDetails(sections);
+    const wantDeep = needsDeepDive(sections, { deep });
+    this._emit({ type: 'collect-start', deep: wantDeep });
 
     // --- Top-level lists ---
     for (const [name, path] of TOP_LEVEL_LIST_ENDPOINTS) {
       this._abortIfNeeded();
+      if (keyFilter && !keyFilter.has(name)) continue;
       data[name] = await this._collectList(name, path, data.errors);
     }
 
     // --- Outage trending ---
-    await this._collectOutageTrending(data);
+    if (wantTrending) {
+      await this._collectOutageTrending(data);
+    }
 
     // --- Server group + template details ---
-    await this._collectGroupDetails(data);
-    await this._collectTemplateDetails(data);
+    if (wantGroupDetails) {
+      await this._collectGroupDetails(data);
+    }
+    if (wantTemplateDetails) {
+      await this._collectTemplateDetails(data);
+    }
 
     // --- Deep dive (per-server) ---
-    if (deep) {
+    if (wantDeep) {
       await this._collectDeepServerData(data, { maxServers });
     }
 
     const inventory = /** @type {BpaInventory} */ (data);
     inventory.stats = {
       requests: this._requestCount,
-      deep,
+      deep: wantDeep,
       maxServers,
       durationMs: Date.now() - started
     };

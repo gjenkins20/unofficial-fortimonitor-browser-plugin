@@ -82,9 +82,10 @@ export function tabFilename(tab, customer) {
  * @param {{ generatedAt?: string, customer?: string }} [options]
  * @returns {{ filename: string, content: string }[]}
  */
-export function buildCombinedZipEntries(ctx, { generatedAt = new Date().toISOString(), customer = '' } = {}) {
+export function buildCombinedZipEntries(ctx, { generatedAt = new Date().toISOString(), customer = '', sections } = {}) {
+  const tabs = getVisibleTabs(sections);
   const entries = [];
-  for (const tab of getTabs()) {
+  for (const tab of tabs) {
     entries.push({
       filename: `${String(tab.filenamePart)}.csv`,
       content: buildTabCsv(tab, ctx, { generatedAt, customer })
@@ -93,12 +94,12 @@ export function buildCombinedZipEntries(ctx, { generatedAt = new Date().toISOStr
   // README so the customer-facing recipient knows what's inside.
   entries.unshift({
     filename: 'README.txt',
-    content: combinedReadme(customer, generatedAt)
+    content: combinedReadme(customer, generatedAt, tabs)
   });
   return entries;
 }
 
-function combinedReadme(customer, generatedAt) {
+function combinedReadme(customer, generatedAt, tabs = getTabs()) {
   const lines = [
     'Unofficial FortiMonitor Toolkit - Best-Practice Assessment',
     'Built by Gregori Jenkins - https://www.linkedin.com/in/gregorijenkins',
@@ -109,7 +110,7 @@ function combinedReadme(customer, generatedAt) {
     'Contents (one CSV per assessment tab):',
     ''
   ].filter((l) => l !== null);
-  for (const tab of getTabs()) {
+  for (const tab of tabs) {
     lines.push(`  ${tab.filenamePart}.csv  -  ${tab.label}`);
   }
   lines.push('');
@@ -580,6 +581,49 @@ export function getTabs() {
   return TABS;
 }
 
+// FMN-149: tab visibility per section selection. Cross-cutting tabs
+// (executive-summary, feature-utilization, recommendations,
+// recommended-labs) need the full inventory crawl and only render in
+// "all" mode. Analyzer-scoped tabs render only when their section is in
+// the selection. Raw Counts always renders - it surfaces what was
+// actually fetched and is cheap synthesis on top.
+const TAB_VISIBILITY = Object.freeze({
+  'executive-summary':       { mode: 'all-only' },
+  'feature-utilization':     { mode: 'all-only' },
+  'incident-summary':        { mode: 'section', section: 'incidents' },
+  'incidents':               { mode: 'section', section: 'incidents' },
+  'user-activity':           { mode: 'section', section: 'user-activity' },
+  'instance-analysis':       { mode: 'section', section: 'instance-analysis' },
+  'template-recommendations': { mode: 'section', section: 'template-recommendations' },
+  'monitoring-policy':       { mode: 'section', section: 'monitoring-policy' },
+  'recommendations':         { mode: 'all-only' },
+  'recommended-labs':        { mode: 'all-only' },
+  'raw-counts':              { mode: 'always' }
+});
+
+function isAllSel(sections) {
+  return Array.isArray(sections) && sections.length === 1 && sections[0] === 'all';
+}
+
+function tabVisibleFor(tabId, sections) {
+  if (!Array.isArray(sections) || sections.length === 0 || isAllSel(sections)) return true;
+  const v = TAB_VISIBILITY[tabId];
+  if (!v) return true;
+  if (v.mode === 'always') return true;
+  if (v.mode === 'all-only') return false;
+  if (v.mode === 'section') return sections.includes(v.section);
+  return true;
+}
+
+/**
+ * Filter the tab list by a sections selection. ["all"] / undefined
+ * returns the full list (today's behavior).
+ */
+export function getVisibleTabs(sections) {
+  if (!Array.isArray(sections) || sections.length === 0 || isAllSel(sections)) return TABS;
+  return TABS.filter((t) => tabVisibleFor(t.id, sections));
+}
+
 // =============================================================================
 // DOM render
 // =============================================================================
@@ -605,13 +649,21 @@ export function renderViewer({ root, store }) {
 
   const ctx = () => ({ inventory, analysis, customer, tenantOrigin });
 
+  // FMN-149: when result.sections is analyzer-scoped, hide cross-cutting
+  // tab buttons (which require the full crawl) and any analyzer-scoped
+  // tab whose section wasn't requested. Raw Counts always shows.
+  const sections = Array.isArray(result.sections) && result.sections.length > 0
+    ? result.sections
+    : ['all'];
+  const visibleTabs = getVisibleTabs(sections);
+
   // Top action bar: combined-report download (ZIP + PDF) + per-tab CSV
   // (FMN-145: CSV consolidated into the toolbar; previously sat next
   // to the active tab's H2 title which read as disjoint).
   const filenameStatus = h('span', { class: 'muted', style: 'font-size:0.85rem;margin-left:0.6rem;' }, '');
   // Closure-tracked active tab so the CSV button always targets the
   // tab the operator is currently viewing.
-  let activeTab = TABS[0];
+  let activeTab = visibleTabs[0];
   const csvBtn = h('button', {
     class: 'btn btn-secondary',
     'data-test': 'download-tab-csv'
@@ -627,7 +679,7 @@ export function renderViewer({ root, store }) {
     'data-test': 'download-combined-report'
   }, 'Download Combined Report (ZIP)');
   combinedBtn.addEventListener('click', () => {
-    const entries = buildCombinedZipEntries(ctx(), { customer });
+    const entries = buildCombinedZipEntries(ctx(), { customer, sections });
     const fname = combinedZipFilename(customer);
     downloadZip(fname, entries);
     filenameStatus.textContent = `Saved ${fname}`;
@@ -649,7 +701,7 @@ export function renderViewer({ root, store }) {
     'data-test': 'download-combined-pdf'
   }, 'Download PDF (Full Report)');
   pdfBtn.addEventListener('click', () => {
-    printReport(ctx(), { customer, coverPage: coverCheckbox.checked });
+    printReport(ctx(), { customer, coverPage: coverCheckbox.checked, sections });
     filenameStatus.textContent = `Opening print dialog (suggested: ${pdfFilename(customer)})`;
   });
 
@@ -677,7 +729,7 @@ export function renderViewer({ root, store }) {
   const pane = h('div', { class: 'tab-pane', 'data-test': 'tab-pane' });
 
   const tabButtons = new Map();
-  for (const tab of TABS) {
+  for (const tab of visibleTabs) {
     const btn = h('button', {
       class: 'tab-btn',
       role: 'tab',
@@ -690,7 +742,7 @@ export function renderViewer({ root, store }) {
   }
 
   function activate(id) {
-    const tab = TABS.find((t) => t.id === id) ?? TABS[0];
+    const tab = visibleTabs.find((t) => t.id === id) ?? visibleTabs[0];
     activeTab = tab;
     for (const [otherId, btn] of tabButtons) {
       const isActive = otherId === tab.id;
@@ -705,7 +757,7 @@ export function renderViewer({ root, store }) {
   root.appendChild(strip);
   root.appendChild(pane);
 
-  activate(TABS[0].id);
+  activate(visibleTabs[0].id);
   return () => { /* no-op teardown - DOM lives inside container */ };
 }
 

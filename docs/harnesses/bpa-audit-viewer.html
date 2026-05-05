@@ -193,7 +193,16 @@
     }
   };
 
-  const analysis = runAllAnalyzers(inventory);
+  // FMN-149: optional ?sections=... query string drives the viewer's
+  // tab-filter so a Playwright spec can exercise per-section delivery
+  // (e.g. ?sections=user-activity hides cross-cutting tabs and renders
+  // only User Activity + Raw Counts). Default is unset = today's full
+  // 11-tab render.
+  const params = new URLSearchParams(window.location.search);
+  const sectionsParam = params.get('sections');
+  const sections = sectionsParam ? sectionsParam.split(',').map((s) => s.trim()).filter(Boolean) : null;
+
+  const analysis = runAllAnalyzers(inventory, sections ? { sections } : undefined);
 
   const store = {
     customerName: 'Acme Corp (harness)',
@@ -201,12 +210,12 @@
     maxServers: 0,
     // FMN-147: simulate the SW having captured a regional tenant origin
     // so the harness exercises the template-link rendering.
-    runResult: { inventory, analysis, deep: true, tenant_origin: 'https://my.us02.fortimonitor.com' }
+    runResult: { inventory, analysis, deep: true, tenant_origin: 'https://my.us02.fortimonitor.com', sections: sections ?? undefined }
   };
 
   renderViewer({ root: document.getElementById('harness-host'), store });
 
-  console.log(`[bpa-harness] mounted, ${getTabs().length} tabs, ${inventory.servers.length} servers, ${inventory.outages.length} outages`);
+  console.log(`[bpa-harness] mounted, ${getTabs().length} tabs, ${inventory.servers.length} servers, ${inventory.outages.length} outages, sections=${JSON.stringify(sections)}`);
 </script>
 </body>
 </html>

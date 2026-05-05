@@ -739,3 +739,29 @@ test('runAllAnalyzers: each analyzer is a pure function (no inventory mutation)'
   runAllAnalyzers(inv);
   assert.deepEqual(inv, before);
 });
+
+test('runAllAnalyzers: ["all"] selection runs every analyzer (FMN-149)', () => {
+  const r = runAllAnalyzers({}, { sections: ['all'] });
+  assert.deepEqual(Object.keys(r).sort(), [
+    'incidents', 'instances', 'monitoring_policy', 'templates', 'users'
+  ]);
+});
+
+test('runAllAnalyzers: single-section selection produces only that result key (FMN-149)', () => {
+  const r = runAllAnalyzers({}, { sections: ['user-activity'] });
+  assert.deepEqual(Object.keys(r), ['users']);
+});
+
+test('runAllAnalyzers: skipped result keys are absent, not empty (FMN-149)', () => {
+  const r = runAllAnalyzers({}, { sections: ['user-activity'] });
+  assert.equal('users' in r, true);
+  assert.equal('incidents' in r, false);
+  assert.equal('instances' in r, false);
+  assert.equal('templates' in r, false);
+  assert.equal('monitoring_policy' in r, false);
+});
+
+test('runAllAnalyzers: multi-section selection runs each requested analyzer (FMN-149)', () => {
+  const r = runAllAnalyzers({}, { sections: ['template-recommendations', 'monitoring-policy'] });
+  assert.deepEqual(Object.keys(r).sort(), ['monitoring_policy', 'templates']);
+});

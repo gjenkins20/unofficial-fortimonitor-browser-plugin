@@ -247,6 +247,35 @@ test.describe('BPA Audit viewer harness (FMN-133)', () => {
     await page.close();
   });
 
+  test('Per-section delivery: ?sections=user-activity hides cross-cutting tabs and renders only User Activity + Raw Counts (FMN-149)', async ({ extensionContext }) => {
+    const page = await extensionContext.newPage();
+    await page.goto(`${HARNESS_URL}?sections=user-activity`);
+    await page.waitForLoadState('domcontentloaded');
+
+    // Visible analyzer-scoped tab.
+    await expect(page.locator('button[data-tab="user-activity"]')).toBeVisible();
+    await expect(page.locator('button[data-tab="raw-counts"]')).toBeVisible();
+
+    // Hidden tabs (cross-cutting + non-requested analyzer-scoped).
+    for (const id of ['executive-summary', 'feature-utilization', 'incident-summary', 'incidents', 'instance-analysis', 'template-recommendations', 'monitoring-policy', 'recommendations', 'recommended-labs']) {
+      await expect(page.locator(`button[data-tab="${id}"]`)).toHaveCount(0);
+    }
+    await page.close();
+  });
+
+  test('Per-section delivery: ?sections=template-recommendations,monitoring-policy hides cross-cutting + non-requested tabs (FMN-149)', async ({ extensionContext }) => {
+    const page = await extensionContext.newPage();
+    await page.goto(`${HARNESS_URL}?sections=template-recommendations,monitoring-policy`);
+    await page.waitForLoadState('domcontentloaded');
+    for (const id of ['template-recommendations', 'monitoring-policy', 'raw-counts']) {
+      await expect(page.locator(`button[data-tab="${id}"]`)).toBeVisible();
+    }
+    for (const id of ['executive-summary', 'incidents', 'user-activity', 'instance-analysis', 'recommendations']) {
+      await expect(page.locator(`button[data-tab="${id}"]`)).toHaveCount(0);
+    }
+    await page.close();
+  });
+
   test('Filter input restricts visible rows in the active tab', async ({ extensionContext }) => {
     const page = await extensionContext.newPage();
     await page.goto(HARNESS_URL);

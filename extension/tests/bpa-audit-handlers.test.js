@@ -178,6 +178,72 @@ test('createBpaAuditHandlers: bpa:run-audit forwards payload.sections to the sta
   assert.deepEqual(stored.sections, ['template-recommendations', 'monitoring-policy']);
 });
 
+test('runBpaAudit: ["user-activity"] runs only the user analyzer and skips frontend templates walk (FMN-149)', async () => {
+  const v2Fetch = createFetchMock(async (url) => {
+    if (/\/v2\/user\b/.test(url)) {
+      return listResponse('user_list', [{
+        id: 42, name: 'Alice', contact_info: [{ url: 'https://api2.panopta.com/v2/contact/9001/contact_info/1' }]
+      }]);
+    }
+    return jsonResponse({});
+  });
+  const frontendUrls = [];
+  const frontendFetch = createFetchMock(async (url) => {
+    frontendUrls.push(url);
+    if (/\/users\/users\/get_edit_user_data/.test(url)) {
+      return jsonRes({ success: true, data: { user_id: 42, contact_id: 9001, config_data: { last_login: 'x', created_on: 'y' } } });
+    }
+    throw new Error('unexpected frontend URL: ' + url);
+  });
+  const client = new PanoptaClient({ apiKey: 'k', fetch: v2Fetch });
+  const r = await runBpaAudit({ client, includeFrontend: true, frontendFetch, sections: ['user-activity'] });
+
+  // Analyzer dispatch: only user-activity result key present.
+  assert.deepEqual(Object.keys(r.analysis), ['users']);
+  // Frontend walk: only EditUser was hit; monitoring_config_data was NOT.
+  assert.ok(frontendUrls.some((u) => /get_edit_user_data/.test(u)));
+  assert.equal(frontendUrls.some((u) => /get_monitoring_config_data/.test(u)), false);
+  assert.deepEqual(r.sections, ['user-activity']);
+});
+
+test('runBpaAudit: ["template-recommendations"] runs only template analyzer + template config walk (FMN-149)', async () => {
+  const v2Fetch = createFetchMock(async (url) => {
+    if (/\/v2\/server_template\?limit=/.test(url)) {
+      return listResponse('server_template_list', [{ id: 101, name: 't1', url: '/v2/server_template/101' }]);
+    }
+    if (/\/v2\/server_template\/101$/.test(url)) {
+      return jsonResponse({ id: 101, name: 't1' });
+    }
+    return jsonResponse({});
+  });
+  const frontendUrls = [];
+  const frontendFetch = createFetchMock(async (url) => {
+    frontendUrls.push(url);
+    if (/\/report\/get_monitoring_config_data/.test(url)) {
+      return jsonRes({ success: true, categories: { added: [], detected: [] } });
+    }
+    throw new Error('unexpected frontend URL: ' + url);
+  });
+  const client = new PanoptaClient({ apiKey: 'k', fetch: v2Fetch });
+  const r = await runBpaAudit({ client, includeFrontend: true, frontendFetch, sections: ['template-recommendations'] });
+  assert.deepEqual(Object.keys(r.analysis), ['templates']);
+  assert.equal(frontendUrls.some((u) => /get_edit_user_data/.test(u)), false);
+  assert.ok(frontendUrls.some((u) => /get_monitoring_config_data/.test(u)));
+});
+
+test('runBpaAudit: ["incidents"] does not call frontend fetcher at all (FMN-149)', async () => {
+  const fetch = buildBaselineFetch();
+  let frontendCalled = false;
+  const frontendFetch = createFetchMock(async () => {
+    frontendCalled = true;
+    return jsonRes({ success: true });
+  });
+  const client = new PanoptaClient({ apiKey: 'k', fetch });
+  const r = await runBpaAudit({ client, includeFrontend: true, frontendFetch, sections: ['incidents'] });
+  assert.equal(frontendCalled, false, 'frontend fetcher must not run when neither user-activity nor templates is selected');
+  assert.deepEqual(Object.keys(r.analysis), ['incidents']);
+});
+
 test('runBpaAudit: 401 from any endpoint propagates as PanoptaError(auth)', async () => {
   const fetch = createFetchMock(async () => errorResponse(401));
   const client = new PanoptaClient({ apiKey: 'bad', fetch });

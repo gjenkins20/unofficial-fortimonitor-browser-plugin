@@ -15,7 +15,7 @@
 // rule. The only difference is that CSV is per-tab and PDF is the
 // combined report.
 
-import { getTabs, csvCellValue } from '../ui/bpa-audit/viewer.js';
+import { getTabs, getVisibleTabs, csvCellValue } from '../ui/bpa-audit/viewer.js';
 
 // ---------------------------------------------------------------------------
 // Filename helper - mirrors combinedZipFilename's pattern with .pdf ext.
@@ -121,8 +121,12 @@ const PRINT_STYLES = `
  * @param {string}  [options.generatedAt]     - ISO timestamp string
  * @returns {string} full <!DOCTYPE html> document
  */
-export function buildPrintableHtml(ctx, { coverPage = false, customer = '', generatedAt = new Date().toISOString() } = {}) {
-  const tabs = getTabs();
+export function buildPrintableHtml(ctx, { coverPage = false, customer = '', generatedAt = new Date().toISOString(), sections } = {}) {
+  // FMN-149: when result.sections is analyzer-scoped, the PDF mirrors
+  // the viewer's tab filter (cross-cutting tabs hidden, analyzer-scoped
+  // tabs included only when their section was selected, Raw Counts
+  // always included).
+  const tabs = sections ? getVisibleTabs(sections) : getTabs();
   const parts = [];
   parts.push('<!DOCTYPE html>');
   parts.push('<html lang="en"><head><meta charset="UTF-8">');
