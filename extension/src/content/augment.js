@@ -445,6 +445,412 @@
     },
   });
 
+  // FMN-150: in-page "Columns" button + popover on /report/ListServers.
+  // Anchors a toolkit-styled trigger to FortiMonitor's bulk-action row
+  // (Add / Move / Delete / Tag / Download) and opens a popover whose
+  // toggles share the same fm:webguiColumns['instances-list-native']
+  // storage key as the FMN-123 popup card. chrome.storage.onChanged
+  // already drives applyNativeHideShowToAll(), so toggling in either
+  // surface updates the page and the other surface live.
+  const COLUMNS_BUTTON_ID = 'fmn-columns-button';
+  const COLUMNS_POPOVER_ID = 'fmn-columns-popover';
+  const COLUMNS_MENU_STYLE_ID = 'fmn-columns-menu-styles';
+  const COLUMNS_MENU_ID = 'instances-columns-menu';
+  const COLUMNS_LABEL_BY_ID = {
+    instance: 'Instance',
+    parentGroup: 'Parent Group',
+    alertTimeline: 'Alert Timeline',
+    tags: 'Tags',
+    agentVersion: 'Agent Version',
+    heartbeat: 'Device Heartbeat',
+  };
+
+  const columnsPopoverState = {
+    el: null,
+    anchor: null,
+    outsideHandler: null,
+    keyHandler: null,
+    scrollHandler: null,
+    resizeHandler: null,
+  };
+
+  function ensureColumnsMenuStyles() {
+    if (document.getElementById(COLUMNS_MENU_STYLE_ID)) return;
+    const style = document.createElement('style');
+    style.id = COLUMNS_MENU_STYLE_ID;
+    style.textContent = `
+      .fmn-columns-trigger {
+        display: inline-flex; align-items: center; gap: 6px;
+        background: #fff; border: 1px solid #B6C8EB;
+        color: #3954BF; border-radius: 4px;
+        padding: 6px 10px; font-size: 12px; font-weight: 500;
+        cursor: pointer; line-height: 1; font-family: inherit;
+        margin-left: auto;
+      }
+      .fmn-columns-trigger:hover { background: #E8ECF8; }
+      .fmn-columns-trigger.is-open { background: #E8ECF8; }
+      .fmn-columns-trigger .fmn-tk-chip {
+        display: inline-block; font-size: 9.5px; font-weight: 700;
+        background: #3954BF; color: #fff; padding: 2px 4px; border-radius: 2px;
+        letter-spacing: 0.04em;
+      }
+      .fmn-columns-trigger .fmn-caret { font-size: 9px; color: #9AA4BC; }
+      .fmn-columns-popover {
+        position: fixed; z-index: 2147483646;
+        background: #fff; border: 1px solid #D6D9DD; border-radius: 6px;
+        box-shadow: 0 6px 22px rgba(16, 22, 26, 0.18);
+        width: 268px; padding: 0;
+        font: 13px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
+        color: #394449;
+      }
+      .fmn-columns-popover-header {
+        display: flex; justify-content: space-between; align-items: baseline;
+        padding: 10px 12px 8px; border-bottom: 1px solid #E4E7EB;
+      }
+      .fmn-columns-popover-title { font-size: 12px; font-weight: 600; color: #394449; }
+      .fmn-columns-popover-context {
+        font-size: 10.5px; color: #9AA4BC;
+        font-family: ui-monospace, Menlo, monospace;
+      }
+      .fmn-columns-popover-list { padding: 4px 0; max-height: 320px; overflow-y: auto; }
+      .fmn-columns-popover-row {
+        display: grid; grid-template-columns: 1fr 28px;
+        align-items: center; gap: 8px;
+        padding: 7px 12px; font-size: 12.5px;
+      }
+      .fmn-columns-popover-row + .fmn-columns-popover-row {
+        border-top: 1px solid #E4E7EB;
+      }
+      .fmn-columns-popover-row.is-locked .fmn-col-name::after {
+        content: ' (always visible)'; color: #9AA4BC;
+        font-size: 10.5px; font-style: italic; font-weight: 400;
+      }
+      .fmn-columns-popover-row.is-hidden .fmn-col-name {
+        color: #9AA4BC; text-decoration: line-through;
+      }
+      .fmn-col-name {
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      .fmn-col-toggle {
+        width: 28px; height: 24px; border: 1px solid #D6D9DD;
+        background: #fff; border-radius: 4px;
+        cursor: pointer; color: #9AA4BC;
+        font: inherit; padding: 0;
+        display: inline-flex; align-items: center; justify-content: center;
+      }
+      .fmn-col-toggle.is-on {
+        color: #3954BF; border-color: #B6C8EB; background: #E8ECF8;
+      }
+      .fmn-col-toggle:disabled { opacity: 0.45; cursor: default; }
+      .fmn-columns-popover-footer {
+        display: flex; justify-content: flex-end;
+        padding: 8px 12px; border-top: 1px solid #E4E7EB; background: #FAFBFC;
+      }
+      .fmn-columns-popover-reset {
+        background: transparent; border: none; color: #3954BF;
+        font-size: 11.5px; cursor: pointer; padding: 0; font-family: inherit;
+      }
+      .fmn-columns-popover-reset:hover { text-decoration: underline; }
+    `;
+    document.head.appendChild(style);
+  }
+
+  // Find FortiMonitor's bulk-action row on /report/ListServers by
+  // text-matching the canonical button labels (Move/Delete/Tag/Download)
+  // and locating their common parent. Resilient across class-name churn.
+  // Returns null if fewer than 3 of the expected labels are co-resident.
+  function findInstancesActionBar() {
+    const WANTED = new Set(['move', 'delete', 'tag', 'download']);
+    const counts = new Map();
+    const parents = [];
+    const buttons = document.querySelectorAll(
+      'button, a.btn, .btn, [role="button"]'
+    );
+    for (const el of buttons) {
+      const text = (el.textContent || '').trim().toLowerCase();
+      if (!WANTED.has(text)) continue;
+      const parent = el.parentElement;
+      if (!parent) continue;
+      if (!counts.has(parent)) {
+        counts.set(parent, 0);
+        parents.push(parent);
+      }
+      counts.set(parent, counts.get(parent) + 1);
+    }
+    let best = null;
+    let bestCount = 0;
+    for (const parent of parents) {
+      const count = counts.get(parent);
+      if (count > bestCount) {
+        best = parent;
+        bestCount = count;
+      }
+    }
+    return bestCount >= 3 ? best : null;
+  }
+
+  function buildColumnsButton() {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = COLUMNS_BUTTON_ID;
+    btn.setAttribute(ENTRY_ATTR, COLUMNS_MENU_ID);
+    btn.className = 'fmn-columns-trigger';
+    btn.title = 'Show or hide table columns';
+
+    const chip = document.createElement('span');
+    chip.className = 'fmn-tk-chip';
+    chip.textContent = 'FM TK';
+    btn.appendChild(chip);
+
+    const label = document.createElement('span');
+    label.textContent = 'Columns';
+    btn.appendChild(label);
+
+    const caret = document.createElement('span');
+    caret.className = 'fmn-caret';
+    caret.textContent = '▾';
+    btn.appendChild(caret);
+
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (columnsPopoverState.el) {
+        closeColumnsPopover();
+      } else {
+        openColumnsPopover(btn);
+      }
+    });
+
+    return btn;
+  }
+
+  function openColumnsPopover(anchor) {
+    if (columnsPopoverState.el) return;
+    ensureColumnsMenuStyles();
+
+    const popover = document.createElement('div');
+    popover.id = COLUMNS_POPOVER_ID;
+    popover.className = 'fmn-columns-popover';
+    popover.setAttribute('role', 'dialog');
+    popover.setAttribute('aria-label', 'Table columns');
+
+    renderColumnsPopoverContents(popover);
+    document.body.appendChild(popover);
+    columnsPopoverState.el = popover;
+    columnsPopoverState.anchor = anchor;
+
+    repositionColumnsPopover();
+    anchor.classList.add('is-open');
+
+    const outsideHandler = (e) => {
+      const target = e.target;
+      if (popover.contains(target)) return;
+      if (anchor.contains(target) || target === anchor) return;
+      closeColumnsPopover();
+    };
+    document.addEventListener('mousedown', outsideHandler, true);
+    columnsPopoverState.outsideHandler = outsideHandler;
+
+    const keyHandler = (e) => {
+      if (e.key === 'Escape') closeColumnsPopover();
+    };
+    document.addEventListener('keydown', keyHandler);
+    columnsPopoverState.keyHandler = keyHandler;
+
+    const reposition = () => repositionColumnsPopover();
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
+    columnsPopoverState.scrollHandler = reposition;
+    columnsPopoverState.resizeHandler = reposition;
+  }
+
+  function closeColumnsPopover() {
+    if (columnsPopoverState.anchor) {
+      columnsPopoverState.anchor.classList.remove('is-open');
+    }
+    if (columnsPopoverState.el) {
+      columnsPopoverState.el.remove();
+      columnsPopoverState.el = null;
+    }
+    if (columnsPopoverState.outsideHandler) {
+      document.removeEventListener('mousedown', columnsPopoverState.outsideHandler, true);
+      columnsPopoverState.outsideHandler = null;
+    }
+    if (columnsPopoverState.keyHandler) {
+      document.removeEventListener('keydown', columnsPopoverState.keyHandler);
+      columnsPopoverState.keyHandler = null;
+    }
+    if (columnsPopoverState.scrollHandler) {
+      window.removeEventListener('scroll', columnsPopoverState.scrollHandler, true);
+      columnsPopoverState.scrollHandler = null;
+    }
+    if (columnsPopoverState.resizeHandler) {
+      window.removeEventListener('resize', columnsPopoverState.resizeHandler);
+      columnsPopoverState.resizeHandler = null;
+    }
+    columnsPopoverState.anchor = null;
+  }
+
+  function repositionColumnsPopover() {
+    const popover = columnsPopoverState.el;
+    const anchor = columnsPopoverState.anchor;
+    if (!popover || !anchor) return;
+    if (!document.body.contains(anchor)) {
+      // Anchor was re-rendered out from under us. Close to avoid
+      // leaving an orphaned popover floating on the page.
+      closeColumnsPopover();
+      return;
+    }
+    const rect = anchor.getBoundingClientRect();
+    const popWidth = popover.offsetWidth || 268;
+    const GAP = 6;
+    let top = rect.bottom + GAP;
+    let left = rect.right - popWidth;
+    if (left < 8) left = 8;
+    if (top + popover.offsetHeight + 8 > window.innerHeight) {
+      // Flip above the anchor when there's no room below.
+      top = Math.max(8, rect.top - popover.offsetHeight - GAP);
+    }
+    popover.style.top = top + 'px';
+    popover.style.left = left + 'px';
+  }
+
+  function renderColumnsPopoverContents(popover) {
+    popover.innerHTML = '';
+
+    const header = document.createElement('div');
+    header.className = 'fmn-columns-popover-header';
+    const title = document.createElement('span');
+    title.className = 'fmn-columns-popover-title';
+    title.textContent = 'Columns';
+    const ctx = document.createElement('span');
+    ctx.className = 'fmn-columns-popover-context';
+    ctx.textContent = INSTANCES_PATH;
+    header.appendChild(title);
+    header.appendChild(ctx);
+    popover.appendChild(header);
+
+    const list = document.createElement('div');
+    list.className = 'fmn-columns-popover-list';
+    for (const col of currentNativeColumns) {
+      const meta = NATIVE_META_BY_ID.get(col.id);
+      if (!meta) continue;
+      const row = document.createElement('div');
+      row.className = 'fmn-columns-popover-row';
+      if (meta.lockedVisible) row.classList.add('is-locked');
+      if (col.hidden && !meta.lockedVisible) row.classList.add('is-hidden');
+
+      const name = document.createElement('span');
+      name.className = 'fmn-col-name';
+      name.textContent = COLUMNS_LABEL_BY_ID[col.id] || meta.matchText || col.id;
+      row.appendChild(name);
+
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'fmn-col-toggle';
+      const isVisible = meta.lockedVisible || !col.hidden;
+      if (isVisible) toggle.classList.add('is-on');
+      toggle.textContent = isVisible ? '\u{1F441}' : '\u{1F441}';
+      toggle.title = meta.lockedVisible
+        ? 'This column is always visible'
+        : isVisible ? 'Hide this column' : 'Show this column';
+      if (meta.lockedVisible) {
+        toggle.disabled = true;
+      } else {
+        toggle.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setNativeColumnHidden(col.id, !col.hidden).catch((err) => {
+            console.error('[FMN columns]', 'toggle failed', err);
+          });
+        });
+      }
+      row.appendChild(toggle);
+      list.appendChild(row);
+    }
+    popover.appendChild(list);
+
+    const footer = document.createElement('div');
+    footer.className = 'fmn-columns-popover-footer';
+    const reset = document.createElement('button');
+    reset.type = 'button';
+    reset.className = 'fmn-columns-popover-reset';
+    reset.textContent = 'Reset to default';
+    reset.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      resetNativeColumns().catch((err) => {
+        console.error('[FMN columns]', 'reset failed', err);
+      });
+    });
+    footer.appendChild(reset);
+    popover.appendChild(footer);
+  }
+
+  async function setNativeColumnHidden(colId, hidden) {
+    const meta = NATIVE_META_BY_ID.get(colId);
+    if (!meta || meta.lockedVisible) return;
+    const data = await chrome.storage.local.get(WEBGUI_COLUMNS_KEY);
+    const all = (data && data[WEBGUI_COLUMNS_KEY]) || {};
+    const list = normalizeNativeColumnOrder(all[NATIVE_AUG_ID]);
+    for (const col of list) {
+      if (col.id === colId) {
+        col.hidden = Boolean(hidden);
+        break;
+      }
+    }
+    all[NATIVE_AUG_ID] = list;
+    await chrome.storage.local.set({ [WEBGUI_COLUMNS_KEY]: all });
+  }
+
+  async function resetNativeColumns() {
+    const data = await chrome.storage.local.get(WEBGUI_COLUMNS_KEY);
+    const all = (data && data[WEBGUI_COLUMNS_KEY]) || {};
+    if (!all[NATIVE_AUG_ID]) return;
+    delete all[NATIVE_AUG_ID];
+    await chrome.storage.local.set({ [WEBGUI_COLUMNS_KEY]: all });
+  }
+
+  // Re-render popover contents whenever the native-columns storage
+  // entry changes, so toggling in the popup card is mirrored here.
+  function subscribeColumnsPopoverToStorage() {
+    if (!chrome.storage || !chrome.storage.onChanged) return;
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName && areaName !== 'local') return;
+      if (!changes || !changes[WEBGUI_COLUMNS_KEY]) return;
+      if (!columnsPopoverState.el) return;
+      // Defer one frame so the FMN-123 listener has updated
+      // currentNativeColumns first.
+      Promise.resolve().then(() => {
+        if (columnsPopoverState.el) {
+          renderColumnsPopoverContents(columnsPopoverState.el);
+        }
+      });
+    });
+  }
+  subscribeColumnsPopoverToStorage();
+
+  register({
+    id: COLUMNS_MENU_ID,
+    mount() {
+      if (location.pathname !== INSTANCES_PATH) return;
+      const existing = document.querySelector(
+        `[${ENTRY_ATTR}="${COLUMNS_MENU_ID}"]`
+      );
+      if (existing && document.body.contains(existing)) {
+        // Button still present; reposition popover if open in case
+        // the action bar shifted (FortiMonitor re-render, viewport).
+        if (columnsPopoverState.el) repositionColumnsPopover();
+        return;
+      }
+      const actionBar = findInstancesActionBar();
+      if (!actionBar) return;
+      ensureColumnsMenuStyles();
+      const button = buildColumnsButton();
+      actionBar.appendChild(button);
+    },
+  });
+
   function ensureColumnStyles() {
     if (document.getElementById('fmn-ip-column-styles')) return;
     const style = document.createElement('style');
