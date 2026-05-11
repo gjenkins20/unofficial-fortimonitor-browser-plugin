@@ -18,13 +18,25 @@ place.
 
 ## Unreleased
 
+- FMN-153: IP Address and DNS Name columns on `/report/ListServers` now
+  walk the full `pageData.instance.fqdns[]` array and classify each entry
+  by value (IPv4 / IPv6 / hostname), instead of reading only the scalar
+  `pageData.instance.fqdn`. Surfaces real addresses that the prior code
+  missed (e.g., instances whose primary fqdn is a label like "server"
+  while a secondary entry carries the real IP).
+- FMN-153: Universal search bar now classifies `fqdn + additional_fqdns`
+  on ingest and tags results with `field: 'ip'` or `field: 'dns'`
+  accurately, so the result snippet reads from the right list.
+
+## v1.0.1 - 2026-05-11
+
 - FMN-157: Popup version display now reads from `chrome.runtime.getManifest().version`
   instead of a hardcoded string, closing the drift seen between popup `v0.7.0`
   and manifest `1.0.0`.
 - FMN-157: This `CHANGELOG.md` seeded.
 - FMN-157: `v1.0.0` git tag created retroactively on `github/main` so future
   releases have a canonical predecessor reference.
-- FMN-157 (planned): Persistent Dev Launcher generalized from
+- FMN-157: Persistent Dev Launcher generalized from
   `tools/dev/fmn-151-browser.mjs` to `tools/dev/launcher.mjs` (target URL via
   flag). Internal tooling; no operator-visible change.
 

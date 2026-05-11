@@ -113,8 +113,18 @@
   const SERVER_ID_RE = /^s-(\d+)$/;
   const APPLIANCE_ID_RE = /^a-\d+$/;
   const OTHER_ID_RE = /^cs-\d+$/;
-  const IPV4_RE = /^(\d{1,3}\.){3}\d{1,3}$/;
-  const IPV6_HINT_RE = /^[0-9a-fA-F:]+$/;
+  // FMN-71 baseline regexes. FMN-153 expanded the classifier to walk the
+  // full pageData.instance.fqdns[] array (each entry is { fqdn, ipTypes })
+  // and validate token shape locally. The ipTypes hint from FortiMonitor
+  // is unreliable - observed cases (FMN-153 capture 2026-05-11): the
+  // literal string "server" arrives tagged ipTypes:"v4", and "yahoo.com"
+  // arrives tagged ipTypes:"v6". We classify from value alone.
+  const IPV4_RE = /^(25[0-5]|2[0-4]\d|[01]?\d?\d)(\.(25[0-5]|2[0-4]\d|[01]?\d?\d)){3}$/;
+  const IPV6_HINT_RE = /^[0-9a-fA-F:]+:[0-9a-fA-F:]+$/;
+  // Hostname must contain at least one dot, every label is 1-63 chars and
+  // alphanumeric/hyphen (no leading/trailing hyphen). Rejects bare words
+  // like "server" (no dot) and IP-shaped strings (caught by IPV4_RE first).
+  const HOSTNAME_RE = /^[a-zA-Z0-9]([-a-zA-Z0-9]{0,62}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([-a-zA-Z0-9]{0,62}[a-zA-Z0-9])?)+\.?$/;
   const FETCH_CONCURRENCY = 3;
   const HEADER_AUG_ATTR = 'data-fmn-ip-augmented';
   const ROW_AUG_ATTR = 'data-fmn-ip-row-augmented';
@@ -1494,13 +1504,51 @@
     return a.localeCompare(b);
   }
 
-  function classifyFqdn(fqdn) {
-    if (typeof fqdn !== 'string') return { ip: null, dns: null };
-    const v = fqdn.trim();
-    if (!v) return { ip: null, dns: null };
-    if (IPV4_RE.test(v)) return { ip: v, dns: null };
-    if (v.includes(':') && IPV6_HINT_RE.test(v)) return { ip: v, dns: null };
-    return { ip: null, dns: v };
+  // FMN-153: classify a single FQDN-shaped string. Strict hostname check
+  // rejects bare-word values like "server" instead of routing them to the
+  // DNS column. Returns 'ipv4' | 'ipv6' | 'dns' | null.
+  function classifyAddressToken(raw) {
+    if (typeof raw !== 'string') return null;
+    const v = raw.trim();
+    if (!v) return null;
+    if (IPV4_RE.test(v)) return 'ipv4';
+    if (v.includes(':') && IPV6_HINT_RE.test(v)) return 'ipv6';
+    if (HOSTNAME_RE.test(v) && v.includes('.')) return 'dns';
+    return null;
+  }
+
+  // FMN-153: walk pageData.instance.fqdns[] (FMN-71 originally read only
+  // the scalar instance.fqdn; this missed real addresses sitting at
+  // fqdns[1+] and surfaced "server"-as-IP / "yahoo.com"-as-IP confusion).
+  // Returns { ips: string[], dnsNames: string[] }, both deduped in
+  // insertion order; unclassifiable tokens (e.g., "server") are dropped.
+  function classifyFqdns(inst) {
+    const ips = [];
+    const ipSet = new Set();
+    const dnsNames = [];
+    const dnsSet = new Set();
+    const candidates = [];
+    if (inst && Array.isArray(inst.fqdns)) {
+      for (const entry of inst.fqdns) {
+        if (entry && typeof entry.fqdn === 'string') candidates.push(entry.fqdn);
+      }
+    }
+    // Defensive fallback: if for any reason fqdns[] is missing, fall back
+    // to the scalar fqdn so existing rows still render something.
+    if (candidates.length === 0 && inst && typeof inst.fqdn === 'string') {
+      candidates.push(inst.fqdn);
+    }
+    for (const c of candidates) {
+      const kind = classifyAddressToken(c);
+      if (!kind) continue;
+      const v = c.trim();
+      if (kind === 'ipv4' || kind === 'ipv6') {
+        if (!ipSet.has(v)) { ipSet.add(v); ips.push(v); }
+      } else if (kind === 'dns') {
+        if (!dnsSet.has(v)) { dnsSet.add(v); dnsNames.push(v); }
+      }
+    }
+    return { ips, dnsNames };
   }
 
   function enqueueFetch(serverId) {
@@ -1541,7 +1589,12 @@
     let body;
     try { body = await res.json(); } catch { return { state: 'failed' }; }
     const inst = body && body.pageData && body.pageData.instance;
-    const { ip, dns } = classifyFqdn(inst && inst.fqdn);
+    // FMN-153: walk fqdns[] not scalar fqdn. ips / dnsNames are arrays so
+    // the omni-search corpus can search each token individually. ip / dns
+    // remain joined strings for the existing cell-render path.
+    const { ips, dnsNames } = classifyFqdns(inst);
+    const ip = ips.length ? ips.join(', ') : null;
+    const dns = dnsNames.length ? dnsNames.join(', ') : null;
     // FMN-76: Model / Model # / OS pulled from fabricSystemData. Populated only
     // on Fortinet/fabric devices; non-fabric rows resolve as null and render
     // 'n/a' per the ticket's accepted empty state. pageData.instance.deviceModel
@@ -1551,7 +1604,7 @@
     const model = (fsd && typeof fsd.model_name === 'string' && fsd.model_name) || null;
     const modelNumber = (fsd && typeof fsd.model_number === 'string' && fsd.model_number) || null;
     const os = (fsd && typeof fsd.os_version === 'string' && fsd.os_version) || null;
-    return { state: 'resolved', ip, dns, model, modelNumber, os };
+    return { state: 'resolved', ip, dns, ips, dnsNames, model, modelNumber, os };
   }
 
   function paintCellsForServer(serverId) {
@@ -2044,7 +2097,17 @@
     const field = row.matched_field;
     if (field === 'name') return '';
     if (field === 'fqdn') return row.fqdn;
-    if (field === 'ip') return (row.additional_fqdns || []).join(', ');
+    // FMN-153: ips / dns_names classified at ingest; fall back to the
+    // legacy additional_fqdns array for entries that pre-date the change
+    // or are absent for any reason.
+    if (field === 'ip') {
+      const ips = Array.isArray(row.ips) && row.ips.length ? row.ips : (row.additional_fqdns || []);
+      return ips.join(', ');
+    }
+    if (field === 'dns') {
+      const dns = Array.isArray(row.dns_names) && row.dns_names.length ? row.dns_names : (row.additional_fqdns || []);
+      return dns.join(', ');
+    }
     if (field === 'description') return row.description;
     if (field === 'tag') return (row.tags || []).join(', ');
     if (field === 'attribute') {

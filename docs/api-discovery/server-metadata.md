@@ -75,13 +75,47 @@ Field notes:
 | `pageData.instance.id` | integer | Server id (matches `server_id` query param) |
 | `pageData.instance.name` | string | **Human-readable server name** - what the operator sees in the UI breadcrumbs and page title |
 | `pageData.instance.formattedName` | string | `"{name} ({fqdn})"` - useful for display contexts that want both |
-| `pageData.instance.fqdn` | string | Primary host/IP |
+| `pageData.instance.fqdn` | string | Primary host/IP - **only the first entry of `fqdns[]`**. Do not rely on this alone (see FMN-153 note below). |
+| `pageData.instance.fqdns` | array of `{ fqdn, ipTypes }` | **Full list of host/IP entries for the instance.** Source of truth; the scalar `.fqdn` is just `fqdns[0].fqdn`. |
 | `pageData.instance.deviceSubType` | string | e.g., `"fortinet.fortigate"` - useful filter for FortiGate-only tools |
 | `pageData.instance.serverKey` | string | Internal key (not used by plugin) |
 | `pageData.instance.status` | string | `"active"` for normal devices |
 | `success` | boolean | Set on successful JSON responses |
 
 The plugin uses only `pageData.instance.name` (and optionally `formattedName` for display). The other ~85 fields are ignored but documented here in case future tools need them.
+
+### FMN-153 finding: `fqdns[]` array, and `ipTypes` is unreliable
+
+Captured 2026-05-11 against 19 representative instances on a production tenant.
+
+`pageData.instance.fqdns` is the canonical list of address entries for the instance. Each entry has the shape `{ fqdn: string, ipTypes: "v4" | "v6" | ... }`. The scalar `pageData.instance.fqdn` is simply `fqdns[0].fqdn`; relying on it alone misses every secondary address.
+
+**The `ipTypes` hint is not trustworthy** - it appears to record the type chosen at instance-configuration time, not the actual content. Observed cases on the captured tenant:
+
+| `fqdns[i].fqdn` | `fqdns[i].ipTypes` | Reality |
+|---|---|---|
+| `"server"` (literal word, no dot) | `"v4"` | Not an address at all |
+| Hostname like `"yahoo.com"` | `"v6"` (sometimes) | Hostname, not IPv6 |
+| Hostname like `"www.slack.com"` | `"v4"` | Hostname, not IPv4 |
+| Plain IPv4 like `"10.0.0.94"` | `"v4"` | Correct (coincidence on this set) |
+
+Callers must classify each `fqdns[i].fqdn` string from value alone using local regex. The toolkit's classifier (FMN-153, in `extension/src/content/augment.js` and `extension/src/background/omni-search-handlers.js`) accepts:
+
+- IPv4 - strict octet-bounded regex - routes to the IP Address column
+- IPv6 - hex+colon shape with at least one colon - routes to the IP Address column
+- Hostname - DNS-label form with at least one dot - routes to the DNS Name column
+- Anything else (bare words, status text, URLs with schemes) - **dropped**
+
+Multi-value cases render comma-separated. Duplicates are deduped in insertion order.
+
+### What the plugin actually reads from `instance.*`
+
+| Use site | Field(s) |
+|---|---|
+| FMN-61 name resolution | `pageData.instance.name`, `formattedName` |
+| FMN-71 IP Address sub-column | classified from `pageData.instance.fqdns[*].fqdn` |
+| FMN-71 DNS Name sub-column | classified from `pageData.instance.fqdns[*].fqdn` |
+| FMN-76 Model / Model # / OS | `pageData.fabricSystemData.{model_name, model_number, os_version}` (Fortinet/fabric only) |
 
 ---
 

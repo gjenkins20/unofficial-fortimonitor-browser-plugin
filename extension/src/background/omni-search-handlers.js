@@ -24,6 +24,42 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 const STORAGE_KEY_PREFIX = 'fm:omni-search-cache:';
 const MAX_RESULTS_DEFAULT = 20;
 
+// FMN-153: classify address-shaped strings locally. Duplicate of the
+// classifier in src/content/augment.js (intentionally inline - content
+// scripts can't ES-import). Returns 'ipv4' | 'ipv6' | 'dns' | null.
+// Hostname rule requires at least one dot to reject bare-word values
+// (e.g., the literal "server" observed as fqdn on some instances).
+const FMN153_IPV4_RE = /^(25[0-5]|2[0-4]\d|[01]?\d?\d)(\.(25[0-5]|2[0-4]\d|[01]?\d?\d)){3}$/;
+const FMN153_IPV6_RE = /^[0-9a-fA-F:]+:[0-9a-fA-F:]+$/;
+const FMN153_HOST_RE = /^[a-zA-Z0-9]([-a-zA-Z0-9]{0,62}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([-a-zA-Z0-9]{0,62}[a-zA-Z0-9])?)+\.?$/;
+function classifyAddressToken(raw) {
+  if (typeof raw !== 'string') return null;
+  const v = raw.trim();
+  if (!v) return null;
+  if (FMN153_IPV4_RE.test(v)) return 'ipv4';
+  if (v.includes(':') && FMN153_IPV6_RE.test(v)) return 'ipv6';
+  if (FMN153_HOST_RE.test(v) && v.includes('.')) return 'dns';
+  return null;
+}
+// Split a list of FQDN strings into deduped ips[] / dnsNames[] arrays.
+function partitionAddresses(tokens) {
+  const ips = [];
+  const ipSet = new Set();
+  const dnsNames = [];
+  const dnsSet = new Set();
+  for (const t of tokens) {
+    const kind = classifyAddressToken(t);
+    if (!kind) continue;
+    const v = t.trim();
+    if (kind === 'ipv4' || kind === 'ipv6') {
+      if (!ipSet.has(v)) { ipSet.add(v); ips.push(v); }
+    } else if (kind === 'dns') {
+      if (!dnsSet.has(v)) { dnsSet.add(v); dnsNames.push(v); }
+    }
+  }
+  return { ips, dnsNames };
+}
+
 let memCache = new Map(); // tenantOrigin -> { fetchedAt, servers, corpus }
 let pendingBuilds = new Map(); // tenantOrigin -> Promise<cache>, dedupes concurrent builds
 
@@ -131,11 +167,19 @@ function buildServerEntry(server, groupNameById, templateNameById) {
       if (tid != null && templateNameById.has(tid)) templateNames.push(templateNameById.get(tid));
     }
   }
+  // FMN-153: classify fqdn + additional_fqdns into ips[] / dns_names[]
+  // so the scorer and snippet renderer can label matches correctly. The
+  // raw additional_fqdns array is kept for back-compat with any reader
+  // that depends on it.
+  const additional = Array.isArray(server.additional_fqdns) ? server.additional_fqdns : [];
+  const { ips, dnsNames } = partitionAddresses([server.fqdn, ...additional]);
   return {
     id,
     name: server.name ?? '',
     fqdn: server.fqdn ?? '',
-    additional_fqdns: Array.isArray(server.additional_fqdns) ? server.additional_fqdns : [],
+    additional_fqdns: additional,
+    ips,
+    dns_names: dnsNames,
     description: server.description ?? '',
     tags: Array.isArray(server.tags) ? server.tags : [],
     attributes: Array.isArray(server.attributes)
@@ -227,8 +271,20 @@ export function scoreServer(server, q) {
   if (name.startsWith(q)) return { score: 800, field: 'name' };
   if (fqdn.startsWith(q)) return { score: 700, field: 'fqdn' };
   if (name.includes(q)) return { score: 600, field: 'name' };
-  if ((server.additional_fqdns || []).some((a) => String(a).toLowerCase().includes(q))) {
+  // FMN-153: differentiate IP matches from DNS-name matches so the
+  // snippet renderer can label them accurately. ips[] and dns_names[]
+  // are classified at ingest time (buildServerEntry).
+  if ((server.ips || []).some((a) => String(a).toLowerCase().includes(q))) {
     return { score: 500, field: 'ip' };
+  }
+  if ((server.dns_names || []).some((a) => String(a).toLowerCase().includes(q))) {
+    return { score: 500, field: 'dns' };
+  }
+  // Fallback: legacy additional_fqdns hit (token didn't pass strict
+  // classification but the operator pre-FMN-153 corpus would have
+  // matched it). Score it the same; field label is generic.
+  if ((server.additional_fqdns || []).some((a) => String(a).toLowerCase().includes(q))) {
+    return { score: 480, field: 'fqdn' };
   }
   if (fqdn.includes(q)) return { score: 400, field: 'fqdn' };
   if ((server.tags || []).some((t) => String(t).toLowerCase() === q)) {
