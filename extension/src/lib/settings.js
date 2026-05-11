@@ -21,6 +21,12 @@ export const BPA_AUDIT_ENABLED_KEY = 'fm:bpaAuditEnabled';
 // Beta-gated until FMN-138 (Discovery) lands and the FortiMonitor SSO
 // save endpoint is wired up; until then the wizard supports dry-run only.
 export const SSO_CONFIG_ENABLED_KEY = 'fm:ssoConfigEnabled';
+// FMN-152: per-tool flag for the in-page omni-search input. When on, the
+// toolkit replaces FortiMonitor's "Search Instances" input with a search
+// that matches across every server field (name, fqdn, IP, description,
+// tags, attributes, model, OS, agent version, group, template). Off by
+// default; operator opts in via popup Settings.
+export const OMNI_SEARCH_ENABLED_KEY = 'fm:omniSearchEnabled';
 
 export const ASK_CLAUDE_TOOL_TIERS = ['readonly', 'readwrite', 'all'];
 export const DEFAULT_ASK_CLAUDE_TOOL_TIER = 'readonly';
@@ -290,6 +296,31 @@ export async function isSidebarLauncherEnabled(storage = defaultStorage()) {
  */
 export async function setSidebarLauncherEnabled(enabled, storage = defaultStorage()) {
   await storage.set({ [SIDEBAR_LAUNCHER_ENABLED_KEY]: Boolean(enabled) });
+}
+
+/**
+ * Read the FMN-152 omni-search-enabled flag. Off by default: a fresh
+ * install leaves FortiMonitor's native "Search Instances" untouched.
+ *
+ * @param {{ get: (key: string) => Promise<Record<string, any>> }} [storage]
+ */
+export async function isOmniSearchEnabled(storage = defaultStorage()) {
+  try {
+    const data = await storage.get(OMNI_SEARCH_ENABLED_KEY);
+    return Boolean(data?.[OMNI_SEARCH_ENABLED_KEY]);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Persist the FMN-152 omni-search-enabled flag.
+ *
+ * @param {boolean} enabled
+ * @param {{ set: (obj: Record<string, any>) => Promise<void> }} [storage]
+ */
+export async function setOmniSearchEnabled(enabled, storage = defaultStorage()) {
+  await storage.set({ [OMNI_SEARCH_ENABLED_KEY]: Boolean(enabled) });
 }
 
 /**

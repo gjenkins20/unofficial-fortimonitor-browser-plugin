@@ -479,6 +479,17 @@
     </div>
 
     <div class="settings-section">
+      <label class="settings-label" for="omni-search-toggle">Replace FortiMonitor's "Search Instances"</label>
+      <p class="settings-help">
+        Off by default. When on, the toolkit hides FortiMonitor's <em>Search Instances</em> input in the top bar and replaces it with an <strong>FM TK Search</strong> input that matches across every server field the v2 API exposes: name, fqdn, IP addresses, description, tags, attributes (Operating System, Model, custom), device type, agent version, server group, and applied template. Toggle off to restore FortiMonitor's native search. Requires a configured RW API key.
+      </p>
+      <label class="toggle-row">
+        <input id="omni-search-toggle" type="checkbox">
+        <span>Use FM TK Search instead of native "Search Instances"</span>
+      </label>
+    </div>
+
+    <div class="settings-section">
       <label class="settings-label" for="feature-badges-toggle">"FM Toolkit" attribution badges</label>
       <p class="settings-help">
         On by default. When on, each visible UI feature this extension adds to FortiMonitor pages carries a small diagonal <strong>FM Toolkit</strong> ribbon in its top-right corner, so you can tell at a glance which controls come from this extension vs. native FortiMonitor. The ribbons are click-through and persist for the page lifetime. Toggle off to hide them; the change takes effect on the next page load.

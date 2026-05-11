@@ -75,6 +75,7 @@ tools/discovery/sso-capture-*.json
 
 # FMN-151 live-FortiMonitor reproduction profile (cookies, local storage)
 tests/e2e/.profile-fmn-live/
+tests/e2e/.profile-fmn-live-cookies.json
 
 # Live-spec artifacts (screenshots + JSON capture customer data from real tenant)
 tests/e2e/__artifacts__/

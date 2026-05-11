@@ -1900,6 +1900,428 @@
     });
   }
 
+  // FMN-152: in-page omni-search across every searchable server field.
+  // Replaces FortiMonitor's "Search Instances" input in the top bar
+  // with a search that matches across name, fqdn, IPs, description,
+  // tags, attributes (incl. Model + OS), device type, agent version,
+  // group, template. Off by default; operator opts in via popup
+  // Settings -> "Replace FortiMonitor's Search Instances with FM TK
+  // Search". When on, the native input is hidden; when off, our DOM
+  // is removed and the native input is restored.
+  const OMNI_AUG_ID = 'omni-search';
+  const OMNI_CONTAINER_ID = 'fmn-omni-search-container';
+  const OMNI_INPUT_ID = 'fmn-omni-search-input';
+  const OMNI_DROPDOWN_ID = 'fmn-omni-search-dropdown';
+  const OMNI_STYLE_ID = 'fmn-omni-search-styles';
+  const OMNI_FM_SEARCH_SELECTOR = 'input[placeholder="Search Instances"]';
+  const OMNI_DEBOUNCE_MS = 180;
+  const OMNI_SEARCH_KEY = 'fm:omniSearchEnabled';
+  const OMNI_NATIVE_HIDDEN_ATTR = 'data-fmn-omni-search-hidden';
+
+  let omniSearchEnabled = false;
+  let omniSearchFlagLoaded = false;
+
+  const omniState = {
+    debounceTimer: null,
+    activeIndex: -1,
+    lastResults: [],
+    lastQuery: '',
+    isOpen: false,
+  };
+
+  function ensureOmniStyles() {
+    if (document.getElementById(OMNI_STYLE_ID)) return;
+    const style = document.createElement('style');
+    style.id = OMNI_STYLE_ID;
+    style.textContent = `
+      #${OMNI_CONTAINER_ID} {
+        position: relative; display: inline-flex; align-items: center;
+        margin-right: 8px; vertical-align: middle;
+      }
+      #${OMNI_CONTAINER_ID} .fmn-omni-chip {
+        font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em;
+        color: #ffffff; background: #3954BF; padding: 2px 5px;
+        border-radius: 3px; margin-right: 6px; text-transform: uppercase;
+        flex: 0 0 auto;
+      }
+      #${OMNI_INPUT_ID} {
+        height: 32px; width: 220px; padding: 0 10px;
+        border: 1px solid #D6D9DD; border-radius: 4px; background: #fff;
+        font: inherit; font-size: 13px; color: #394449;
+        outline: none;
+      }
+      #${OMNI_INPUT_ID}:focus {
+        border-color: #3954BF; box-shadow: 0 0 0 2px rgba(57,84,191,0.12);
+      }
+      #${OMNI_DROPDOWN_ID} {
+        position: absolute; top: 100%; left: 0;
+        min-width: 380px; max-width: 480px; margin-top: 4px;
+        background: #ffffff; border: 1px solid #D6D9DD; border-radius: 6px;
+        box-shadow: 0 8px 24px rgba(15,23,42,0.12);
+        z-index: 100000; max-height: 460px; overflow-y: auto;
+        display: none;
+      }
+      #${OMNI_DROPDOWN_ID}.is-open { display: block; }
+      .fmn-omni-row {
+        display: grid; grid-template-columns: 1fr auto;
+        align-items: center; gap: 10px;
+        padding: 8px 12px; border-bottom: 1px solid #E4E7EB;
+        cursor: pointer; font-size: 12.5px;
+      }
+      .fmn-omni-row:last-child { border-bottom: none; }
+      .fmn-omni-row:hover, .fmn-omni-row.is-active {
+        background: #F4F6FB;
+      }
+      .fmn-omni-row-name {
+        font-weight: 600; color: #394449;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      .fmn-omni-row-snippet {
+        color: #6B7280; font-size: 11px; margin-top: 2px;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      .fmn-omni-badge {
+        font-size: 10px; font-weight: 600; text-transform: uppercase;
+        color: #3954BF; background: #E8ECF8; padding: 2px 6px;
+        border-radius: 3px; letter-spacing: 0.04em;
+      }
+      .fmn-omni-empty, .fmn-omni-error, .fmn-omni-loading {
+        padding: 10px 12px; color: #6B7280; font-size: 12px;
+      }
+      .fmn-omni-error { color: #B91C1C; }
+      .fmn-omni-footer {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 6px 12px; background: #FAFBFC; border-top: 1px solid #E4E7EB;
+        font-size: 10.5px; color: #6B7280;
+      }
+      .fmn-omni-refresh {
+        background: transparent; border: none; color: #3954BF;
+        font: inherit; font-size: 10.5px; cursor: pointer; padding: 0;
+      }
+      .fmn-omni-refresh:hover { text-decoration: underline; }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function omniRequest(type, payload = {}) {
+    return new Promise((resolve, reject) => {
+      try {
+        chrome.runtime.sendMessage({ type, payload }, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          if (!response || !response.ok) {
+            reject(new Error(response?.error ?? 'omni-search request failed'));
+            return;
+          }
+          resolve(response.result);
+        });
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  function omniDetailPath(serverId) {
+    if (serverId == null) return null;
+    return `/report/Instance/${serverId}/details`;
+  }
+
+  function omniSnippetForRow(row) {
+    const field = row.matched_field;
+    if (field === 'name') return '';
+    if (field === 'fqdn') return row.fqdn;
+    if (field === 'ip') return (row.additional_fqdns || []).join(', ');
+    if (field === 'description') return row.description;
+    if (field === 'tag') return (row.tags || []).join(', ');
+    if (field === 'attribute') {
+      const a = (row.attributes || [])[0];
+      return a ? `${a.name}: ${a.value}` : '';
+    }
+    if (field === 'device_type') return row.device_type || row.device_sub_type;
+    if (field === 'agent_version') return row.agent_version;
+    if (field === 'group') return row.group_name;
+    if (field === 'template') return (row.template_names || []).join(', ');
+    if (field === 'status') return row.status;
+    return '';
+  }
+
+  function omniRenderResults(results, query) {
+    const dropdown = document.getElementById(OMNI_DROPDOWN_ID);
+    if (!dropdown) return;
+    dropdown.innerHTML = '';
+    omniState.lastResults = results.matches || [];
+    omniState.lastQuery = query;
+    omniState.activeIndex = -1;
+    if (!results.matches || results.matches.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'fmn-omni-empty';
+      empty.textContent = `No matches for "${query}".`;
+      dropdown.appendChild(empty);
+    } else {
+      for (let i = 0; i < results.matches.length; i++) {
+        const r = results.matches[i];
+        const row = document.createElement('div');
+        row.className = 'fmn-omni-row';
+        row.setAttribute('data-index', String(i));
+        const text = document.createElement('div');
+        const name = document.createElement('div');
+        name.className = 'fmn-omni-row-name';
+        name.textContent = r.name || `Server ${r.id}`;
+        text.appendChild(name);
+        const snippet = omniSnippetForRow(r);
+        if (snippet) {
+          const sn = document.createElement('div');
+          sn.className = 'fmn-omni-row-snippet';
+          sn.textContent = snippet;
+          text.appendChild(sn);
+        }
+        const badge = document.createElement('span');
+        badge.className = 'fmn-omni-badge';
+        badge.textContent = r.matched_field || 'match';
+        row.appendChild(text);
+        row.appendChild(badge);
+        row.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          omniNavigateTo(r);
+        });
+        dropdown.appendChild(row);
+      }
+    }
+    // Footer with refresh
+    const footer = document.createElement('div');
+    footer.className = 'fmn-omni-footer';
+    const left = document.createElement('span');
+    left.textContent = `${results.matches?.length ?? 0} matches`;
+    footer.appendChild(left);
+    const refresh = document.createElement('button');
+    refresh.type = 'button';
+    refresh.className = 'fmn-omni-refresh';
+    refresh.textContent = 'Refresh cache';
+    refresh.addEventListener('mousedown', async (e) => {
+      e.preventDefault();
+      await omniRefreshCache();
+      omniRunSearch(query);
+    });
+    footer.appendChild(refresh);
+    dropdown.appendChild(footer);
+  }
+
+  function omniRenderState(label, kind = 'loading') {
+    const dropdown = document.getElementById(OMNI_DROPDOWN_ID);
+    if (!dropdown) return;
+    dropdown.innerHTML = '';
+    const el = document.createElement('div');
+    el.className = kind === 'error' ? 'fmn-omni-error' : 'fmn-omni-loading';
+    el.textContent = label;
+    dropdown.appendChild(el);
+  }
+
+  function omniOpen() {
+    const dropdown = document.getElementById(OMNI_DROPDOWN_ID);
+    if (!dropdown) return;
+    dropdown.classList.add('is-open');
+    omniState.isOpen = true;
+  }
+
+  function omniClose() {
+    const dropdown = document.getElementById(OMNI_DROPDOWN_ID);
+    if (!dropdown) return;
+    dropdown.classList.remove('is-open');
+    omniState.isOpen = false;
+    omniState.activeIndex = -1;
+  }
+
+  function omniNavigateTo(row) {
+    const path = omniDetailPath(row.id);
+    if (!path) return;
+    omniClose();
+    const input = document.getElementById(OMNI_INPUT_ID);
+    if (input) input.value = '';
+    window.location.href = path;
+  }
+
+  async function omniRunSearch(query) {
+    if (!query || !query.trim()) {
+      omniClose();
+      return;
+    }
+    omniRenderState('Searching...');
+    omniOpen();
+    try {
+      const result = await omniRequest('omni-search:query', { query, max: 25 });
+      omniRenderResults(result, query);
+    } catch (e) {
+      omniRenderState(e.message || 'Search failed', 'error');
+    }
+  }
+
+  async function omniRefreshCache() {
+    omniRenderState('Refreshing cache...');
+    try {
+      await omniRequest('omni-search:refresh', {});
+    } catch (e) {
+      omniRenderState(e.message || 'Refresh failed', 'error');
+    }
+  }
+
+  function omniHighlightActive() {
+    const dropdown = document.getElementById(OMNI_DROPDOWN_ID);
+    if (!dropdown) return;
+    const rows = dropdown.querySelectorAll('.fmn-omni-row');
+    rows.forEach((r, i) => r.classList.toggle('is-active', i === omniState.activeIndex));
+    if (omniState.activeIndex >= 0 && rows[omniState.activeIndex]) {
+      rows[omniState.activeIndex].scrollIntoView({ block: 'nearest' });
+    }
+  }
+
+  function buildOmniContainer() {
+    const container = document.createElement('div');
+    container.id = OMNI_CONTAINER_ID;
+    const chip = document.createElement('span');
+    chip.className = 'fmn-omni-chip';
+    chip.textContent = 'FM TK';
+    const input = document.createElement('input');
+    input.id = OMNI_INPUT_ID;
+    input.type = 'search';
+    input.placeholder = 'Search all fields';
+    input.autocomplete = 'off';
+    const dropdown = document.createElement('div');
+    dropdown.id = OMNI_DROPDOWN_ID;
+
+    input.addEventListener('input', (e) => {
+      const q = e.target.value;
+      if (omniState.debounceTimer) clearTimeout(omniState.debounceTimer);
+      omniState.debounceTimer = setTimeout(() => omniRunSearch(q), OMNI_DEBOUNCE_MS);
+    });
+    input.addEventListener('focus', () => {
+      if (omniState.lastResults.length > 0 && input.value) omniOpen();
+    });
+    input.addEventListener('keydown', (e) => {
+      if (!omniState.isOpen) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        omniState.activeIndex = Math.min(
+          omniState.activeIndex + 1,
+          (omniState.lastResults?.length ?? 0) - 1
+        );
+        omniHighlightActive();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        omniState.activeIndex = Math.max(omniState.activeIndex - 1, -1);
+        omniHighlightActive();
+      } else if (e.key === 'Enter') {
+        const row = omniState.lastResults[omniState.activeIndex];
+        if (row) omniNavigateTo(row);
+      } else if (e.key === 'Escape') {
+        omniClose();
+        input.blur();
+      }
+    });
+    document.addEventListener('mousedown', (e) => {
+      if (!container.contains(e.target)) omniClose();
+    }, { capture: true });
+
+    container.appendChild(chip);
+    container.appendChild(input);
+    container.appendChild(dropdown);
+    return container;
+  }
+
+  function ensureNativeHiddenStyle() {
+    const id = 'fmn-omni-search-native-hidden';
+    if (document.getElementById(id)) return;
+    const style = document.createElement('style');
+    style.id = id;
+    // Use display:none on the search-form ancestor so the slot is fully
+    // collapsed when our search is enabled. Scoped to the attribute so
+    // nothing else inherits.
+    style.textContent = `
+      .search-form[${OMNI_NATIVE_HIDDEN_ATTR}] { display: none !important; }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function hideNativeFortiMonitorSearch() {
+    const fmInput = document.querySelector(OMNI_FM_SEARCH_SELECTOR);
+    if (!fmInput) return null;
+    const fmWrapper = fmInput.closest('.search-form');
+    if (!fmWrapper) return null;
+    fmWrapper.setAttribute(OMNI_NATIVE_HIDDEN_ATTR, '1');
+    return fmWrapper;
+  }
+
+  function restoreNativeFortiMonitorSearch() {
+    const hidden = document.querySelectorAll(`.search-form[${OMNI_NATIVE_HIDDEN_ATTR}]`);
+    for (const el of hidden) el.removeAttribute(OMNI_NATIVE_HIDDEN_ATTR);
+  }
+
+  function teardownOmniSearch() {
+    const c = document.getElementById(OMNI_CONTAINER_ID);
+    if (c) c.remove();
+    restoreNativeFortiMonitorSearch();
+    if (omniState.debounceTimer) { clearTimeout(omniState.debounceTimer); omniState.debounceTimer = null; }
+    omniState.lastResults = [];
+    omniState.lastQuery = '';
+    omniState.isOpen = false;
+    omniState.activeIndex = -1;
+  }
+
+  async function loadOmniSearchFlag() {
+    try {
+      const data = await chrome.storage.local.get(OMNI_SEARCH_KEY);
+      omniSearchEnabled = Boolean(data && data[OMNI_SEARCH_KEY]);
+    } catch {
+      omniSearchEnabled = false;
+    }
+    omniSearchFlagLoaded = true;
+  }
+
+  function subscribeOmniSearchFlag() {
+    if (!chrome.storage || !chrome.storage.onChanged) return;
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName && areaName !== 'local') return;
+      const change = changes && changes[OMNI_SEARCH_KEY];
+      if (!change) return;
+      const next = Boolean(change.newValue);
+      if (next === omniSearchEnabled) return;
+      omniSearchEnabled = next;
+      if (!next) teardownOmniSearch();
+      ensureAll();
+    });
+  }
+
+  register({
+    id: OMNI_AUG_ID,
+    mount() {
+      if (!omniSearchFlagLoaded) return;
+      if (!omniSearchEnabled) {
+        // Toggle was flipped off mid-session: ensure no leftover DOM.
+        if (document.getElementById(OMNI_CONTAINER_ID)) teardownOmniSearch();
+        return;
+      }
+      // Find FortiMonitor's "Search Instances" input. If it's not in the
+      // DOM yet (SPA still hydrating), bail and the next mutation tick
+      // will retry.
+      const fmInput = document.querySelector(OMNI_FM_SEARCH_SELECTOR);
+      if (!fmInput) return;
+      const fmWrapper = fmInput.closest('.search-form') || fmInput.parentElement;
+      if (!fmWrapper || !fmWrapper.parentElement) return;
+      ensureOmniStyles();
+      ensureNativeHiddenStyle();
+      // Already injected? Make sure the native input is still hidden in
+      // case FortiMonitor re-rendered the top bar and stripped our attr.
+      if (document.getElementById(OMNI_CONTAINER_ID)) {
+        hideNativeFortiMonitorSearch();
+        return;
+      }
+      const container = buildOmniContainer();
+      fmWrapper.parentElement.insertBefore(container, fmWrapper);
+      hideNativeFortiMonitorSearch();
+    },
+  });
+
   function start() {
     // Attach storage listeners synchronously, before awaiting initial
     // loads. Otherwise a storage change that fires between content-script
@@ -1910,6 +2332,7 @@
     subscribeColumnOrder();
     subscribeNativeColumnOrder();
     subscribeSidebarLauncherFlag();
+    subscribeOmniSearchFlag();
 
     // Load persisted column order and the sidebar-launcher flag before the
     // first ensureAll() so the initial mount paints in the operator's
@@ -1921,6 +2344,7 @@
       loadNativeColumnOrder(),
       loadSidebarLauncherFlag(),
       loadShowFeatureBadgesFlag(),
+      loadOmniSearchFlag(),
     ]).finally(() => {
       ensureAll();
       const observer = new MutationObserver(() => ensureAll());
@@ -1947,4 +2371,14 @@
   } else {
     start();
   }
+
+  // FMN-152 dev aid: ping the SW on every content-script injection so the
+  // SW wakes promptly and Playwright probes via CDP can introspect its
+  // state (the SW idles in MV3; Playwright cannot wake it from the
+  // outside, only from a chrome.runtime context like this content script).
+  // Cheap no-op; the SW dispatch returns 'Unknown message type' which
+  // we ignore.
+  try {
+    chrome.runtime.sendMessage({ type: 'fm:noop-wake' }, () => void chrome.runtime.lastError);
+  } catch { /* SW unreachable; nothing we can do here */ }
 })();

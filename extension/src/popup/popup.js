@@ -26,7 +26,9 @@ import {
   isSidebarLauncherEnabled,
   setSidebarLauncherEnabled,
   isShowFeatureBadgesEnabled,
-  setShowFeatureBadgesEnabled
+  setShowFeatureBadgesEnabled,
+  isOmniSearchEnabled,
+  setOmniSearchEnabled
 } from '../lib/settings.js';
 import {
   listAugmentations,
@@ -305,6 +307,12 @@ async function loadSidebarLauncherIntoToggle() {
 async function loadShowFeatureBadgesIntoToggle() {
   const toggle = document.getElementById('feature-badges-toggle');
   toggle.checked = await isShowFeatureBadgesEnabled();
+}
+
+async function loadOmniSearchIntoToggle() {
+  const toggle = document.getElementById('omni-search-toggle');
+  if (!toggle) return;
+  toggle.checked = await isOmniSearchEnabled();
 }
 
 async function applyExperimentalVisibility() {
@@ -870,6 +878,7 @@ function init() {
     await loadSsoConfigIntoToggle();
     await loadSidebarLauncherIntoToggle();
     await loadShowFeatureBadgesIntoToggle();
+    await loadOmniSearchIntoToggle();
     await loadWebguiColumnsIntoSettings();
     await applyExperimentalVisibility();
     showSettings();
@@ -888,6 +897,10 @@ function init() {
 
   document.getElementById('sidebar-launcher-toggle').addEventListener('change', async (e) => {
     await setSidebarLauncherEnabled(e.target.checked);
+  });
+
+  document.getElementById('omni-search-toggle').addEventListener('change', async (e) => {
+    await setOmniSearchEnabled(e.target.checked);
   });
 
   document.getElementById('feature-badges-toggle').addEventListener('change', async (e) => {

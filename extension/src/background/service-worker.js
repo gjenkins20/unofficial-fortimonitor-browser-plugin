@@ -20,6 +20,7 @@ import { createServerSearchHandlers } from './server-search-handlers.js';
 import { createSdwanReportHandlers } from './sdwan-report-handlers.js';
 import { createBpaAuditHandlers } from './bpa-audit-handlers.js';
 import { createClaudeChatHandlers } from './claude-chat-handlers.js';
+import { createOmniSearchHandlers } from './omni-search-handlers.js';
 import { resolveFortimonitorOrigin } from '../lib/origin-resolver.js';
 import { applyAllProviderRules, WATCHED_STORAGE_KEYS } from '../lib/origin-rewrite.js';
 
@@ -46,8 +47,13 @@ const handlers = {
   ...createServerSearchHandlers({ events: { emit } }),
   ...createSdwanReportHandlers({ events: { emit } }),
   ...createBpaAuditHandlers({ events: { emit }, resolveOrigin }),
-  ...createClaudeChatHandlers({ events: { emit } })
+  ...createClaudeChatHandlers({ events: { emit } }),
+  ...createOmniSearchHandlers({ events: { emit } })
 };
+
+// FMN-152 dev aid: expose handler keys on globalThis so a Playwright
+// sw.evaluate() probe can verify each handler module wired in.
+globalThis.__fmDebugHandlerKeys = Object.keys(handlers).sort();
 
 chrome.runtime.onInstalled.addListener(() => {
   const m = chrome.runtime.getManifest();
