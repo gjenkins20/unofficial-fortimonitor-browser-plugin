@@ -18,6 +18,18 @@ place.
 
 ## Unreleased
 
+- FMN-154 (phase 1): Deployment Snapshot &amp; Diff. New toolkit card on
+  FortiMonitor's Canned Reports page (`/report/ListReports`), styled to
+  match native `.pa-card` tiles and tagged with the FMN-86 attribution
+  ribbon. "Take Snapshot Now" runs a BPA scan and persists a condensed
+  result to `chrome.storage.local` (two-slot model: current + previous).
+  "Open Snapshot &amp; Diff" launches a viewer that shows added / removed
+  / modified servers between the two snapshots with field-level prev →
+  next changes. Phase 2 (separate ticket) will add N-rotation, multi-tab
+  diffs, and export.
+
+## v1.2.0 - 2026-05-11
+
 - FMN-160: FM TK Search now matches instances by their numeric ID. Paste an
   ID like `43859419` into the search bar and the matching instance appears
   with the `id` badge and an `#43859419` snippet. Exact-ID is the strongest

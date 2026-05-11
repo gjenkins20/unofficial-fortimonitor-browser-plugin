@@ -19,6 +19,7 @@ import { createServerLookupHandlers } from './server-lookup-handlers.js';
 import { createServerSearchHandlers } from './server-search-handlers.js';
 import { createSdwanReportHandlers } from './sdwan-report-handlers.js';
 import { createBpaAuditHandlers } from './bpa-audit-handlers.js';
+import { createBpaSnapshotHandlers } from './bpa-snapshot-handlers.js';
 import { createClaudeChatHandlers } from './claude-chat-handlers.js';
 import { createOmniSearchHandlers } from './omni-search-handlers.js';
 import { resolveFortimonitorOrigin } from '../lib/origin-resolver.js';
@@ -47,6 +48,7 @@ const handlers = {
   ...createServerSearchHandlers({ events: { emit } }),
   ...createSdwanReportHandlers({ events: { emit } }),
   ...createBpaAuditHandlers({ events: { emit }, resolveOrigin }),
+  ...createBpaSnapshotHandlers({ events: { emit }, resolveOrigin }),
   ...createClaudeChatHandlers({ events: { emit } }),
   ...createOmniSearchHandlers({ events: { emit } })
 };

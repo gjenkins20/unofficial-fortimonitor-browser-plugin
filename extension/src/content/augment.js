@@ -2421,6 +2421,199 @@
     },
   });
 
+  // FMN-154: toolkit card on FortiMonitor's Canned Reports page
+  // (/report/ListReports). Mounts as a sibling of FortiMonitor's native
+  // .pa-card tiles inside the .pa-hList container, styled identically
+  // and overlaid with the FMN-86 "FM Toolkit" attribution ribbon.
+  const REPORTS_PATH = '/report/ListReports';
+  const SNAPSHOT_CARD_ID = 'fmn-snapshot-diff-card';
+  const SNAPSHOT_CARD_STYLE_ID = 'fmn-snapshot-card-styles';
+  const SNAPSHOT_TOOL_URL = chrome.runtime.getURL('src/ui/bpa-diff/app.html');
+
+  function ensureSnapshotCardStyles() {
+    if (document.getElementById(SNAPSHOT_CARD_STYLE_ID)) return;
+    const style = document.createElement('style');
+    style.id = SNAPSHOT_CARD_STYLE_ID;
+    style.textContent = `
+      .fmn-pa-card-ribbon-host { position: relative; overflow: hidden; }
+      .fmn-pa-card-ribbon {
+        position: absolute; top: 0; right: 0;
+        width: 60px; height: 60px;
+        pointer-events: none; overflow: hidden; z-index: 5;
+      }
+      .fmn-pa-card-ribbon::before {
+        content: "FM Toolkit";
+        position: absolute; display: block;
+        width: 90px; padding: 2px 0;
+        top: 10.5px; right: -25px;
+        background: #1f6feb; color: #fff;
+        font-size: 7.5px; font-weight: 600; letter-spacing: 0.03em;
+        text-align: center; text-indent: 5.5px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.22);
+        transform: rotate(45deg); transform-origin: center;
+      }
+      .fmn-snapshot-meta {
+        font-size: 12px; color: #5b6776;
+        margin: 6px 0 0; font-style: italic;
+      }
+      .fmn-snapshot-meta.fmn-snapshot-meta-running { color: #1f6feb; font-style: normal; }
+      .fmn-snapshot-meta.fmn-snapshot-meta-error { color: #dc2626; font-style: normal; }
+      .fmn-pa-card-ft-row {
+        display: flex; gap: 8px; flex-wrap: wrap;
+      }
+      .fmn-pa-card-ft-row .pa-btn[disabled] {
+        opacity: 0.55; cursor: not-allowed;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function formatSnapshotTimestamp(iso) {
+    if (!iso) return null;
+    try {
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return iso;
+      return d.toLocaleString();
+    } catch { return iso; }
+  }
+
+  async function refreshSnapshotCardMeta(card) {
+    const meta = card.querySelector('.fmn-snapshot-meta');
+    if (!meta) return;
+    meta.classList.remove('fmn-snapshot-meta-running', 'fmn-snapshot-meta-error');
+    try {
+      const resp = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({ type: 'bpa-snapshots:status' }, (r) => resolve(r || null));
+      });
+      if (!resp || !resp.ok) {
+        meta.textContent = 'No snapshot yet.';
+        const openBtn = card.querySelector('[data-fmn-snapshot-open]');
+        if (openBtn) openBtn.disabled = true;
+        return;
+      }
+      const r = resp.result;
+      if (!r?.hasCurrent) {
+        meta.textContent = 'No snapshot yet.';
+        const openBtn = card.querySelector('[data-fmn-snapshot-open]');
+        if (openBtn) openBtn.disabled = true;
+      } else {
+        const parts = [`Last snapshot: ${formatSnapshotTimestamp(r.currentTakenAt)}`];
+        if (r.hasPrevious) parts.push(`previous: ${formatSnapshotTimestamp(r.previousTakenAt)}`);
+        else parts.push('no prior snapshot to diff against yet');
+        meta.textContent = parts.join(' / ');
+        const openBtn = card.querySelector('[data-fmn-snapshot-open]');
+        if (openBtn) openBtn.disabled = !r.hasPrevious;
+      }
+    } catch (err) {
+      meta.textContent = 'Status unavailable.';
+    }
+  }
+
+  function buildSnapshotCard() {
+    const card = document.createElement('div');
+    card.setAttribute(ENTRY_ATTR, SNAPSHOT_CARD_ID);
+    card.className = 'pa-card fmn-pa-card-ribbon-host';
+    const ribbon = document.createElement('span');
+    ribbon.className = 'fmn-pa-card-ribbon';
+    ribbon.setAttribute('aria-hidden', 'true');
+    card.appendChild(ribbon);
+
+    const hd = document.createElement('div');
+    hd.className = 'pa-card-hd';
+    const h3 = document.createElement('h3');
+    h3.className = 'pa-txt pa-txt_lg';
+    h3.style.fontWeight = 'bold';
+    h3.textContent = 'Deployment Snapshot & Diff';
+    hd.appendChild(h3);
+    card.appendChild(hd);
+
+    const bd = document.createElement('div');
+    bd.className = 'pa-card-bd';
+    const p = document.createElement('p');
+    p.className = 'pa-txt';
+    p.textContent = 'Save the full deployment as a snapshot, then see what changed between any two snapshots.';
+    bd.appendChild(p);
+    const meta = document.createElement('p');
+    meta.className = 'fmn-snapshot-meta';
+    meta.textContent = 'Loading...';
+    bd.appendChild(meta);
+    card.appendChild(bd);
+
+    const ft = document.createElement('div');
+    ft.className = 'pa-card-ft';
+    const row = document.createElement('div');
+    row.className = 'fmn-pa-card-ft-row';
+
+    const openBtn = document.createElement('button');
+    openBtn.type = 'button';
+    openBtn.className = 'pa-btn';
+    openBtn.textContent = 'Open Snapshot & Diff';
+    openBtn.setAttribute('data-fmn-snapshot-open', '');
+    openBtn.addEventListener('click', () => {
+      window.open(SNAPSHOT_TOOL_URL, '_blank', 'noopener');
+    });
+
+    const takeBtn = document.createElement('button');
+    takeBtn.type = 'button';
+    takeBtn.className = 'pa-btn';
+    takeBtn.textContent = 'Take Snapshot Now';
+    takeBtn.setAttribute('data-fmn-snapshot-take', '');
+    takeBtn.addEventListener('click', () => takeSnapshotFromCard(card, takeBtn));
+
+    row.appendChild(openBtn);
+    row.appendChild(takeBtn);
+    ft.appendChild(row);
+    card.appendChild(ft);
+    return card;
+  }
+
+  async function takeSnapshotFromCard(card, button) {
+    const meta = card.querySelector('.fmn-snapshot-meta');
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Running...';
+    if (meta) {
+      meta.classList.remove('fmn-snapshot-meta-error');
+      meta.classList.add('fmn-snapshot-meta-running');
+      meta.textContent = 'Running BPA scan...';
+    }
+    try {
+      const resp = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({ type: 'bpa-snapshots:take', payload: { sections: ['all'] } }, (r) => resolve(r || null));
+      });
+      if (!resp || !resp.ok) {
+        throw new Error(resp?.error || 'Snapshot failed');
+      }
+      // resp.result.ok is true; refresh meta to show new timestamps.
+      await refreshSnapshotCardMeta(card);
+    } catch (err) {
+      if (meta) {
+        meta.classList.remove('fmn-snapshot-meta-running');
+        meta.classList.add('fmn-snapshot-meta-error');
+        meta.textContent = `Snapshot failed: ${err?.message || err}`;
+      }
+    } finally {
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+  }
+
+  register({
+    id: SNAPSHOT_CARD_ID,
+    mount() {
+      if (location.pathname !== REPORTS_PATH) return;
+      const existing = document.querySelector(`[${ENTRY_ATTR}="${SNAPSHOT_CARD_ID}"]`);
+      if (existing && document.body.contains(existing)) return;
+      const host = document.querySelector('.pa-hList');
+      if (!host) return;
+      ensureSnapshotCardStyles();
+      const card = buildSnapshotCard();
+      host.appendChild(card);
+      refreshSnapshotCardMeta(card);
+    },
+  });
+
   function start() {
     // Attach storage listeners synchronously, before awaiting initial
     // loads. Otherwise a storage change that fires between content-script
