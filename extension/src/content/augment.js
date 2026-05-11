@@ -350,13 +350,25 @@
     if (document.getElementById(NATIVE_STYLE_ID)) return;
     const style = document.createElement('style');
     style.id = NATIVE_STYLE_ID;
-    // display:none on paired TH+TDs is the safe operation per FMN-93's
-    // analysis: aoColumns cardinality is preserved, sort/AJAX redraw/
-    // width-sync keep working, the column is just visually absent.
+    // FMN-151: Do NOT use `display: none` here. With table-layout:fixed
+    // and our FMN-151 colgroup, a column whose cells are display:none
+    // causes Chrome to silently zero the ADJACENT column's allotted
+    // width too (verified live on a real tenant; adjacent col[i]
+    // computed width comes back 0 even with width:200px !important).
+    // Instead, zero out padding + borders + content visibility, and rely
+    // on syncScrollTableWidths() setting col[i].style.width = 0 in the
+    // colgroup to actually collapse the column. Both rows stay in
+    // layout, so adjacent columns are unaffected.
     style.textContent = `
       table.pa-table_outage th[${NATIVE_HIDDEN_ATTR}],
       table.pa-table_outage td[${NATIVE_HIDDEN_ATTR}] {
-        display: none !important;
+        padding: 0 !important;
+        border: 0 !important;
+        overflow: hidden !important;
+      }
+      table.pa-table_outage th[${NATIVE_HIDDEN_ATTR}] > *,
+      table.pa-table_outage td[${NATIVE_HIDDEN_ATTR}] > * {
+        visibility: hidden !important;
       }
     `;
     document.head.appendChild(style);
@@ -496,13 +508,18 @@
     void scrollBody.offsetWidth;
 
     // Measure per-column rendered widths from both tables. Use the larger
-    // so neither side's content overflows. Hidden cells contribute 0.
+    // so neither side's content overflows. Cells flagged hidden by the
+    // FMN-123 native-hidden mechanism contribute 0 - we collapse the
+    // column via colgroup col[i].width = 0 below, and FMN-151's CSS
+    // ensures the cell renders at zero effective width (padding 0 +
+    // content visibility:hidden).
+    const isFmnHidden = (el) => el && el.hasAttribute(NATIVE_HIDDEN_ATTR);
     const widths = [];
     for (let i = 0; i < headCells.length; i++) {
       const headCell = headCells[i];
       const bodyCell = bodyCells[i];
-      const headHidden = window.getComputedStyle(headCell).display === 'none';
-      const bodyHidden = window.getComputedStyle(bodyCell).display === 'none';
+      const headHidden = isFmnHidden(headCell);
+      const bodyHidden = isFmnHidden(bodyCell);
       if (headHidden && bodyHidden) { widths.push(0); continue; }
       const hW = headHidden ? 0 : headCell.getBoundingClientRect().width;
       const bW = bodyHidden ? 0 : bodyCell.getBoundingClientRect().width;
