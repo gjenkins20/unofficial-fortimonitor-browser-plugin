@@ -2096,6 +2096,9 @@
   function omniSnippetForRow(row) {
     const field = row.matched_field;
     if (field === 'name') return '';
+    // FMN-160: id matches surface the id itself as the snippet so the
+    // operator confirms exactly which numeric they hit.
+    if (field === 'id') return '#' + row.id;
     if (field === 'fqdn') return row.fqdn;
     // FMN-153: ips / dns_names classified at ingest; fall back to the
     // legacy additional_fqdns array for entries that pre-date the change

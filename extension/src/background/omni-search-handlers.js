@@ -121,6 +121,12 @@ export function buildServerCorpus(server, groupNameById, templateNameById) {
     const s = String(v).trim();
     if (s) parts.push(s);
   };
+  // FMN-160: push the numeric id into the corpus so substring filter
+  // catches operator queries like "43859419" pasted from URLs / logs /
+  // tickets. The exact + prefix rules in scoreServer label these hits
+  // with field:'id'.
+  const idForCorpus = extractIdFromUrl(server.url) ?? server.id ?? null;
+  if (idForCorpus != null) push(String(idForCorpus));
   push(server.name);
   push(server.fqdn);
   push(server.additional_fqdns);
@@ -266,6 +272,13 @@ async function getCache(tenantOrigin, factory, { forceRefresh = false } = {}) {
 export function scoreServer(server, q) {
   const name = (server.name || '').toLowerCase();
   const fqdn = (server.fqdn || '').toLowerCase();
+  // FMN-160: numeric-id matches. Only consider rules when the query is
+  // all digits, otherwise these rules can't fire even by accident.
+  const idStr = server.id != null ? String(server.id) : '';
+  if (idStr && /^\d+$/.test(q)) {
+    if (idStr === q) return { score: 950, field: 'id' };
+    if (idStr.startsWith(q)) return { score: 750, field: 'id' };
+  }
   if (name === q) return { score: 1000, field: 'name' };
   if (fqdn === q) return { score: 900, field: 'fqdn' };
   if (name.startsWith(q)) return { score: 800, field: 'name' };

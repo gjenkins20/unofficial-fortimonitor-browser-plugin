@@ -18,6 +18,13 @@ place.
 
 ## Unreleased
 
+- FMN-160: FM TK Search now matches instances by their numeric ID. Paste an
+  ID like `43859419` into the search bar and the matching instance appears
+  with the `id` badge and an `#43859419` snippet. Exact-ID is the strongest
+  signal (ranks just under name-exact); prefix matches also surface.
+
+## v1.1.0 - 2026-05-11
+
 - FMN-153: IP Address and DNS Name columns on `/report/ListServers` now
   walk the full `pageData.instance.fqdns[]` array and classify each entry
   by value (IPv4 / IPv6 / hostname), instead of reading only the scalar
