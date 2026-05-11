@@ -17,6 +17,7 @@ test-results/
 playwright-report/
 .playwright-cache/
 tests/e2e/.artifacts/
+tests/e2e/.fixtures/
 
 # Ollama-fixture leak guard (FMN-120 Phase 2). Older fixture builds
 # could drop a model store at the repo root when OLLAMA_MODELS wasn't

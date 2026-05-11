@@ -1,12 +1,12 @@
 // Unofficial FortiMonitor Toolkit - Server Lookup live E2E (FMN-119).
 // Skip-by-default. Drives the tool against the operator's real tenant
-// using a small handful of known-good identifiers discovered from
-// /v2/server.
+// using three distinctly-different instances from the tenant pool
+// (discover-tenant.js); name + id round-trip per instance.
 
 import { test, expect } from './fixtures.js';
 import { seedApiKey } from './seed-api-key.js';
+import { discoverDiverseServers, extractServerId, summarizePick } from './discover-tenant.js';
 
-const PANOPTA_BASE = 'https://api2.panopta.com/v2';
 const API_KEY = process.env.FORTIMONITOR_API_KEY;
 
 test.describe('live - Server Lookup E2E - real tenant', () => {
@@ -14,59 +14,71 @@ test.describe('live - Server Lookup E2E - real tenant', () => {
     'FORTIMONITOR_API_KEY not set. Add it to tests/e2e/.env.local. See docs/playwright-e2e-runbook.md.'
   );
 
-  let sampleServer = null;
+  let testInstances = [];
 
   test.beforeAll(async ({ extensionContext }) => {
     await seedApiKey(extensionContext, API_KEY);
-    const r = await fetch(`${PANOPTA_BASE}/server?limit=10`, {
-      headers: { 'Authorization': `ApiKey ${API_KEY}` }
-    });
-    if (!r.ok) throw new Error(`Tenant discovery failed: ${r.status}`);
-    const body = await r.json();
-    const list = Array.isArray(body?.server_list) ? body.server_list : [];
-    function extractId(s) {
-      if (s?.id != null) return Number(s.id);
-      if (typeof s?.url === 'string') {
-        const m = s.url.match(/\/server\/(\d+)\/?$/);
-        if (m) return Number(m[1]);
+    const picks = await discoverDiverseServers(API_KEY, { count: 3 });
+    testInstances = picks.map((s) => ({
+      id: extractServerId(s),
+      name: s.name
+    })).filter((x) => x.id != null && x.name);
+    if (testInstances.length === 0) {
+      throw new Error('Tenant has no usable id+name pair; cannot run live Server Lookup suite.');
+    }
+    console.log('[live discovery] server-lookup picks:', picks.map(summarizePick));
+  });
+
+  test('live - Lookup by name resolves the correct id for each diverse instance', async ({ extensionContext, serverLookupUrl }) => {
+    const page = await extensionContext.newPage();
+    try {
+      await page.goto(serverLookupUrl);
+      await expect(page.locator('.step-header h2')).toContainText('Look up server IDs in bulk');
+      // Paste all 3 names in one go; tool batches them.
+      await page.locator('textarea.paste-area').fill(testInstances.map((i) => i.name).join('\n'));
+      await page.getByRole('button', { name: 'Run lookup' }).click();
+      await expect(page).toHaveURL(/#\/results$/, { timeout: 60_000 });
+      await page.waitForSelector('.body-section table tbody tr', { state: 'attached', timeout: 30_000 });
+      const rows = await page.locator('.body-section table tbody tr').all();
+      // Columns: # / Input / Source / Status / Server ID / Candidates
+      const byInput = new Map();
+      for (const r of rows) {
+        const cells = await r.locator('td').allTextContents();
+        byInput.set(cells[1].trim(), cells.map((c) => c.trim()));
       }
-      return null;
+      for (const inst of testInstances) {
+        const row = byInput.get(inst.name);
+        expect(row, `Expected a result row for "${inst.name}"`).toBeTruthy();
+        expect(row[3]).toContain('found');
+        expect(row[4]).toBe(String(inst.id));
+      }
+    } finally {
+      await page.close();
     }
-    let found = null;
-    for (const s of list) {
-      const id = extractId(s);
-      if (id != null && typeof s?.name === 'string' && s.name.length > 0) { found = { id, name: s.name }; break; }
-    }
-    if (!found) throw new Error('Tenant has no usable id+name pair; cannot run live Server Lookup suite.');
-    sampleServer = found;
   });
 
-  test('live - Lookup by name returns the matching server id', async ({ extensionContext, serverLookupUrl }) => {
+  test('live - Lookup by numeric id verifies each diverse instance id exists', async ({ extensionContext, serverLookupUrl }) => {
     const page = await extensionContext.newPage();
-    await page.goto(serverLookupUrl);
-    await expect(page.locator('.step-header h2')).toContainText('Look up server IDs in bulk');
-    await page.locator('textarea.paste-area').fill(sampleServer.name);
-    await page.getByRole('button', { name: 'Run lookup' }).click();
-    await expect(page).toHaveURL(/#\/results$/, { timeout: 60_000 });
-    await page.waitForSelector('.body-section table tbody tr', { state: 'attached', timeout: 30_000 });
-    const cells = await page.locator('.body-section table tbody tr').first().locator('td').allTextContents();
-    // Columns: # / Input / Source / Status / Server ID / Candidates
-    expect(cells[1].trim()).toBe(sampleServer.name);
-    expect(cells[3]).toContain('found');
-    expect(cells[4].trim()).toBe(String(sampleServer.id));
-    await page.close();
-  });
-
-  test('live - Lookup by numeric id verifies the id exists', async ({ extensionContext, serverLookupUrl }) => {
-    const page = await extensionContext.newPage();
-    await page.goto(serverLookupUrl);
-    await page.locator('textarea.paste-area').fill(String(sampleServer.id));
-    await page.getByRole('button', { name: 'Run lookup' }).click();
-    await expect(page).toHaveURL(/#\/results$/, { timeout: 60_000 });
-    await page.waitForSelector('.body-section table tbody tr', { state: 'attached', timeout: 30_000 });
-    const cells = await page.locator('.body-section table tbody tr').first().locator('td').allTextContents();
-    expect(cells[3]).toContain('found');
-    expect(cells[4].trim()).toBe(String(sampleServer.id));
-    await page.close();
+    try {
+      await page.goto(serverLookupUrl);
+      await page.locator('textarea.paste-area').fill(testInstances.map((i) => String(i.id)).join('\n'));
+      await page.getByRole('button', { name: 'Run lookup' }).click();
+      await expect(page).toHaveURL(/#\/results$/, { timeout: 60_000 });
+      await page.waitForSelector('.body-section table tbody tr', { state: 'attached', timeout: 30_000 });
+      const rows = await page.locator('.body-section table tbody tr').all();
+      const byInput = new Map();
+      for (const r of rows) {
+        const cells = await r.locator('td').allTextContents();
+        byInput.set(cells[1].trim(), cells.map((c) => c.trim()));
+      }
+      for (const inst of testInstances) {
+        const row = byInput.get(String(inst.id));
+        expect(row, `Expected a result row for id ${inst.id}`).toBeTruthy();
+        expect(row[3]).toContain('found');
+        expect(row[4]).toBe(String(inst.id));
+      }
+    } finally {
+      await page.close();
+    }
   });
 });

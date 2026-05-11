@@ -73,6 +73,9 @@ themselves rather than fail.
 | `stubs.js`             | `findServersStubScript`: stubbed `chrome.runtime.sendMessage` + canned tenant data. Same fixtures as the synthetic harness at `docs/harnesses/find-servers.html`. |
 | `find-servers.spec.js` | Stubbed scenarios. |
 | `find-servers-live.spec.js` | Live-tenant scenarios. Skipped without `FORTIMONITOR_API_KEY`. |
+| `discover-tenant.js`   | FMN-119 helper. `discoverDiverseServers(apiKey, {count})` picks N distinctly-different servers from the tenant (OS bucket / device_type / attribute-count axes). Shared by the per-tool live specs that need diversity coverage. |
+| `capture-port-scope-session.mjs` | One-time session capture for port-scope live tests. Opens headed Chromium against fortimonitor.forticloud.com; operator logs in; cookies saved to `tests/e2e/.fixtures/fortimonitor-session.json` (gitignored). |
+| `port-scope-live.spec.js` | Live Port Scope scenarios. Skipped without the session fixture above (uses session-cookie auth, not the v2 API key). Read-only: scan + review only, no execute. |
 
 ## Adding a scenario
 
@@ -115,6 +118,22 @@ For each new tool:
 4. Reuse `seedApiKey` for live mode.
 
 See FMN-119 for the cross-tool rollout plan.
+
+## Port Scope live tests (session-cookie auth)
+
+The Port Scope tools (`Add to Port Scope (Fabric)`, `Remove from Port Scope (Fabric)`) use FortiMonitor's session cookie, not the v2 API key. To run their live coverage:
+
+```bash
+# One-time per session (re-run when cookies expire):
+node tests/e2e/capture-port-scope-session.mjs
+# A Chromium window opens to fortimonitor.forticloud.com. Log in
+# normally; press Enter in the terminal when the page has loaded.
+
+# Then the live suite picks up port-scope-live.spec.js automatically:
+npm run test:e2e:live
+```
+
+The captured fixture lives at `tests/e2e/.fixtures/fortimonitor-session.json` (gitignored). Without it, `port-scope-live.spec.js` skips with a clear reason; other live specs are unaffected.
 
 ## Known limitations
 
