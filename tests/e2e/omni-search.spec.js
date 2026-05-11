@@ -114,18 +114,26 @@ test.describe('FMN-152 omni-search content-script UI', () => {
     await page.close();
   });
 
-  test('warm pulse: chip carries is-warming during fetch then clears', async ({ ctx }) => {
+  test('warm pulse: chip carries is-warming and input placeholder reads "Caching..." during fetch, both clear after', async ({ ctx }) => {
     const { page } = await gotoHarness(ctx);
     // Slow the stub so we can observe the warming state.
     await page.evaluate(() => window.__omniHarness.setWarmDelay(400));
     await enable(page);
-    // Right after enable, chip should be pulsing.
-    const duringWarm = await page.evaluate(() => !!document.querySelector('.fmn-omni-chip.is-warming'));
-    expect(duringWarm).toBe(true);
+    // Right after enable, chip pulses AND placeholder explains the wait.
+    const during = await page.evaluate(() => ({
+      warming: !!document.querySelector('.fmn-omni-chip.is-warming'),
+      placeholder: document.getElementById('fmn-omni-search-input')?.placeholder,
+    }));
+    expect(during.warming).toBe(true);
+    expect(during.placeholder).toMatch(/cach/i);
     // Wait for warm to complete.
     await page.waitForTimeout(600);
-    const afterWarm = await page.evaluate(() => !!document.querySelector('.fmn-omni-chip.is-warming'));
-    expect(afterWarm).toBe(false);
+    const after = await page.evaluate(() => ({
+      warming: !!document.querySelector('.fmn-omni-chip.is-warming'),
+      placeholder: document.getElementById('fmn-omni-search-input')?.placeholder,
+    }));
+    expect(after.warming).toBe(false);
+    expect(after.placeholder).toBe('Search all fields');
     await page.close();
   });
 

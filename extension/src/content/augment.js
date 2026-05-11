@@ -1917,6 +1917,7 @@
   const OMNI_DEBOUNCE_MS = 180;
   const OMNI_SEARCH_KEY = 'fm:omniSearchEnabled';
   const OMNI_NATIVE_HIDDEN_ATTR = 'data-fmn-omni-search-hidden';
+  const OMNI_PLACEHOLDER_DEFAULT = 'Search all fields';
 
   let omniSearchEnabled = false;
   let omniSearchFlagLoaded = false;
@@ -2200,7 +2201,7 @@
     const input = document.createElement('input');
     input.id = OMNI_INPUT_ID;
     input.type = 'search';
-    input.placeholder = 'Search all fields';
+    input.placeholder = OMNI_PLACEHOLDER_DEFAULT;
     input.autocomplete = 'off';
     const dropdown = document.createElement('div');
     dropdown.id = OMNI_DROPDOWN_ID;
@@ -2335,13 +2336,22 @@
       fmWrapper.parentElement.insertBefore(container, fmWrapper);
       hideNativeFortiMonitorSearch();
       // Kick off cache warming in the background so the operator's first
-      // query does not wait on the /v2/server fetch. Fire-and-forget; the
-      // pulse on the FM TK chip indicates a fetch is in flight.
+      // query does not wait on the /v2/server fetch. Surface the wait
+      // two ways: a pulse under the FM TK chip, AND a "Caching..."
+      // placeholder so it's clear what the pulse means and that brief
+      // patience is expected. Restore the normal placeholder when warm
+      // completes (or fails - in which case the next real query surfaces
+      // the actual error).
       const chip = container.querySelector('.fmn-omni-chip');
+      const input = container.querySelector('#' + OMNI_INPUT_ID);
       if (chip) chip.classList.add('is-warming');
+      if (input && !input.value) input.placeholder = 'Caching, please wait...';
       omniRequest('omni-search:warm', {})
         .catch(() => { /* warming failure surfaces on the first real query */ })
-        .finally(() => { if (chip) chip.classList.remove('is-warming'); });
+        .finally(() => {
+          if (chip) chip.classList.remove('is-warming');
+          if (input) input.placeholder = OMNI_PLACEHOLDER_DEFAULT;
+        });
     },
   });
 
