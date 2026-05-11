@@ -826,6 +826,12 @@ async function refreshGuards() {
 }
 
 function init() {
+  // FMN-157: read version from manifest so the footer never drifts. Prior
+  // to this, popup.html hardcoded a stale v0.7.0 while the manifest moved
+  // through 1.0.0 - reading at runtime closes the drift permanently.
+  const versionEl = document.getElementById('version');
+  if (versionEl) versionEl.textContent = 'v' + chrome.runtime.getManifest().version;
+
   // FMN-91: sort first, before any visibility / guard logic operates on the
   // tool list. Experimental toggles section is also sorted at popup load,
   // independent of whether the operator opens Settings this session.
