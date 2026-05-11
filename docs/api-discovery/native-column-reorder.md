@@ -158,6 +158,65 @@ don't revisit without a different approach (e.g., resurrecting FMN-70's
 takeover in a feature-flagged form, which was already cancelled by the
 operator).
 
+## Probe result (FMN-122, 2026-05-11)
+
+Probed on the operator's live tenant. ColReorder is **not accessible**
+from extension content scripts. Approach 1 is closed.
+
+### Diagnostic
+
+```
+{
+  "url": "https://fortimonitor.forticloud.com/report/ListServers",
+  "hasJQuery": true,
+  "jQueryVersion": "3.5.1",
+  "hasDataTablesPlugin": false,
+  "dtVersion": undefined,
+  "hasColReorderGlobal": false,
+  "colReorderVersion": undefined,
+  "tableCount": 2,
+  "tables": [
+    { "i": 0, "id": null,               "classes": "pa-table pa-table_outage dataTable no-footer", "isDataTable": false, "hasColReorderInstance": false },
+    { "i": 1, "id": "inventory-table",  "classes": "pa-table pa-table_outage dataTable no-footer", "isDataTable": false, "hasColReorderInstance": false }
+  ]
+}
+```
+
+### Interpretation
+
+The DOM is clearly DataTables-rendered. Both `<table>` nodes carry
+`dataTable no-footer` (DataTables' own emitted classes), and
+`augment.js` continues to target `.dataTables_scrollHead`,
+`.dataTables_scrollBody`, and `.dataTables_scrollHeadInner` correctly
+for FMN-71, FMN-123, and FMN-150. So FortiMonitor does use DataTables
+under the hood.
+
+But the DataTables plugin is loaded as a webpack/bundler-scoped module
+and never attached to `window.jQuery`. From an MV3 content script we
+hold a reference to `window.jQuery` but not to the bundled DataTables
+copy that the page actually instantiates the tables with. Calling
+`$(t).DataTable()` returns nothing because `$.fn.dataTable` is
+undefined; even when DataTables itself has wired up the table.
+
+`dt.colReorder.move(i, j)` is therefore unreachable. There is no
+content-script path to retrieve `dt`. ColReorder is, in practical
+terms for our extension, not available.
+
+### Outcome
+
+- **Approach 1 (ColReorder)** is closed. No follow-up implementation
+  ticket filed.
+- **Approach 2 (custom paired TH+TD mover)** remains rejected on
+  cost/risk grounds (see the existing analysis above).
+- **Approach 4 (hide/show only)** shipped as FMN-123 (commit
+  `118cf02`). That is the entire reordering-adjacent functionality
+  the extension ships on `/report/ListServers`.
+
+Native column reorder will not be revisited unless a different escape
+hatch appears, e.g. FortiMonitor exposing the DataTables instance on a
+known global, or operator-approved revival of FMN-70's takeover. Both
+are out of scope here.
+
 ## Out of scope
 
 - Implementation. This ticket was a spike.
