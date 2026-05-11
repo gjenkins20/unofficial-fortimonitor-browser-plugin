@@ -2612,15 +2612,31 @@
     return card;
   }
 
+  function formatElapsed(sec) {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
+  }
+
   async function takeSnapshotFromCard(card, button) {
     const meta = card.querySelector('.fmn-snapshot-meta');
+    const openLink = card.querySelector('.fmn-snapshot-secondary');
     const originalText = button.textContent;
     button.disabled = true;
-    button.textContent = 'Running...';
+    button.textContent = 'Taking...';
+    if (openLink) openLink.setAttribute('hidden', '');
+    const start = Date.now();
+    let ticker = null;
+    const updateRunning = () => {
+      if (!meta) return;
+      const sec = Math.floor((Date.now() - start) / 1000);
+      meta.textContent = `Taking a snapshot... ${formatElapsed(sec)} elapsed`;
+    };
     if (meta) {
       meta.classList.remove('fmn-snapshot-meta-error');
       meta.classList.add('fmn-snapshot-meta-running');
-      meta.textContent = 'Running BPA scan...';
+      updateRunning();
+      ticker = setInterval(updateRunning, 1000);
     }
     try {
       const resp = await new Promise((resolve) => {
@@ -2629,15 +2645,17 @@
       if (!resp || !resp.ok) {
         throw new Error(resp?.error || 'Snapshot failed');
       }
-      // resp.result.ok is true; refresh meta to show new timestamps.
+      if (ticker) { clearInterval(ticker); ticker = null; }
       await refreshSnapshotCardMeta(card);
     } catch (err) {
+      if (ticker) { clearInterval(ticker); ticker = null; }
       if (meta) {
         meta.classList.remove('fmn-snapshot-meta-running');
         meta.classList.add('fmn-snapshot-meta-error');
         meta.textContent = `Snapshot failed: ${err?.message || err}`;
       }
     } finally {
+      if (ticker) clearInterval(ticker);
       button.disabled = false;
       button.textContent = originalText;
     }
