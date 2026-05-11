@@ -64,13 +64,13 @@ test('buildFabricConnectionPayload requires core fields', () => {
 
 // ----- parseListResponse ----------------------------
 
-test('parseListResponse returns id/name/resourceUrl per item', () => {
+test('parseListResponse returns id/name/resourceUrl per item for onsight_list', () => {
   const items = parseListResponse({
-    objects: [
-      { id: 16966, name: 'OnSight A', resource_uri: '/v2/onsight/16966' },
-      { id: 16967, name: 'OnSight B', resource_uri: '/v2/onsight/16967' }
+    onsight_list: [
+      { url: 'https://api2.panopta.com/v2/onsight/16966', name: 'OnSight A' },
+      { url: 'https://api2.panopta.com/v2/onsight/16967', name: 'OnSight B' }
     ]
-  });
+  }, 'onsight_list');
   assert.equal(items.length, 2);
   assert.deepEqual(items[0], {
     id: 16966,
@@ -79,16 +79,39 @@ test('parseListResponse returns id/name/resourceUrl per item', () => {
   });
 });
 
+test('parseListResponse extracts id from url for server_group_list', () => {
+  const items = parseListResponse({
+    server_group_list: [
+      { url: 'https://api2.panopta.com/v2/server_group/617573', name: 'FM_Training', id: null }
+    ]
+  }, 'server_group_list');
+  assert.equal(items.length, 1);
+  assert.equal(items[0].id, 617573);
+  assert.equal(items[0].resourceUrl, 'https://api2.panopta.com/v2/server_group/617573');
+});
+
 test('parseListResponse falls back to "#id" when name is missing', () => {
   const items = parseListResponse({
-    objects: [{ id: 99, resource_uri: '/v2/onsight/99' }]
-  });
+    onsight_list: [{ url: 'https://api2.panopta.com/v2/onsight/99' }]
+  }, 'onsight_list');
+  assert.equal(items[0].id, 99);
   assert.equal(items[0].name, '#99');
 });
 
-test('parseListResponse throws on missing objects array', () => {
-  assert.throws(() => parseListResponse({}), PanoptaError);
-  assert.throws(() => parseListResponse(null), PanoptaError);
+test('parseListResponse honors legacy resource_uri when url is absent', () => {
+  const items = parseListResponse({
+    onsight_list: [{ id: 99, name: 'OnSight Legacy', resource_uri: '/v2/onsight/99' }]
+  }, 'onsight_list');
+  assert.equal(items[0].resourceUrl, 'https://api2.panopta.com/v2/onsight/99');
+});
+
+test('parseListResponse throws on missing wrapper array', () => {
+  assert.throws(() => parseListResponse({}, 'onsight_list'), PanoptaError);
+  assert.throws(() => parseListResponse(null, 'onsight_list'), PanoptaError);
+});
+
+test('parseListResponse requires wrapperKey', () => {
+  assert.throws(() => parseListResponse({ onsight_list: [] }), TypeError);
 });
 
 // ----- PanoptaClient construction ----------------------------
@@ -207,17 +230,21 @@ test('createFabricConnection wraps fetch network errors', async () => {
 
 test('listOnsight returns parsed items', async () => {
   const fetchMock = createFetchMock(async () => jsonResponse({
-    objects: [{ id: 1, name: 'OS-1', resource_uri: '/v2/onsight/1' }]
+    onsight_list: [{ url: 'https://api2.panopta.com/v2/onsight/1', name: 'OS-1' }]
   }));
   const client = new PanoptaClient({ apiKey: 'k', fetch: fetchMock });
   const items = await client.listOnsight();
   assert.equal(items.length, 1);
+  assert.equal(items[0].id, 1);
   assert.equal(items[0].name, 'OS-1');
   assert.match(fetchMock.calls[0].url, /\/onsight\?limit=100$/);
 });
 
 test('listServerGroups + listOnsightGroups hit correct paths', async () => {
-  const fetchMock = createFetchMock(async () => jsonResponse({ objects: [] }));
+  const fetchMock = createFetchMock(async (url) => {
+    if (/server_group/.test(url)) return jsonResponse({ server_group_list: [] });
+    return jsonResponse({ onsight_group_list: [] });
+  });
   const client = new PanoptaClient({ apiKey: 'k', fetch: fetchMock });
   await client.listServerGroups();
   await client.listOnsightGroups();

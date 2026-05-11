@@ -100,22 +100,57 @@ export function buildFabricConnectionPayload({
 }
 
 /**
- * Normalize a v2 list response (e.g., /v2/onsight, /v2/server_group).
- * Returns an array of { id, name, resourceUrl } for dropdowns.
+ * Normalize a v2 list response (e.g., /v2/onsight, /v2/server_group,
+ * /v2/onsight_group). The v2 API wraps list payloads under a
+ * resource-specific key (`onsight_list`, `server_group_list`,
+ * `onsight_group_list`), not the historical `objects` array - callers
+ * pass the wrapper key explicitly.
+ *
+ * Items typically expose `url` (full URL ending in the resource id) and
+ * `name`. `id` is extracted from the trailing numeric segment of `url`
+ * when not present directly, mirroring parseServerListResponse.
+ *
+ * Returns an array of { id, name, resourceUrl } suitable for dropdowns
+ * and for passing resourceUrl back to write endpoints.
+ *
+ * Note: the original implementation expected `{ objects: [...] }` per
+ * an earlier (incorrect) schema assumption. That shape was never
+ * returned by the live tenant; the bug surfaced during FMN-119 live
+ * E2E rollout when Add Fabric Connection's start step failed to
+ * populate its dropdowns. See test/panopta-client.test.js for the
+ * corrected shapes by wrapper key.
  */
-export function parseListResponse(json, baseUrl = PANOPTA_BASE) {
-  if (!json || typeof json !== 'object' || !Array.isArray(json.objects)) {
-    throw new PanoptaError('Malformed list response: missing objects array', {
+const LIST_ITEM_URL_ID_RE = /\/(\d+)\/?$/;
+
+export function parseListResponse(json, wrapperKey, baseUrl = PANOPTA_BASE) {
+  if (!wrapperKey || typeof wrapperKey !== 'string') {
+    throw new TypeError('parseListResponse: wrapperKey is required');
+  }
+  if (!json || typeof json !== 'object' || !Array.isArray(json[wrapperKey])) {
+    throw new PanoptaError(`Malformed list response: missing ${wrapperKey} array`, {
       phase: 'read',
       responseBody: json
     });
   }
   const root = baseUrl.replace(/\/v2$/, '');
-  return json.objects.map((o) => ({
-    id: o.id,
-    name: o.name ?? `#${o.id}`,
-    resourceUrl: o.resource_uri ? `${root}${o.resource_uri}` : null
-  }));
+  return json[wrapperKey].map((o) => {
+    let id = o.id ?? null;
+    if (id == null && typeof o.url === 'string') {
+      const m = o.url.match(LIST_ITEM_URL_ID_RE);
+      if (m) id = Number(m[1]);
+    }
+    let resourceUrl = null;
+    if (typeof o.url === 'string') {
+      resourceUrl = o.url;
+    } else if (typeof o.resource_uri === 'string') {
+      resourceUrl = `${root}${o.resource_uri}`;
+    }
+    return {
+      id,
+      name: o.name ?? (id != null ? `#${id}` : '(unnamed)'),
+      resourceUrl
+    };
+  });
 }
 
 /**
@@ -255,17 +290,17 @@ export class PanoptaClient {
 
   async listOnsight({ limit = 100 } = {}) {
     const { body } = await this._request('GET', `/onsight?limit=${limit}`);
-    return parseListResponse(body, this.baseUrl);
+    return parseListResponse(body, 'onsight_list', this.baseUrl);
   }
 
   async listServerGroups({ limit = 100 } = {}) {
     const { body } = await this._request('GET', `/server_group?limit=${limit}`);
-    return parseListResponse(body, this.baseUrl);
+    return parseListResponse(body, 'server_group_list', this.baseUrl);
   }
 
   async listOnsightGroups({ limit = 100 } = {}) {
     const { body } = await this._request('GET', `/onsight_group?limit=${limit}`);
-    return parseListResponse(body, this.baseUrl);
+    return parseListResponse(body, 'onsight_group_list', this.baseUrl);
   }
 
   /**
