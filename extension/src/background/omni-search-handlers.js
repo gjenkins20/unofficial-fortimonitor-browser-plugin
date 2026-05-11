@@ -25,6 +25,7 @@ const STORAGE_KEY_PREFIX = 'fm:omni-search-cache:';
 const MAX_RESULTS_DEFAULT = 20;
 
 let memCache = new Map(); // tenantOrigin -> { fetchedAt, servers, corpus }
+let pendingBuilds = new Map(); // tenantOrigin -> Promise<cache>, dedupes concurrent builds
 
 function cacheKey(tenantOrigin) {
   return STORAGE_KEY_PREFIX + tenantOrigin;
@@ -149,12 +150,18 @@ function buildServerEntry(server, groupNameById, templateNameById) {
   };
 }
 
+// Paginate /v2/server at a high page size. limit=0 (the Swagger
+// "give me everything" mode) was actually slower in practice on a
+// real tenant - the giant single response took longer to transfer and
+// parse than several 200-row pages with the parser running in parallel
+// with subsequent network requests. 200 is a sweet spot for tenants up
+// to a few thousand servers; bigger pages stall earlier rendering.
 async function buildCache(tenantOrigin, factory) {
   const client = await factory();
   const [servers, groups, templates] = await Promise.all([
-    client.listAllServers({ pageSize: 100 }),
-    client.listAllServerGroups({ pageSize: 100 }).catch(() => []),
-    client._paginatedList('/server_template', { pageSize: 100 }).catch(() => []),
+    client.listAllServers({ pageSize: 200 }),
+    client._paginatedList('/server_group', { pageSize: 200 }).catch(() => []),
+    client._paginatedList('/server_template', { pageSize: 200 }).catch(() => []),
   ]);
   const groupNameById = buildIdNameMap(groups);
   const templateNameById = buildIdNameMap(templates);
@@ -177,10 +184,22 @@ async function getCache(tenantOrigin, factory, { forceRefresh = false } = {}) {
     }
     if (isFresh(cache)) return cache;
   }
-  const fresh = await buildCache(tenantOrigin, factory);
-  memCache.set(tenantOrigin, fresh);
-  await writeCacheToStorage(tenantOrigin, fresh);
-  return fresh;
+  // Dedupe concurrent builds: if a warm + a query land in the same window,
+  // both await one fetch instead of triggering two parallel /v2/server walks.
+  const inflight = pendingBuilds.get(tenantOrigin);
+  if (inflight) return inflight;
+  const promise = (async () => {
+    try {
+      const fresh = await buildCache(tenantOrigin, factory);
+      memCache.set(tenantOrigin, fresh);
+      await writeCacheToStorage(tenantOrigin, fresh);
+      return fresh;
+    } finally {
+      pendingBuilds.delete(tenantOrigin);
+    }
+  })();
+  pendingBuilds.set(tenantOrigin, promise);
+  return promise;
 }
 
 // Identify which top-level field matched, for the result row's "matched
@@ -248,6 +267,15 @@ export function createOmniSearchHandlers({ events = {}, getClient } = {}) {
     'omni-search:refresh': async ({ tenantOrigin } = {}) => {
       const origin = tenantOrigin || 'api2.panopta.com';
       const cache = await getCache(origin, factory, { forceRefresh: true });
+      return { fetchedAt: cache.fetchedAt, serverCount: cache.servers.length };
+    },
+
+    // Background warm: build the cache if it's missing or stale, so the
+    // operator's first typed query doesn't wait for the network. Idempotent
+    // and safe to call eagerly from the content-script mount path.
+    'omni-search:warm': async ({ tenantOrigin } = {}) => {
+      const origin = tenantOrigin || 'api2.panopta.com';
+      const cache = await getCache(origin, factory);
       return { fetchedAt: cache.fetchedAt, serverCount: cache.servers.length };
     },
   };

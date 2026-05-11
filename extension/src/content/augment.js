@@ -1943,6 +1943,17 @@
         color: #ffffff; background: #3954BF; padding: 2px 5px;
         border-radius: 3px; margin-right: 6px; text-transform: uppercase;
         flex: 0 0 auto;
+        position: relative;
+      }
+      #${OMNI_CONTAINER_ID} .fmn-omni-chip.is-warming::after {
+        content: ''; position: absolute;
+        bottom: -3px; left: 0; right: 0; height: 2px;
+        background: linear-gradient(90deg, transparent, #3954BF, transparent);
+        animation: fmn-omni-warm-pulse 1.1s linear infinite;
+      }
+      @keyframes fmn-omni-warm-pulse {
+        0% { background-position: -100% 0; opacity: 0.4; }
+        100% { background-position: 200% 0; opacity: 1; }
       }
       #${OMNI_INPUT_ID} {
         height: 32px; width: 220px; padding: 0 10px;
@@ -2319,6 +2330,14 @@
       const container = buildOmniContainer();
       fmWrapper.parentElement.insertBefore(container, fmWrapper);
       hideNativeFortiMonitorSearch();
+      // Kick off cache warming in the background so the operator's first
+      // query does not wait on the /v2/server fetch. Fire-and-forget; the
+      // pulse on the FM TK chip indicates a fetch is in flight.
+      const chip = container.querySelector('.fmn-omni-chip');
+      if (chip) chip.classList.add('is-warming');
+      omniRequest('omni-search:warm', {})
+        .catch(() => { /* warming failure surfaces on the first real query */ })
+        .finally(() => { if (chip) chip.classList.remove('is-warming'); });
     },
   });
 
