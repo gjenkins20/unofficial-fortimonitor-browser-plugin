@@ -40,17 +40,18 @@ test.describe('live - Server Lookup E2E - real tenant', () => {
       await expect(page).toHaveURL(/#\/results$/, { timeout: 60_000 });
       await page.waitForSelector('.body-section table tbody tr', { state: 'attached', timeout: 30_000 });
       const rows = await page.locator('.body-section table tbody tr').all();
-      // Columns: # / Input / Source / Status / Server ID / Candidates
+      // Columns (FMN-115 added a row-select checkbox as col 0):
+      //   0=checkbox / 1=# / 2=Input / 3=Source / 4=Status / 5=Server ID / 6=Candidates
       const byInput = new Map();
       for (const r of rows) {
         const cells = await r.locator('td').allTextContents();
-        byInput.set(cells[1].trim(), cells.map((c) => c.trim()));
+        byInput.set(cells[2].trim(), cells.map((c) => c.trim()));
       }
       for (const inst of testInstances) {
         const row = byInput.get(inst.name);
         expect(row, `Expected a result row for "${inst.name}"`).toBeTruthy();
-        expect(row[3]).toContain('found');
-        expect(row[4]).toBe(String(inst.id));
+        expect(row[4]).toContain('found');
+        expect(row[5]).toBe(String(inst.id));
       }
     } finally {
       await page.close();
@@ -69,13 +70,13 @@ test.describe('live - Server Lookup E2E - real tenant', () => {
       const byInput = new Map();
       for (const r of rows) {
         const cells = await r.locator('td').allTextContents();
-        byInput.set(cells[1].trim(), cells.map((c) => c.trim()));
+        byInput.set(cells[2].trim(), cells.map((c) => c.trim()));
       }
       for (const inst of testInstances) {
         const row = byInput.get(String(inst.id));
         expect(row, `Expected a result row for id ${inst.id}`).toBeTruthy();
-        expect(row[3]).toContain('found');
-        expect(row[4]).toBe(String(inst.id));
+        expect(row[4]).toContain('found');
+        expect(row[5]).toBe(String(inst.id));
       }
     } finally {
       await page.close();

@@ -39,22 +39,23 @@ test.describe('Server Lookup E2E - stubbed tenant', () => {
         'edge-win-01\nhttps://fortimonitor.forticloud.com/instance/1002/details\n9999\nedge-win\nnope-server'
       );
       const rows = await readRows(page);
-      // Columns: # / Input / Source / Status / Server ID / Candidates
-      const byInput = Object.fromEntries(rows.map((r) => [r[1], r]));
-      expect(byInput['edge-win-01'][3]).toContain('found');
-      expect(byInput['edge-win-01'][4]).toBe('1001');
+      // Columns (FMN-115 added a row-select checkbox as col 0):
+      //   0=checkbox / 1=# / 2=Input / 3=Source / 4=Status / 5=Server ID / 6=Candidates
+      const byInput = Object.fromEntries(rows.map((r) => [r[2], r]));
+      expect(byInput['edge-win-01'][4]).toContain('found');
+      expect(byInput['edge-win-01'][5]).toBe('1001');
       // URL input: stored row keys by raw URL.
-      const urlRow = rows.find((r) => /\/instance\/1002\//.test(r[1]));
-      expect(urlRow[3]).toContain('found');
-      expect(urlRow[4]).toBe('1002');
-      const idRow = rows.find((r) => r[1] === '9999');
-      expect(idRow[3]).toContain('not_found');
+      const urlRow = rows.find((r) => /\/instance\/1002\//.test(r[2]));
+      expect(urlRow[4]).toContain('found');
+      expect(urlRow[5]).toBe('1002');
+      const idRow = rows.find((r) => r[2] === '9999');
+      expect(idRow[4]).toContain('not_found');
       const ambiguous = byInput['edge-win'];
-      expect(ambiguous[3]).toContain('ambiguous');
-      expect(ambiguous[5]).toContain('1001');
-      expect(ambiguous[5]).toContain('1002');
+      expect(ambiguous[4]).toContain('ambiguous');
+      expect(ambiguous[6]).toContain('1001');
+      expect(ambiguous[6]).toContain('1002');
       const missing = byInput['nope-server'];
-      expect(missing[3]).toContain('not_found');
+      expect(missing[4]).toContain('not_found');
     } finally {
       await page.close();
     }
