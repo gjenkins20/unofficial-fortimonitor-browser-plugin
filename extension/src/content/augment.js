@@ -2455,16 +2455,35 @@
       }
       .fmn-snapshot-meta {
         font-size: 12px; color: #5b6776;
-        margin: 6px 0 0; font-style: italic;
+        margin: 8px 0 0;
       }
-      .fmn-snapshot-meta.fmn-snapshot-meta-running { color: #1f6feb; font-style: normal; }
-      .fmn-snapshot-meta.fmn-snapshot-meta-error { color: #dc2626; font-style: normal; }
+      .fmn-snapshot-meta.fmn-snapshot-meta-running {
+        color: #1f6feb; font-weight: 500;
+      }
+      .fmn-snapshot-meta.fmn-snapshot-meta-error {
+        background: #fde8e8;
+        color: #b91c1c;
+        border-left: 3px solid #dc2626;
+        padding: 8px 10px;
+        font-weight: 500;
+        font-size: 12.5px;
+        border-radius: 3px;
+        margin: 10px 0 0;
+        line-height: 1.45;
+      }
       .fmn-pa-card-ft-row {
-        display: flex; gap: 8px; flex-wrap: wrap;
+        display: flex; gap: 6px; align-items: center;
       }
-      .fmn-pa-card-ft-row .pa-btn[disabled] {
-        opacity: 0.55; cursor: not-allowed;
+      .fmn-pa-card-ft-row .pa-btn { flex-shrink: 0; }
+      .fmn-pa-card-ft-row .fmn-snapshot-secondary {
+        font-size: 11.5px; color: #5b6776;
+        margin-left: 6px;
       }
+      .fmn-pa-card-ft-row .fmn-snapshot-secondary[hidden] { display: none; }
+      .fmn-pa-card-ft-row .fmn-snapshot-secondary a {
+        color: #1f6feb; text-decoration: none; cursor: pointer;
+      }
+      .fmn-pa-card-ft-row .fmn-snapshot-secondary a:hover { text-decoration: underline; }
     `;
     document.head.appendChild(style);
   }
@@ -2478,6 +2497,17 @@
     } catch { return iso; }
   }
 
+  // Only show the Open-diff link when a diff is actually possible. Hides
+  // the disabled-button noise and keeps the card body to a single primary
+  // action (matching the native FortiMonitor tile pattern of one Create
+  // button per card).
+  function setSnapshotOpenLink(card, visible) {
+    const link = card.querySelector('.fmn-snapshot-secondary');
+    if (!link) return;
+    if (visible) link.removeAttribute('hidden');
+    else link.setAttribute('hidden', '');
+  }
+
   async function refreshSnapshotCardMeta(card) {
     const meta = card.querySelector('.fmn-snapshot-meta');
     if (!meta) return;
@@ -2488,25 +2518,23 @@
       });
       if (!resp || !resp.ok) {
         meta.textContent = 'No snapshot yet.';
-        const openBtn = card.querySelector('[data-fmn-snapshot-open]');
-        if (openBtn) openBtn.disabled = true;
+        setSnapshotOpenLink(card, false);
         return;
       }
       const r = resp.result;
       if (!r?.hasCurrent) {
         meta.textContent = 'No snapshot yet.';
-        const openBtn = card.querySelector('[data-fmn-snapshot-open]');
-        if (openBtn) openBtn.disabled = true;
+        setSnapshotOpenLink(card, false);
+      } else if (!r.hasPrevious) {
+        meta.textContent = `Last: ${formatSnapshotTimestamp(r.currentTakenAt)}. Take another to compare.`;
+        setSnapshotOpenLink(card, false);
       } else {
-        const parts = [`Last snapshot: ${formatSnapshotTimestamp(r.currentTakenAt)}`];
-        if (r.hasPrevious) parts.push(`previous: ${formatSnapshotTimestamp(r.previousTakenAt)}`);
-        else parts.push('no prior snapshot to diff against yet');
-        meta.textContent = parts.join(' / ');
-        const openBtn = card.querySelector('[data-fmn-snapshot-open]');
-        if (openBtn) openBtn.disabled = !r.hasPrevious;
+        meta.textContent = `Last: ${formatSnapshotTimestamp(r.currentTakenAt)} (vs. ${formatSnapshotTimestamp(r.previousTakenAt)}).`;
+        setSnapshotOpenLink(card, true);
       }
     } catch (err) {
       meta.textContent = 'Status unavailable.';
+      setSnapshotOpenLink(card, false);
     }
   }
 
@@ -2524,7 +2552,10 @@
     const h3 = document.createElement('h3');
     h3.className = 'pa-txt pa-txt_lg';
     h3.style.fontWeight = 'bold';
-    h3.textContent = 'Deployment Snapshot & Diff';
+    // Shortened title so it fits the 1-line header height the native
+    // FortiMonitor tiles use; a 2-line title pushed header taller and
+    // clipped the footer below the .pa-card's 200px row.
+    h3.textContent = 'Snapshot & Diff';
     hd.appendChild(h3);
     card.appendChild(hd);
 
@@ -2532,12 +2563,9 @@
     bd.className = 'pa-card-bd';
     const p = document.createElement('p');
     p.className = 'pa-txt';
-    p.textContent = 'Save the full deployment as a snapshot, then see what changed between any two snapshots.';
+    p.title = 'Save the full deployment as a snapshot, then see what changed between any two snapshots.';
+    p.textContent = 'Save the deployment; see what changed between snapshots.';
     bd.appendChild(p);
-    const meta = document.createElement('p');
-    meta.className = 'fmn-snapshot-meta';
-    meta.textContent = 'Loading...';
-    bd.appendChild(meta);
     card.appendChild(bd);
 
     const ft = document.createElement('div');
@@ -2545,25 +2573,41 @@
     const row = document.createElement('div');
     row.className = 'fmn-pa-card-ft-row';
 
-    const openBtn = document.createElement('button');
-    openBtn.type = 'button';
-    openBtn.className = 'pa-btn';
-    openBtn.textContent = 'Open Snapshot & Diff';
-    openBtn.setAttribute('data-fmn-snapshot-open', '');
-    openBtn.addEventListener('click', () => {
-      window.open(SNAPSHOT_TOOL_URL, '_blank', 'noopener');
-    });
-
     const takeBtn = document.createElement('button');
     takeBtn.type = 'button';
     takeBtn.className = 'pa-btn';
-    takeBtn.textContent = 'Take Snapshot Now';
+    takeBtn.textContent = 'Take Snapshot';
     takeBtn.setAttribute('data-fmn-snapshot-take', '');
     takeBtn.addEventListener('click', () => takeSnapshotFromCard(card, takeBtn));
 
-    row.appendChild(openBtn);
+    // Open is rendered as a secondary text link next to the primary
+    // button - keeps the footer to one-line height (matching native
+    // FortiMonitor tiles) and disappears entirely when no diff is
+    // possible (no second button to confuse the operator with).
+    const openLink = document.createElement('span');
+    openLink.className = 'fmn-snapshot-secondary';
+    openLink.setAttribute('hidden', '');
+    const openAnchor = document.createElement('a');
+    openAnchor.setAttribute('role', 'button');
+    openAnchor.setAttribute('data-fmn-snapshot-open', '');
+    openAnchor.textContent = 'Open diff →';
+    openAnchor.addEventListener('click', (e) => {
+      e.preventDefault();
+      window.open(SNAPSHOT_TOOL_URL, '_blank', 'noopener');
+    });
+    openLink.appendChild(openAnchor);
+
     row.appendChild(takeBtn);
+    row.appendChild(openLink);
     ft.appendChild(row);
+    // Meta line sits in the footer below the button row - one compact
+    // line for status (or a red block for errors). Keeps the body
+    // height at native parity (description only) so the .pa-card row
+    // height clamps without clipping.
+    const meta = document.createElement('p');
+    meta.className = 'fmn-snapshot-meta';
+    meta.textContent = 'Loading...';
+    ft.appendChild(meta);
     card.appendChild(ft);
     return card;
   }

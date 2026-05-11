@@ -67,7 +67,7 @@ test.describe('FMN-154 phase 1: Snapshot & Diff card on Canned Reports', () => {
     expect(info.mounted).toBe(true);
     expect(info.parentClass).toContain('pa-hList');
     expect(info.hasRibbon).toBe(true);
-    expect(info.title).toBe('Deployment Snapshot & Diff');
+    expect(info.title).toBe('Snapshot & Diff');
     expect(info.hasCardHd).toBe(true);
     expect(info.hasCardBd).toBe(true);
     expect(info.hasCardFt).toBe(true);
@@ -88,10 +88,9 @@ test.describe('FMN-154 phase 1: Snapshot & Diff card on Canned Reports', () => {
     expect(r.siblingCount).toBeGreaterThan(1);
   });
 
-  test('action buttons are present; Open button is disabled until a previous snapshot exists', async ({ livePage }) => {
+  test('Take Snapshot button is the primary action; Open-diff link only appears when a diff is possible', async ({ livePage }) => {
     const page = livePage;
-    // The empty-state meta lands once bpa-snapshots:status resolves. Wait
-    // for either "No snapshot yet." or a "Last snapshot: ..." rendering.
+    // Wait for bpa-snapshots:status to resolve and the meta to render.
     await page.waitForFunction(
       () => {
         const meta = document.querySelector(
@@ -105,28 +104,30 @@ test.describe('FMN-154 phase 1: Snapshot & Diff card on Canned Reports', () => {
     );
     const r = await page.evaluate(() => {
       const card = document.querySelector('[data-fmn-entry="fmn-snapshot-diff-card"]');
-      const buttons = Array.from(card.querySelectorAll('button'));
-      const labels = buttons.map((b) => b.textContent.trim());
-      const open = buttons.find((b) => b.getAttribute('data-fmn-snapshot-open') !== null);
-      const take = buttons.find((b) => b.getAttribute('data-fmn-snapshot-take') !== null);
+      const takeBtn = card.querySelector('[data-fmn-snapshot-take]');
+      const openLink = card.querySelector('.fmn-snapshot-secondary');
+      const openAnchor = card.querySelector('[data-fmn-snapshot-open]');
       return {
-        labels,
-        openExists: !!open,
-        takeExists: !!take,
-        openDisabled: open ? open.disabled : null,
-        takeDisabled: take ? take.disabled : null,
+        takeExists: !!takeBtn,
+        takeLabel: takeBtn?.textContent.trim(),
+        takeDisabled: takeBtn?.disabled,
+        openLinkInDom: !!openLink,
+        openLinkHiddenAttr: openLink?.hasAttribute('hidden'),
+        openAnchorLabel: openAnchor?.textContent.trim(),
         meta: card.querySelector('.fmn-snapshot-meta')?.textContent.trim(),
       };
     });
-    expect(r.openExists).toBe(true);
     expect(r.takeExists).toBe(true);
-    expect(r.labels).toContain('Open Snapshot & Diff');
-    expect(r.labels).toContain('Take Snapshot Now');
-    // Take is always enabled. Open is disabled when there's no previous
-    // snapshot to diff against.
+    expect(r.takeLabel).toBe('Take Snapshot');
     expect(r.takeDisabled).toBe(false);
-    if (r.meta === 'No snapshot yet.' || r.meta?.startsWith('Last snapshot:') && r.meta.includes('no prior snapshot')) {
-      expect(r.openDisabled).toBe(true);
+    // Open is always in the DOM but hidden until 2 snapshots exist.
+    expect(r.openLinkInDom).toBe(true);
+    expect(r.openAnchorLabel).toBe('Open diff →');
+    if (r.meta && !r.meta.includes(' vs. ')) {
+      // Empty state or single-snapshot state: open link must be hidden.
+      expect(r.openLinkHiddenAttr).toBe(true);
+    } else {
+      expect(r.openLinkHiddenAttr).toBe(false);
     }
   });
 
