@@ -245,8 +245,22 @@
       );
       if (!hasDataRows) return;
       ensureColumnStyles();
+      let anyChanged = false;
       for (const table of document.querySelectorAll('table.pa-table_outage')) {
-        augmentTable(table);
+        if (augmentTable(table)) anyChanged = true;
+      }
+      // FMN-151: The Instance cell's fmn-instance-merged min-width (1080px)
+      // pushes both scroll-head and scroll-body tables past DataTables'
+      // first-draw column-width measurement. Without re-pinning, the two
+      // tables size independently to their own content and drift apart
+      // (head ~1780px, body ~2007px on a typical tenant), cumulating into
+      // ~228px column-boundary offset by the right end. Idempotent: only
+      // called when augmentTable actually mutated DOM this pass.
+      if (anyChanged) {
+        syncScrollTableWidths();
+        // Keep the DataTables-adjust call as a defense-in-depth path for
+        // any tenant that exposes $.fn.DataTable.
+        requestDataTablesAdjust();
       }
     },
   });
@@ -324,6 +338,10 @@
       if (sameOrder(currentNativeColumns, next)) return;
       currentNativeColumns = next;
       applyNativeHideShowToAll();
+      // FMN-151: directly re-sync head and body widths after hide/show.
+      // requestDataTablesAdjust silently no-ops on this tenant
+      // because $.fn.DataTable is not exposed at content-script eval time.
+      syncScrollTableWidths();
       requestDataTablesAdjust();
     });
   }
@@ -406,8 +424,11 @@
   }
 
   // After visibility changes, ask DataTables to re-fit remaining columns.
-  // Best-effort: jQuery / DataTables may not be exposed on every tenant.
-  // Guard every dereference; failures are silent.
+  // Best-effort: jQuery is loaded on FortiMonitor but $.fn.DataTable is
+  // not exposed at the time augment.js runs (probed live during FMN-151),
+  // so this typically no-ops. syncScrollTableWidths() below is the
+  // authoritative width-sync; this function is kept for tenants that may
+  // expose the DataTable API differently.
   function requestDataTablesAdjust() {
     try {
       const $ = window.jQuery;
@@ -427,6 +448,104 @@
       // jQuery / DataTables absent or threw - hide/show still worked
       // visually via CSS; sort/scroll behavior may be slightly off until
       // the next native draw. Acceptable.
+    }
+  }
+
+  // FMN-151: directly synchronize the scroll-head and scroll-body table
+  // widths. Required because FortiMonitor does not expose $.fn.DataTable
+  // at content-script-eval time (verified live), so requestDataTablesAdjust
+  // silently no-ops. The two tables size independently to their own
+  // intrinsic content under auto-layout, which the FMN-71 1080px Instance
+  // min-width pushes past DataTables' first-draw measurement, producing a
+  // ~200+px column-boundary drift between thead and tbody by the right
+  // end of the table.
+  //
+  // Sync algorithm: write column widths into a <colgroup>/<col> set on
+  // each of the head and body tables. Under table-layout:fixed the
+  // colgroup widths are the authoritative column-width source: per-cell
+  // padding differences between thead and tbody (which FortiMonitor's CSS
+  // applies asymmetrically - e.g. paddingRight:10px on TH vs 0 on TD on
+  // some columns) are absorbed inside the column, so the rendered cell
+  // rect at column N matches between head and body. Per-cell width styles
+  // and CSS !important rules (like the 20px checkbox-column override) are
+  // also respected: with table-layout:fixed, the column width wins.
+  //
+  // Hidden columns (display:none from FMN-123 hide/show) get a 0-width
+  // <col> so the column collapses; the body cell's display:none ensures
+  // the content stays hidden.
+  function syncScrollTableWidths() {
+    const scrollHead = document.querySelector('.dataTables_scrollHead table.pa-table_outage');
+    const scrollBody = document.querySelector('.dataTables_scrollBody table.pa-table_outage');
+    if (!scrollHead || !scrollBody) return;
+    const headRow = scrollHead.querySelector('thead tr');
+    const bodyFirstRow = scrollBody.querySelector('tbody tr');
+    if (!headRow || !bodyFirstRow) return;
+    const headCells = Array.from(headRow.children);
+    const bodyCells = Array.from(bodyFirstRow.children);
+    if (headCells.length !== bodyCells.length) return;
+
+    // Clear any prior pinning so we measure natural widths fresh. Without
+    // this, post-toggle calls would re-measure our own pinned values and
+    // the sync would be a no-op.
+    scrollHead.style.tableLayout = '';
+    scrollBody.style.tableLayout = '';
+    scrollHead.style.width = '';
+    scrollBody.style.width = '';
+    removeFmnColgroup(scrollHead);
+    removeFmnColgroup(scrollBody);
+    void scrollBody.offsetWidth;
+
+    // Measure per-column rendered widths from both tables. Use the larger
+    // so neither side's content overflows. Hidden cells contribute 0.
+    const widths = [];
+    for (let i = 0; i < headCells.length; i++) {
+      const headCell = headCells[i];
+      const bodyCell = bodyCells[i];
+      const headHidden = window.getComputedStyle(headCell).display === 'none';
+      const bodyHidden = window.getComputedStyle(bodyCell).display === 'none';
+      if (headHidden && bodyHidden) { widths.push(0); continue; }
+      const hW = headHidden ? 0 : headCell.getBoundingClientRect().width;
+      const bW = bodyHidden ? 0 : bodyCell.getBoundingClientRect().width;
+      widths.push(Math.max(hW, bW));
+    }
+
+    const total = widths.reduce((a, b) => a + b, 0);
+    scrollHead.style.width = total + 'px';
+    scrollBody.style.width = total + 'px';
+    scrollHead.style.tableLayout = 'fixed';
+    scrollBody.style.tableLayout = 'fixed';
+    applyFmnColgroup(scrollHead, widths);
+    applyFmnColgroup(scrollBody, widths);
+    scrollHead.setAttribute('data-fmn-width-synced', JSON.stringify(widths));
+    scrollBody.setAttribute('data-fmn-width-synced', JSON.stringify(widths));
+  }
+
+  // Clear widths on any existing colgroup cols so per-column measurement
+  // sees natural widths, not values we (or DataTables) pinned earlier.
+  // We do not delete the colgroup itself - FortiMonitor / DataTables may
+  // rely on its presence and we want to reuse it in applyFmnColgroup.
+  function removeFmnColgroup(table) {
+    const cg = table.querySelector('colgroup');
+    if (!cg) return;
+    for (const col of cg.children) col.style.width = '';
+  }
+
+  function applyFmnColgroup(table, widths) {
+    // Reuse the existing colgroup if any (preserving its non-width state),
+    // otherwise create one. Adjust the <col> count to match the column
+    // count, then set widths.
+    let cg = table.querySelector('colgroup');
+    if (!cg) {
+      cg = document.createElement('colgroup');
+      table.insertBefore(cg, table.firstChild);
+    }
+    cg.setAttribute('data-fmn-colgroup', '1');
+    while (cg.children.length < widths.length) cg.appendChild(document.createElement('col'));
+    while (cg.children.length > widths.length) cg.removeChild(cg.lastElementChild);
+    for (let i = 0; i < widths.length; i++) {
+      // 0-width columns collapse; we keep them in the DOM so column
+      // indices stay aligned with cell indices.
+      cg.children[i].style.width = (widths[i] > 0 ? widths[i] : 0) + 'px';
     }
   }
 
@@ -965,6 +1084,7 @@
     // MutationObserver feedback would loop forever, freezing the page.
     if (headerMutated || addedAny) applyColumnOrderToDom();
     if (addedAny && sortState.column) applySortIfActive();
+    return headerMutated || addedAny;
   }
 
   function findInstanceCell(cells) {
