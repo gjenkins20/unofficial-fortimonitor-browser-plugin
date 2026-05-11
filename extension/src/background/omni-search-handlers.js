@@ -54,7 +54,7 @@ function isFresh(cache) {
   return Date.now() - cache.fetchedAt < CACHE_TTL_MS;
 }
 
-function extractIdFromUrl(url) {
+export function extractIdFromUrl(url) {
   if (typeof url !== 'string') return null;
   const m = url.match(/\/(\d+)\/?$/);
   return m ? Number(m[1]) : null;
@@ -62,7 +62,7 @@ function extractIdFromUrl(url) {
 
 // Build a {id -> name} map from a list of records that each have
 // {url, name}.
-function buildIdNameMap(records, fallbackName = null) {
+export function buildIdNameMap(records, fallbackName = null) {
   const map = new Map();
   for (const r of records ?? []) {
     if (!r || typeof r !== 'object') continue;
@@ -73,7 +73,7 @@ function buildIdNameMap(records, fallbackName = null) {
   return map;
 }
 
-function buildServerCorpus(server, groupNameById, templateNameById) {
+export function buildServerCorpus(server, groupNameById, templateNameById) {
   const parts = [];
   const push = (v) => {
     if (v == null) return;
