@@ -72,3 +72,9 @@ fmn-135-*.mjs
 
 # FMN-138 SSO Discovery captures (contain session cookies + IdP cert material)
 tools/discovery/sso-capture-*.json
+
+# FMN-151 live-FortiMonitor reproduction profile (cookies, local storage)
+tests/e2e/.profile-fmn-live/
+
+# Live-spec artifacts (screenshots + JSON capture customer data from real tenant)
+tests/e2e/__artifacts__/
