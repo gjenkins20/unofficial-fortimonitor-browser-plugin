@@ -202,42 +202,83 @@ async function getCache(tenantOrigin, factory, { forceRefresh = false } = {}) {
   return promise;
 }
 
-// Identify which top-level field matched, for the result row's "matched
-// in" badge. First-hit wins. Returns one of: name, fqdn, ip, description,
-// tag, attribute, device_type, agent_version, group, template, status,
-// or null.
-function classifyMatch(server, q) {
-  if (server.name && server.name.toLowerCase().includes(q)) return 'name';
-  if (server.fqdn && server.fqdn.toLowerCase().includes(q)) return 'fqdn';
-  if (server.additional_fqdns?.some((a) => String(a).toLowerCase().includes(q))) return 'ip';
-  if (server.description && server.description.toLowerCase().includes(q)) return 'description';
-  if (server.tags?.some((t) => String(t).toLowerCase().includes(q))) return 'tag';
-  if (server.attributes?.some(
+// Score a server against the (already-lowercased) query. Higher is more
+// relevant; we sort matches by score so an exact-name hit always beats
+// a record that incidentally contains the query in a different field.
+//   1000 exact name
+//    900 fqdn exact
+//    800 name starts-with
+//    700 fqdn starts-with
+//    600 name contains
+//    500 additional_fqdns (IP) contains
+//    400 fqdn contains
+//    300 tag exact
+//    250 attribute name or value contains
+//    200 description contains
+//    150 group / template contains
+//    100 device_type / agent_version / status contains
+//      0 anything else (corpus hit but we can't classify)
+// Returns { score, field } where field labels the strongest signal.
+function scoreServer(server, q) {
+  const name = (server.name || '').toLowerCase();
+  const fqdn = (server.fqdn || '').toLowerCase();
+  if (name === q) return { score: 1000, field: 'name' };
+  if (fqdn === q) return { score: 900, field: 'fqdn' };
+  if (name.startsWith(q)) return { score: 800, field: 'name' };
+  if (fqdn.startsWith(q)) return { score: 700, field: 'fqdn' };
+  if (name.includes(q)) return { score: 600, field: 'name' };
+  if ((server.additional_fqdns || []).some((a) => String(a).toLowerCase().includes(q))) {
+    return { score: 500, field: 'ip' };
+  }
+  if (fqdn.includes(q)) return { score: 400, field: 'fqdn' };
+  if ((server.tags || []).some((t) => String(t).toLowerCase() === q)) {
+    return { score: 350, field: 'tag' };
+  }
+  if ((server.tags || []).some((t) => String(t).toLowerCase().includes(q))) {
+    return { score: 300, field: 'tag' };
+  }
+  if ((server.attributes || []).some(
     (a) => String(a.value).toLowerCase().includes(q) || String(a.name).toLowerCase().includes(q)
-  )) return 'attribute';
-  if (server.device_type && server.device_type.toLowerCase().includes(q)) return 'device_type';
-  if (server.device_sub_type && server.device_sub_type.toLowerCase().includes(q)) return 'device_type';
-  if (server.agent_version && server.agent_version.toLowerCase().includes(q)) return 'agent_version';
-  if (server.group_name && server.group_name.toLowerCase().includes(q)) return 'group';
-  if (server.template_names?.some((t) => String(t).toLowerCase().includes(q))) return 'template';
-  if (server.status && server.status.toLowerCase().includes(q)) return 'status';
-  return null;
+  )) return { score: 250, field: 'attribute' };
+  if ((server.description || '').toLowerCase().includes(q)) return { score: 200, field: 'description' };
+  if ((server.group_name || '').toLowerCase().includes(q)) return { score: 150, field: 'group' };
+  if ((server.template_names || []).some((t) => String(t).toLowerCase().includes(q))) {
+    return { score: 150, field: 'template' };
+  }
+  if ((server.device_type || '').toLowerCase().includes(q)) return { score: 100, field: 'device_type' };
+  if ((server.device_sub_type || '').toLowerCase().includes(q)) return { score: 100, field: 'device_type' };
+  if ((server.agent_version || '').toLowerCase().includes(q)) return { score: 100, field: 'agent_version' };
+  if ((server.status || '').toLowerCase().includes(q)) return { score: 100, field: 'status' };
+  return { score: 0, field: 'other' };
 }
 
 function searchCache(cache, query, max = MAX_RESULTS_DEFAULT) {
   const q = String(query ?? '').trim().toLowerCase();
   if (!q) return { query: '', total: 0, matches: [] };
-  const matches = [];
+  // Two-pass scan: substring filter against the denormalized corpus
+  // (fast), then per-row relevance score. We materialize ALL scored hits
+  // and sort, then trim to `max`. The relevance step is O(n) where n is
+  // total hits, which on a 1k-server tenant is bounded by tenant size.
+  const scored = [];
   for (let i = 0; i < cache.corpus.length; i++) {
     if (cache.corpus[i].indexOf(q) === -1) continue;
     const server = cache.servers[i];
-    matches.push({
-      ...server,
-      matched_field: classifyMatch(server, q) ?? 'other',
-    });
-    if (matches.length >= max) break;
+    const { score, field } = scoreServer(server, q);
+    scored.push({ score, server, field });
   }
-  return { query: q, total: matches.length, matches };
+  scored.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    // Stable secondary: name asc so equal-score results have a
+    // deterministic order rather than API-order.
+    const an = (a.server.name || '').toLowerCase();
+    const bn = (b.server.name || '').toLowerCase();
+    return an.localeCompare(bn);
+  });
+  const matches = scored.slice(0, max).map(({ server, field }) => ({
+    ...server,
+    matched_field: field,
+  }));
+  return { query: q, total: scored.length, matches };
 }
 
 export function createOmniSearchHandlers({ events = {}, getClient } = {}) {

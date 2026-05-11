@@ -2104,7 +2104,11 @@
     const footer = document.createElement('div');
     footer.className = 'fmn-omni-footer';
     const left = document.createElement('span');
-    left.textContent = `${results.matches?.length ?? 0} matches`;
+    const shown = results.matches?.length ?? 0;
+    const total = results.total ?? shown;
+    left.textContent = total > shown
+      ? `${shown} of ${total} matches (top ${shown} shown)`
+      : `${shown} match${shown === 1 ? '' : 'es'}`;
     footer.appendChild(left);
     const refresh = document.createElement('button');
     refresh.type = 'button';
