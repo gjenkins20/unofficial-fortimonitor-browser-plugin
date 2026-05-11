@@ -219,7 +219,7 @@ async function getCache(tenantOrigin, factory, { forceRefresh = false } = {}) {
 //    100 device_type / agent_version / status contains
 //      0 anything else (corpus hit but we can't classify)
 // Returns { score, field } where field labels the strongest signal.
-function scoreServer(server, q) {
+export function scoreServer(server, q) {
   const name = (server.name || '').toLowerCase();
   const fqdn = (server.fqdn || '').toLowerCase();
   if (name === q) return { score: 1000, field: 'name' };
@@ -252,7 +252,7 @@ function scoreServer(server, q) {
   return { score: 0, field: 'other' };
 }
 
-function searchCache(cache, query, max = MAX_RESULTS_DEFAULT) {
+export function searchCache(cache, query, max = MAX_RESULTS_DEFAULT) {
   const q = String(query ?? '').trim().toLowerCase();
   if (!q) return { query: '', total: 0, matches: [] };
   // Two-pass scan: substring filter against the denormalized corpus

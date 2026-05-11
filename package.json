@@ -5,6 +5,7 @@
   "description": "Repo-root tooling for E2E tests. The extension itself lives under extension/ with its own package.json; this manifest exists only to host the Playwright dev-dep and the test:e2e script.",
   "type": "module",
   "scripts": {
+    "test:unit": "node --test 'tests/unit/**/*.test.mjs'",
     "test:e2e": "playwright test --config tests/e2e/playwright.config.js --grep-invert='live -'",
     "test:e2e:live": "playwright test --config tests/e2e/playwright.config.js --grep='live -'",
     "test:e2e:ollama-live": "OLLAMA_LIVE=1 playwright test --config tests/e2e/playwright.config.js --grep='live - Ask AI'",
