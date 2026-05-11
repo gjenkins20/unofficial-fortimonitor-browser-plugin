@@ -47,6 +47,11 @@ async function gotoHarness(ctx) {
   await page.route(ROUTED_URL, async (route) => {
     await route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: buildHarnessHtml() });
   });
+  // Stub destination pages for click-through nav tests so window.location.href
+  // assignments don't 404 against the public origin.
+  await page.route(/^https:\/\/fortimonitor\.forticloud\.com\/report\/Instance\//, async (route) => {
+    await route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: '<html><body>instance stub</body></html>' });
+  });
   await page.goto(ROUTED_URL);
   // Wait for augment.js to finish its Promise.all([loadXxxFlag()]).finally(ensureAll).
   await page.waitForTimeout(150);
@@ -167,6 +172,133 @@ test.describe('FMN-152 omni-search content-script UI', () => {
     expect(dd.rows[0]?.badge).toBe('name');
     expect(dd.rows.some((r) => r.name === 'SQL_Server_01')).toBe(true);
     expect(dd.footer).toMatch(/\d+ match/);
+    await page.close();
+  });
+
+  // ---- Phase 4: interactions + edge states ----
+
+  test('keyboard nav: ArrowDown / ArrowUp highlights rows; Enter navigates', async ({ ctx }) => {
+    const { page } = await gotoHarness(ctx);
+    await enable(page);
+    await page.waitForTimeout(120);
+    await page.focus('#fmn-omni-search-input');
+    await page.keyboard.type('server', { delay: 5 });
+    await page.waitForTimeout(350);
+    await page.keyboard.press('ArrowDown');
+    let active = await page.evaluate(() => document.querySelector('.fmn-omni-row.is-active')?.querySelector('.fmn-omni-row-name')?.textContent);
+    expect(active).toBe('server'); // exact-name row 0
+    await page.keyboard.press('ArrowDown');
+    active = await page.evaluate(() => document.querySelector('.fmn-omni-row.is-active')?.querySelector('.fmn-omni-row-name')?.textContent);
+    expect(active).toBe('SQL_Server_01'); // row 1
+    await page.keyboard.press('ArrowUp');
+    active = await page.evaluate(() => document.querySelector('.fmn-omni-row.is-active')?.querySelector('.fmn-omni-row-name')?.textContent);
+    expect(active).toBe('server');
+    // Enter -> nav to /report/Instance/1/details
+    await Promise.all([page.waitForURL(/\/report\/Instance\/1\/details/, { timeout: 3000 }), page.keyboard.press('Enter')]);
+    expect(page.url()).toMatch(/\/report\/Instance\/1\/details/);
+    await page.close();
+  });
+
+  test('Esc closes the dropdown', async ({ ctx }) => {
+    const { page } = await gotoHarness(ctx);
+    await enable(page);
+    await page.waitForTimeout(120);
+    await page.fill('#fmn-omni-search-input', 'server');
+    await page.waitForTimeout(350);
+    expect(await page.evaluate(() => document.getElementById('fmn-omni-search-dropdown')?.classList.contains('is-open'))).toBe(true);
+    await page.focus('#fmn-omni-search-input');
+    await page.keyboard.press('Escape');
+    expect(await page.evaluate(() => document.getElementById('fmn-omni-search-dropdown')?.classList.contains('is-open'))).toBe(false);
+    await page.close();
+  });
+
+  test('click row triggers nav', async ({ ctx }) => {
+    const { page } = await gotoHarness(ctx);
+    await enable(page);
+    await page.waitForTimeout(120);
+    await page.fill('#fmn-omni-search-input', 'SQL');
+    await page.waitForTimeout(350);
+    await Promise.all([
+      page.waitForURL(/\/report\/Instance\/2\/details/, { timeout: 3000 }),
+      page.click('.fmn-omni-row >> nth=0'),
+    ]);
+    expect(page.url()).toMatch(/\/report\/Instance\/2\/details/);
+    await page.close();
+  });
+
+  test('click outside container closes the dropdown', async ({ ctx }) => {
+    const { page } = await gotoHarness(ctx);
+    await enable(page);
+    await page.waitForTimeout(120);
+    await page.fill('#fmn-omni-search-input', 'server');
+    await page.waitForTimeout(350);
+    expect(await page.evaluate(() => document.getElementById('fmn-omni-search-dropdown')?.classList.contains('is-open'))).toBe(true);
+    await page.mouse.click(10, 10); // body outside the container
+    await page.waitForTimeout(60);
+    expect(await page.evaluate(() => document.getElementById('fmn-omni-search-dropdown')?.classList.contains('is-open'))).toBe(false);
+    await page.close();
+  });
+
+  test('refresh button fires omni-search:refresh then re-runs the query', async ({ ctx }) => {
+    const { page } = await gotoHarness(ctx);
+    await enable(page);
+    await page.waitForTimeout(120);
+    await page.fill('#fmn-omni-search-input', 'server');
+    await page.waitForTimeout(350);
+    await page.evaluate(() => window.__omniHarness.resetCallLog());
+    // Use mousedown - the refresh button binds on mousedown to avoid the
+    // input blur preventing the click.
+    await page.dispatchEvent('.fmn-omni-refresh', 'mousedown');
+    await page.waitForTimeout(250);
+    const types = await page.evaluate(() => window.__omniHarness.sendMessageCalls.map((c) => c.type));
+    expect(types).toContain('omni-search:refresh');
+    expect(types).toContain('omni-search:query');
+    await page.close();
+  });
+
+  test('error from stub surfaces in the dropdown', async ({ ctx }) => {
+    const { page } = await gotoHarness(ctx);
+    await enable(page);
+    await page.waitForTimeout(120);
+    await page.evaluate(() => window.__omniHarness.failNextQuery());
+    await page.fill('#fmn-omni-search-input', 'anything');
+    await page.waitForTimeout(350);
+    const text = await page.evaluate(() => document.querySelector('#fmn-omni-search-dropdown .fmn-omni-error')?.textContent);
+    expect(text).toMatch(/query-failed/);
+    await page.close();
+  });
+
+  test('no-match query shows "No matches" copy', async ({ ctx }) => {
+    const { page } = await gotoHarness(ctx);
+    await enable(page);
+    await page.waitForTimeout(120);
+    await page.fill('#fmn-omni-search-input', 'zxqv-nope');
+    await page.waitForTimeout(350);
+    const text = await page.evaluate(() => document.querySelector('#fmn-omni-search-dropdown .fmn-omni-empty')?.textContent);
+    expect(text).toMatch(/No matches/);
+    await page.close();
+  });
+
+  test('host Vue re-render wipe: container re-mounts and heartbeat keeps ticking (no feedback loop)', async ({ ctx }) => {
+    const { page } = await gotoHarness(ctx);
+    await enable(page);
+    await page.waitForTimeout(150);
+    // Snapshot heartbeat before the wipe.
+    const hb1 = await page.evaluate(() => document.getElementById('hb')?.textContent);
+    // Simulate the host stripping our container + the hidden attr.
+    await page.evaluate(() => window.__omniHarness.simulateHostRerenderWipe());
+    // Wait a bit for the MutationObserver tick + ensureAll re-mount.
+    await page.waitForTimeout(250);
+    const after = await page.evaluate(() => ({
+      omni: !!document.getElementById('fmn-omni-search-container'),
+      nativeHidden: !!document.querySelector('.search-form[data-fmn-omni-search-hidden]'),
+      heartbeat: document.getElementById('hb')?.textContent,
+      frozen: document.getElementById('hb')?.classList.contains('frozen'),
+    }));
+    expect(after.omni).toBe(true);
+    expect(after.nativeHidden).toBe(true);
+    expect(after.frozen).toBe(false);
+    expect(after.heartbeat).not.toEqual(hb1);
     await page.close();
   });
 });
