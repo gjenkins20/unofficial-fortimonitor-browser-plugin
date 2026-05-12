@@ -251,4 +251,81 @@ test.describe('Native column hide/show on /report/ListServers (FMN-123)', () => 
 
     await page.close();
   });
+
+  // FMN-158: hiding a column must collapse its colgroup col[i].style.width
+  // to 0px on both the scroll-head and scroll-body tables. Pre-fix, only
+  // the inner element children were visibility:hidden via the FMN-151 CSS;
+  // the column kept its measured natural width (~190px) and the TH's
+  // direct text node (e.g. "Tags") stayed visible because the CSS
+  // `[data-fmn-native-hidden] > *` selector misses text-node-only content.
+  test('FMN-158: hidden column collapses its colgroup col[i].width to 0px', async ({ ctx }) => {
+    const { page, errors } = await gotoHarness(ctx);
+
+    await page.click('#hide-tags-heartbeat-btn');
+    await page.waitForFunction(() => {
+      const el = document.getElementById('verdict');
+      return el && el.textContent.includes('PASS');
+    }, { timeout: 2000 });
+
+    const widths = await page.evaluate(() => {
+      const out = {};
+      for (const id of ['scroll-head-table', 'scroll-body-table']) {
+        const table = document.getElementById(id);
+        const cg = table?.querySelector('colgroup');
+        const cols = cg ? Array.from(cg.children).map((c) => c.style.width || null) : [];
+        out[id] = cols;
+      }
+      return out;
+    });
+
+    // Tags is at column index 5 (per ID_TO_INDEX above); Heartbeat at 7.
+    // Both must read "0px" on both tables. Other columns must be > 0.
+    for (const tableId of ['scroll-head-table', 'scroll-body-table']) {
+      expect(widths[tableId][5]).toBe('0px');
+      expect(widths[tableId][7]).toBe('0px');
+      for (let i = 0; i < widths[tableId].length; i++) {
+        if (i === 5 || i === 7) continue;
+        const w = parseFloat(widths[tableId][i] || '0');
+        expect(w).toBeGreaterThan(0);
+      }
+    }
+
+    expect(errors).toEqual([]);
+    await page.close();
+  });
+
+  test('FMN-158: re-showing a hidden column restores non-zero colgroup width', async ({ ctx }) => {
+    const { page } = await gotoHarness(ctx);
+
+    await page.click('#hide-tags-heartbeat-btn');
+    await page.waitForFunction(() => {
+      const el = document.getElementById('verdict');
+      return el && el.textContent.includes('PASS');
+    }, { timeout: 2000 });
+
+    await page.click('#show-all-btn');
+    await page.waitForFunction(() => {
+      const el = document.getElementById('verdict');
+      return el && el.textContent.includes('PASS');
+    }, { timeout: 2000 });
+
+    const widths = await page.evaluate(() => {
+      const out = {};
+      for (const id of ['scroll-head-table', 'scroll-body-table']) {
+        const table = document.getElementById(id);
+        const cg = table?.querySelector('colgroup');
+        out[id] = cg ? Array.from(cg.children).map((c) => parseFloat(c.style.width || '0')) : [];
+      }
+      return out;
+    });
+
+    // After show-all, no column should be at 0 width.
+    for (const tableId of ['scroll-head-table', 'scroll-body-table']) {
+      for (const w of widths[tableId]) {
+        expect(w).toBeGreaterThan(0);
+      }
+    }
+
+    await page.close();
+  });
 });

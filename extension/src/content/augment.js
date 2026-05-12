@@ -347,12 +347,11 @@
       const next = normalizeNativeColumnOrder(newAll[NATIVE_AUG_ID]);
       if (sameOrder(currentNativeColumns, next)) return;
       currentNativeColumns = next;
+      // FMN-158: applyNativeHideShowToAll now handles the follow-up
+      // syncScrollTableWidths + requestDataTablesAdjust internally so
+      // every code path that flips hidden state stays consistent (initial
+      // mount, popover toggle, settings-card toggle, storage-onChanged).
       applyNativeHideShowToAll();
-      // FMN-151: directly re-sync head and body widths after hide/show.
-      // requestDataTablesAdjust silently no-ops on this tenant
-      // because $.fn.DataTable is not exposed at content-script eval time.
-      syncScrollTableWidths();
-      requestDataTablesAdjust();
     });
   }
 
@@ -391,23 +390,38 @@
   // TDs with the hidden attribute. Idempotent: only mutates the
   // attribute when the desired value differs from the current one, so
   // re-runs do not trigger MutationObserver feedback loops.
+  // FMN-158: returns true when any attr actually changed this pass. The
+  // caller uses that signal to re-run syncScrollTableWidths so the
+  // colgroup col[i].style.width pin goes to 0 for newly-hidden columns.
+  // Without the follow-up width sync, the column keeps its measured
+  // natural width (~190px) while only inner element children are
+  // visibility:hidden, producing a wide blank column where the header's
+  // direct text node (e.g. "Tags") still shows through because the
+  // FMN-151 CSS selector `[data-fmn-native-hidden] > *` doesn't match
+  // text-node-only TH content.
   function applyNativeHideShowToAll() {
-    if (!nativeColumnOrderLoaded) return;
+    if (!nativeColumnOrderLoaded) return false;
     const tables = document.querySelectorAll('table.pa-table_outage');
-    if (tables.length === 0) return;
+    if (tables.length === 0) return false;
     ensureNativeColumnStyles();
+    let anyChanged = false;
     for (const table of tables) {
-      applyNativeHideShowToTable(table);
+      if (applyNativeHideShowToTable(table)) anyChanged = true;
     }
+    if (anyChanged) {
+      syncScrollTableWidths();
+      requestDataTablesAdjust();
+    }
+    return anyChanged;
   }
 
   function applyNativeHideShowToTable(table) {
     const thead = table.querySelector('thead');
-    if (!thead) return;
+    if (!thead) return false;
     const headerRow = thead.querySelector('tr');
-    if (!headerRow) return;
+    if (!headerRow) return false;
     const headerCells = Array.from(headerRow.children);
-    if (headerCells.length === 0) return;
+    if (headerCells.length === 0) return false;
 
     // Map registry id → column index, by trimmed-text TH match.
     const idToIndex = new Map();
@@ -420,8 +434,9 @@
         }
       }
     }
-    if (idToIndex.size === 0) return;
+    if (idToIndex.size === 0) return false;
 
+    let changed = false;
     for (const col of currentNativeColumns) {
       const idx = idToIndex.get(col.id);
       if (idx == null) continue;
@@ -430,19 +445,27 @@
       // says otherwise. normalize() also enforces this; defense in depth.
       const wantHidden = !meta?.lockedVisible && Boolean(col.hidden);
       const headerCell = headerCells[idx];
-      if (headerCell) setHiddenAttr(headerCell, wantHidden);
+      if (headerCell && setHiddenAttr(headerCell, wantHidden)) changed = true;
       const bodyRows = table.querySelectorAll('tbody > tr');
       for (const row of bodyRows) {
         const cell = row.children[idx];
-        if (cell) setHiddenAttr(cell, wantHidden);
+        if (cell && setHiddenAttr(cell, wantHidden)) changed = true;
       }
     }
+    return changed;
   }
 
   function setHiddenAttr(el, wantHidden) {
     const has = el.hasAttribute(NATIVE_HIDDEN_ATTR);
-    if (wantHidden && !has) el.setAttribute(NATIVE_HIDDEN_ATTR, '1');
-    else if (!wantHidden && has) el.removeAttribute(NATIVE_HIDDEN_ATTR);
+    if (wantHidden && !has) {
+      el.setAttribute(NATIVE_HIDDEN_ATTR, '1');
+      return true;
+    }
+    if (!wantHidden && has) {
+      el.removeAttribute(NATIVE_HIDDEN_ATTR);
+      return true;
+    }
+    return false;
   }
 
   // After visibility changes, ask DataTables to re-fit remaining columns.

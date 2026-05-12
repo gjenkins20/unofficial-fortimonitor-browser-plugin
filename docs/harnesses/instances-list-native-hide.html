@@ -165,7 +165,18 @@
     const listeners = new Set();
     function clone(v) { return v == null ? v : JSON.parse(JSON.stringify(v)); }
     window.chrome = {
-      runtime: { getURL: function (p) { return p; }, id: 'harness-extension-id' },
+      runtime: {
+        getURL: function (p) { return p; },
+        id: 'harness-extension-id',
+        // FMN-158: augment.js line 2654 calls chrome.runtime.onMessage.addListener
+        // (added by FMN-154 BPA snapshot card). Without this stub the whole
+        // augment.js script load throws on registration, FMN-71 row
+        // augmentation never runs, and any harness-driven spec stalls waiting
+        // for data-fmn-ip-row-augmented.
+        onMessage: { addListener: function () {}, removeListener: function () {} },
+        sendMessage: function () { return Promise.resolve(); },
+        lastError: null
+      },
       storage: {
         local: {
           get: function (key) {
