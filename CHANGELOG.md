@@ -18,20 +18,20 @@ place.
 
 ## Unreleased
 
-- FMN-157: in-extension update check. The toolkit now fetches the raw
-  `manifest.json` from `main` on GitHub at most once per hour, semver-
-  compares the published version against the installed one, and renders
-  an `Update available: v{remote}. You're on v{local}. Run `git pull` in
-  the cloned repo and reload the extension.` banner above the popup tool
-  grid when a newer release is found. Triggers: service-worker startup,
-  a 12h `chrome.alarms` backstop, and popup-open (all subject to the
-  hour rate limit). Failures are silent and never overwrite the last-
-  known-good result. Banner has **Snooze 7 days** and **Dismiss** (24h)
-  buttons that persist `fm:updateSnoozeUntil`. On by default behind
-  `fm:updateCheckEnabled`; toggle off under popup &rarr; Settings to
-  disable the network check entirely. New `alarms` permission and new
-  `https://raw.githubusercontent.com/*` host permission. Reloading the
-  extension is required to pick up the new permissions.
+- FMN-155 (phase 1, behind flag): Bulk Action Composer. New tile in the
+  toolkit popup that opens a 4-step wizard: pick a subset of instances
+  (re-using the FMN-152 omni-search corpus, plus clipboard CSV and a
+  best-effort "current page selection" loader), pick an action (v1
+  ships <em>Add Tag</em>, <em>Remove Tag</em>, and <em>Apply Template</em>),
+  configure it, and preview a per-row prev vs. next table. Commit runs
+  against the v2 API with concurrency 3, streams per-row pass/fail
+  status into the table, and offers a CSV export of results. Actions
+  are a pluggable registry under <code>extension/src/lib/bulk-actions/</code>
+  so phase-2 actions (port scope, parent group, agent_resource status,
+  maintenance) plug in by adding one file. <strong>Off by default</strong>
+  behind <code>fm:bulkComposerEnabled</code> (FMN-129 per-tool gating
+  pattern); toggle on under popup &rarr; Settings &rarr; "Bulk Action
+  Composer (Beta)".
 - FMN-154 (phase 1, behind flag): Deployment Snapshot &amp; Diff. New
   toolkit card on FortiMonitor's Canned Reports page
   (`/report/ListReports`), styled to match native `.pa-card` tiles and

@@ -236,6 +236,26 @@
       </button>
 
       <button class="tool-card"
+              data-group="bulk"
+              data-tool="bulk-composer"
+              data-url="src/ui/bulk-composer/app.html"
+              data-api-key-required="true"
+              data-experimental="bulk-composer"
+              hidden
+              title="Requires a FortiMonitor v2 API key - configure in popup → Settings (⚙).">
+        <div class="tool-meta">
+          <div class="tool-name">
+            Bulk Action Composer
+            <span class="badge beta">Beta</span>
+          </div>
+          <div class="tool-desc" data-default-desc="Pick a subset of instances, choose an action (Add Tag / Remove Tag / Apply Template), preview prev vs. next per row, and commit with bounded concurrency. Re-uses the omni-search corpus for fast subset selection.">
+            Pick a subset of instances, choose an action (Add Tag / Remove Tag / Apply Template), preview prev vs. next per row, and commit with bounded concurrency. Re-uses the omni-search corpus for fast subset selection.
+          </div>
+        </div>
+        <div class="chevron">›</div>
+      </button>
+
+      <button class="tool-card"
               data-group="sso"
               data-tool="sso-config"
               data-url="src/ui/sso-config/app.html"
@@ -505,6 +525,17 @@
       <label class="toggle-row">
         <input id="omni-search-toggle" type="checkbox">
         <span>Use FM TK Search instead of native "Search Instances"</span>
+      </label>
+    </div>
+
+    <div class="settings-section">
+      <label class="settings-label" for="bulk-composer-toggle">Bulk Action Composer (Beta)</label>
+      <p class="settings-help">
+        Off by default. When on, the toolkit surfaces a <strong>Bulk Action Composer</strong> tile that walks a 4-step wizard: pick instances (re-using the FM TK Search corpus), pick an action, configure it, preview a per-row prev vs. next table, then commit with bounded concurrency. v1 supports <em>Add Tag</em>, <em>Remove Tag</em>, and <em>Apply Template</em>. Requires a configured RW API key. Mid-wizard drafts persist in this Chrome profile.
+      </p>
+      <label class="toggle-row">
+        <input id="bulk-composer-toggle" type="checkbox">
+        <span>Show Bulk Action Composer</span>
       </label>
     </div>
 

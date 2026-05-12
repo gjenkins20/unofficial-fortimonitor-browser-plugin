@@ -22,6 +22,7 @@ import { createBpaAuditHandlers } from './bpa-audit-handlers.js';
 import { createBpaSnapshotHandlers } from './bpa-snapshot-handlers.js';
 import { createClaudeChatHandlers } from './claude-chat-handlers.js';
 import { createOmniSearchHandlers } from './omni-search-handlers.js';
+import { createBulkComposerHandlers } from './bulk-composer-handlers.js';
 import { resolveFortimonitorOrigin } from '../lib/origin-resolver.js';
 import { applyAllProviderRules, WATCHED_STORAGE_KEYS } from '../lib/origin-rewrite.js';
 import { checkForUpdate } from './update-check.js';
@@ -51,7 +52,8 @@ const handlers = {
   ...createBpaAuditHandlers({ events: { emit }, resolveOrigin }),
   ...createBpaSnapshotHandlers({ events: { emit }, resolveOrigin }),
   ...createClaudeChatHandlers({ events: { emit } }),
-  ...createOmniSearchHandlers({ events: { emit } })
+  ...createOmniSearchHandlers({ events: { emit } }),
+  ...createBulkComposerHandlers({ events: { emit } })
 };
 
 // FMN-152 dev aid: expose handler keys on globalThis so a Playwright

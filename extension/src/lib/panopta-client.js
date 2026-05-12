@@ -786,6 +786,61 @@ export class PanoptaClient {
     return body;
   }
 
+  // ---- Server tag management (FMN-155) ---------------------------------
+  //
+  // The v2 API exposes server `tags` as a string-array attribute on the
+  // /server/{id} record. There is no dedicated /tag endpoint - mutations
+  // go through PUT /server/{id} with the full server body. Caller
+  // semantics:
+  //   addServerTag    - merge `tags` into the server's existing tag list
+  //                     (idempotent: already-present tags are no-ops).
+  //   removeServerTag - drop `tags` from the server's existing tag list
+  //                     (idempotent: missing tags are no-ops).
+  //
+  // Returns { status, tagsBefore, tagsAfter, addedTags, removedTags }
+  // so callers can render a coherent prev->next diff in the preview
+  // table without re-fetching.
+
+  async addServerTag(serverId, tags) {
+    if (!serverId) throw new TypeError('addServerTag: serverId is required');
+    const tagList = Array.isArray(tags)
+      ? tags.filter((t) => typeof t === 'string' && t.trim())
+      : (typeof tags === 'string' && tags.trim()) ? [tags.trim()] : [];
+    if (tagList.length === 0) throw new TypeError('addServerTag: at least one non-empty tag is required');
+    const { body: server } = await this._request('GET', `/server/${encodeURIComponent(serverId)}`);
+    const before = Array.isArray(server?.tags) ? server.tags.slice() : [];
+    const beforeSet = new Set(before);
+    const added = tagList.filter((t) => !beforeSet.has(t));
+    if (added.length === 0) {
+      return { status: 200, tagsBefore: before, tagsAfter: before, addedTags: [], removedTags: [] };
+    }
+    const after = before.concat(added);
+    const { res } = await this._request('PUT', `/server/${encodeURIComponent(serverId)}`, {
+      body: { ...server, tags: after }
+    });
+    return { status: res.status, tagsBefore: before, tagsAfter: after, addedTags: added, removedTags: [] };
+  }
+
+  async removeServerTag(serverId, tags) {
+    if (!serverId) throw new TypeError('removeServerTag: serverId is required');
+    const tagList = Array.isArray(tags)
+      ? tags.filter((t) => typeof t === 'string' && t.trim())
+      : (typeof tags === 'string' && tags.trim()) ? [tags.trim()] : [];
+    if (tagList.length === 0) throw new TypeError('removeServerTag: at least one non-empty tag is required');
+    const { body: server } = await this._request('GET', `/server/${encodeURIComponent(serverId)}`);
+    const before = Array.isArray(server?.tags) ? server.tags.slice() : [];
+    const removeSet = new Set(tagList);
+    const after = before.filter((t) => !removeSet.has(t));
+    const removed = before.filter((t) => removeSet.has(t));
+    if (removed.length === 0) {
+      return { status: 200, tagsBefore: before, tagsAfter: before, addedTags: [], removedTags: [] };
+    }
+    const { res } = await this._request('PUT', `/server/${encodeURIComponent(serverId)}`, {
+      body: { ...server, tags: after }
+    });
+    return { status: res.status, tagsBefore: before, tagsAfter: after, addedTags: [], removedTags: removed };
+  }
+
   async acknowledgeOutage(outageId, { message = null } = {}) {
     if (!outageId) throw new TypeError('acknowledgeOutage: outageId is required');
     const payload = message ? { message } : {};

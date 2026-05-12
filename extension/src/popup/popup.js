@@ -32,7 +32,9 @@ import {
   isSnapshotDiffEnabled,
   setSnapshotDiffEnabled,
   isUpdateCheckEnabled,
-  setUpdateCheckEnabled
+  setUpdateCheckEnabled,
+  isBulkComposerEnabled,
+  setBulkComposerEnabled
 } from '../lib/settings.js';
 import {
   UPDATE_CHECK_RESULT_KEY,
@@ -329,6 +331,12 @@ async function loadSnapshotDiffIntoToggle() {
   toggle.checked = await isSnapshotDiffEnabled();
 }
 
+async function loadBulkComposerIntoToggle() {
+  const toggle = document.getElementById('bulk-composer-toggle');
+  if (!toggle) return;
+  toggle.checked = await isBulkComposerEnabled();
+}
+
 async function applyExperimentalVisibility() {
   const askClaudeOn = await isAskClaudeEnabled();
   for (const el of document.querySelectorAll('[data-experimental="ask-claude"]')) {
@@ -360,6 +368,10 @@ async function applyExperimentalVisibility() {
   const ssoConfigOn = await isSsoConfigEnabled();
   for (const el of document.querySelectorAll('[data-experimental="sso-config"]')) {
     el.hidden = !ssoConfigOn;
+  }
+  const bulkComposerOn = await isBulkComposerEnabled();
+  for (const el of document.querySelectorAll('[data-experimental="bulk-composer"]')) {
+    el.hidden = !bulkComposerOn;
   }
 }
 
@@ -984,6 +996,7 @@ function init() {
     await loadOmniSearchIntoToggle();
     await loadSnapshotDiffIntoToggle();
     await loadUpdateCheckIntoToggle();
+    await loadBulkComposerIntoToggle();
     await loadWebguiColumnsIntoSettings();
     await applyExperimentalVisibility();
     showSettings();
@@ -1023,6 +1036,12 @@ function init() {
       await renderUpdateBanner();
     });
   }
+
+  document.getElementById('bulk-composer-toggle').addEventListener('change', async (e) => {
+    await setBulkComposerEnabled(e.target.checked);
+    await applyExperimentalVisibility();
+    await refreshGuards();
+  });
 
   document.getElementById('feature-badges-toggle').addEventListener('change', async (e) => {
     await setShowFeatureBadgesEnabled(e.target.checked);

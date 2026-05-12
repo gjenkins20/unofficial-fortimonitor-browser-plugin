@@ -38,6 +38,12 @@ export const SNAPSHOT_DIFF_ENABLED_KEY = 'fm:snapshotDiffEnabled';
 // a newer version is published. On by default - operator-friendly, the
 // banner is gated on an actual newer version existing, not just the flag.
 export const UPDATE_CHECK_ENABLED_KEY = 'fm:updateCheckEnabled';
+// FMN-155: per-tool flag for the Bulk Action Composer wizard (a 4-step
+// flow that picks a subset of instances, picks an action, configures
+// it, then previews + commits with bounded concurrency). Off by default
+// until the operator has exercised the supported actions (Add Tag,
+// Remove Tag, Apply Template) against their tenant.
+export const BULK_COMPOSER_ENABLED_KEY = 'fm:bulkComposerEnabled';
 
 export const ASK_CLAUDE_TOOL_TIERS = ['readonly', 'readwrite', 'all'];
 export const DEFAULT_ASK_CLAUDE_TOOL_TIER = 'readonly';
@@ -358,6 +364,32 @@ export async function isSnapshotDiffEnabled(storage = defaultStorage()) {
  */
 export async function setSnapshotDiffEnabled(enabled, storage = defaultStorage()) {
   await storage.set({ [SNAPSHOT_DIFF_ENABLED_KEY]: Boolean(enabled) });
+}
+
+/**
+ * Read the FMN-155 bulk-composer-enabled flag. Off by default so the
+ * Bulk Action Composer tile stays hidden until the operator opts in
+ * via popup Settings. Storage errors fail closed (return false).
+ *
+ * @param {{ get: (key: string) => Promise<Record<string, any>> }} [storage]
+ */
+export async function isBulkComposerEnabled(storage = defaultStorage()) {
+  try {
+    const data = await storage.get(BULK_COMPOSER_ENABLED_KEY);
+    return Boolean(data?.[BULK_COMPOSER_ENABLED_KEY]);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Persist the FMN-155 bulk-composer-enabled flag.
+ *
+ * @param {boolean} enabled
+ * @param {{ set: (obj: Record<string, any>) => Promise<void> }} [storage]
+ */
+export async function setBulkComposerEnabled(enabled, storage = defaultStorage()) {
+  await storage.set({ [BULK_COMPOSER_ENABLED_KEY]: Boolean(enabled) });
 }
 
 /**
