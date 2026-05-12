@@ -55,7 +55,9 @@ export function createBpaSnapshotHandlers({
 
     'bpa-snapshots:estimate': async () => {
       // Prefer the last snapshot's actual run duration. Falls back to a
-      // conservative default for the very first snapshot.
+      // conservative 3-minute default for the very first snapshot - on
+      // real tenants the BPA crawl typically runs 1-5 minutes, and the
+      // prior 30s default underset operator expectations (FMN-164).
       const { current } = await readSnapshots(local);
       if (current?.durationMs && current.durationMs > 0) {
         return {
@@ -65,7 +67,7 @@ export function createBpaSnapshotHandlers({
         };
       }
       return {
-        estimatedSeconds: 30,
+        estimatedSeconds: 180,
         basedOn: 'default',
         lastServerCount: null,
       };
