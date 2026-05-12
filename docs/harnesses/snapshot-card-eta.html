@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Harness: Snapshot card ETA + in-flight pickup (FMN-164)</title>
+<!--
+  Synthetic harness for FMN-164. Drives the snapshot-diff card on a fake
+  /report/ListReports page with a configurable chrome.runtime.sendMessage
+  stub so a Playwright spec can flex through the three estimate branches
+  (no API key / probe-success / probe-failure) and the in-flight resume
+  path on card mount.
+
+  Companion spec: tests/e2e/fmn-164-eta-and-inflight-pickup.spec.js. The
+  spec sets window.__snapshotHarness.* to configure stub behavior before
+  flipping fm:snapshotDiffEnabled true.
+-->
+<style>
+  body {
+    font: 13px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    margin: 0; padding: 20px; background: #f4f5f7; color: #222;
+  }
+  /* Minimal native .pa-card / .pa-hList classes the augment.js card
+     mount targets. Real styling lives in augment.js's injected styles;
+     we only need the structure here. */
+  .pa-hList {
+    display: flex; flex-wrap: wrap; gap: 12px;
+  }
+  .pa-card {
+    width: 280px; background: #fff; border: 1px solid #d6d9dd;
+    border-radius: 4px; padding: 12px;
+  }
+  .pa-card-hd h3 { margin: 0 0 8px; font-size: 14px; }
+  .pa-card-bd { font-size: 12px; }
+  .pa-card-ft { margin-top: 8px; }
+  .pa-btn {
+    background: #1f6feb; color: #fff; border: 0; padding: 6px 10px;
+    border-radius: 3px; cursor: pointer; font-size: 12px;
+  }
+  .pa-txt { margin: 0; }
+  .pa-txt_lg { font-size: 14px; }
+  .heartbeat {
+    position: fixed; bottom: 8px; left: 8px; background: #d6f5d6;
+    border: 1px solid #67c167; border-radius: 4px; padding: 2px 8px;
+    font-variant-numeric: tabular-nums;
+  }
+  .heartbeat.frozen { background: #f7c7c7; border-color: #c25c5c; }
+</style>
+</head>
+<body>
+
+<!-- The native FortiMonitor canned-reports container the snapshot card
+     mounts into. augment.js queries .pa-hList. -->
+<div class="pa-hList">
+  <div class="pa-card"><div class="pa-card-hd"><h3>Native tile (placeholder)</h3></div></div>
+</div>
+
+<div class="heartbeat" id="hb">heartbeat: 0</div>
+
+<script>
+  // Heartbeat - frozen counter == augment.js froze the page (FMN-72 guard).
+  (function () {
+    const el = document.getElementById('hb');
+    let n = 0;
+    let lastTick = performance.now();
+    setInterval(function () {
+      n += 1;
+      const now = performance.now();
+      const gap = now - lastTick;
+      lastTick = now;
+      el.textContent = 'heartbeat: ' + n + ' (gap ' + Math.round(gap) + 'ms)';
+      if (gap > 800) { el.classList.add('frozen'); el.textContent += ' [STARVED]'; }
+    }, 100);
+  })();
+
+  // chrome.* stubs.
+  (function () {
+    const storeData = {};
+    const sessionData = {};
+    const listeners = new Set();
+    // Configurable state read by the sendMessage stub. Spec mutates these
+    // via window.__snapshotHarness.* before flipping the flag on.
+    const cfg = {
+      statusResult: {
+        hasCurrent: false,
+        hasPrevious: false,
+        currentTakenAt: null,
+        previousTakenAt: null,
+        runInFlight: false,
+        runStartedAt: null,
+      },
+      estimateResult: {
+        estimatedSeconds: 180,
+        basedOn: 'default',
+        lastServerCount: null,
+        serverCount: null,
+      },
+    };
+
+    function clone(v) { return v == null ? v : JSON.parse(JSON.stringify(v)); }
+
+    window.chrome = {
+      runtime: {
+        getURL: function (p) { return p; },
+        id: 'harness-extension-id',
+        lastError: null,
+        sendMessage: function (msg, cb) {
+          const respond = (result, err) => {
+            window.chrome.runtime.lastError = err ? { message: err } : null;
+            if (cb) try { cb(err ? { ok: false, error: err } : { ok: true, result }); }
+              catch (e) { console.error('cb threw', e); }
+            window.chrome.runtime.lastError = null;
+          };
+          if (msg?.type === 'bpa-snapshots:status') {
+            setTimeout(() => respond(clone(cfg.statusResult)), 5);
+          } else if (msg?.type === 'bpa-snapshots:estimate') {
+            setTimeout(() => respond(clone(cfg.estimateResult)), 5);
+          } else if (msg?.type === 'bpa-snapshots:take') {
+            // No-op for this harness; in-flight is tested via the status
+            // result, not by exercising a real take.
+            setTimeout(() => respond({ ok: true }), 5);
+          } else if (msg?.type === 'fm:noop-wake') {
+            respond({ ok: true });
+          } else {
+            // Unknown message - mirror the SW's fallthrough behavior so
+            // unrelated content-script wires don't blow up the harness.
+            respond(null, 'Unknown message type: ' + msg?.type);
+          }
+        },
+        onMessage: {
+          addListener: function () { /* no-op for harness */ },
+          removeListener: function () { /* no-op */ },
+        },
+      },
+      storage: {
+        local: {
+          get: function (key) {
+            return new Promise(function (resolve) {
+              if (typeof key === 'string') {
+                const out = {};
+                if (key in storeData) out[key] = clone(storeData[key]);
+                resolve(out);
+              } else { resolve(clone(storeData)); }
+            });
+          },
+          set: function (obj) {
+            return new Promise(function (resolve) {
+              const changes = {};
+              for (const k of Object.keys(obj)) {
+                changes[k] = { oldValue: clone(storeData[k]), newValue: clone(obj[k]) };
+                storeData[k] = clone(obj[k]);
+              }
+              for (const fn of listeners) {
+                try { fn(changes, 'local'); } catch (e) { console.error('listener error', e); }
+              }
+              resolve();
+            });
+          },
+        },
+        session: {
+          get: function (key) {
+            return new Promise(function (resolve) {
+              if (typeof key === 'string') {
+                const out = {};
+                if (key in sessionData) out[key] = clone(sessionData[key]);
+                resolve(out);
+              } else { resolve(clone(sessionData)); }
+            });
+          },
+          set: function (obj) {
+            return new Promise(function (resolve) {
+              for (const k of Object.keys(obj)) sessionData[k] = clone(obj[k]);
+              resolve();
+            });
+          },
+          remove: function (key) {
+            return new Promise(function (resolve) {
+              const keys = Array.isArray(key) ? key : [key];
+              for (const k of keys) delete sessionData[k];
+              resolve();
+            });
+          },
+        },
+        onChanged: {
+          addListener: function (fn) { listeners.add(fn); },
+          removeListener: function (fn) { listeners.delete(fn); },
+        },
+      },
+    };
+
+    window.__snapshotHarness = {
+      setStatus: (next) => { Object.assign(cfg.statusResult, next); },
+      setEstimate: (next) => { Object.assign(cfg.estimateResult, next); },
+      enable: () => window.chrome.storage.local.set({ 'fm:snapshotDiffEnabled': true }),
+      disable: () => window.chrome.storage.local.set({ 'fm:snapshotDiffEnabled': false }),
+      getStore: () => clone(storeData),
+    };
+  })();
+
+  try { history.replaceState({}, '', '/report/ListReports'); } catch {}
+</script>
+
+<script src="../../extension/src/content/augment.js"></script>
+
+</body>
+</html>

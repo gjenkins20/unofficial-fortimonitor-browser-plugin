@@ -2555,6 +2555,13 @@
     if (!est) return '';
     const s = est.estimatedSeconds;
     if (est.basedOn === 'last-run') return `last took ${s}s`;
+    if (est.basedOn === 'projected' && typeof est.serverCount === 'number') {
+      // Round to nearest minute for the projected case so the meta line
+      // reads naturally ("About 120 servers; estimated ~3 minutes"); the
+      // exact seconds aren't load-bearing once we're past the default.
+      const minutes = Math.max(1, Math.round(s / 60));
+      return `About ${est.serverCount} servers; estimated ~${minutes} minute${minutes === 1 ? '' : 's'}`;
+    }
     return `~${s}s estimated (first run)`;
   }
 
@@ -2644,10 +2651,39 @@
     } catch { return null; }
   }
 
+  // FMN-164: shared running-state UI updater. Used both by the "Take
+  // Snapshot" click path (where we know the start time locally) and by the
+  // card-mount path when bpa-snapshots:status reports runInFlight=true
+  // (where we resume from the SW's persisted start time). The setInterval
+  // handle is returned so the caller can clear it when the run completes.
+  function startRunningTicker(card, startMs) {
+    const meta = card.querySelector('.fmn-snapshot-meta');
+    if (!meta) return null;
+    meta.classList.remove('fmn-snapshot-meta-error');
+    meta.classList.add('fmn-snapshot-meta-running');
+    meta.style.setProperty('--fmn-progress', '0%');
+    resetSnapshotProgress(card);
+    const updateRunning = () => {
+      const sec = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
+      meta.textContent = `Taking a snapshot... ${formatElapsed(sec)} elapsed · safe to leave page`;
+    };
+    updateRunning();
+    return setInterval(updateRunning, 1000);
+  }
+
+  // Track the in-flight resume ticker so storage-listener / re-mount cycles
+  // don't accumulate intervals.
+  let snapshotResumeTicker = null;
+  function clearResumeTicker() {
+    if (snapshotResumeTicker) {
+      clearInterval(snapshotResumeTicker);
+      snapshotResumeTicker = null;
+    }
+  }
+
   async function refreshSnapshotCardMeta(card) {
     const meta = card.querySelector('.fmn-snapshot-meta');
     if (!meta) return;
-    meta.classList.remove('fmn-snapshot-meta-running', 'fmn-snapshot-meta-error');
     try {
       const [statusResp, estimate] = await Promise.all([
         new Promise((resolve) => {
@@ -2655,6 +2691,28 @@
         }),
         fetchSnapshotEstimate(),
       ]);
+      const r = statusResp?.ok ? statusResp.result : null;
+      // FMN-164: in-flight resume on card mount. If the SW reports a run
+      // is in progress, render the elapsed counter resuming from
+      // runStartedAt instead of overwriting the meta line with a stale
+      // "No snapshot yet" / "Last: ..." string. The take-button stays
+      // disabled is handled by the next mount cycle, but during this
+      // refresh we leave button state alone (the button's not addressed
+      // here; the elapsed banner is the operator's signal that a run is
+      // in flight).
+      if (r && r.runInFlight) {
+        clearResumeTicker();
+        const startMs = typeof r.runStartedAt === 'number' ? r.runStartedAt : Date.now();
+        snapshotResumeTicker = startRunningTicker(card, startMs);
+        setSnapshotOpenLink(card, false);
+        return;
+      }
+      // Not in flight - tear down any prior resume ticker and clear the
+      // running/error classes before painting the steady-state meta.
+      clearResumeTicker();
+      meta.classList.remove('fmn-snapshot-meta-running', 'fmn-snapshot-meta-error');
+      meta.style.removeProperty('--fmn-progress');
+
       const estText = snapshotEstimateText(estimate);
       if (!statusResp || !statusResp.ok) {
         meta.textContent = ['No snapshot yet', estText, 'saved on this Chrome only']
@@ -2662,7 +2720,6 @@
         setSnapshotOpenLink(card, false);
         return;
       }
-      const r = statusResp.result;
       if (!r?.hasCurrent) {
         meta.textContent = ['No snapshot yet', estText, 'saved on this Chrome only']
           .filter(Boolean).join(' · ');
@@ -2770,21 +2827,12 @@
     button.disabled = true;
     button.textContent = 'Taking...';
     if (openLink) openLink.setAttribute('hidden', '');
+    // FMN-164: any in-flight resume ticker from the prior mount must be
+    // cleared before the click-path takes over - otherwise both intervals
+    // fight over the meta text.
+    clearResumeTicker();
     const start = Date.now();
-    let ticker = null;
-    const updateRunning = () => {
-      if (!meta) return;
-      const sec = Math.floor((Date.now() - start) / 1000);
-      meta.textContent = `Taking a snapshot... ${formatElapsed(sec)} elapsed · safe to leave page`;
-    };
-    if (meta) {
-      meta.classList.remove('fmn-snapshot-meta-error');
-      meta.classList.add('fmn-snapshot-meta-running');
-      meta.style.setProperty('--fmn-progress', '0%');
-      resetSnapshotProgress(card);
-      updateRunning();
-      ticker = setInterval(updateRunning, 1000);
-    }
+    let ticker = startRunningTicker(card, start);
     try {
       const resp = await new Promise((resolve) => {
         chrome.runtime.sendMessage({ type: 'bpa-snapshots:take', payload: { sections: ['all'] } }, (r) => resolve(r || null));
