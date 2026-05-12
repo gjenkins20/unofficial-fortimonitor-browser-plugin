@@ -252,42 +252,42 @@ A higher-fidelity HTML mockup lives at `docs/mockups/voip-report.html`.
   (`/config/ChooseSimulatedThreshold?server_resource_id=<id>` or
   similar — captured in `voip.md`).
 
-## 8. Follow-up tickets to file (after operator sign-off)
+## 8. Follow-up tickets (filed 2026-05-12)
 
-Listed here, not filed yet. Each has the `browser-plugin` label.
+Each carries the `browser-plugin` label.
 
-1. **FMN-XXX — Network Quality Report: card + viewer scaffold**
+1. **FMN-181 — Network Quality Report: card + viewer scaffold**
    Inject the `pa-card` on `/report/ListReports` (mirrors FMN-154). Open
    an extension-served result page. Hook up the v2 fetcher for
    `server` + `agent_resource` + `outage` + `outage_statistics` +
    `server_template`. Empty/zero/error states. CSV export. No
    time-series wiring yet.
 
-2. **FMN-XXX — Network Quality Report: outage join + active-outage panel**
+2. **FMN-182 — Network Quality Report: outage join + active-outage panel**
    Build the description-prefix join on `/v2/outage` for the four NQ
    metric labels (`'Latency from '`, `'Jitter from '`, `'Packet Loss from '`,
    `'MOS from '`). Populate the active-outage panel. Populate the
    recent-outage counters. Window selector (24h / 7d / 30d).
 
-3. **FMN-XXX — Network Quality Report: capture session-auth metric data
+3. **FMN-183 — Network Quality Report: capture session-auth metric data
    endpoint** (capture-only)
    Probe `/report/get_service_performance_data` (or whatever the Service
    Performance report uses) for an `icmp.latency` agent_resource to find
    the time-series endpoint. Document findings in
    `docs/api-discovery/metric-data.md`. Discovery-only; no implementation.
 
-4. **FMN-XXX — Network Quality Report: time-series enrichment (gated on #3)**
+4. **FMN-184 — Network Quality Report: time-series enrichment (gated on FMN-183)**
    If a session-auth metric-data endpoint is found, add a "max jitter in
    window" / "max packet loss in window" column to the per-row table.
    Otherwise close as won't-fix-without-FortiMonitor-changes.
 
-5. **FMN-XXX — Network Quality Report: instance-subset filter** (FMN-152 deps)
+5. **FMN-185 — Network Quality Report: instance-subset filter** (FMN-152 deps)
    Reuse omni-search corpus to filter the report to a customer / site /
    tag. Adds the search input above the inventory table.
 
-6. **FMN-XXX — Settings entry for Network Quality Report visibility**
+6. **FMN-186 — Settings entry for Network Quality Report visibility**
    Per project memory `per_tool_visibility_flag.md`, the tile gets its
-   own Settings toggle in popup. Default off until #1 and #2 ship.
+   own Settings toggle in popup. Default off until FMN-181 and FMN-182 ship.
 
 ## 9. Honest "what we'd need first" note
 
