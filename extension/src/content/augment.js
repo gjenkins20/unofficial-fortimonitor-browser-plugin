@@ -2875,26 +2875,74 @@
     }
   }
 
+  // FMN-187: Vue periodically reconciles .pa-hList's children and tears out
+  // our injected <li> because it isn't part of Vue's data model. The global
+  // subtree MutationObserver eventually catches this, but operator observed
+  // 35+ second gaps before the card reappeared. Defend two ways:
+  //   1. A dedicated MutationObserver pointed at .pa-hList itself, so a
+  //      child removal triggers immediate re-mount on the very next tick
+  //      regardless of whatever else is in the global observer's batch.
+  //   2. The existence check verifies the card is a direct child of the
+  //      CURRENT host. If Vue replaced .pa-hList entirely, the old card may
+  //      be orphaned in a detached subtree (document.querySelector still
+  //      finds it briefly during the transition); treat that as "missing"
+  //      and re-attach to the live host.
+  let snapshotHostElement = null;
+  let snapshotHostObserver = null;
+
+  function attachSnapshotHostObserver(host) {
+    if (snapshotHostElement === host && snapshotHostObserver) return;
+    if (snapshotHostObserver) snapshotHostObserver.disconnect();
+    snapshotHostElement = host;
+    snapshotHostObserver = new MutationObserver(() => mountSnapshotCard());
+    snapshotHostObserver.observe(host, { childList: true });
+  }
+
+  function findSnapshotCardChild(host) {
+    for (const child of host.children) {
+      if (child.getAttribute && child.getAttribute(ENTRY_ATTR) === SNAPSHOT_CARD_ID) {
+        return child;
+      }
+    }
+    return null;
+  }
+
+  function detachSnapshotHostObserver() {
+    if (snapshotHostObserver) snapshotHostObserver.disconnect();
+    snapshotHostObserver = null;
+    snapshotHostElement = null;
+  }
+
+  function mountSnapshotCard() {
+    if (location.pathname !== REPORTS_PATH) {
+      detachSnapshotHostObserver();
+      return;
+    }
+    // Flag must be loaded AND on. Without the flag-loaded check, the
+    // mount could race the initial load and flicker on then off.
+    if (!snapshotDiffFlagLoaded || !snapshotDiffEnabled) {
+      const existing = document.querySelector(`[${ENTRY_ATTR}="${SNAPSHOT_CARD_ID}"]`);
+      if (existing) existing.remove();
+      detachSnapshotHostObserver();
+      return;
+    }
+    const host = document.querySelector('.pa-hList');
+    if (!host) return;
+    attachSnapshotHostObserver(host);
+    if (findSnapshotCardChild(host)) return;
+    // Card is missing from the live host. Sweep any orphaned card the
+    // global observer may have left in a detached subtree.
+    const orphan = document.querySelector(`[${ENTRY_ATTR}="${SNAPSHOT_CARD_ID}"]`);
+    if (orphan && !host.contains(orphan)) orphan.remove();
+    ensureSnapshotCardStyles();
+    const card = buildSnapshotCard();
+    host.appendChild(card);
+    refreshSnapshotCardMeta(card);
+  }
+
   register({
     id: SNAPSHOT_CARD_ID,
-    mount() {
-      if (location.pathname !== REPORTS_PATH) return;
-      // Flag must be loaded AND on. Without the flag-loaded check, the
-      // mount could race the initial load and flicker on then off.
-      if (!snapshotDiffFlagLoaded || !snapshotDiffEnabled) {
-        const existing = document.querySelector(`[${ENTRY_ATTR}="${SNAPSHOT_CARD_ID}"]`);
-        if (existing) existing.remove();
-        return;
-      }
-      const existing = document.querySelector(`[${ENTRY_ATTR}="${SNAPSHOT_CARD_ID}"]`);
-      if (existing && document.body.contains(existing)) return;
-      const host = document.querySelector('.pa-hList');
-      if (!host) return;
-      ensureSnapshotCardStyles();
-      const card = buildSnapshotCard();
-      host.appendChild(card);
-      refreshSnapshotCardMeta(card);
-    },
+    mount: mountSnapshotCard,
   });
 
   // FMN-169: per-feature info bubbles on hover. Mirror of the content-
