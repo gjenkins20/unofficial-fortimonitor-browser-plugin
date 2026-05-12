@@ -59,6 +59,8 @@
   // Idempotent state: only one tour instance at a time.
   let activeTour = null;
   let enginePromise = null;
+  let quizPromise = null;
+  let activeQuiz = null;
 
   /**
    * Read the fm:introTourEnabled flag. Storage errors fail closed so a
@@ -96,9 +98,39 @@
     return enginePromise;
   }
 
+  // FMN-167: quiz renderer + state factory live in a separate module
+  // so the engine itself stays narrow (the tour is just steps; the quiz
+  // is a sibling experience the bridge orchestrates on tour completion).
+  const QUIZ_RENDERER_URL = chrome.runtime.getURL('src/ui/intro-tour/quiz-renderer.js');
+  const QUIZ_MODULE_URL = chrome.runtime.getURL('src/ui/intro-tour/quiz.js');
+
+  function loadQuizModules() {
+    if (!quizPromise) {
+      quizPromise = Promise.all([
+        import(QUIZ_RENDERER_URL),
+        import(QUIZ_MODULE_URL)
+      ]).then(([renderer, quiz]) => ({ renderer, quiz }));
+    }
+    return quizPromise;
+  }
+
+  async function startQuiz() {
+    try {
+      const { renderer, quiz } = await loadQuizModules();
+      activeQuiz = renderer.renderQuiz({
+        doc: document,
+        state: quiz.createQuizState(),
+        onFinish: () => { activeQuiz = null; }
+      });
+    } catch (err) {
+      console.error('[FMN intro-tour] quiz failed to mount', err);
+    }
+  }
+
   async function startTour() {
     if (!(await isEnabled())) return;
     if (activeTour && activeTour.isActive) return;
+    if (activeQuiz) { activeQuiz.dispose(); activeQuiz = null; }
     ensureStyles();
     const mod = await loadEngine();
     activeTour = new mod.IntroTour(INTRO_TOUR_STEPS, {
@@ -106,7 +138,14 @@
       doc: document,
       storage: chrome.storage.session,
       storageKey: 'fm:intro-tour:state',
-      onComplete: () => { activeTour = null; },
+      onComplete: () => {
+        activeTour = null;
+        // FMN-167: post-tour quiz to solidify the material. Mounts as
+        // a sibling overlay using the same scoped stylesheet; the
+        // engine has already torn down its own overlay before this
+        // callback fires.
+        startQuiz();
+      },
       onDismiss: () => { activeTour = null; }
     });
     await activeTour.start();

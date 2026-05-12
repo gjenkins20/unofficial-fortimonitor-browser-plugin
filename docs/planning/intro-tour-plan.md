@@ -234,17 +234,34 @@ Out of scope for this ticket (the stub renders one hard-coded step). The authori
 
 ---
 
-## 10. Stub framework - what FMN-167 ships
+## 10. What FMN-167 ships
 
+**Scope-shift note (2026-05-12):** the original plan punted the popup trigger to a
+follow-up (FMN-174). Per operator feedback that the headline goal is "initiated
+by the extension," the trigger UI plus a short comprehension quiz are now part
+of FMN-167. End-to-end testable from the popup without DevTools.
+
+### Framework
 1. `extension/src/ui/intro-tour/step-schema.js` - `normalizeStep`, `validateStep`, `STEP_DEFAULTS`.
-2. `extension/src/ui/intro-tour/step-renderer.js` - `renderStep(step, { container }) -> { hostNode, dispose }`. Pure DOM construction, returns the inserted node + a teardown fn. Imports the scoped CSS at bridge mount time.
-3. `extension/src/ui/intro-tour/tour-engine.js` - `runTour(steps, opts) -> IntroTour` instance. State machine over the steps array; integrates with `chrome.storage.session` for cross-route. v1 supports `next-button` advance only (`click` and `auto` are stubs that throw - the only step shipped uses `next-button`).
-4. `extension/src/ui/intro-tour/styles.css` - `.fmn-tour-overlay`, `.fmn-tour-spotlight`, `.fmn-tour-card`, `.fmn-tour-next`, `.fmn-tour-dismiss`. Scoped, reuses CSS variables from `extension/src/ui/styles.css` where possible.
-5. `extension/src/content/intro-tour-bridge.js` - content-script glue, registered as an augmentation in `augment.js`. Reads `fm:introTourEnabled`; listens for `chrome.runtime.onMessage` `fm:intro-tour:start`; calls `runTour(INTRO_TOUR_STEPS)`.
-6. One step in `INTRO_TOUR_STEPS`: the Dashboards step. Anchored on `nav .pa-side-nav__top-level-item` (most stable selector visible across FortiMonitor's nav variants). Caption: a placeholder welcome line. `advance: "next-button"`. Clicking Next ends the tour (it's the only step).
-7. The popup tile and the Settings toggle are **not** shipped in this ticket - they're the trigger-surface follow-up ticket. To exercise the stub during operator review: enable the flag in DevTools (`chrome.storage.local.set({ 'fm:introTourEnabled': true })`), reload the FortiMonitor tab, send the start message from DevTools (`chrome.runtime.sendMessage({ type: 'fm:intro-tour:start' })` from the popup or extension context).
+2. `extension/src/ui/intro-tour/step-renderer.js` - `renderStep(step, { container }) -> { hostNode, dispose }`. Pure DOM, returns the inserted node + a teardown fn.
+3. `extension/src/ui/intro-tour/tour-engine.js` - `runTour(steps, opts) -> IntroTour`. State machine; integrates with `chrome.storage.session` for cross-route. v1 supports `next-button` advance only.
+4. `extension/src/ui/intro-tour/styles.css` - scoped `.fmn-tour-*` styles for both the tour overlay and the quiz card.
+5. `extension/src/content/intro-tour-bridge.js` - content-script glue. Reads `fm:introTourEnabled`, listens for `fm:intro-tour:start`, drives the engine, and mounts the quiz on tour completion.
 
-The stub is real, runnable code. Operator flips the flag, sends the message, sees the caption.
+### Quiz
+6. `extension/src/ui/intro-tour/quiz.js` - pure state machine: `INTRO_TOUR_QUIZ` (3 questions), `createQuizState`, `answerCurrent`, `scoreQuiz`.
+7. `extension/src/ui/intro-tour/quiz-renderer.js` - DOM renderer for the quiz card. Single-answer multiple choice with right/wrong feedback + per-question explanation + final results panel.
+8. Bridge wires `engine.onComplete` to `renderQuiz`, so the quiz appears immediately after the last tour step.
+
+### Trigger surface
+9. **`extension/src/popup/popup.html` + `popup.js`** - new `Training` section pinned above the alphabetized tools list, gated on `fm:introTourEnabled`. Tile click sends `fm:intro-tour:start` to the SW, then closes the popup.
+10. **Settings entry** - "Tour FortiMonitor (Beta)" toggle. Flipping it on reveals the Training section without a popup reload.
+11. **`extension/src/background/intro-tour-dispatch.js`** - SW handler. Receives the start message, queries open FortiMonitor tabs, fans the message out via `chrome.tabs.sendMessage`. If no FM tab is open, opens one to `https://fortimonitor.forticloud.com/dashboards` and dispatches once `chrome.tabs.onUpdated` reports `status: 'complete'` (25s timeout).
+
+### Step content
+12. One step in `INTRO_TOUR_STEPS`: the welcome step anchored on `li.pa-side-nav__top-level-item`. Clicking Next ends the tour and immediately mounts the quiz. FMN-173 authors the full 15-step content.
+
+The flag stays **off by default**. Operator opts in via Settings, sees the Training section appear, clicks the tile, watches the tour run, takes the quiz, sees their score. End-to-end testable without DevTools.
 
 ---
 

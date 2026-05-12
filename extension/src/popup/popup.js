@@ -38,7 +38,9 @@ import {
   isNoiseAnalyzerEnabled,
   setNoiseAnalyzerEnabled,
   isShowInfoBubblesEnabled,
-  setShowInfoBubblesEnabled
+  setShowInfoBubblesEnabled,
+  isIntroTourEnabled,
+  setIntroTourEnabled
 } from '../lib/settings.js';
 import { mountInfoBubbles } from '../lib/info-bubble.js';
 import {
@@ -328,6 +330,18 @@ async function loadShowInfoBubblesIntoToggle() {
   const toggle = document.getElementById('info-bubbles-toggle');
   if (!toggle) return;
   toggle.checked = await isShowInfoBubblesEnabled();
+}
+
+// FMN-167: load the intro-tour toggle into Settings + reveal the popup
+// Training section + tile when the flag is on. Called once on popup init
+// and whenever Settings is opened. The section is hidden by default so
+// operators who haven't opted in never see a Beta tile.
+async function loadIntroTourState() {
+  const enabled = await isIntroTourEnabled();
+  const settingsToggle = document.getElementById('intro-tour-toggle');
+  if (settingsToggle) settingsToggle.checked = enabled;
+  const section = document.getElementById('training-section');
+  if (section) section.hidden = !enabled;
 }
 
 async function loadOmniSearchIntoToggle() {
@@ -1118,6 +1132,11 @@ function init() {
   applyExperimentalVisibility();
   refreshGuards();
 
+  // FMN-167: reveal the Training section + tile on initial popup paint
+  // when the flag is on. Independent of Settings being opened so a
+  // fresh popup load still shows the tile for opted-in operators.
+  loadIntroTourState().catch(() => { /* failure means tile stays hidden */ });
+
   // FMN-157: render any prior update-check result immediately, then
   // ask the SW to refresh in the background (subject to the hour
   // rate limit inside checkForUpdate). The next popup open picks up
@@ -1181,6 +1200,7 @@ function init() {
     await loadSidebarLauncherIntoToggle();
     await loadShowFeatureBadgesIntoToggle();
     await loadShowInfoBubblesIntoToggle();
+    await loadIntroTourState();
     await loadOmniSearchIntoToggle();
     await loadSnapshotDiffIntoToggle();
     await loadUpdateCheckIntoToggle();
@@ -1265,6 +1285,35 @@ function init() {
   if (infoBubblesToggle) {
     infoBubblesToggle.addEventListener('change', async (e) => {
       await setShowInfoBubblesEnabled(e.target.checked);
+    });
+  }
+
+  // FMN-167: intro-tour Settings toggle. Flipping it on reveals the
+  // Training section in the popup immediately (no popup reload needed);
+  // flipping off hides it. The popup tile click handler is wired below
+  // and is conditional on the flag check at click time (defense in depth
+  // in case the section was somehow visible without the flag).
+  const introTourToggle = document.getElementById('intro-tour-toggle');
+  if (introTourToggle) {
+    introTourToggle.addEventListener('change', async (e) => {
+      await setIntroTourEnabled(e.target.checked);
+      const section = document.getElementById('training-section');
+      if (section) section.hidden = !e.target.checked;
+    });
+  }
+
+  // FMN-167: tile click -> send fm:intro-tour:start to the SW. The SW
+  // fans the message out to every FortiMonitor tab; if none are open it
+  // opens one to /dashboards first. Close the popup after dispatching
+  // so the operator's focus snaps to the tour.
+  const introTourTile = document.getElementById('training-intro-tour-tile');
+  if (introTourTile) {
+    introTourTile.addEventListener('click', async () => {
+      if (!(await isIntroTourEnabled())) return;
+      try {
+        await chrome.runtime.sendMessage({ type: 'fm:intro-tour:start' });
+      } catch { /* SW unreachable - dispatch is best-effort */ }
+      window.close();
     });
   }
 

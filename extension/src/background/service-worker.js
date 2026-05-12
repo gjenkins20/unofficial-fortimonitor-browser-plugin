@@ -23,6 +23,7 @@ import { createBpaSnapshotHandlers } from './bpa-snapshot-handlers.js';
 import { createClaudeChatHandlers } from './claude-chat-handlers.js';
 import { createOmniSearchHandlers } from './omni-search-handlers.js';
 import { createBulkComposerHandlers } from './bulk-composer-handlers.js';
+import { attachIntroTourStartHandler } from './intro-tour-dispatch.js';
 import { resolveFortimonitorOrigin } from '../lib/origin-resolver.js';
 import { applyAllProviderRules, WATCHED_STORAGE_KEYS } from '../lib/origin-rewrite.js';
 import { checkForUpdate } from './update-check.js';
@@ -59,6 +60,13 @@ const handlers = {
 // FMN-152 dev aid: expose handler keys on globalThis so a Playwright
 // sw.evaluate() probe can verify each handler module wired in.
 globalThis.__fmDebugHandlerKeys = Object.keys(handlers).sort();
+
+// FMN-167: register the intro-tour start-message fan-out listener on top
+// of the regular dispatch path. The message uses chrome.tabs.sendMessage
+// to reach content scripts; the regular dispatch() answers extension-
+// context messages and doesn't fan out to tabs. This listener returns
+// true to keep the response channel open for the async tab work.
+attachIntroTourStartHandler();
 
 chrome.runtime.onInstalled.addListener(() => {
   const m = chrome.runtime.getManifest();

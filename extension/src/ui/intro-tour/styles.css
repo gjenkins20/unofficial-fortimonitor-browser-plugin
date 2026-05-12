@@ -125,3 +125,102 @@
   color: #6b7380;
   font-style: italic;
 }
+
+/* FMN-167 post-tour quiz overlay. Sibling experience to the tour itself;
+   the bridge mounts it after the engine fires onComplete. Reuses the
+   .fmn-tour-card chrome so visual continuity is preserved. */
+.fmn-tour-quiz-overlay { position: fixed; inset: 0; z-index: 2147483600; }
+.fmn-tour-quiz-overlay .fmn-tour-backdrop {
+  position: absolute; inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  pointer-events: auto;
+}
+.fmn-tour-quiz-card {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(520px, 92vw);
+  max-height: 86vh;
+  background: #ffffff;
+  border: 1px solid #c0cad7;
+  border-radius: 7px;
+  box-shadow: 0 14px 38px rgba(15, 23, 42, 0.32);
+  padding: 18px 22px 16px;
+  display: flex; flex-direction: column; gap: 12px;
+  overflow-y: auto;
+  z-index: 1;
+}
+
+.fmn-tour-quiz-header {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7c8896;
+  font-weight: 700;
+}
+.fmn-tour-quiz-prompt {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1d2733;
+  line-height: 1.35;
+  margin: 0;
+}
+.fmn-tour-quiz-options {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.fmn-tour-quiz-option {
+  appearance: none; cursor: pointer; text-align: left;
+  background: #ffffff;
+  border: 1px solid #c0cad7;
+  border-radius: 5px;
+  padding: 9px 12px;
+  font: inherit;
+  font-size: 13px;
+  color: #1d2733;
+  transition: background 70ms ease, border-color 70ms ease, color 70ms ease;
+}
+.fmn-tour-quiz-option:hover:not(:disabled) {
+  background: #f4f8ff;
+  border-color: #1f6feb;
+}
+.fmn-tour-quiz-option:disabled { cursor: default; }
+.fmn-tour-quiz-option-correct {
+  background: #e7f5ec !important;
+  border-color: #2c9f59 !important;
+  color: #1d6a3b !important;
+  font-weight: 600;
+}
+.fmn-tour-quiz-option-wrong {
+  background: #fbe9e8 !important;
+  border-color: #c43c31 !important;
+  color: #842922 !important;
+  font-weight: 600;
+}
+.fmn-tour-quiz-explanation {
+  background: #f7f9fc;
+  border-left: 3px solid #1f6feb;
+  padding: 9px 12px;
+  font-size: 12px;
+  color: #46535f;
+  line-height: 1.45;
+  border-radius: 0 4px 4px 0;
+}
+
+.fmn-tour-quiz-review {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.fmn-tour-quiz-review li {
+  display: flex; align-items: flex-start; gap: 8px;
+  font-size: 12.5px; color: #46535f; line-height: 1.4;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: #f7f9fc;
+}
+.fmn-tour-quiz-review .review-marker {
+  font-size: 13px; font-weight: 700; flex-shrink: 0; min-width: 14px;
+}
+.fmn-tour-quiz-review li.review-correct .review-marker { color: #2c9f59; }
+.fmn-tour-quiz-review li.review-wrong .review-marker { color: #c43c31; }
+
+.fmn-tour-quiz-actions { display: flex; justify-content: flex-end; }

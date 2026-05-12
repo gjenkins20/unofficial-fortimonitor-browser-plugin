@@ -54,6 +54,27 @@
       <input id="search" type="text" placeholder="Search tools…">
     </div>
 
+    <!-- FMN-167 Training section. Pinned above the alphabetized tool list -->
+    <!-- so guided walk-throughs surface to new operators on first popup -->
+    <!-- open. Gated on fm:introTourEnabled (default off until authoring -->
+    <!-- and operator validation complete). -->
+    <div id="training-section" hidden>
+      <div class="tool-group-label">Training</div>
+      <button class="tool-card"
+              id="training-intro-tour-tile"
+              data-tool="intro-tour"
+              data-fmn-trigger="intro-tour-start">
+        <div class="tool-meta">
+          <div class="tool-name">
+            Tour FortiMonitor
+            <span class="badge beta">Beta</span>
+          </div>
+          <div class="tool-desc">Guided walk-through of the FortiMonitor UI with a short quiz at the end.</div>
+        </div>
+        <div class="chevron">›</div>
+      </button>
+    </div>
+
     <!-- FMN-91: tool cards are sorted alphabetically (single flat list) at -->
     <!-- runtime in popup.js (sortToolCardsAlphabetically). New cards can be -->
     <!-- inserted in any order here; they auto-slot at popup load. -->
@@ -536,6 +557,17 @@
       <label class="toggle-row">
         <input id="bulk-composer-toggle" type="checkbox">
         <span>Show Bulk Action Composer</span>
+      </label>
+    </div>
+
+    <div class="settings-section">
+      <label class="settings-label" for="intro-tour-toggle">Tour FortiMonitor (Beta)</label>
+      <p class="settings-help">
+        Off by default. When on, the toolkit adds a <strong>Tour FortiMonitor</strong> tile to a <strong>Training</strong> section at the top of the popup. The tile launches a short guided walk-through of FortiMonitor's UI on whichever FortiMonitor tab you have open (the toolkit opens a tab to <code>/dashboards</code> if none is open). A 3-question quiz follows the tour to help solidify the material. Captions for the full walk-through are still being authored; the current build ships a single welcome step plus the quiz.
+      </p>
+      <label class="toggle-row">
+        <input id="intro-tour-toggle" type="checkbox">
+        <span>Show Tour FortiMonitor tile in the popup Training section</span>
       </label>
     </div>
 
