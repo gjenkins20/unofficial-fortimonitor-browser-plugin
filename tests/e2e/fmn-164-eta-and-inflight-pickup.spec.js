@@ -83,11 +83,11 @@ async function enableAndMount(page) {
 
 test.describe('FMN-164: tenant-size-aware ETA + in-flight pickup', () => {
 
-  test('branch A: no API key -> "No snapshot yet · ~180s estimated (first run) · saved on this Chrome only"', async ({ ctx }) => {
+  test('no prior snapshot -> "No snapshot yet · ~180s estimated (first run) · saved on this Chrome only"', async ({ ctx }) => {
     const { page, errors } = await gotoHarness(ctx);
     await page.evaluate(() => {
       window.__snapshotHarness.setStatus({ hasCurrent: false, hasPrevious: false, runInFlight: false });
-      window.__snapshotHarness.setEstimate({ estimatedSeconds: 180, basedOn: 'default', serverCount: null, lastServerCount: null });
+      window.__snapshotHarness.setEstimate({ estimatedSeconds: 180, basedOn: 'default', lastServerCount: null });
     });
     await enableAndMount(page);
 
@@ -95,54 +95,6 @@ test.describe('FMN-164: tenant-size-aware ETA + in-flight pickup', () => {
     expect(meta).toContain('No snapshot yet');
     expect(meta).toContain('~180s estimated (first run)');
     expect(meta).toContain('saved on this Chrome only');
-    expect(errors).toEqual([]);
-  });
-
-  test('branch B: probe success -> "About N servers; estimated ~M minutes"', async ({ ctx }) => {
-    const { page, errors } = await gotoHarness(ctx);
-    // 220 servers -> projected ~344s -> rounds to 6 minutes in the
-    // meta-line text. The handler's clamp at 180s default doesn't apply
-    // because 344 > 180.
-    await page.evaluate(() => {
-      window.__snapshotHarness.setStatus({ hasCurrent: false, hasPrevious: false, runInFlight: false });
-      window.__snapshotHarness.setEstimate({
-        estimatedSeconds: 344,
-        basedOn: 'projected',
-        serverCount: 220,
-        lastServerCount: null,
-      });
-    });
-    await enableAndMount(page);
-
-    const meta = await page.locator(META_SELECTOR).textContent();
-    expect(meta).toContain('No snapshot yet');
-    expect(meta).toContain('About 220 servers');
-    // 344s rounds to 6 minutes (Math.round(344/60) == 6).
-    expect(meta).toContain('estimated ~6 minutes');
-    expect(meta).toContain('saved on this Chrome only');
-    expect(errors).toEqual([]);
-  });
-
-  test('branch C: probe failure -> falls back to ~180s default (visually identical to branch A)', async ({ ctx }) => {
-    const { page, errors } = await gotoHarness(ctx);
-    // The harness lets the spec drive the estimate result directly, so
-    // branch C is exercised by setting estimateResult to the default
-    // shape (basedOn:'default'). The SW-side test ensures the probe
-    // failure path lands on this exact shape.
-    await page.evaluate(() => {
-      window.__snapshotHarness.setStatus({ hasCurrent: false, hasPrevious: false, runInFlight: false });
-      window.__snapshotHarness.setEstimate({
-        estimatedSeconds: 180,
-        basedOn: 'default',
-        serverCount: null,
-        lastServerCount: null,
-      });
-    });
-    await enableAndMount(page);
-
-    const meta = await page.locator(META_SELECTOR).textContent();
-    expect(meta).toContain('~180s estimated (first run)');
-    expect(meta).not.toContain('About ');
     expect(errors).toEqual([]);
   });
 
@@ -163,7 +115,6 @@ test.describe('FMN-164: tenant-size-aware ETA + in-flight pickup', () => {
       window.__snapshotHarness.setEstimate({
         estimatedSeconds: 180,
         basedOn: 'default',
-        serverCount: null,
         lastServerCount: null,
       });
     }, startedAt);
@@ -220,7 +171,6 @@ test.describe('FMN-164: tenant-size-aware ETA + in-flight pickup', () => {
       window.__snapshotHarness.setEstimate({
         estimatedSeconds: 240,
         basedOn: 'last-run',
-        serverCount: null,
         lastServerCount: 150,
       });
     });

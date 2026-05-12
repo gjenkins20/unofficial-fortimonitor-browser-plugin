@@ -17,18 +17,10 @@ import {
   diffServers,
 } from '../lib/bpa-snapshots.js';
 
-// FMN-164: tenant-size-aware ETA tuning.
-//
-// SERVERS_PER_SECOND is the projected BPA crawl throughput. Operator-side
-// reports cite "3+ minutes is typical" on real tenants; the schema-discovery
-// account ran ~120 servers in roughly that window, so ~0.7 servers/sec is the
-// starting calibration. Tune from real runs - basedOn:'projected' carries the
-// serverCount so post-run telemetry can refine N over time.
-const SERVERS_PER_SECOND = 0.7;
-const BASELINE_SECONDS = 30;
+// FMN-164: 180s is the observed minimum for a first-run snapshot on real
+// tenants ("3+ minutes is typical"). Used until a real run lands a
+// durationMs in storage, at which point that measured value wins.
 const DEFAULT_ESTIMATE_SECONDS = 180;
-const PROBE_CACHE_KEY = 'fmn.bpaSnapshot.serverCountProbe';
-const PROBE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes - covers a flurry of card mounts
 const RUN_STATE_KEY = 'fmn.bpaSnapshot.runState';
 
 async function defaultClientFactory() {
@@ -42,47 +34,6 @@ async function defaultClientFactory() {
     );
   }
   return new PanoptaClient({ apiKey, fetch: wrappedFetch });
-}
-
-function projectEstimateSeconds(serverCount) {
-  if (!Number.isFinite(serverCount) || serverCount <= 0) return DEFAULT_ESTIMATE_SECONDS;
-  // baseline + serverCount/N; floor at the conservative 180s default so an
-  // accurate-but-optimistic projection never undersells the wait.
-  const projected = Math.round(BASELINE_SECONDS + serverCount / SERVERS_PER_SECOND);
-  return Math.max(DEFAULT_ESTIMATE_SECONDS, projected);
-}
-
-async function readProbeCache(session) {
-  if (!session) return null;
-  try {
-    const got = await session.get(PROBE_CACHE_KEY);
-    const entry = got?.[PROBE_CACHE_KEY];
-    if (!entry) return null;
-    if (typeof entry.fetchedAt !== 'number') return null;
-    if (Date.now() - entry.fetchedAt > PROBE_CACHE_TTL_MS) return null;
-    return entry;
-  } catch { return null; }
-}
-
-async function writeProbeCache(session, entry) {
-  if (!session) return;
-  try { await session.set({ [PROBE_CACHE_KEY]: entry }); } catch { /* quota / unavailable */ }
-}
-
-// Probe /v2/server?limit=1 to learn meta.total_count. Returns the count or
-// null on any failure (no API key, network blip, malformed body). Callers
-// must treat null as "fall back to the default estimate" - no error UI.
-async function probeServerCount({ getClient }) {
-  try {
-    const factory = getClient ?? (() => defaultClientFactory());
-    const client = await factory();
-    const body = await client.listServers({ limit: 1, offset: 0 });
-    const total = body?.meta?.total_count;
-    if (typeof total === 'number' && total >= 0) return total;
-    return null;
-  } catch {
-    return null;
-  }
 }
 
 export function createBpaSnapshotHandlers({
@@ -138,53 +89,23 @@ export function createBpaSnapshotHandlers({
     },
 
     'bpa-snapshots:estimate': async () => {
-      // Three branches, in priority order:
+      // Two branches:
       //   1. We've taken a snapshot before -> use its actual run duration.
-      //   2. We have an API key + the probe returns a server count
-      //      -> project baseline + (serverCount / SERVERS_PER_SECOND).
-      //   3. Otherwise -> conservative 180s default (matches the no-data
-      //      first-run case operators see on a fresh install).
-      // The probe is cached in chrome.storage.session for 5 minutes so a
-      // flurry of card mounts (popup open / reload / tab focus) doesn't
-      // hammer /v2/server. (FMN-164)
+      //   2. Otherwise -> 180s default. Set from observed first-run
+      //      performance ("3+ minutes typical"); a projection equation
+      //      tuned without real-tenant data only mis-sold the wait.
       const { current } = await readSnapshots(local);
       if (current?.durationMs && current.durationMs > 0) {
         return {
           estimatedSeconds: Math.max(5, Math.round(current.durationMs / 1000)),
           basedOn: 'last-run',
           lastServerCount: current.inventory?.servers?.length ?? null,
-          serverCount: null,
         };
       }
-
-      let probeServerCountValue = null;
-      const cached = await readProbeCache(session);
-      if (cached && typeof cached.serverCount === 'number') {
-        probeServerCountValue = cached.serverCount;
-      } else {
-        probeServerCountValue = await probeServerCount({ getClient });
-        if (probeServerCountValue !== null) {
-          await writeProbeCache(session, {
-            serverCount: probeServerCountValue,
-            fetchedAt: Date.now(),
-          });
-        }
-      }
-
-      if (typeof probeServerCountValue === 'number') {
-        return {
-          estimatedSeconds: projectEstimateSeconds(probeServerCountValue),
-          basedOn: 'projected',
-          lastServerCount: null,
-          serverCount: probeServerCountValue,
-        };
-      }
-
       return {
         estimatedSeconds: DEFAULT_ESTIMATE_SECONDS,
         basedOn: 'default',
         lastServerCount: null,
-        serverCount: null,
       };
     },
 

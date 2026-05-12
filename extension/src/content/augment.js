@@ -2555,13 +2555,6 @@
     if (!est) return '';
     const s = est.estimatedSeconds;
     if (est.basedOn === 'last-run') return `last took ${s}s`;
-    if (est.basedOn === 'projected' && typeof est.serverCount === 'number') {
-      // Round to nearest minute for the projected case so the meta line
-      // reads naturally ("About 120 servers; estimated ~3 minutes"); the
-      // exact seconds aren't load-bearing once we're past the default.
-      const minutes = Math.max(1, Math.round(s / 60));
-      return `About ${est.serverCount} servers; estimated ~${minutes} minute${minutes === 1 ? '' : 's'}`;
-    }
     return `~${s}s estimated (first run)`;
   }
 
