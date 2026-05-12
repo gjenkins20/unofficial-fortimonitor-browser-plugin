@@ -2458,7 +2458,19 @@
         margin: 8px 0 0;
       }
       .fmn-snapshot-meta.fmn-snapshot-meta-running {
+        position: relative;
         color: #1f6feb; font-weight: 500;
+        background: linear-gradient(
+          to right,
+          rgba(31, 111, 235, 0.18) 0%,
+          rgba(31, 111, 235, 0.18) var(--fmn-progress, 0%),
+          rgba(31, 111, 235, 0.04) var(--fmn-progress, 0%),
+          rgba(31, 111, 235, 0.04) 100%
+        );
+        padding: 6px 8px;
+        border-radius: 3px;
+        margin-top: 8px;
+        transition: background 200ms ease;
       }
       .fmn-snapshot-meta.fmn-snapshot-meta-error {
         background: #fde8e8;
@@ -2508,28 +2520,129 @@
     else link.setAttribute('hidden', '');
   }
 
+  function snapshotEstimateText(est) {
+    if (!est) return '';
+    const s = est.estimatedSeconds;
+    if (est.basedOn === 'last-run') return `last took ${s}s`;
+    return `~${s}s estimated (first run)`;
+  }
+
+  // FMN-154: rough total of TOP_LEVEL_LIST_ENDPOINTS in bpa-fetcher.js.
+  // Used to estimate snapshot progress for the bar; auto-adjusts upward
+  // if more endpoints actually fire (so the bar never overshoots 100%
+  // and never lies about being complete).
+  const SNAPSHOT_ESTIMATED_ENDPOINT_TOTAL = 22;
+  const snapshotProgressState = {
+    card: null,
+    seenEndpoints: 0,
+    estimatedTotal: SNAPSHOT_ESTIMATED_ENDPOINT_TOTAL,
+    deepTotal: 0,
+    deepDone: 0,
+    phase: 'collect', // 'collect' | 'deep' | 'done'
+  };
+
+  function resetSnapshotProgress(card) {
+    snapshotProgressState.card = card;
+    snapshotProgressState.seenEndpoints = 0;
+    snapshotProgressState.estimatedTotal = SNAPSHOT_ESTIMATED_ENDPOINT_TOTAL;
+    snapshotProgressState.deepTotal = 0;
+    snapshotProgressState.deepDone = 0;
+    snapshotProgressState.phase = 'collect';
+  }
+
+  function applySnapshotProgress(percent) {
+    const s = snapshotProgressState;
+    if (!s.card) return;
+    const meta = s.card.querySelector('.fmn-snapshot-meta');
+    if (meta) meta.style.setProperty('--fmn-progress', `${Math.max(0, Math.min(100, percent))}%`);
+  }
+
+  function handleSnapshotProgressEvent(evt) {
+    if (!evt || typeof evt !== 'object') return;
+    const s = snapshotProgressState;
+    if (!s.card) return;
+    switch (evt.type) {
+      case 'collect-start':
+        s.phase = 'collect';
+        s.seenEndpoints = 0;
+        applySnapshotProgress(2);
+        break;
+      case 'endpoint-start':
+        // No-op; we credit on endpoint-done so percent reflects real work.
+        break;
+      case 'endpoint-done':
+      case 'endpoint-error': {
+        s.seenEndpoints += 1;
+        if (s.seenEndpoints > s.estimatedTotal) s.estimatedTotal = s.seenEndpoints + 1;
+        // Cap at 90% during the collect phase; collect-done will close the gap.
+        const pct = Math.min(90, Math.round((s.seenEndpoints / s.estimatedTotal) * 90));
+        applySnapshotProgress(pct);
+        break;
+      }
+      case 'deep-server':
+        s.phase = 'deep';
+        s.deepTotal = evt.total || s.deepTotal;
+        s.deepDone = evt.index || s.deepDone;
+        if (s.deepTotal > 0) {
+          const pct = 90 + Math.round((s.deepDone / s.deepTotal) * 8); // 90-98 band
+          applySnapshotProgress(pct);
+        }
+        break;
+      case 'collect-done':
+        s.phase = 'done';
+        applySnapshotProgress(99);
+        break;
+    }
+  }
+
+  // Wire the progress listener once at content-script load. The SW emits
+  // bpa-snapshots:progress as { type: '__event__', event: '...', payload }.
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (!msg || typeof msg !== 'object') return;
+    if (msg.type !== '__event__') return;
+    if (msg.event === 'bpa-snapshots:progress') handleSnapshotProgressEvent(msg.payload);
+  });
+
+  async function fetchSnapshotEstimate() {
+    try {
+      const resp = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({ type: 'bpa-snapshots:estimate' }, (r) => resolve(r || null));
+      });
+      if (!resp || !resp.ok) return null;
+      return resp.result;
+    } catch { return null; }
+  }
+
   async function refreshSnapshotCardMeta(card) {
     const meta = card.querySelector('.fmn-snapshot-meta');
     if (!meta) return;
     meta.classList.remove('fmn-snapshot-meta-running', 'fmn-snapshot-meta-error');
     try {
-      const resp = await new Promise((resolve) => {
-        chrome.runtime.sendMessage({ type: 'bpa-snapshots:status' }, (r) => resolve(r || null));
-      });
-      if (!resp || !resp.ok) {
-        meta.textContent = 'No snapshot yet.';
+      const [statusResp, estimate] = await Promise.all([
+        new Promise((resolve) => {
+          chrome.runtime.sendMessage({ type: 'bpa-snapshots:status' }, (r) => resolve(r || null));
+        }),
+        fetchSnapshotEstimate(),
+      ]);
+      const estText = snapshotEstimateText(estimate);
+      if (!statusResp || !statusResp.ok) {
+        meta.textContent = ['No snapshot yet', estText, 'saved on this Chrome only']
+          .filter(Boolean).join(' · ');
         setSnapshotOpenLink(card, false);
         return;
       }
-      const r = resp.result;
+      const r = statusResp.result;
       if (!r?.hasCurrent) {
-        meta.textContent = 'No snapshot yet.';
+        meta.textContent = ['No snapshot yet', estText, 'saved on this Chrome only']
+          .filter(Boolean).join(' · ');
         setSnapshotOpenLink(card, false);
       } else if (!r.hasPrevious) {
-        meta.textContent = `Last: ${formatSnapshotTimestamp(r.currentTakenAt)}. Take another to compare.`;
+        meta.textContent = [`Last: ${formatSnapshotTimestamp(r.currentTakenAt)}`, estText + ' next', 'this Chrome only']
+          .filter(Boolean).join(' · ');
         setSnapshotOpenLink(card, false);
       } else {
-        meta.textContent = `Last: ${formatSnapshotTimestamp(r.currentTakenAt)} (vs. ${formatSnapshotTimestamp(r.previousTakenAt)}).`;
+        meta.textContent = [`Last: ${formatSnapshotTimestamp(r.currentTakenAt)} (vs. ${formatSnapshotTimestamp(r.previousTakenAt)})`, estText + ' next']
+          .filter(Boolean).join(' · ');
         setSnapshotOpenLink(card, true);
       }
     } catch (err) {
@@ -2577,6 +2690,7 @@
     takeBtn.type = 'button';
     takeBtn.className = 'pa-btn';
     takeBtn.textContent = 'Take Snapshot';
+    takeBtn.title = 'Scans your FortiMonitor account via the v2 API and stores a snapshot on this Chrome only. Safe to leave the page - the scan continues in the background.';
     takeBtn.setAttribute('data-fmn-snapshot-take', '');
     takeBtn.addEventListener('click', () => takeSnapshotFromCard(card, takeBtn));
 
@@ -2630,11 +2744,13 @@
     const updateRunning = () => {
       if (!meta) return;
       const sec = Math.floor((Date.now() - start) / 1000);
-      meta.textContent = `Taking a snapshot... ${formatElapsed(sec)} elapsed`;
+      meta.textContent = `Taking a snapshot... ${formatElapsed(sec)} elapsed · safe to leave page`;
     };
     if (meta) {
       meta.classList.remove('fmn-snapshot-meta-error');
       meta.classList.add('fmn-snapshot-meta-running');
+      meta.style.setProperty('--fmn-progress', '0%');
+      resetSnapshotProgress(card);
       updateRunning();
       ticker = setInterval(updateRunning, 1000);
     }
@@ -2646,7 +2762,10 @@
         throw new Error(resp?.error || 'Snapshot failed');
       }
       if (ticker) { clearInterval(ticker); ticker = null; }
+      applySnapshotProgress(100);
       await refreshSnapshotCardMeta(card);
+      // Clear the running-bar background once the success state lands.
+      if (meta) meta.style.removeProperty('--fmn-progress');
     } catch (err) {
       if (ticker) { clearInterval(ticker); ticker = null; }
       if (meta) {

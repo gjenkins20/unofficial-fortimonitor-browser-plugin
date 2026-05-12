@@ -19,9 +19,20 @@ const STORAGE_KEY = 'fm:bpaSnapshots';
 export function condenseForSnapshot(result) {
   if (!result || typeof result !== 'object') return null;
   const inv = result.inventory || {};
+  // FMN-154: record durationMs from the BPA result so the next estimate
+  // can show real data instead of a default heuristic.
+  let durationMs = null;
+  if (result.started_at && result.finished_at) {
+    const start = Date.parse(result.started_at);
+    const end = Date.parse(result.finished_at);
+    if (Number.isFinite(start) && Number.isFinite(end) && end >= start) {
+      durationMs = end - start;
+    }
+  }
   return {
     schema: 1,
     takenAt: result.finished_at || result.started_at || new Date().toISOString(),
+    durationMs,
     deep: Boolean(result.deep),
     maxServers: result.max_servers ?? 0,
     customer: pickCustomer(result.customer),

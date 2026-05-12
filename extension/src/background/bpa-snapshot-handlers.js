@@ -53,6 +53,24 @@ export function createBpaSnapshotHandlers({
       };
     },
 
+    'bpa-snapshots:estimate': async () => {
+      // Prefer the last snapshot's actual run duration. Falls back to a
+      // conservative default for the very first snapshot.
+      const { current } = await readSnapshots(local);
+      if (current?.durationMs && current.durationMs > 0) {
+        return {
+          estimatedSeconds: Math.max(5, Math.round(current.durationMs / 1000)),
+          basedOn: 'last-run',
+          lastServerCount: current.inventory?.servers?.length ?? null,
+        };
+      }
+      return {
+        estimatedSeconds: 30,
+        basedOn: 'default',
+        lastServerCount: null,
+      };
+    },
+
     'bpa-snapshots:take': async (payload) => {
       if (runInFlight) throw new Error('A snapshot run is already in progress');
       const factory = getClient ?? (() => defaultClientFactory());
