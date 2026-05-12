@@ -64,6 +64,11 @@ const context = await chromium.launchPersistentContext(PROFILE_DIR, {
     `--disable-extensions-except=${EXTENSION_PATH}`,
     `--load-extension=${EXTENSION_PATH}`,
     `--remote-debugging-port=${CDP_PORT}`,
+    // Extension tests cannot use true headless mode (the extension's
+    // content scripts only run in a real browser). Keep the window offscreen
+    // + minimized so the operator's display stays clean.
+    '--window-position=-32000,-32000',
+    '--start-minimized',
   ],
 });
 
