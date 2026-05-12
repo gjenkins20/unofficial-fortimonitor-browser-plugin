@@ -915,6 +915,169 @@ async function loadUpdateCheckIntoToggle() {
   const toggle = document.getElementById('update-check-toggle');
   if (!toggle) return;
   toggle.checked = await isUpdateCheckEnabled();
+  // FMN-165: when the toggle is off, the manual "Check now" button must
+  // also disable. The button respects the same flag - manual triggers
+  // never override an explicit opt-out.
+  syncManualCheckButtonEnabled(toggle.checked);
+}
+
+// -------- FMN-165: manual "Check for updates now" button --------
+
+const MANUAL_CHECK_IDLE_LABEL = 'Check for updates now';
+const MANUAL_CHECK_INFLIGHT_LABEL = 'Checking GitHub…';
+// Up-to-date / failure result lines fade after this delay.
+const MANUAL_CHECK_RESULT_OK_MS = 4_000;
+const MANUAL_CHECK_RESULT_ERR_MS = 5_000;
+
+let manualCheckResultTimer = null;
+
+function syncManualCheckButtonEnabled(enabled) {
+  const btn = document.getElementById('update-check-now');
+  if (!btn) return;
+  if (enabled) {
+    btn.disabled = false;
+    btn.removeAttribute('title');
+  } else {
+    btn.disabled = true;
+    btn.title = 'Re-enable update checks above to run manually.';
+  }
+}
+
+function clearManualCheckResultTimer() {
+  if (manualCheckResultTimer !== null) {
+    clearTimeout(manualCheckResultTimer);
+    manualCheckResultTimer = null;
+  }
+}
+
+function setManualCheckResult({ kind, text, autoHideMs }) {
+  const line = document.getElementById('update-check-now-result');
+  if (!line) return;
+  clearManualCheckResultTimer();
+  if (!kind) {
+    line.hidden = true;
+    line.textContent = '';
+    line.className = 'update-check-result';
+    return;
+  }
+  line.className = 'update-check-result ' + kind;
+  line.textContent = text;
+  line.hidden = false;
+  if (autoHideMs && autoHideMs > 0) {
+    manualCheckResultTimer = setTimeout(() => {
+      // Re-fetch the element each time; the popup DOM is stable but the
+      // closure is long-lived and defensive cheaper than reasoning about it.
+      const el = document.getElementById('update-check-now-result');
+      if (el) {
+        el.hidden = true;
+        el.textContent = '';
+        el.className = 'update-check-result';
+      }
+      manualCheckResultTimer = null;
+    }, autoHideMs);
+  }
+}
+
+function setManualCheckButtonState(state) {
+  const btn = document.getElementById('update-check-now');
+  if (!btn) return;
+  switch (state) {
+    case 'in-flight':
+      btn.disabled = true;
+      btn.removeAttribute('title');
+      btn.innerHTML = '';
+      {
+        const sp = document.createElement('span');
+        sp.className = 'update-check-spinner';
+        sp.setAttribute('aria-hidden', 'true');
+        btn.appendChild(sp);
+        btn.appendChild(document.createTextNode(MANUAL_CHECK_INFLIGHT_LABEL));
+      }
+      break;
+    case 'hidden':
+      btn.hidden = true;
+      break;
+    case 'idle':
+    default:
+      btn.hidden = false;
+      btn.disabled = false;
+      btn.removeAttribute('title');
+      btn.textContent = MANUAL_CHECK_IDLE_LABEL;
+      break;
+  }
+}
+
+/**
+ * Operator-initiated update check (FMN-165). Bypasses the 1h
+ * rate-limit; still no-op if fm:updateCheckEnabled is false (which
+ * already disables the button, but we double-check via the SW handler).
+ *
+ * SW handler returns { ok, result?: { ran, reason?, result? }, error? }.
+ * Four UI outcomes:
+ *   - newer-version: hide the button, re-render the banner above the tool grid.
+ *   - up-to-date: green "Up to date (v{local})" line fades after a few seconds.
+ *   - disabled / network / parse failure: red "Check failed: {reason}" line.
+ *   - SW unreachable: red "Check failed: extension not ready" line.
+ */
+async function runManualUpdateCheck() {
+  const btn = document.getElementById('update-check-now');
+  if (!btn || btn.disabled) return;
+  clearManualCheckResultTimer();
+  setManualCheckResult({ kind: null });
+  setManualCheckButtonState('in-flight');
+
+  let envelope = null;
+  let sendError = null;
+  try {
+    envelope = await chrome.runtime.sendMessage({
+      type: 'fm:update-check:run',
+      payload: { force: true }
+    });
+  } catch (err) {
+    sendError = err?.message ?? String(err);
+  }
+
+  // SW handler is best-effort; treat any envelope.ok !== true as failure.
+  if (sendError || !envelope || envelope.ok !== true) {
+    setManualCheckButtonState('idle');
+    setManualCheckResult({
+      kind: 'error',
+      text: 'Check failed: ' + (sendError || envelope?.error || 'extension not ready'),
+      autoHideMs: MANUAL_CHECK_RESULT_ERR_MS
+    });
+    return;
+  }
+
+  const result = envelope.result;
+  // checkForUpdate did not run (disabled / rate-limited / bad local / etc.).
+  if (!result?.ran) {
+    setManualCheckButtonState('idle');
+    setManualCheckResult({
+      kind: 'error',
+      text: 'Check failed: ' + (result?.reason || 'unknown reason'),
+      autoHideMs: MANUAL_CHECK_RESULT_ERR_MS
+    });
+    return;
+  }
+
+  // Successful fetch. Two sub-cases:
+  if (result.result?.isNewer === true) {
+    // Hide the button and re-render the banner; the banner reads
+    // storage and renderUpdateBanner already handles the rest.
+    setManualCheckResult({ kind: null });
+    setManualCheckButtonState('hidden');
+    await renderUpdateBanner();
+    return;
+  }
+
+  // Up to date.
+  setManualCheckButtonState('idle');
+  const local = result.result?.localVersion ?? chrome.runtime.getManifest().version ?? '?';
+  setManualCheckResult({
+    kind: 'ok',
+    text: 'Up to date (v' + local + ')',
+    autoHideMs: MANUAL_CHECK_RESULT_OK_MS
+  });
 }
 
 // -------- Init --------
@@ -1038,11 +1201,25 @@ function init() {
   // re-render the banner here since the operator is in Settings -
   // renderUpdateBanner runs again the next time the popup is opened
   // (and on Back, since hideSettings doesn't reset the main view).
+  // FMN-165: keep the manual "Check now" button enabled-state in sync
+  // with the toggle. Operator-initiated manual triggers still respect
+  // the flag - the button never overrides an opt-out.
   const updateCheckToggle = document.getElementById('update-check-toggle');
   if (updateCheckToggle) {
     updateCheckToggle.addEventListener('change', async (e) => {
       await setUpdateCheckEnabled(e.target.checked);
+      syncManualCheckButtonEnabled(e.target.checked);
       await renderUpdateBanner();
+    });
+  }
+
+  // FMN-165: manual "Check for updates now" button. Wired once at
+  // popup init; subsequent state transitions are driven by
+  // runManualUpdateCheck.
+  const updateCheckNow = document.getElementById('update-check-now');
+  if (updateCheckNow) {
+    updateCheckNow.addEventListener('click', () => {
+      runManualUpdateCheck();
     });
   }
 

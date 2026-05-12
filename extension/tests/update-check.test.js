@@ -324,3 +324,110 @@ test('checkForUpdate: bad local version aborts without fetch', async () => {
   assert.equal(result.reason, 'bad-local-version');
   assert.equal(fetchImpl.calls.length, 0);
 });
+
+// ---------- checkForUpdate: FMN-165 force bypass ----------
+
+test('checkForUpdate: force=true bypasses the hour rate-limit', async () => {
+  const prior = {
+    checkedAt: 10_000,
+    localVersion: '1.4.0',
+    remoteVersion: '1.4.0',
+    isNewer: false
+  };
+  const storage = createStorageMock({ [UPDATE_CHECK_RESULT_KEY]: prior });
+  // Same fetch behavior as the rate-limit test above, but with force=true
+  // and only 30 minutes elapsed - inside the normal rate-limit window.
+  const fetchImpl = makeFetchMock(() => jsonResponse({ version: '2.0.0' }));
+  const result = await checkForUpdate({
+    fetchImpl,
+    storage,
+    localVersion: '1.4.0',
+    now: () => 10_000 + (30 * 60 * 1000),
+    force: true
+  });
+  assert.equal(result.ran, true);
+  assert.equal(result.result.remoteVersion, '2.0.0');
+  assert.equal(result.result.isNewer, true);
+  assert.equal(fetchImpl.calls.length, 1);
+  // Storage updated with the fresh result.
+  assert.equal(storage.__raw()[UPDATE_CHECK_RESULT_KEY].remoteVersion, '2.0.0');
+});
+
+test('checkForUpdate: force=true still respects the disabled flag', async () => {
+  // Operator opt-out wins over a forced manual trigger.
+  const storage = createStorageMock({ [UPDATE_CHECK_ENABLED_KEY]: false });
+  const fetchImpl = makeFetchMock(() => {
+    throw new Error('fetch should not have been called');
+  });
+  const result = await checkForUpdate({
+    fetchImpl,
+    storage,
+    localVersion: '1.4.0',
+    now: () => 1000,
+    force: true
+  });
+  assert.equal(result.ran, false);
+  assert.equal(result.reason, 'disabled');
+  assert.equal(fetchImpl.calls.length, 0);
+});
+
+test('checkForUpdate: force=false (default) keeps the rate-limit gate', async () => {
+  // Sanity check: a popup-open trigger (no force) does still get
+  // rate-limited even after FMN-165. Regression coverage for the
+  // automatic path.
+  const prior = {
+    checkedAt: 10_000,
+    localVersion: '1.4.0',
+    remoteVersion: '1.4.0',
+    isNewer: false
+  };
+  const storage = createStorageMock({ [UPDATE_CHECK_RESULT_KEY]: prior });
+  const fetchImpl = makeFetchMock(() => {
+    throw new Error('fetch should not have been called');
+  });
+  const result = await checkForUpdate({
+    fetchImpl,
+    storage,
+    localVersion: '1.4.0',
+    now: () => 10_000 + (30 * 60 * 1000),
+    force: false
+  });
+  assert.equal(result.ran, false);
+  assert.equal(result.reason, 'rate-limited');
+  assert.equal(fetchImpl.calls.length, 0);
+});
+
+test('checkForUpdate: force=true on fresh storage runs the check', async () => {
+  // No prior result; force should still run (the rate-limit gate has
+  // nothing to check against anyway, but make the path explicit).
+  const storage = createStorageMock();
+  const fetchImpl = makeFetchMock(() => jsonResponse({ version: '1.4.0' }));
+  const result = await checkForUpdate({
+    fetchImpl,
+    storage,
+    localVersion: '1.4.0',
+    now: () => 1000,
+    force: true
+  });
+  assert.equal(result.ran, true);
+  assert.equal(result.result.isNewer, false);
+  assert.equal(fetchImpl.calls.length, 1);
+});
+
+test('checkForUpdate: repeated force=true calls each refetch', async () => {
+  // Operator clicks "Check for updates now" rapidly; each click should
+  // hit the network. No client-side gating.
+  const storage = createStorageMock();
+  const fetchImpl = makeFetchMock(() => jsonResponse({ version: '1.4.0' }));
+  const t0 = 1000;
+  await checkForUpdate({
+    fetchImpl, storage, localVersion: '1.4.0', now: () => t0, force: true
+  });
+  await checkForUpdate({
+    fetchImpl, storage, localVersion: '1.4.0', now: () => t0 + 100, force: true
+  });
+  await checkForUpdate({
+    fetchImpl, storage, localVersion: '1.4.0', now: () => t0 + 200, force: true
+  });
+  assert.equal(fetchImpl.calls.length, 3);
+});

@@ -586,6 +586,18 @@
         <input id="update-check-toggle" type="checkbox">
         <span>Check the GitHub repo for newer versions</span>
       </label>
+      <!--
+        FMN-165: manual "Check for updates now" button. Operator-initiated;
+        bypasses the 1h rate-limit but respects fm:updateCheckEnabled. The
+        result-line element renders the four post-click states (idle is
+        empty + hidden, in-flight uses the button label, up-to-date / failure
+        live in the result line, newer-version hides this whole row and
+        re-renders the banner above the tool grid).
+      -->
+      <div class="settings-actions update-check-actions">
+        <button id="update-check-now" type="button" class="btn">Check for updates now</button>
+      </div>
+      <div id="update-check-now-result" class="update-check-result" hidden></div>
     </div>
 
     <div class="settings-section">

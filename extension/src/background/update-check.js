@@ -132,7 +132,12 @@ export async function getLastResult(storage) {
  *   - If the flag is disabled, the check is skipped (no fetch, no
  *     write). The prior stored result is preserved.
  *   - If a successful check happened less than MIN_INTERVAL_MS ago,
- *     the fetch is skipped. The prior stored result is preserved.
+ *     the fetch is skipped (unless force=true). The prior stored
+ *     result is preserved.
+ *   - When force=true (FMN-165: operator-initiated "Check for updates
+ *     now" button), the hour rate-limit is bypassed. The flag gate is
+ *     still honored - manual triggers do not override an operator-set
+ *     "don't check" preference.
  *   - On fetch success + valid JSON + valid semver, the result is
  *     written.
  *   - On any failure (network, HTTP non-2xx, JSON parse, bad semver)
@@ -146,6 +151,7 @@ export async function getLastResult(storage) {
  * @param {{ get, set }} [deps.storage]
  * @param {string} [deps.localVersion] - typically chrome.runtime.getManifest().version
  * @param {() => number} [deps.now] - injection for time-travel tests
+ * @param {boolean} [deps.force] - FMN-165: bypass the hour rate-limit; flag gate still applies
  * @returns {Promise<{ ran: boolean, reason?: string, result?: { checkedAt: number, localVersion: string, remoteVersion: string, isNewer: boolean } }>}
  */
 export async function checkForUpdate(deps = {}) {
@@ -156,15 +162,18 @@ export async function checkForUpdate(deps = {}) {
   }
   const localVersion = deps.localVersion ?? safeManifestVersion();
   const now = deps.now ?? Date.now;
+  const force = deps.force === true;
 
-  // 1. Flag gate: off = no fetch, no write.
+  // 1. Flag gate: off = no fetch, no write. Applies even to forced
+  //    manual triggers - the flag is an explicit opt-out.
   const enabled = await readEnabledFlag(storage);
   if (!enabled) return { ran: false, reason: 'disabled' };
 
   // 2. Rate limit: bail if a successful check ran within MIN_INTERVAL_MS.
+  //    force=true skips this gate (operator-initiated by definition).
   const prior = await getLastResult(storage);
   const nowMs = now();
-  if (prior && typeof prior.checkedAt === 'number' && (nowMs - prior.checkedAt) < MIN_INTERVAL_MS) {
+  if (!force && prior && typeof prior.checkedAt === 'number' && (nowMs - prior.checkedAt) < MIN_INTERVAL_MS) {
     return { ran: false, reason: 'rate-limited' };
   }
 

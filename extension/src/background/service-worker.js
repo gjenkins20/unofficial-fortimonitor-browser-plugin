@@ -125,15 +125,24 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     chrome.runtime.reload();
     return false;
   }
-  // FMN-157: popup-triggered update check. The popup fires this on
-  // open; checkForUpdate's hour rate limit handles "don't actually
-  // refetch every popup open" gracefully. We respond synchronously
-  // (the popup doesn't need the result; it re-reads storage instead)
-  // and let the check resolve in the background.
+  // FMN-157 / FMN-165: popup-triggered update check.
+  //
+  // The popup fires this on open (force=false) - checkForUpdate's hour
+  // rate limit handles "don't actually refetch every popup open"
+  // gracefully and the popup re-reads storage to render the banner.
+  //
+  // The popup also fires this from the Settings "Check for updates
+  // now" button (force=true; FMN-165). That path bypasses the hour
+  // rate-limit and the popup needs the resolved result to render the
+  // success / failure UI synchronously, so we await checkForUpdate
+  // and report the outcome over sendResponse.
   if (message.type === 'fm:update-check:run') {
-    sendResponse({ ok: true });
-    checkForUpdate().catch(() => { /* silent */ });
-    return false;
+    const force = Boolean(message?.payload?.force);
+    checkForUpdate({ force }).then(
+      (result) => sendResponse({ ok: true, result }),
+      (error) => sendResponse({ ok: false, error: error?.message ?? String(error) })
+    );
+    return true; // keep the channel open for the async response
   }
   dispatch(handlers, message).then(
     (result) => sendResponse({ ok: true, result }),

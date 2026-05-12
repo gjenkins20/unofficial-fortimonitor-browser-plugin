@@ -582,3 +582,41 @@ html, body {
     overflow-y: visible;
   }
 }
+
+/* FMN-165: manual "Check for updates now" button + result line. */
+.update-check-actions {
+  margin-top: 8px;
+}
+.update-check-actions .btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.update-check-spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  vertical-align: -1px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: fm-update-spin 0.7s linear infinite;
+}
+@keyframes fm-update-spin {
+  to { transform: rotate(360deg); }
+}
+.update-check-result {
+  margin-top: 8px;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+.update-check-result.ok {
+  color: var(--ok);
+}
+.update-check-result.error {
+  color: var(--accent);
+}
+.update-check-result[hidden] {
+  /* Defensive: keep [hidden] working even if a class forces a display value. */
+  display: none;
+}
