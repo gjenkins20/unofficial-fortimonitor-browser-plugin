@@ -3,7 +3,7 @@
   "name": "Unofficial FortiMonitor Toolkit",
   "short_name": "FM Toolkit",
   "description": "Session-authenticated tools for FortiMonitor - batch operations on port scope and more. Rides your existing FortiMonitor session; frontend-only, no API keys.",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "author": "Gregori Jenkins",
   "homepage_url": "https://www.linkedin.com/in/gregorijenkins",
   "action": {
@@ -17,6 +17,7 @@
   "permissions": [
     "cookies",
     "storage",
+    "alarms",
     "declarativeNetRequestWithHostAccess"
   ],
   "host_permissions": [
@@ -24,6 +25,7 @@
     "https://*.fortimonitor.com/*",
     "https://api2.panopta.com/*",
     "https://api.anthropic.com/*",
+    "https://raw.githubusercontent.com/*",
     "http://localhost/*",
     "http://127.0.0.1/*"
   ],

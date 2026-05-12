@@ -18,6 +18,20 @@ place.
 
 ## Unreleased
 
+- FMN-157: in-extension update check. The toolkit now fetches the raw
+  `manifest.json` from `main` on GitHub at most once per hour, semver-
+  compares the published version against the installed one, and renders
+  an `Update available: v{remote}. You're on v{local}. Run `git pull` in
+  the cloned repo and reload the extension.` banner above the popup tool
+  grid when a newer release is found. Triggers: service-worker startup,
+  a 12h `chrome.alarms` backstop, and popup-open (all subject to the
+  hour rate limit). Failures are silent and never overwrite the last-
+  known-good result. Banner has **Snooze 7 days** and **Dismiss** (24h)
+  buttons that persist `fm:updateSnoozeUntil`. On by default behind
+  `fm:updateCheckEnabled`; toggle off under popup &rarr; Settings to
+  disable the network check entirely. New `alarms` permission and new
+  `https://raw.githubusercontent.com/*` host permission. Reloading the
+  extension is required to pick up the new permissions.
 - FMN-154 (phase 1, behind flag): Deployment Snapshot &amp; Diff. New
   toolkit card on FortiMonitor's Canned Reports page
   (`/report/ListReports`), styled to match native `.pa-card` tiles and

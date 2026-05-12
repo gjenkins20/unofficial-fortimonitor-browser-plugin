@@ -31,6 +31,25 @@
   </div>
 
   <div id="main-view">
+    <!--
+      FMN-157: update-available banner. Renders above the tool grid when
+      the background's checkForUpdate result has isNewer === true AND the
+      update-check flag is enabled AND fm:updateSnoozeUntil is in the past.
+      popup.js fills #update-banner-remote / #update-banner-local at init.
+    -->
+    <div id="update-banner" class="update-banner" hidden>
+      <div class="update-banner-body">
+        <strong>Update available:</strong>
+        v<span id="update-banner-remote"></span>.
+        You're on v<span id="update-banner-local"></span>.
+        Run <code>git pull</code> in the cloned repo and reload the extension.
+      </div>
+      <div class="update-banner-actions">
+        <button id="update-snooze" type="button" class="btn">Snooze 7 days</button>
+        <button id="update-dismiss" type="button" class="btn">Dismiss</button>
+      </div>
+    </div>
+
     <div class="search-row">
       <input id="search" type="text" placeholder="Search tools…">
     </div>
@@ -520,6 +539,22 @@
         on the FortiMonitor page itself.
       </p>
       <div id="webgui-columns-list"></div>
+    </div>
+
+    <div class="settings-section">
+      <label class="settings-label" for="update-check-toggle">Update notifications</label>
+      <p class="settings-help">
+        On by default. When on, the toolkit fetches the latest
+        <code>manifest.json</code> from <code>github.com/gjenkins20/unofficial-fortimonitor-browser-plugin</code>
+        at most once per hour and shows a banner above the tool grid when a newer
+        version is published. The banner instructs you to run <code>git pull</code>
+        in your cloned repo and reload the extension; nothing is auto-updated.
+        Toggle off to disable the network check entirely.
+      </p>
+      <label class="toggle-row">
+        <input id="update-check-toggle" type="checkbox">
+        <span>Check the GitHub repo for newer versions</span>
+      </label>
     </div>
 
     <div class="settings-section">

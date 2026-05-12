@@ -31,6 +31,13 @@ export const OMNI_SEARCH_ENABLED_KEY = 'fm:omniSearchEnabled';
 // on FortiMonitor's Canned Reports page. Off by default until the
 // operator has compared a few reports and validated the diff output.
 export const SNAPSHOT_DIFF_ENABLED_KEY = 'fm:snapshotDiffEnabled';
+// FMN-157: in-extension update check against the GitHub repo. The
+// background fetches https://raw.githubusercontent.com/.../manifest.json
+// at most once per hour, semver-compares to chrome.runtime.getManifest().
+// version, and stores the result so the popup can render a banner when
+// a newer version is published. On by default - operator-friendly, the
+// banner is gated on an actual newer version existing, not just the flag.
+export const UPDATE_CHECK_ENABLED_KEY = 'fm:updateCheckEnabled';
 
 export const ASK_CLAUDE_TOOL_TIERS = ['readonly', 'readwrite', 'all'];
 export const DEFAULT_ASK_CLAUDE_TOOL_TIER = 'readonly';
@@ -483,6 +490,37 @@ export async function setAskClaudeProviderConfig(provider, config, storage = def
   if (removes.length > 0 && typeof storage.remove === 'function') {
     await storage.remove(removes);
   }
+}
+
+/**
+ * Read the FMN-157 update-check-enabled flag. Defaults to TRUE: a fresh
+ * install opts in to the GitHub-side update check because the install
+ * path is `git clone + Load unpacked` and operators have no other
+ * notification surface. The popup banner is still conditional on an
+ * actual newer version existing in the remote manifest, so the flag
+ * being on doesn't add UI noise by itself. Storage errors fail open
+ * (return true) so a transient blip never silently disables the check.
+ *
+ * @param {{ get: (key: string) => Promise<Record<string, any>> }} [storage]
+ */
+export async function isUpdateCheckEnabled(storage = defaultStorage()) {
+  try {
+    const data = await storage.get(UPDATE_CHECK_ENABLED_KEY);
+    const value = data?.[UPDATE_CHECK_ENABLED_KEY];
+    return value === undefined ? true : Boolean(value);
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Persist the FMN-157 update-check-enabled flag.
+ *
+ * @param {boolean} enabled
+ * @param {{ set: (obj: Record<string, any>) => Promise<void> }} [storage]
+ */
+export async function setUpdateCheckEnabled(enabled, storage = defaultStorage()) {
+  await storage.set({ [UPDATE_CHECK_ENABLED_KEY]: Boolean(enabled) });
 }
 
 function defaultStorage() {

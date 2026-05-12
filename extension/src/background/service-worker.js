@@ -24,6 +24,7 @@ import { createClaudeChatHandlers } from './claude-chat-handlers.js';
 import { createOmniSearchHandlers } from './omni-search-handlers.js';
 import { resolveFortimonitorOrigin } from '../lib/origin-resolver.js';
 import { applyAllProviderRules, WATCHED_STORAGE_KEYS } from '../lib/origin-rewrite.js';
+import { checkForUpdate } from './update-check.js';
 
 const resolveOrigin = () => resolveFortimonitorOrigin({
   queryTabs: (q) => chrome.tabs.query(q),
@@ -71,6 +72,30 @@ chrome.runtime.onInstalled.addListener(() => {
 // worker was inactive.
 applyAllProviderRules();
 
+// FMN-157: in-extension update check. On service-worker wakeup, run
+// checkForUpdate(); the function's own rate limiter bails if a
+// successful check happened within the last hour, so repeated SW
+// wakeups don't hammer GitHub. We also set a 12h chrome.alarms alarm
+// as a backstop so installations that rarely wake the SW still get a
+// daily-ish check. Errors are swallowed inside checkForUpdate.
+checkForUpdate().catch(() => { /* silent */ });
+
+const UPDATE_CHECK_ALARM = 'fm:updateCheckAlarm';
+try {
+  chrome.alarms?.create?.(UPDATE_CHECK_ALARM, {
+    // First fire 12h from now; periodic every 12h after. The function's
+    // hour rate limit is the real gate; the alarm just guarantees the
+    // check runs even on long-idle profiles.
+    delayInMinutes: 12 * 60,
+    periodInMinutes: 12 * 60
+  });
+  chrome.alarms?.onAlarm?.addListener?.((alarm) => {
+    if (alarm?.name === UPDATE_CHECK_ALARM) {
+      checkForUpdate().catch(() => { /* silent */ });
+    }
+  });
+} catch { /* alarms permission missing or API unavailable; ignored */ }
+
 // Keep DNR rules in sync with Settings edits.
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
@@ -96,6 +121,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     sendResponse({ ok: true });
     console.log('[fm-toolkit] dev-reload requested via bridge');
     chrome.runtime.reload();
+    return false;
+  }
+  // FMN-157: popup-triggered update check. The popup fires this on
+  // open; checkForUpdate's hour rate limit handles "don't actually
+  // refetch every popup open" gracefully. We respond synchronously
+  // (the popup doesn't need the result; it re-reads storage instead)
+  // and let the check resolve in the background.
+  if (message.type === 'fm:update-check:run') {
+    sendResponse({ ok: true });
+    checkForUpdate().catch(() => { /* silent */ });
     return false;
   }
   dispatch(handlers, message).then(

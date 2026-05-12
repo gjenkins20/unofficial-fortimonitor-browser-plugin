@@ -109,6 +109,46 @@ html, body {
   cursor: pointer;
 }
 
+/*
+ * FMN-157: update-available banner. Renders above the search row when
+ * the background reports a newer remote manifest version. Scoped
+ * [hidden] rule per memory html_hidden_vs_class_display.md - the
+ * default `display: flex` would otherwise defeat the [hidden] attr.
+ */
+.update-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--info-soft);
+  color: var(--info);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.update-banner[hidden] {
+  display: none;
+}
+.update-banner code {
+  background: rgba(255, 255, 255, 0.6);
+  padding: 0 4px;
+  border-radius: 3px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+.update-banner-body {
+  word-break: break-word;
+}
+.update-banner-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+.update-banner-actions .btn {
+  font-size: 11px;
+  padding: 4px 10px;
+}
+
 .search-row {
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);

@@ -30,8 +30,14 @@ import {
   isOmniSearchEnabled,
   setOmniSearchEnabled,
   isSnapshotDiffEnabled,
-  setSnapshotDiffEnabled
+  setSnapshotDiffEnabled,
+  isUpdateCheckEnabled,
+  setUpdateCheckEnabled
 } from '../lib/settings.js';
+import {
+  UPDATE_CHECK_RESULT_KEY,
+  UPDATE_CHECK_SNOOZE_KEY
+} from '../background/update-check.js';
 import {
   listAugmentations,
   getRegistry,
@@ -820,6 +826,77 @@ function attachRowDrag(row, augId) {
   });
 }
 
+// -------- FMN-157: update-available banner --------
+
+const SNOOZE_7_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+const SNOOZE_24_HOURS_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Render the update-available banner if:
+ *   1. The update-check flag is on.
+ *   2. The stored fm:updateCheck result has isNewer === true.
+ *   3. fm:updateSnoozeUntil is absent or in the past.
+ *
+ * Failing any of those leaves the banner hidden. All errors are
+ * swallowed; the banner is best-effort.
+ */
+async function renderUpdateBanner() {
+  const banner = document.getElementById('update-banner');
+  if (!banner) return;
+  try {
+    const enabled = await isUpdateCheckEnabled();
+    if (!enabled) {
+      banner.hidden = true;
+      return;
+    }
+    const data = await chrome.storage.local.get([UPDATE_CHECK_RESULT_KEY, UPDATE_CHECK_SNOOZE_KEY]);
+    const result = data?.[UPDATE_CHECK_RESULT_KEY];
+    const snoozeUntil = Number(data?.[UPDATE_CHECK_SNOOZE_KEY] || 0);
+    if (!result || result.isNewer !== true) {
+      banner.hidden = true;
+      return;
+    }
+    if (snoozeUntil > Date.now()) {
+      banner.hidden = true;
+      return;
+    }
+    const remoteEl = document.getElementById('update-banner-remote');
+    const localEl = document.getElementById('update-banner-local');
+    if (remoteEl) remoteEl.textContent = String(result.remoteVersion || '?');
+    if (localEl) localEl.textContent = String(result.localVersion || chrome.runtime.getManifest().version || '?');
+    banner.hidden = false;
+  } catch {
+    banner.hidden = true;
+  }
+}
+
+/**
+ * Trigger a background update check. The service worker enforces the
+ * once-per-hour rate limit; calling this on every popup open is safe.
+ * If sendMessage fails (SW idle / API unavailable) we ignore it - the
+ * banner still renders based on prior stored state.
+ */
+async function triggerBackgroundUpdateCheck() {
+  try {
+    await chrome.runtime.sendMessage({ type: 'fm:update-check:run' });
+  } catch { /* ignored */ }
+}
+
+async function snoozeUpdateBanner(ms) {
+  try {
+    const until = Date.now() + ms;
+    await chrome.storage.local.set({ [UPDATE_CHECK_SNOOZE_KEY]: until });
+  } catch { /* ignored */ }
+  const banner = document.getElementById('update-banner');
+  if (banner) banner.hidden = true;
+}
+
+async function loadUpdateCheckIntoToggle() {
+  const toggle = document.getElementById('update-check-toggle');
+  if (!toggle) return;
+  toggle.checked = await isUpdateCheckEnabled();
+}
+
 // -------- Init --------
 
 async function refreshGuards() {
@@ -848,6 +925,18 @@ function init() {
 
   applyExperimentalVisibility();
   refreshGuards();
+
+  // FMN-157: render any prior update-check result immediately, then
+  // ask the SW to refresh in the background (subject to the hour
+  // rate limit inside checkForUpdate). The next popup open picks up
+  // any new result.
+  renderUpdateBanner();
+  triggerBackgroundUpdateCheck();
+
+  const snoozeBtn = document.getElementById('update-snooze');
+  if (snoozeBtn) snoozeBtn.addEventListener('click', () => snoozeUpdateBanner(SNOOZE_7_DAYS_MS));
+  const dismissBtn = document.getElementById('update-dismiss');
+  if (dismissBtn) dismissBtn.addEventListener('click', () => snoozeUpdateBanner(SNOOZE_24_HOURS_MS));
 
   document.getElementById('session-link').addEventListener('click', (e) => {
     e.preventDefault();
@@ -894,6 +983,7 @@ function init() {
     await loadShowFeatureBadgesIntoToggle();
     await loadOmniSearchIntoToggle();
     await loadSnapshotDiffIntoToggle();
+    await loadUpdateCheckIntoToggle();
     await loadWebguiColumnsIntoSettings();
     await applyExperimentalVisibility();
     showSettings();
@@ -921,6 +1011,18 @@ function init() {
   document.getElementById('snapshot-diff-toggle').addEventListener('change', async (e) => {
     await setSnapshotDiffEnabled(e.target.checked);
   });
+
+  // FMN-157: update-check toggle. Persists the flag; we don't try to
+  // re-render the banner here since the operator is in Settings -
+  // renderUpdateBanner runs again the next time the popup is opened
+  // (and on Back, since hideSettings doesn't reset the main view).
+  const updateCheckToggle = document.getElementById('update-check-toggle');
+  if (updateCheckToggle) {
+    updateCheckToggle.addEventListener('change', async (e) => {
+      await setUpdateCheckEnabled(e.target.checked);
+      await renderUpdateBanner();
+    });
+  }
 
   document.getElementById('feature-badges-toggle').addEventListener('change', async (e) => {
     await setShowFeatureBadgesEnabled(e.target.checked);

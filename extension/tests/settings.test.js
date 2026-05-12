@@ -34,7 +34,10 @@ import {
   ASK_CLAUDE_LMSTUDIO_URL_KEY,
   DEFAULT_OLLAMA_URL,
   DEFAULT_OLLAMA_MODEL,
-  DEFAULT_LMSTUDIO_URL
+  DEFAULT_LMSTUDIO_URL,
+  isUpdateCheckEnabled,
+  setUpdateCheckEnabled,
+  UPDATE_CHECK_ENABLED_KEY
 } from '../src/lib/settings.js';
 import { createStorageMock } from './fixtures/chrome-mocks.js';
 
@@ -341,4 +344,40 @@ test('getAskClaudeProviderConfig fails closed to provider defaults on storage er
   };
   const cfg = await getAskClaudeProviderConfig('lmstudio', storage);
   assert.equal(cfg.url, DEFAULT_LMSTUDIO_URL.replace(/\/+$/, ''));
+});
+
+// ---------- FMN-157: update-check flag ----------
+
+test('isUpdateCheckEnabled defaults to true on empty storage (FMN-157)', async () => {
+  const storage = createStorageMock();
+  assert.equal(await isUpdateCheckEnabled(storage), true);
+});
+
+test('isUpdateCheckEnabled returns false when explicitly disabled (FMN-157)', async () => {
+  const storage = createStorageMock();
+  await setUpdateCheckEnabled(false, storage);
+  assert.equal(await isUpdateCheckEnabled(storage), false);
+  assert.equal(storage.__raw()[UPDATE_CHECK_ENABLED_KEY], false);
+});
+
+test('isUpdateCheckEnabled roundtrips a true write (FMN-157)', async () => {
+  const storage = createStorageMock();
+  await setUpdateCheckEnabled(true, storage);
+  assert.equal(await isUpdateCheckEnabled(storage), true);
+  assert.equal(storage.__raw()[UPDATE_CHECK_ENABLED_KEY], true);
+});
+
+test('isUpdateCheckEnabled fails open (returns true) on storage error (FMN-157)', async () => {
+  const brokenStorage = {
+    async get() { throw new Error('storage unavailable'); }
+  };
+  assert.equal(await isUpdateCheckEnabled(brokenStorage), true);
+});
+
+test('setUpdateCheckEnabled coerces non-boolean values to strict booleans (FMN-157)', async () => {
+  const storage = createStorageMock();
+  await setUpdateCheckEnabled('yes', storage);
+  assert.equal(storage.__raw()[UPDATE_CHECK_ENABLED_KEY], true);
+  await setUpdateCheckEnabled(0, storage);
+  assert.equal(storage.__raw()[UPDATE_CHECK_ENABLED_KEY], false);
 });
