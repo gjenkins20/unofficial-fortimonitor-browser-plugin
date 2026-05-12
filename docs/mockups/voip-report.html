@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FMN-166 - Network Quality Report (mockup)</title>
+<style>
+  :root {
+    --fm-bg:        #f4f6f9;
+    --fm-panel:     #ffffff;
+    --fm-border:    #dde2ea;
+    --fm-border-2:  #e9edf2;
+    --fm-text:      #1d2733;
+    --fm-muted:     #46535f;
+    --fm-muted-2:   #5b6776;
+    --fm-faint:     #7c8896;
+    --fm-blue:      #1f6feb;
+    --fm-blue-2:    #1857c4;
+    --fm-blue-bg:   #e8f0fe;
+    --fm-green:     #1f9d55;
+    --fm-amber:     #d97706;
+    --fm-red:       #dc2626;
+
+    --ribbon-strip-top: 10.5px;
+    --ribbon-strip-right: -25px;
+    --ribbon-text-indent: 5.5px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--fm-bg);
+    color: var(--fm-text);
+    margin: 0;
+    padding: 28px 40px 64px;
+    -webkit-font-smoothing: antialiased;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+  h1 {
+    font-size: 22px; font-weight: 600; margin: 0 0 4px;
+    letter-spacing: -0.01em;
+  }
+  .lede { color: var(--fm-muted); margin: 0 0 28px; max-width: 760px; }
+  h2 {
+    font-size: 13.5px; font-weight: 600; margin: 36px 0 10px;
+    padding-bottom: 6px; border-bottom: 1px solid var(--fm-border);
+    color: var(--fm-text);
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .caption {
+    font-size: 11.5px; color: var(--fm-faint);
+    margin: 6px 0 0; font-style: italic;
+  }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11.5px; background: #eef1f5;
+    padding: 1px 5px; border-radius: 3px; color: var(--fm-text);
+  }
+
+  /* ---- FortiMonitor Reports-page chrome (approximation) ---- */
+  .fm-page {
+    background: var(--fm-panel);
+    border: 1px solid var(--fm-border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .fm-page-header {
+    background: linear-gradient(180deg, #fafbfd 0%, #f4f6f9 100%);
+    padding: 16px 22px;
+    border-bottom: 1px solid var(--fm-border);
+  }
+  .fm-page-header .breadcrumb {
+    font-size: 12px; color: var(--fm-faint);
+    margin-bottom: 4px;
+  }
+  .fm-page-header h1.fm-title {
+    font-size: 18px; font-weight: 600;
+    margin: 0; color: var(--fm-text);
+  }
+  .fm-page-header .fm-subtitle {
+    font-size: 12.5px; color: var(--fm-muted);
+    margin-top: 4px;
+  }
+  .fm-page-body { padding: 22px; }
+
+  /* ---- Cards grid (the /report/ListReports page) ---- */
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 14px;
+    margin-top: 6px;
+  }
+  .tile {
+    position: relative;
+    background: var(--fm-panel);
+    border: 1px solid var(--fm-border);
+    border-radius: 6px;
+    padding: 18px 18px 16px;
+    min-height: 152px;
+    display: flex; flex-direction: column;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    overflow: hidden;
+  }
+  .tile .icon {
+    width: 32px; height: 32px;
+    border-radius: 6px;
+    background: var(--fm-blue-bg);
+    color: var(--fm-blue);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700;
+    margin-bottom: 10px;
+  }
+  .tile h4 {
+    font-size: 14px; font-weight: 600;
+    margin: 0 0 4px; color: var(--fm-text);
+  }
+  .tile p.tile-sub {
+    font-size: 12px; color: var(--fm-muted);
+    margin: 0 0 12px; flex: 1;
+  }
+  .tile .tile-actions {
+    display: flex; gap: 8px; align-items: center;
+  }
+  .btn {
+    display: inline-flex; align-items: center;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px; font-weight: 500;
+    cursor: pointer;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--fm-text);
+    line-height: 1.2;
+  }
+  .btn-primary {
+    background: var(--fm-blue); color: #fff;
+    border-color: var(--fm-blue);
+  }
+  .btn-secondary {
+    background: #fff; color: var(--fm-text);
+    border-color: var(--fm-border);
+  }
+
+  /* FM Toolkit ribbon (FMN-86) */
+  .fmt-ribbon-host { position: relative; overflow: hidden; }
+  .fmt-ribbon {
+    position: absolute;
+    top: 0; right: 0;
+    width: 60px; height: 60px;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 50;
+  }
+  .fmt-ribbon::before {
+    content: "FM Toolkit";
+    position: absolute;
+    display: block;
+    width: 90px;
+    padding: 2px 0;
+    top: var(--ribbon-strip-top);
+    right: var(--ribbon-strip-right);
+    background: var(--fm-blue);
+    color: #fff;
+    font-size: 7.5px; font-weight: 600;
+    letter-spacing: 0.03em;
+    text-align: center;
+    text-indent: var(--ribbon-text-indent);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
+    transform: rotate(45deg);
+    transform-origin: center;
+  }
+  .tile.fmt .icon {
+    background: rgba(31, 111, 235, 0.10);
+    color: var(--fm-blue);
+  }
+
+  /* ---- Report page (the result viewer) ---- */
+  .report-toolbar {
+    display: flex; align-items: center; gap: 14px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+  }
+  .window-pills {
+    display: inline-flex;
+    background: #fbfcfd;
+    border: 1px solid var(--fm-border);
+    border-radius: 5px;
+    overflow: hidden;
+  }
+  .window-pills button {
+    background: transparent;
+    border: 0;
+    padding: 6px 12px;
+    font-size: 12px;
+    color: var(--fm-muted);
+    cursor: pointer;
+    border-right: 1px solid var(--fm-border);
+  }
+  .window-pills button:last-child { border-right: 0; }
+  .window-pills button.active {
+    background: var(--fm-blue-bg);
+    color: var(--fm-blue);
+    font-weight: 600;
+  }
+  .summary-strip {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 22px;
+  }
+  .summary-card {
+    background: #fbfcfd;
+    border: 1px solid var(--fm-border);
+    border-radius: 5px;
+    padding: 14px 16px;
+  }
+  .summary-card .label {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--fm-faint);
+    margin-bottom: 6px;
+  }
+  .summary-card .value {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--fm-text);
+    line-height: 1.1;
+  }
+  .summary-card .delta {
+    font-size: 11.5px;
+    color: var(--fm-muted-2);
+    margin-top: 4px;
+  }
+  .summary-card .delta.red { color: var(--fm-red); font-weight: 600; }
+
+  /* table styles */
+  .nq-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .nq-table th, .nq-table td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--fm-border-2);
+    vertical-align: top;
+  }
+  .nq-table th {
+    background: #f7f9fc;
+    color: var(--fm-muted-2);
+    font-weight: 600;
+    font-size: 10.5px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .nq-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .nq-table tr:last-child td { border-bottom: 0; }
+  .nq-table tr:hover td { background: #fafbfd; }
+
+  .sev-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .sev-badge.critical { background: #fde8e8; color: var(--fm-red); }
+  .sev-badge.warning  { background: #fff4e0; color: var(--fm-amber); }
+
+  .yes-dot, .no-dot, .partial-dot {
+    display: inline-block;
+    width: 10px; height: 10px; border-radius: 50%;
+  }
+  .yes-dot { background: var(--fm-green); }
+  .no-dot  { background: #cbd3dc; }
+  .partial-dot { background: var(--fm-amber); }
+
+  .metric-pills {
+    display: inline-flex; flex-wrap: wrap; gap: 4px;
+  }
+  .metric-pills .pill {
+    display: inline-flex;
+    padding: 2px 7px;
+    border-radius: 10px;
+    background: #eef1f5;
+    color: var(--fm-muted-2);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    align-items: center;
+    gap: 4px;
+  }
+  .metric-pills .pill .n {
+    font-variant-numeric: tabular-nums;
+    color: var(--fm-text);
+  }
+  .metric-pills .pill.hot {
+    background: #fde8e8;
+    color: var(--fm-red);
+  }
+  .metric-pills .pill.hot .n { color: var(--fm-red); }
+
+  .truth-note {
+    font-size: 11.5px;
+    color: var(--fm-muted-2);
+    background: #fbfcfd;
+    border-left: 3px solid var(--fm-amber);
+    padding: 8px 12px;
+    margin-bottom: 18px;
+    border-radius: 0 4px 4px 0;
+  }
+
+  /* extension-served tool-window chrome (for the report itself) */
+  .tool-window {
+    background: var(--fm-panel);
+    border: 1px solid var(--fm-border);
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+  }
+  .tool-window-bar {
+    background: #f7f9fc;
+    border-bottom: 1px solid var(--fm-border);
+    padding: 8px 14px;
+    display: flex; align-items: center; gap: 10px;
+    font-size: 12px; color: var(--fm-muted);
+  }
+  .tool-window-bar .dots { display: inline-flex; gap: 6px; }
+  .tool-window-bar .dots i {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #cbd3dc; display: inline-block;
+  }
+  .tool-window-bar .title { flex: 1; font-weight: 500; }
+  .tool-window-body { padding: 22px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Network Quality (VoIP-adjacent) Report - mockup</h1>
+  <p class="lede">
+    FMN-166 design proposal. Two surfaces shown: the Canned Reports card injected on
+    <code>/report/ListReports</code>, and the extension-served Network Quality
+    Report itself. Real per-instance / per-metric data is from the live tenant survey
+    (FMN-166 probes).
+  </p>
+
+  <h2>Surface 1 - Canned Reports card (on /report/ListReports)</h2>
+  <p class="caption">
+    Tile shows alongside FortiMonitor's 19 native report cards. The FM Toolkit ribbon
+    marks it as extension-added, matching FMN-154's pattern.
+  </p>
+
+  <div class="fm-page">
+    <div class="fm-page-header">
+      <div class="breadcrumb">FortiMonitor &raquo; Reports</div>
+      <h1 class="fm-title">All Reports</h1>
+    </div>
+    <div class="fm-page-body">
+      <div class="cards-grid">
+        <!-- two stock cards for context -->
+        <div class="tile">
+          <div class="icon">SP</div>
+          <h4>Service Performance Report</h4>
+          <p class="tile-sub">Latency, packet loss, and availability per service.</p>
+          <div class="tile-actions"><button class="btn btn-primary">Run Report</button></div>
+        </div>
+        <div class="tile">
+          <div class="icon">SD</div>
+          <h4>SD-WAN Report</h4>
+          <p class="tile-sub">Per-link health for SD-WAN-managed FortiGate instances.</p>
+          <div class="tile-actions"><button class="btn btn-primary">Run Report</button></div>
+        </div>
+
+        <!-- the new toolkit-added tile -->
+        <div class="tile fmt fmt-ribbon-host" style="border: 1.5px solid var(--fm-blue); box-shadow: 0 0 0 1px var(--fm-blue-bg);">
+          <span class="fmt-ribbon" aria-hidden="true"></span>
+          <div class="icon">NQ</div>
+          <h4>Network Quality Report</h4>
+          <p class="tile-sub">
+            ICMP-derived MOS, latency, jitter, packet loss across all monitored
+            instances. FortiMonitor does not measure SIP / RTP directly.
+          </p>
+          <div class="tile-actions">
+            <button class="btn btn-primary">Open Report</button>
+          </div>
+        </div>
+
+        <div class="tile">
+          <div class="icon">IN</div>
+          <h4>Incident Report</h4>
+          <p class="tile-sub">Outages over a chosen window, with MTTR / MTTA breakdown.</p>
+          <div class="tile-actions"><button class="btn btn-primary">Run Report</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h2>Surface 2 - Network Quality Report (extension-served)</h2>
+  <p class="caption">
+    Opens in a new tab from the card above. Real data shape; counts are illustrative
+    where outage-density numbers depend on the active window.
+  </p>
+
+  <div class="tool-window">
+    <div class="tool-window-bar">
+      <span class="dots"><i></i><i></i><i></i></span>
+      <span class="title">Network Quality Report - FM Toolkit</span>
+      <span style="font-size:11px;color:var(--fm-faint);">chrome-extension://...</span>
+    </div>
+    <div class="tool-window-body">
+
+      <h1 style="font-size:20px;margin:0 0 4px;">Network Quality Report</h1>
+      <p style="font-size:12.5px;color:var(--fm-muted);margin:0 0 18px;max-width:760px;">
+        ICMP-derived MOS, latency, jitter, packet loss across all monitored
+        instances. <strong>FortiMonitor does not measure SIP / RTP directly.</strong>
+      </p>
+
+      <div class="truth-note">
+        MOS shown here is synthetic - it is derived from ICMP probe statistics via
+        the G.107 E-model approximation, not from real RTP / RTCP-XR call data.
+        A "good" MOS means the ICMP path is healthy; it does not prove that
+        voice traffic on the same path is healthy.
+      </div>
+
+      <div class="report-toolbar">
+        <div>
+          <span style="font-size:11px;color:var(--fm-faint);text-transform:uppercase;letter-spacing:.06em;">Window</span>
+          <div class="window-pills" style="margin-left:8px;">
+            <button>24h</button>
+            <button class="active">7d</button>
+            <button>30d</button>
+          </div>
+        </div>
+        <button class="btn btn-secondary" style="margin-left:auto;">Export CSV</button>
+        <button class="btn btn-secondary">Export PDF</button>
+      </div>
+
+      <div class="summary-strip">
+        <div class="summary-card">
+          <div class="label">Instances configured for NQ</div>
+          <div class="value">18 <span style="font-size:14px;color:var(--fm-faint);font-weight:400;">/ 64</span></div>
+          <div class="delta">9 include MOS</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">Active NQ outages</div>
+          <div class="value">2</div>
+          <div class="delta red">1 critical, 1 warning</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">NQ outages in last 7d</div>
+          <div class="value">31</div>
+          <div class="delta">across 7 instances</div>
+        </div>
+      </div>
+
+      <h2 style="margin-top:6px;">Active Network Quality outages</h2>
+      <table class="nq-table">
+        <thead>
+          <tr>
+            <th>Severity</th>
+            <th>Instance</th>
+            <th>Metric</th>
+            <th>Started</th>
+            <th class="num">Duration</th>
+            <th>Threshold</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="sev-badge critical">Critical</span></td>
+            <td>zoom.us <span style="color:var(--fm-faint);">(Login)</span></td>
+            <td>MOS</td>
+            <td>11 May 14:22</td>
+            <td class="num">2h 14m</td>
+            <td><code>&lt; 3.5 for 5 min</code></td>
+          </tr>
+          <tr>
+            <td><span class="sev-badge warning">Warning</span></td>
+            <td>mail.google.com <span style="color:var(--fm-faint);">(Gmail)</span></td>
+            <td>Jitter</td>
+            <td>11 May 15:55</td>
+            <td class="num">41m</td>
+            <td><code>&gt; 30 ms for 3 min</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>Top noisy instances - last 7 days</h2>
+      <table class="nq-table">
+        <thead>
+          <tr>
+            <th style="width:30px;">#</th>
+            <th>Instance</th>
+            <th>Per-metric outages</th>
+            <th class="num">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td>zoom.us <span style="color:var(--fm-faint);">(Login)</span></td>
+            <td><div class="metric-pills">
+              <span class="pill hot">MOS <span class="n">8</span></span>
+              <span class="pill">Packet Loss <span class="n">3</span></span>
+              <span class="pill">Latency <span class="n">1</span></span>
+            </div></td>
+            <td class="num">12</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>marketplace.zoom.us</td>
+            <td><div class="metric-pills">
+              <span class="pill">MOS <span class="n">4</span></span>
+              <span class="pill">Packet Loss <span class="n">2</span></span>
+            </div></td>
+            <td class="num">6</td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>events.zoom.us</td>
+            <td><div class="metric-pills">
+              <span class="pill">Latency <span class="n">3</span></span>
+              <span class="pill">Jitter <span class="n">1</span></span>
+            </div></td>
+            <td class="num">4</td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>support.zoom.us</td>
+            <td><div class="metric-pills">
+              <span class="pill">MOS <span class="n">2</span></span>
+              <span class="pill">Packet Loss <span class="n">1</span></span>
+            </div></td>
+            <td class="num">3</td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>8.8.8.8 <span style="color:var(--fm-faint);">(Google_DNS)</span></td>
+            <td><div class="metric-pills">
+              <span class="pill">Packet Loss <span class="n">2</span></span>
+            </div></td>
+            <td class="num">2</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>Per-instance inventory</h2>
+      <table class="nq-table">
+        <thead>
+          <tr>
+            <th>Instance</th>
+            <th>FQDN</th>
+            <th>Template</th>
+            <th>Probed from</th>
+            <th style="text-align:center;">Lat</th>
+            <th style="text-align:center;">Jit</th>
+            <th style="text-align:center;">PL</th>
+            <th style="text-align:center;">MOS</th>
+            <th>Thresholds</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Developers</td>
+            <td>developers.google.com</td>
+            <td>GW NQ Base</td>
+            <td>DEM_Lab-01</td>
+            <td style="text-align:center;"><span class="yes-dot"></span></td>
+            <td style="text-align:center;"><span class="yes-dot"></span></td>
+            <td style="text-align:center;"><span class="yes-dot"></span></td>
+            <td style="text-align:center;"><span class="no-dot" title="not configured"></span></td>
+            <td><span style="color:var(--fm-muted-2);">None</span></td>
+          </tr>
+          <tr>
+            <td>Gmail</td>
+            <td>mail.google.com</td>
+            <td>GW NQ Base</td>
+            <td>DEM_Lab-01</td>
+            <td style="text-align:center;"><span class="yes-dot"></span></td>
+            <td style="text-align:center;"><span class="yes-dot"></span></td>
+            <td style="text-align:center;"><span class="yes-dot"></span></td>
+            <td style="text-align:center;"><span class="no-dot"></span></td>
+            <td><span style="color:var(--fm-amber);">Jitter &gt; 30 ms</span></td>
+          </tr>
+          <tr>
+            <td>Calendar</td>
+            <td>calendar.google.com</td>
+            <td>GW NQ Base</td>
+            <td>DEM_Lab-01</td>
+            <td style="text-align:center;"><span class="yes-dot"></span></td>
+            <td style="text-align:center;"><span class="yes-dot"></span></td>
+            <td style="text-align:center;"><span class="yes-dot"></span></td>
+            <td style="text-align:center;"><span class="no-dot"></span></td>
+            <td><span style="color:var(--fm-muted-2);">None</span></td>
+          </tr>
+          <tr>
+            <td>zoom.us (Login)</td>
+            <td>us05web.zoom.us</td>
+            <td>Zoom NQ+</td>
+            <td>DEM_Lab-01</td>
+            <td style="text-align:center;"><span class="yes-dot"></span></td>
+            <td style="text-align:center;"><span class="yes-dot"></span></td>
+            <td style="text-align:center;"><span class="yes-dot"></span></td>
+            <td style="text-align:center;"><span class="yes-dot"></span></td>
+            <td><span style="color:var(--fm-red);">MOS &lt; 3.5</span></td>
+          </tr>
+          <tr>
+            <td>marketplace.zoom.us</td>
+            <td>marketplace.zoom.us</td>
+            <td>Zoom NQ+</td>
+            <td>DEM_Lab-01</td>
+            <td style="text-align:center;"><span class="yes-dot"></span></td>
+            <td style="text-align:center;"><span class="yes-dot"></span></td>
+            <td style="text-align:center;"><span class="yes-dot"></span></td>
+            <td style="text-align:center;"><span class="yes-dot"></span></td>
+            <td><span style="color:var(--fm-red);">MOS &lt; 3.5</span></td>
+          </tr>
+          <tr>
+            <td>events.zoom.us</td>
+            <td>events.zoom.us</td>
+            <td>Zoom NQ+</td>
+            <td>DEM_Lab-01</td>
+            <td style="text-align:center;"><span class="yes-dot"></span></td>
+            <td style="text-align:center;"><span class="yes-dot"></span></td>
+            <td style="text-align:center;"><span class="yes-dot"></span></td>
+            <td style="text-align:center;"><span class="yes-dot"></span></td>
+            <td><span style="color:var(--fm-muted-2);">None</span></td>
+          </tr>
+          <tr>
+            <td>Google_DNS_primary</td>
+            <td>8.8.8.8</td>
+            <td>DNS NQ</td>
+            <td>ubuntu_onsight_permanent-01</td>
+            <td style="text-align:center;"><span class="yes-dot"></span></td>
+            <td style="text-align:center;"><span class="yes-dot"></span></td>
+            <td style="text-align:center;"><span class="yes-dot"></span></td>
+            <td style="text-align:center;"><span class="no-dot"></span></td>
+            <td><span style="color:var(--fm-muted-2);">None</span></td>
+          </tr>
+          <tr style="opacity:0.55;">
+            <td colspan="9" style="text-align:center;color:var(--fm-faint);">
+              ... 11 more rows
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p class="caption" style="margin-top:14px;">
+        <strong>Legend.</strong> <span class="yes-dot"></span> metric configured /
+        <span class="no-dot"></span> not configured (MOS is opt-in per template).
+        "Probed from" is the agent or OnSight running the ICMP probe (FortiMonitor's
+        <code>monitoring_location</code>); not all sites probe from the same agent.
+      </p>
+
+    </div>
+  </div>
+
+  <p class="caption" style="margin-top:30px;">
+    FMN-166 - 2026-05-11. Data on tenant survey from
+    <code>tools/discovery/fmn-166-voip-survey-*.mjs</code>. Implementation lives in
+    follow-up tickets listed in <code>docs/planning/voip-report.md</code> &sect; 8.
+  </p>
+</div>
+</body>
+</html>
