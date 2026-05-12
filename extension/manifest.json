@@ -50,6 +50,14 @@
       "js": ["src/content/template-edit-soft-refresh.js"],
       "run_at": "document_idle",
       "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://fortimonitor.forticloud.com/*",
+        "https://*.fortimonitor.com/*"
+      ],
+      "js": ["src/content/intro-tour-bridge.js"],
+      "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
@@ -57,6 +65,18 @@
       "resources": [
         "src/popup/popup.html",
         "src/ui/bpa-diff/app.html"
+      ],
+      "matches": [
+        "https://fortimonitor.forticloud.com/*",
+        "https://*.fortimonitor.com/*"
+      ]
+    },
+    {
+      "resources": [
+        "src/ui/intro-tour/tour-engine.js",
+        "src/ui/intro-tour/step-renderer.js",
+        "src/ui/intro-tour/step-schema.js",
+        "src/ui/intro-tour/styles.css"
       ],
       "matches": [
         "https://fortimonitor.forticloud.com/*",

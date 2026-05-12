@@ -1,0 +1,127 @@
+/* Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins> */
+/* FMN-167: scoped intro-tour styles. All selectors prefixed with
+   .fmn-tour-* so the overlay can't leak into FortiMonitor's chrome.
+   Re-uses the same palette as src/ui/styles.css. */
+
+.fmn-tour-overlay {
+  /* Top-level host - positioned absolute so children can position
+     against page coords. pointer-events: none on the host means the
+     overlay never blocks anchor clicks; only the card + buttons opt
+     back in to pointer events via pointer-events: auto. */
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  z-index: 2147483600; /* below browser-extension popups but above page chrome */
+  pointer-events: none;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-size: 13px;
+  color: #222a35;
+}
+
+.fmn-tour-spotlight {
+  position: absolute;
+  border-radius: 8px;
+  box-shadow:
+    0 0 0 9999px rgba(8, 14, 28, 0.42),
+    0 0 0 3px rgba(217, 84, 30, 0.85),
+    0 0 16px 6px rgba(217, 84, 30, 0.35);
+  pointer-events: none;
+  transition: top 120ms ease, left 120ms ease, width 120ms ease, height 120ms ease;
+}
+
+.fmn-tour-card {
+  position: absolute;
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  background: #ffffff;
+  border: 1px solid #c5cbd3;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18), 0 1px 3px rgba(0, 0, 0, 0.08);
+  padding: 14px 16px 12px;
+  pointer-events: auto;
+}
+
+/* Floating fallback: card centers on viewport when no anchor resolves. */
+.fmn-tour-overlay--floating .fmn-tour-card {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 360px;
+}
+
+.fmn-tour-dismiss {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  background: transparent;
+  border: 0;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  color: #6b7380;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.fmn-tour-dismiss:hover { background: #f3f5f7; color: #222a35; }
+.fmn-tour-dismiss:focus-visible { outline: 2px solid #d9541e; outline-offset: 1px; }
+
+.fmn-tour-card-body {
+  margin: 0 0 12px;
+  line-height: 1.42;
+}
+
+.fmn-tour-card-body p { margin: 0 0 8px; }
+.fmn-tour-card-body p:last-child { margin-bottom: 0; }
+.fmn-tour-card-body strong { font-weight: 600; }
+.fmn-tour-card-body code {
+  font-family: "SF Mono", Menlo, monospace;
+  background: #eef2f7;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.fmn-tour-card-body a { color: #d9541e; }
+.fmn-tour-card-body ul, .fmn-tour-card-body ol {
+  margin: 0 0 8px;
+  padding-left: 22px;
+}
+.fmn-tour-card-body li { margin: 2px 0; }
+
+.fmn-tour-card-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+}
+
+.fmn-tour-hint {
+  color: #6b7380;
+  font-size: 12px;
+  font-style: italic;
+}
+
+.fmn-tour-next {
+  background: #d9541e;
+  color: #ffffff;
+  border: 1px solid #d9541e;
+  border-radius: 5px;
+  padding: 6px 14px;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.fmn-tour-next:hover { background: #c14817; border-color: #c14817; }
+.fmn-tour-next:focus-visible { outline: 2px solid #d9541e; outline-offset: 2px; }
+
+/* Caption-empty placeholder (defensive - validated steps never hit
+   this). */
+.fmn-tour-caption-empty {
+  color: #6b7380;
+  font-style: italic;
+}

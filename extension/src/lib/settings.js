@@ -58,6 +58,14 @@ export const SHOW_INFO_BUBBLES_KEY = 'fm:showInfoBubbles';
 // in chrome.storage.local (Sets are not JSON-serializable). Each entry is
 // a featureId from extension/src/lib/info-bubble-registry.js.
 export const DISMISSED_INFO_BUBBLES_KEY = 'fm:dismissedInfoBubbles';
+// FMN-167: per-tool flag for the FortiMonitor intro walk-through. Off
+// by default until the framework graduates and the captioned-script
+// follow-up ticket ships real content. When on, the popup shows the
+// "Tour FortiMonitor" tile in the Training section and the content-script
+// bridge accepts the start message. Specific to the intro tour - sibling
+// tour tickets (FMN-168 OnSight) ship their own flags per the per-tool
+// visibility rule.
+export const INTRO_TOUR_ENABLED_KEY = 'fm:introTourEnabled';
 
 export const ASK_CLAUDE_TOOL_TIERS = ['readonly', 'readwrite', 'all'];
 export const DEFAULT_ASK_CLAUDE_TOOL_TIER = 'readonly';
@@ -432,6 +440,34 @@ export async function isNoiseAnalyzerEnabled(storage = defaultStorage()) {
  */
 export async function setNoiseAnalyzerEnabled(enabled, storage = defaultStorage()) {
   await storage.set({ [NOISE_ANALYZER_ENABLED_KEY]: Boolean(enabled) });
+}
+
+/**
+ * Read the FMN-167 intro-tour-enabled flag. Off by default so the
+ * content-script bridge ignores start messages until the operator opts
+ * in via Settings (FMN-167b will surface the toggle in the popup; for
+ * the FMN-167 stub the flag must be flipped manually via DevTools).
+ * Storage errors fail closed (return false).
+ *
+ * @param {{ get: (key: string) => Promise<Record<string, any>> }} [storage]
+ */
+export async function isIntroTourEnabled(storage = defaultStorage()) {
+  try {
+    const data = await storage.get(INTRO_TOUR_ENABLED_KEY);
+    return Boolean(data?.[INTRO_TOUR_ENABLED_KEY]);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Persist the FMN-167 intro-tour-enabled flag.
+ *
+ * @param {boolean} enabled
+ * @param {{ set: (obj: Record<string, any>) => Promise<void> }} [storage]
+ */
+export async function setIntroTourEnabled(enabled, storage = defaultStorage()) {
+  await storage.set({ [INTRO_TOUR_ENABLED_KEY]: Boolean(enabled) });
 }
 
 /**
