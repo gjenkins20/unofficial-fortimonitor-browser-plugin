@@ -9,12 +9,16 @@ import assert from 'node:assert/strict';
 import { scoreServer } from '../../extension/src/background/omni-search-handlers.js';
 
 // Minimal valid "server entry" shape (matches buildServerEntry output).
+// FMN-153 added classified ips[] / dns_names[] alongside the legacy
+// additional_fqdns array. Test fixtures default both to empty.
 function server(overrides = {}) {
   return {
     id: 1,
     name: '',
     fqdn: '',
     additional_fqdns: [],
+    ips: [],
+    dns_names: [],
     description: '',
     tags: [],
     attributes: [],
@@ -58,10 +62,27 @@ test('name contains scores 600 when not starts-with', () => {
   assert.equal(r.field, 'name');
 });
 
-test('additional_fqdns substring (IP) scores 500', () => {
-  const r = scoreServer(server({ name: 'sql', additional_fqdns: ['10.0.0.185'] }), '10.0.0.185');
+test('ips substring scores 500 with field=ip (FMN-153)', () => {
+  // Post-FMN-153: classified IPs land in server.ips at ingest time;
+  // matching against them yields the high-confidence 'ip' label.
+  const r = scoreServer(server({ name: 'sql', ips: ['10.0.0.185'] }), '10.0.0.185');
   assert.equal(r.score, 500);
   assert.equal(r.field, 'ip');
+});
+
+test('dns_names substring scores 500 with field=dns (FMN-153)', () => {
+  const r = scoreServer(server({ name: 'web', dns_names: ['api.example.com'] }), 'example');
+  assert.equal(r.score, 500);
+  assert.equal(r.field, 'dns');
+});
+
+test('legacy additional_fqdns-only substring scores 480 with field=fqdn (FMN-153 fallback)', () => {
+  // additional_fqdns hits that did not classify into ips/dns_names
+  // (unusual; would be a value that fails both IPv4/IPv6/hostname regex)
+  // fall through to the legacy rule at a slightly lower score.
+  const r = scoreServer(server({ name: 'sql', additional_fqdns: ['unclassified-token'] }), 'unclassified');
+  assert.equal(r.score, 480);
+  assert.equal(r.field, 'fqdn');
 });
 
 test('fqdn contains scores 400 when not exact / starts-with', () => {
