@@ -134,6 +134,15 @@ export async function clearSnapshots(storage) {
   await s.remove(STORAGE_KEY);
 }
 
+// FMN-161: replace just the `previous` slot, leaving `current` untouched.
+// Used by the import handler: an imported baseline becomes the "previous"
+// (i.e. older) side of the diff against whatever was last taken locally.
+export async function setPreviousSnapshot(snapshot, storage) {
+  const s = storage ?? chrome.storage.local;
+  const { current } = await readSnapshots(s);
+  await s.set({ [STORAGE_KEY]: { current, previous: snapshot } });
+}
+
 // Diff inventory.servers between two condensed snapshots. Returns rows
 // keyed by server id with a change category and an optional list of
 // field-level prev/next pairs.

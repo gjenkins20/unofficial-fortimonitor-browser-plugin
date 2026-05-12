@@ -33,6 +33,66 @@
   .picker .pick .val { font-size: 13px; font-weight: 600; color: #1d2733; }
   .picker .pick .sub { font-size: 11.5px; color: #5b6776; margin-top: 2px; }
   .picker .arrow { text-align: center; color: #7c8896; font-size: 18px; }
+  .picker .pick .slot-actions {
+    margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;
+  }
+  .slot-btn {
+    appearance: none; cursor: pointer;
+    background: #f7f9fc; color: #46535f; border: 1px solid #dde2ea;
+    border-radius: 4px; padding: 4px 10px; font-size: 11.5px; font-weight: 500;
+    transition: background 80ms ease, border-color 80ms ease, color 80ms ease;
+  }
+  .slot-btn:hover:not(:disabled) {
+    background: #edf2f8; border-color: #c0cad7; color: #1d2733;
+  }
+  .slot-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .io-panel {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+  }
+  .io-panel .label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+    color: #5b6776; font-weight: 600;
+  }
+  .io-panel .hint {
+    font-size: 11.5px; color: #7c8896; flex-basis: 100%; margin: 4px 0 0;
+  }
+  .io-panel .status {
+    font-size: 12px; font-weight: 500;
+  }
+  .io-panel .status.ok { color: #1f9d55; }
+  .io-panel .status.err { color: #dc2626; }
+  .io-panel button.primary {
+    appearance: none; cursor: pointer;
+    background: #0b6cf7; color: #fff; border: 1px solid #0b6cf7;
+    border-radius: 4px; padding: 6px 14px; font-size: 12px; font-weight: 600;
+    transition: background 80ms ease;
+  }
+  .io-panel button.primary:hover:not(:disabled) { background: #0950c7; }
+  .io-panel button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .io-panel input[type="file"] { display: none; }
+
+  dialog.confirm {
+    border: 1px solid #c0cad7; border-radius: 6px; padding: 0;
+    max-width: 440px; box-shadow: 0 8px 24px rgba(15,23,42,0.15);
+  }
+  dialog.confirm::backdrop { background: rgba(15,23,42,0.35); }
+  dialog.confirm .body { padding: 18px 22px 8px; }
+  dialog.confirm h3 { margin: 0 0 8px; font-size: 14px; }
+  dialog.confirm p { margin: 0 0 6px; font-size: 12.5px; color: #46535f; }
+  dialog.confirm .actions {
+    padding: 12px 22px 18px; display: flex; justify-content: flex-end; gap: 8px;
+  }
+  dialog.confirm button {
+    appearance: none; cursor: pointer; border-radius: 4px;
+    padding: 6px 14px; font-size: 12px; font-weight: 600;
+  }
+  dialog.confirm button.cancel {
+    background: #fff; color: #46535f; border: 1px solid #c0cad7;
+  }
+  dialog.confirm button.primary {
+    background: #0b6cf7; color: #fff; border: 1px solid #0b6cf7;
+  }
 
   .counts { display: flex; gap: 14px; flex-wrap: wrap; }
   .count-chip {
@@ -100,7 +160,19 @@
   </p>
 
   <div id="picker-row"></div>
+  <div id="io-row"></div>
   <div id="content"></div>
+  <dialog id="confirm-import" class="confirm">
+    <div class="body">
+      <h3>Replace existing baseline?</h3>
+      <p id="confirm-import-body"></p>
+      <p>This will replace the previous-slot snapshot. The current snapshot is not affected.</p>
+    </div>
+    <div class="actions">
+      <button type="button" class="cancel" id="confirm-import-cancel">Cancel</button>
+      <button type="button" class="primary" id="confirm-import-ok">Replace</button>
+    </div>
+  </dialog>
 
   <footer class="popup-footer">
     <span id="version"></span>

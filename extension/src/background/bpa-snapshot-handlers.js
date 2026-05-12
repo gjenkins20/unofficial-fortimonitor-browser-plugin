@@ -14,8 +14,15 @@ import {
   condenseForSnapshot,
   readSnapshots,
   writeSnapshot,
+  setPreviousSnapshot,
   diffServers,
 } from '../lib/bpa-snapshots.js';
+import {
+  wrapSnapshot,
+  unwrapSnapshot,
+  filenameFor,
+  SnapshotIoError,
+} from '../lib/snapshot-io.js';
 
 // FMN-164: 180s is the observed minimum for a first-run snapshot on real
 // tenants ("3+ minutes is typical"). Used until a real run lands a
@@ -142,6 +149,64 @@ export function createBpaSnapshotHandlers({
         runInFlight = false;
         runStartedAt = null;
         await persistRunState(null);
+      }
+    },
+
+    // FMN-161: produce a downloadable JSON envelope for a stored slot. The
+    // page that initiated the request turns { filename, contents } into a
+    // Blob + <a download>; the SW just owns the storage read + envelope
+    // formatting because the page has no chrome.storage access.
+    'bpa-snapshots:export': async (payload) => {
+      const slot = payload?.slot === 'previous' ? 'previous' : 'current';
+      const { current, previous } = await readSnapshots(local);
+      const snapshot = slot === 'current' ? current : previous;
+      if (!snapshot) {
+        return { ok: false, reason: 'empty-slot', message: `No ${slot} snapshot to export.` };
+      }
+      const extensionVersion =
+        (typeof chrome !== 'undefined' && chrome.runtime?.getManifest)
+          ? chrome.runtime.getManifest().version
+          : null;
+      const envelope = wrapSnapshot(snapshot, { extensionVersion });
+      return {
+        ok: true,
+        filename: filenameFor(snapshot),
+        contents: JSON.stringify(envelope, null, 2),
+        slot,
+      };
+    },
+
+    // FMN-161: take an envelope from the file picker and land it in the
+    // "previous" slot for diffing against current. If previous already
+    // holds a snapshot, refuse unless the caller passed { force: true } -
+    // the UI surfaces a confirmation in that case. Current is never
+    // overwritten by an import: only newly-taken snapshots rotate into
+    // current, by design.
+    'bpa-snapshots:import': async (payload) => {
+      try {
+        const { snapshot } = unwrapSnapshot(payload?.envelope);
+        const { previous } = await readSnapshots(local);
+        const hadPrevious = Boolean(previous);
+        if (hadPrevious && !payload?.force) {
+          return {
+            ok: false,
+            reason: 'previous-exists',
+            message: 'A baseline snapshot is already loaded. Importing this file will replace it.',
+            existingPreviousTakenAt: previous.takenAt ?? null,
+            incomingTakenAt: snapshot.takenAt ?? null,
+          };
+        }
+        await setPreviousSnapshot(snapshot, local);
+        return {
+          ok: true,
+          previousTakenAt: snapshot.takenAt ?? null,
+          replaced: hadPrevious,
+        };
+      } catch (err) {
+        if (err instanceof SnapshotIoError) {
+          return { ok: false, reason: err.code, message: err.message };
+        }
+        throw err;
       }
     },
 
