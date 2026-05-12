@@ -121,12 +121,14 @@ const PRINT_STYLES = `
  * @param {string}  [options.generatedAt]     - ISO timestamp string
  * @returns {string} full <!DOCTYPE html> document
  */
-export function buildPrintableHtml(ctx, { coverPage = false, customer = '', generatedAt = new Date().toISOString(), sections } = {}) {
+export function buildPrintableHtml(ctx, { coverPage = false, customer = '', generatedAt = new Date().toISOString(), sections, flags } = {}) {
   // FMN-149: when result.sections is analyzer-scoped, the PDF mirrors
   // the viewer's tab filter (cross-cutting tabs hidden, analyzer-scoped
   // tabs included only when their section was selected, Raw Counts
   // always included).
-  const tabs = sections ? getVisibleTabs(sections) : getTabs();
+  // FMN-156: PDF also respects feature flags (Noise Analysis tab is
+  // hidden in the PDF when its flag is off, even in "all" mode).
+  const tabs = (sections || flags) ? getVisibleTabs(sections, flags) : getTabs();
   const parts = [];
   parts.push('<!DOCTYPE html>');
   parts.push('<html lang="en"><head><meta charset="UTF-8">');

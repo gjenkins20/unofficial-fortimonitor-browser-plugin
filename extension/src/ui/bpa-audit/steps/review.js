@@ -43,6 +43,9 @@ export function render({ container, store, navigate }) {
   ));
   container.appendChild(frame);
 
+  // FMN-156 post-rework: noise analysis content is folded into the
+  // Incident Summary tab and runs unconditionally with the rest of the
+  // BPA - no per-tool flag to resolve before rendering.
   const teardown = renderViewer({ root: viewerHost, store });
-  return teardown;
+  return () => teardown();
 }

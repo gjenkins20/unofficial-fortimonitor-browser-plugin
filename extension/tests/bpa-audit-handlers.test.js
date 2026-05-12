@@ -241,7 +241,9 @@ test('runBpaAudit: ["incidents"] does not call frontend fetcher at all (FMN-149)
   const client = new PanoptaClient({ apiKey: 'k', fetch });
   const r = await runBpaAudit({ client, includeFrontend: true, frontendFetch, sections: ['incidents'] });
   assert.equal(frontendCalled, false, 'frontend fetcher must not run when neither user-activity nor templates is selected');
-  assert.deepEqual(Object.keys(r.analysis), ['incidents']);
+  // FMN-156 rework: noise is ancillary to incidents, so selecting
+  // incidents also produces the noise analyzer's result key.
+  assert.deepEqual(Object.keys(r.analysis).sort(), ['incidents', 'noise']);
 });
 
 test('runBpaAudit: 401 from any endpoint propagates as PanoptaError(auth)', async () => {

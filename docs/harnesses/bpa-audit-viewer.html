@@ -107,11 +107,15 @@
       { id: 12, name: 'Custom Win Variant', url: '/v2/server_template/12' }
     ],
     outages: [
-      { id: 5001, server_name: 'fgvm-prod-01', active: true, severity: 'critical', acknowledged: false, start_time: '2026-04-30T12:00:00Z' },
-      { id: 5002, server_name: 'fgvm-prod-02', active: true, severity: 'warning', acknowledged: true, start_time: '2026-04-30T18:30:00Z' },
-      { id: 5003, server_name: 'fgvm-prod-01', active: false, severity: 'warning', start_time: '2026-04-29T10:00:00Z', end_time: '2026-04-29T10:10:00Z' },
-      { id: 5004, server_name: 'fgvm-prod-01', active: false, severity: 'warning', start_time: '2026-04-29T11:00:00Z', end_time: '2026-04-29T11:10:00Z' },
-      { id: 5005, server_name: 'fgvm-prod-01', active: false, severity: 'warning', start_time: '2026-04-29T12:00:00Z', end_time: '2026-04-29T12:10:00Z' }
+      // FMN-156: each outage carries server_id so the noise analyzer's
+      // primary join key (and the per-instance link href) works in tests.
+      // Pre-FMN-156 fixtures used server_name only; backfilled here for
+      // production parity (real /v2/outage records always include server_id).
+      { id: 5001, server_id: 1, server_name: 'fgvm-prod-01', active: true, severity: 'critical', acknowledged: false, start_time: '2026-04-30T12:00:00Z' },
+      { id: 5002, server_id: 2, server_name: 'fgvm-prod-02', active: true, severity: 'warning', acknowledged: true, start_time: '2026-04-30T18:30:00Z' },
+      { id: 5003, server_id: 1, server_name: 'fgvm-prod-01', active: false, severity: 'warning', start_time: '2026-04-29T10:00:00Z', end_time: '2026-04-29T10:10:00Z' },
+      { id: 5004, server_id: 1, server_name: 'fgvm-prod-01', active: false, severity: 'warning', start_time: '2026-04-29T11:00:00Z', end_time: '2026-04-29T11:10:00Z' },
+      { id: 5005, server_id: 1, server_name: 'fgvm-prod-01', active: false, severity: 'warning', start_time: '2026-04-29T12:00:00Z', end_time: '2026-04-29T12:10:00Z' }
     ],
     outage_logs: {
       '5001': [{ description: 'Incident detected ICMP Ping (fgvm-prod-01.acme.com)' }]
@@ -198,16 +202,40 @@
   // (e.g. ?sections=user-activity hides cross-cutting tabs and renders
   // only User Activity + Raw Counts). Default is unset = today's full
   // 11-tab render.
+  // FMN-156: optional ?noise=1 query string flips the noise-analyzer
+  // flag on so the harness Playwright spec can verify the Noise Analysis
+  // tab appears and renders the analyzer output. Default off.
   const params = new URLSearchParams(window.location.search);
   const sectionsParam = params.get('sections');
   const sections = sectionsParam ? sectionsParam.split(',').map((s) => s.trim()).filter(Boolean) : null;
+  const noiseEnabled = params.get('noise') === '1';
+
+  // FMN-156: pre-seed an extra noisy instance in the harness fixture so
+  // the noise analyzer has enough material to flag. The original three
+  // 5003/5004/5005 outages on fgvm-prod-01 already cluster, but we add
+  // descriptions + a high-volume server so the metric ranking also has
+  // multi-row output.
+  const seedNow = new Date('2026-05-01T00:00:00Z');
+  for (const o of inventory.outages) {
+    if (!o.description) o.description = 'Agent Heartbeat';
+    if (!o.status) o.status = o.active === true ? 'active' : 'resolved';
+  }
 
   const analysis = runAllAnalyzers(inventory, sections ? { sections } : undefined);
+  // FMN-156: when noise is requested, run the analyzer explicitly so the
+  // tab has rows (runAllAnalyzers gates on 'noise' being in the wanted
+  // set, which only happens when sections includes 'noise-analysis').
+  if (noiseEnabled && !analysis.noise) {
+    const { analyzeNoise } = await import('../../extension/src/lib/bpa-analyzers/noise.js');
+    analysis.noise = analyzeNoise(inventory, seedNow);
+  }
 
   const store = {
     customerName: 'Acme Corp (harness)',
     deep: true,
     maxServers: 0,
+    // FMN-156: flag wiring mirrors what review.js does at runtime.
+    flags: { noiseAnalyzerEnabled: noiseEnabled },
     // FMN-147: simulate the SW having captured a regional tenant origin
     // so the harness exercises the template-link rendering.
     runResult: { inventory, analysis, deep: true, tenant_origin: 'https://my.us02.fortimonitor.com', sections: sections ?? undefined }
@@ -215,7 +243,7 @@
 
   renderViewer({ root: document.getElementById('harness-host'), store });
 
-  console.log(`[bpa-harness] mounted, ${getTabs().length} tabs, ${inventory.servers.length} servers, ${inventory.outages.length} outages, sections=${JSON.stringify(sections)}`);
+  console.log(`[bpa-harness] mounted, ${getTabs().length} tabs, ${inventory.servers.length} servers, ${inventory.outages.length} outages, sections=${JSON.stringify(sections)}, noise=${noiseEnabled}`);
 </script>
 </body>
 </html>

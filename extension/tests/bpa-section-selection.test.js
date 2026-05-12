@@ -14,6 +14,8 @@ test('defaultSelection() returns ["all"]', () => {
 });
 
 test('analyzer section IDs match the planning-doc taxonomy', () => {
+  // FMN-156 rework: noise analysis folded into Incident Summary; no
+  // separate section id in the wizard pill row.
   assert.deepEqual(
     [...ANALYZER_SECTION_IDS].sort(),
     [

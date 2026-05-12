@@ -45,6 +45,8 @@ test('buildCombinedZipEntries: sections=["user-activity"] produces only the 1 ac
 });
 
 test('getTabs: returns the 11 tabs FMN-133 spec calls for, in order', () => {
+  // FMN-156 rework: noise analysis folded into Incident Summary; no
+  // standalone 12th tab.
   const tabs = getTabs();
   assert.equal(tabs.length, 11);
   const ids = tabs.map((t) => t.id);
@@ -290,29 +292,34 @@ test('combinedZipFilename: blank customer falls back to generic prefix', () => {
   assert.match(combinedZipFilename(''), /^best-practice-assessment_best-practice-assessment_\d{8}\.zip$/);
 });
 
-test('buildCombinedZipEntries: emits one CSV per tab + a README, all 12 entries', () => {
+test('buildCombinedZipEntries: emits one CSV per visible tab + a README (flag-off default = 12 entries)', () => {
   const ctx = {
     inventory: { servers: [{ id: 1, status: 'active' }] },
     analysis: { incidents: { active_details: [], top_by_instance: [], top_by_type: [], noisy_metrics: [], trending: {} }, users: { details: [] } },
     customer: 'Acme'
   };
   const entries = buildCombinedZipEntries(ctx, { generatedAt: '2026-05-01T00:00:00Z', customer: 'Acme' });
-  assert.equal(entries.length, getTabs().length + 1, 'expected 11 tabs + 1 README');
+  // Default flags (noiseAnalyzerEnabled off): noise-analysis tab is filtered
+  // out of buildCombinedZipEntries' visible-tab set, so entries are
+  // 11 native tabs + 1 README = 12. The post-FMN-156 contract is now
+  // "visible tabs + README", not "all tabs + README".
+  const visible = getVisibleTabs(['all']);
+  assert.equal(entries.length, visible.length + 1, 'expected (visible tabs) + 1 README');
   // README is first
   assert.equal(entries[0].filename, 'README.txt');
   assert.match(entries[0].content, /Best-Practice Assessment/);
   assert.match(entries[0].content, /Customer: Acme/);
-  // Every tab is represented by exactly one CSV
+  // Every visible tab is represented by exactly one CSV
   const csvNames = entries.slice(1).map((e) => e.filename);
-  for (const tab of getTabs()) {
+  for (const tab of visible) {
     assert.ok(csvNames.includes(`${tab.filenamePart}.csv`), `expected ${tab.filenamePart}.csv in zip`);
   }
 });
 
-test('buildCombinedZipEntries: README lists every tab with its label', () => {
+test('buildCombinedZipEntries: README lists every visible tab with its label', () => {
   const entries = buildCombinedZipEntries({ inventory: {}, analysis: {}, customer: '' });
   const readme = entries[0].content;
-  for (const tab of getTabs()) {
+  for (const tab of getVisibleTabs(['all'])) {
     assert.match(readme, new RegExp(`${tab.filenamePart}\\.csv\\s+-\\s+${tab.label.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}`));
   }
 });

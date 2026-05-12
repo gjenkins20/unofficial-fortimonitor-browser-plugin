@@ -44,6 +44,10 @@ export const UPDATE_CHECK_ENABLED_KEY = 'fm:updateCheckEnabled';
 // until the operator has exercised the supported actions (Add Tag,
 // Remove Tag, Apply Template) against their tenant.
 export const BULK_COMPOSER_ENABLED_KEY = 'fm:bulkComposerEnabled';
+// FMN-156: per-tool flag for the Best-Practice Assessment Noise Analysis
+// tab. Off by default; toggling on surfaces the analyzer's instance and
+// metric noise rankings inside the BPA viewer.
+export const NOISE_ANALYZER_ENABLED_KEY = 'fm:noiseAnalyzerEnabled';
 
 export const ASK_CLAUDE_TOOL_TIERS = ['readonly', 'readwrite', 'all'];
 export const DEFAULT_ASK_CLAUDE_TOOL_TIER = 'readonly';
@@ -390,6 +394,34 @@ export async function isBulkComposerEnabled(storage = defaultStorage()) {
  */
 export async function setBulkComposerEnabled(enabled, storage = defaultStorage()) {
   await storage.set({ [BULK_COMPOSER_ENABLED_KEY]: Boolean(enabled) });
+}
+
+/**
+ * Read the FMN-156 noise-analyzer-enabled flag. Off by default so the
+ * Noise Analysis tab stays hidden in the BPA Audit viewer until the
+ * operator opts in via Settings. Storage errors fail closed (return
+ * false) so a transient blip never silently surfaces a tab the operator
+ * hasn't asked for.
+ *
+ * @param {{ get: (key: string) => Promise<Record<string, any>> }} [storage]
+ */
+export async function isNoiseAnalyzerEnabled(storage = defaultStorage()) {
+  try {
+    const data = await storage.get(NOISE_ANALYZER_ENABLED_KEY);
+    return Boolean(data?.[NOISE_ANALYZER_ENABLED_KEY]);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Persist the FMN-156 noise-analyzer-enabled flag.
+ *
+ * @param {boolean} enabled
+ * @param {{ set: (obj: Record<string, any>) => Promise<void> }} [storage]
+ */
+export async function setNoiseAnalyzerEnabled(enabled, storage = defaultStorage()) {
+  await storage.set({ [NOISE_ANALYZER_ENABLED_KEY]: Boolean(enabled) });
 }
 
 /**

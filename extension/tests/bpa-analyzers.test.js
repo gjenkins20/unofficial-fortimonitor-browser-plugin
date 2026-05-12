@@ -721,10 +721,10 @@ test('analyzeMonitoringPolicy: automation_rules suggests rules for ungrouped ser
 // runAllAnalyzers
 // =============================================================================
 
-test('runAllAnalyzers: returns the 5-key combined shape FMN-133 expects', () => {
+test('runAllAnalyzers: returns the 6-key combined shape (FMN-156 added noise)', () => {
   const r = runAllAnalyzers({});
   assert.deepEqual(Object.keys(r).sort(), [
-    'incidents', 'instances', 'monitoring_policy', 'templates', 'users'
+    'incidents', 'instances', 'monitoring_policy', 'noise', 'templates', 'users'
   ]);
 });
 
@@ -740,10 +740,10 @@ test('runAllAnalyzers: each analyzer is a pure function (no inventory mutation)'
   assert.deepEqual(inv, before);
 });
 
-test('runAllAnalyzers: ["all"] selection runs every analyzer (FMN-149)', () => {
+test('runAllAnalyzers: ["all"] selection runs every analyzer (FMN-149, FMN-156)', () => {
   const r = runAllAnalyzers({}, { sections: ['all'] });
   assert.deepEqual(Object.keys(r).sort(), [
-    'incidents', 'instances', 'monitoring_policy', 'templates', 'users'
+    'incidents', 'instances', 'monitoring_policy', 'noise', 'templates', 'users'
   ]);
 });
 

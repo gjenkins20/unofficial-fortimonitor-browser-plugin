@@ -87,10 +87,10 @@ test('needsFrontendTemplates: only when templates is selected', () => {
   assert.equal(needsFrontendTemplates(['user-activity']), false);
 });
 
-test('analyzerKeysForSections(["all"]) returns all five analyzer keys', () => {
+test('analyzerKeysForSections(["all"]) returns all six analyzer keys (FMN-156 added noise)', () => {
   const keys = analyzerKeysForSections(['all']);
   assert.deepEqual([...keys].sort(), [
-    'incidents', 'instances', 'monitoring_policy', 'templates', 'users'
+    'incidents', 'instances', 'monitoring_policy', 'noise', 'templates', 'users'
   ]);
 });
 
@@ -102,6 +102,8 @@ test('analyzerKeysForSections maps section ids to analyzer result keys', () => {
 });
 
 test('SECTION_ANALYZER_KEY covers every analyzer-scoped section id', () => {
+  // FMN-156 rework: noise analyzer is now ancillary to 'incidents'; no
+  // separate section id.
   assert.deepEqual(Object.keys(SECTION_ANALYZER_KEY).sort(), [
     'incidents',
     'instance-analysis',
@@ -109,4 +111,9 @@ test('SECTION_ANALYZER_KEY covers every analyzer-scoped section id', () => {
     'template-recommendations',
     'user-activity'
   ]);
+});
+
+test('analyzerKeysForSections(["incidents"]) pulls both incidents and noise (FMN-156 ancillary)', () => {
+  const keys = analyzerKeysForSections(['incidents']);
+  assert.deepEqual([...keys].sort(), ['incidents', 'noise']);
 });

@@ -82,8 +82,8 @@ export function tabFilename(tab, customer) {
  * @param {{ generatedAt?: string, customer?: string }} [options]
  * @returns {{ filename: string, content: string }[]}
  */
-export function buildCombinedZipEntries(ctx, { generatedAt = new Date().toISOString(), customer = '', sections } = {}) {
-  const tabs = getVisibleTabs(sections);
+export function buildCombinedZipEntries(ctx, { generatedAt = new Date().toISOString(), customer = '', sections, flags } = {}) {
+  const tabs = getVisibleTabs(sections, flags);
   const entries = [];
   for (const tab of tabs) {
     entries.push({
@@ -159,6 +159,26 @@ export function combinedZipFilename(customer) {
 function templateLinkCell(id, label, ctx) {
   const text = String(label ?? '');
   if (!ctx?.tenantOrigin || id == null || id === '') {
+    return text;
+  }
+  const href = `${ctx.tenantOrigin}/report/Instance/${encodeURIComponent(id)}/details`;
+  const a = document.createElement('a');
+  a.href = href;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  a.textContent = text;
+  return a;
+}
+
+/**
+ * FMN-156: build a link cell to a server's FortiMonitor instance-details
+ * page. Templates and servers share the /report/Instance/{id}/details
+ * namespace (see project memory + viewer's FMN-147 implementation).
+ * Falls back to plain text when ctx.tenantOrigin is unavailable.
+ */
+function instanceLinkCell(id, label, ctx) {
+  const text = String(label ?? '');
+  if (!ctx?.tenantOrigin || id == null || id === '' || id === 'unknown') {
     return text;
   }
   const href = `${ctx.tenantOrigin}/report/Instance/${encodeURIComponent(id)}/details`;
@@ -273,6 +293,64 @@ const TABS = [
         ],
         rows: ({ analysis }) => analysis?.incidents?.noisy_metrics ?? [],
         emptyText: 'No noisy metric sources detected.'
+      },
+      // FMN-156: noise analysis content folded into Incident Summary
+      // (operator QA on the v1 standalone tab found it duplicative). The
+      // analyzer (extension/src/lib/bpa-analyzers/noise.js) is a pure
+      // function over inventory.outages; sections here surface its output
+      // alongside the existing Noisy Metrics breakdown.
+      {
+        label: 'Noise Summary (last 30 days)',
+        columns: [
+          { key: 'metric', header: 'Metric', getter: (r) => r.key },
+          { key: 'value',  header: 'Value',  getter: (r) => r.value }
+        ],
+        rows: ({ analysis }) => {
+          const n = analysis?.noise;
+          if (!n) return [];
+          const s = n.summary ?? {};
+          return [
+            { key: 'Window (days)',                value: s.window_days ?? 30 },
+            { key: 'Instances with outages',       value: s.instances_with_outages ?? 0 },
+            { key: 'Total outages (in window)',    value: s.total_outages_30d ?? 0 },
+            { key: 'Median MTTR (minutes)',        value: s.median_mttr_min ?? 0 }
+          ];
+        },
+        alwaysIncludeHeader: true
+      },
+      {
+        label: 'Top Noisy Instances',
+        columns: [
+          { key: 'server_id',   header: 'Server ID',
+            getter: (r) => r.server_id,
+            cellRenderer: (r, ctx) => instanceLinkCell(r.server_id, r.server_id, ctx) },
+          { key: 'server_name', header: 'Server',
+            getter: (r) => r.server_name,
+            cellRenderer: (r, ctx) => instanceLinkCell(r.server_id, r.server_name, ctx) },
+          { key: 'count',       header: 'Outages (30d)',  getter: (r) => r.outage_count_30d },
+          { key: 'duration',    header: 'Total Duration (min)', getter: (r) => r.total_duration_min },
+          { key: 'mttr',        header: 'MTTR (min)',     getter: (r) => r.mttr_min },
+          { key: 'flap',        header: 'Flap/24h',       getter: (r) => r.flap_rate_per_24h },
+          { key: 'rec',         header: 'Recommendation', getter: (r) => r.recommendation }
+        ],
+        rows: ({ analysis }) => analysis?.noise?.top_noisy_instances ?? [],
+        emptyText: 'No noisy instances detected in the last 30 days.'
+      },
+      {
+        label: 'Top Noisy Metrics (per outage description)',
+        columns: [
+          { key: 'metric',      header: 'Metric',         getter: (r) => r.metric_name },
+          { key: 'server_id',   header: 'Server ID',
+            getter: (r) => r.server_id,
+            cellRenderer: (r, ctx) => instanceLinkCell(r.server_id, r.server_id, ctx) },
+          { key: 'server_name', header: 'Server',
+            getter: (r) => r.server_name,
+            cellRenderer: (r, ctx) => instanceLinkCell(r.server_id, r.server_name, ctx) },
+          { key: 'count',       header: 'Count (30d)',    getter: (r) => r.count_30d },
+          { key: 'rec',         header: 'Recommendation', getter: (r) => r.recommendation }
+        ],
+        rows: ({ analysis }) => analysis?.noise?.top_noisy_metrics ?? [],
+        emptyText: 'No metric-level noise detected. Each outage description was either unique per server or below the surfacing threshold.'
       }
     ]
   },
@@ -574,7 +652,8 @@ const TABS = [
       ],
       rows: ({ inventory }) => buildRawCounts(inventory)
     }]
-  }
+  },
+
 ];
 
 export function getTabs() {
@@ -605,9 +684,13 @@ function isAllSel(sections) {
   return Array.isArray(sections) && sections.length === 1 && sections[0] === 'all';
 }
 
-function tabVisibleFor(tabId, sections) {
-  if (!Array.isArray(sections) || sections.length === 0 || isAllSel(sections)) return true;
+function tabVisibleFor(tabId, sections, flags = {}) {
   const v = TAB_VISIBILITY[tabId];
+  // FMN-156: a tab can declare a flag dependency; the tab is hidden when
+  // the flag is off, regardless of section selection. We check this first
+  // so flag-off tabs vanish even in 'all' mode.
+  if (v?.flag && !flags[v.flag]) return false;
+  if (!Array.isArray(sections) || sections.length === 0 || isAllSel(sections)) return true;
   if (!v) return true;
   if (v.mode === 'always') return true;
   if (v.mode === 'all-only') return false;
@@ -616,12 +699,20 @@ function tabVisibleFor(tabId, sections) {
 }
 
 /**
- * Filter the tab list by a sections selection. ["all"] / undefined
- * returns the full list (today's behavior).
+ * Filter the tab list by a sections selection + feature flags.
+ * ["all"] / undefined returns the full list (today's behavior) minus
+ * any tabs whose feature flag is off.
+ *
+ * @param {string[]} sections
+ * @param {{ noiseAnalyzerEnabled?: boolean }} [flags]
  */
-export function getVisibleTabs(sections) {
-  if (!Array.isArray(sections) || sections.length === 0 || isAllSel(sections)) return TABS;
-  return TABS.filter((t) => tabVisibleFor(t.id, sections));
+export function getVisibleTabs(sections, flags = {}) {
+  // Flag-gated tabs are pre-filtered even in 'all' mode (see
+  // tabVisibleFor); the section-selection branch is applied on top.
+  if (!Array.isArray(sections) || sections.length === 0 || isAllSel(sections)) {
+    return TABS.filter((t) => tabVisibleFor(t.id, sections, flags));
+  }
+  return TABS.filter((t) => tabVisibleFor(t.id, sections, flags));
 }
 
 // =============================================================================
@@ -655,7 +746,12 @@ export function renderViewer({ root, store }) {
   const sections = Array.isArray(result.sections) && result.sections.length > 0
     ? result.sections
     : ['all'];
-  const visibleTabs = getVisibleTabs(sections);
+  // FMN-156: feature-flag gating. review.js resolves
+  // fm:noiseAnalyzerEnabled and stashes it on store.flags before calling
+  // renderViewer (synchronous render path). Fixtures and harnesses can
+  // also pass `flags` via store directly.
+  const flags = (store && typeof store.flags === 'object' && store.flags) ? store.flags : {};
+  const visibleTabs = getVisibleTabs(sections, flags);
 
   // Top action bar: combined-report download (ZIP + PDF) + per-tab CSV
   // (FMN-145: CSV consolidated into the toolbar; previously sat next
@@ -679,7 +775,7 @@ export function renderViewer({ root, store }) {
     'data-test': 'download-combined-report'
   }, 'Download Combined Report (ZIP)');
   combinedBtn.addEventListener('click', () => {
-    const entries = buildCombinedZipEntries(ctx(), { customer, sections });
+    const entries = buildCombinedZipEntries(ctx(), { customer, sections, flags });
     const fname = combinedZipFilename(customer);
     downloadZip(fname, entries);
     filenameStatus.textContent = `Saved ${fname}`;
@@ -701,7 +797,7 @@ export function renderViewer({ root, store }) {
     'data-test': 'download-combined-pdf'
   }, 'Download PDF (Full Report)');
   pdfBtn.addEventListener('click', () => {
-    printReport(ctx(), { customer, coverPage: coverCheckbox.checked, sections });
+    printReport(ctx(), { customer, coverPage: coverCheckbox.checked, sections, flags });
     filenameStatus.textContent = `Opening print dialog (suggested: ${pdfFilename(customer)})`;
   });
 

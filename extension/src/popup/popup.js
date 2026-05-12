@@ -34,7 +34,9 @@ import {
   isUpdateCheckEnabled,
   setUpdateCheckEnabled,
   isBulkComposerEnabled,
-  setBulkComposerEnabled
+  setBulkComposerEnabled,
+  isNoiseAnalyzerEnabled,
+  setNoiseAnalyzerEnabled
 } from '../lib/settings.js';
 import {
   UPDATE_CHECK_RESULT_KEY,
@@ -335,6 +337,12 @@ async function loadBulkComposerIntoToggle() {
   const toggle = document.getElementById('bulk-composer-toggle');
   if (!toggle) return;
   toggle.checked = await isBulkComposerEnabled();
+}
+
+async function loadNoiseAnalyzerIntoToggle() {
+  const toggle = document.getElementById('noise-analyzer-toggle');
+  if (!toggle) return;
+  toggle.checked = await isNoiseAnalyzerEnabled();
 }
 
 async function applyExperimentalVisibility() {
@@ -997,6 +1005,7 @@ function init() {
     await loadSnapshotDiffIntoToggle();
     await loadUpdateCheckIntoToggle();
     await loadBulkComposerIntoToggle();
+    await loadNoiseAnalyzerIntoToggle();
     await loadWebguiColumnsIntoSettings();
     await applyExperimentalVisibility();
     showSettings();
@@ -1042,6 +1051,12 @@ function init() {
     await applyExperimentalVisibility();
     await refreshGuards();
   });
+
+  // FMN-156 post-rework: noise-analyzer toggle removed from the popup.
+  // The Noise Analysis content is folded into Incident Summary and runs
+  // unconditionally. setNoiseAnalyzerEnabled / isNoiseAnalyzerEnabled
+  // imports remain dormant for any operator who already toggled the
+  // flag on; the value is no longer read anywhere in the runtime.
 
   document.getElementById('feature-badges-toggle').addEventListener('change', async (e) => {
     await setShowFeatureBadgesEnabled(e.target.checked);

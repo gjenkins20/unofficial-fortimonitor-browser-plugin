@@ -12,9 +12,10 @@ import { analyzeUsers } from './user.js';
 import { analyzeInstances } from './instance.js';
 import { analyzeTemplates } from './template.js';
 import { analyzeMonitoringPolicy } from './monitoring-policy.js';
+import { analyzeNoise } from './noise.js';
 import { analyzerKeysForSections } from '../bpa-section-deps.js';
 
-export { analyzeIncidents, analyzeUsers, analyzeInstances, analyzeTemplates, analyzeMonitoringPolicy };
+export { analyzeIncidents, analyzeUsers, analyzeInstances, analyzeTemplates, analyzeMonitoringPolicy, analyzeNoise };
 
 /**
  * @typedef {Object} BpaAnalysis
@@ -23,6 +24,7 @@ export { analyzeIncidents, analyzeUsers, analyzeInstances, analyzeTemplates, ana
  * @property {import('./instance.js').InstanceResult} [instances]
  * @property {import('./template.js').TemplateResult} [templates]
  * @property {import('./monitoring-policy.js').MonitoringPolicyResult} [monitoring_policy]
+ * @property {import('./noise.js').NoiseResult} [noise]
  */
 
 /**
@@ -49,5 +51,9 @@ export function runAllAnalyzers(inventory = {}, { sections } = {}) {
   if (wanted.has('instances')) out.instances = analyzeInstances(inventory);
   if (wanted.has('templates')) out.templates = analyzeTemplates(inventory);
   if (wanted.has('monitoring_policy')) out.monitoring_policy = analyzeMonitoringPolicy(inventory);
+  // FMN-156: noise analyzer feeds the Noise Analysis tab. It reads the
+  // same outages list the IncidentAnalyzer does, so its top-level key
+  // requirement maps to the existing 'noise-analysis' section -> outages.
+  if (wanted.has('noise')) out.noise = analyzeNoise(inventory);
   return out;
 }

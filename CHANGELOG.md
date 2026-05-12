@@ -18,20 +18,18 @@ place.
 
 ## Unreleased
 
-- FMN-155 (phase 1, behind flag): Bulk Action Composer. New tile in the
-  toolkit popup that opens a 4-step wizard: pick a subset of instances
-  (re-using the FMN-152 omni-search corpus, plus clipboard CSV and a
-  best-effort "current page selection" loader), pick an action (v1
-  ships <em>Add Tag</em>, <em>Remove Tag</em>, and <em>Apply Template</em>),
-  configure it, and preview a per-row prev vs. next table. Commit runs
-  against the v2 API with concurrency 3, streams per-row pass/fail
-  status into the table, and offers a CSV export of results. Actions
-  are a pluggable registry under <code>extension/src/lib/bulk-actions/</code>
-  so phase-2 actions (port scope, parent group, agent_resource status,
-  maintenance) plug in by adding one file. <strong>Off by default</strong>
-  behind <code>fm:bulkComposerEnabled</code> (FMN-129 per-tool gating
-  pattern); toggle on under popup &rarr; Settings &rarr; "Bulk Action
-  Composer (Beta)".
+- FMN-156: Noise Analysis content folded into the existing
+  Best-Practice Assessment **Incident Summary** tab as additional
+  sections (Top Noisy Instances + Top Noisy Metrics + Recommendations).
+  Replaces the prior FMN-156 v1 attempt at a standalone 12th tab, which
+  duplicated the existing Noisy Metrics section operator QA found.
+  Analyzer (`extension/src/lib/bpa-analyzers/noise.js`) is a pure
+  function over the inventory's existing outage list - no new v2 API
+  traffic. Outage count, total duration, MTTR, flap rate per 24h, and
+  per-row recommendation (raise warning threshold to P95, widen dwell
+  time, suppress for maintenance windows) shown for the noisiest
+  instances. Operator-visible by default once a BPA scan completes; no
+  separate flag.
 - FMN-154 (phase 1, behind flag): Deployment Snapshot &amp; Diff. New
   toolkit card on FortiMonitor's Canned Reports page
   (`/report/ListReports`), styled to match native `.pa-card` tiles and
