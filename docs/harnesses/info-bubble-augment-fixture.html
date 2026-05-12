@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Harness: Info bubbles on augment.js surfaces (FMN-169)</title>
+<!--
+  Synthetic harness for FMN-169 - per-feature info bubbles mounted by
+  augment.js on FortiMonitor pages. Routes the live FortiMonitor URL to
+  a stripped-down page that exposes the anchors info-bubble-registry.js
+  declares for the 'content' surface:
+
+    - #fmn-omni-search-container .fmn-omni-chip (FMN-152)
+    - #fmn-columns-button                       (FMN-71/151)
+    - th.fmn-instance-merged [data-fmn-col=ip]  (FMN-153)
+    - [data-fmn-entry=fmn-snapshot-diff-card]
+      .fmn-pa-card-ribbon                       (FMN-154)
+
+  Heartbeat counter pattern (per CLAUDE.md augment.js section): a
+  setInterval ticks a counter visible on the page. If augment.js's
+  MutationObserver loops feedback-style on its own DOM writes, the
+  counter freezes (or stutters under sustained CPU). FMN-72 shipped
+  that bug once; FMN-169's mount must not.
+
+  How to run:
+    From repo root: npx playwright test tests/e2e/fmn-169-info-bubbles.spec.js
+
+  Or manually:
+    python3 -m http.server 8765
+    open http://localhost:8765/docs/harnesses/info-bubble-augment-fixture.html
+-->
+<style>
+  body { font: 13px -apple-system, BlinkMacSystemFont, sans-serif; padding: 16px; background: #f4f5f7; }
+  h1 { font-size: 16px; margin: 0 0 12px; }
+  .heartbeat { display: inline-block; padding: 4px 10px; border-radius: 4px; background: #d6f5d6;
+               border: 1px solid #67c167; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .heartbeat.frozen { background: #f7c7c7; border-color: #c25c5c; }
+  .panel { background: #fff; border: 1px solid #d4d7dc; border-radius: 6px; padding: 12px; margin: 12px 0; }
+  .panel h2 { font-size: 12px; margin: 0 0 8px; color: #555; text-transform: uppercase; letter-spacing: 0.04em; }
+
+  /* Fakes for FortiMonitor primitives the augmentations expect. */
+  table.pa-table_outage { border-collapse: collapse; width: 100%; }
+  table.pa-table_outage th, table.pa-table_outage td { border: 1px solid #ddd; padding: 4px 8px; font-size: 12px; }
+  .pa-table-row-checkbox { vertical-align: middle; }
+  .search-form { display: inline-flex; align-items: center; gap: 8px; }
+  .search-form input { padding: 4px 8px; }
+  #action-bar { display: flex; gap: 8px; align-items: center; padding: 6px; background: #fafafa; border: 1px solid #e0e0e0; }
+  .pa-hList { display: flex; gap: 8px; flex-wrap: wrap; padding: 8px; background: #fafafa; border: 1px solid #e0e0e0; }
+  .pa-card { width: 240px; padding: 12px; background: #fff; border: 1px solid #d4d7dc; border-radius: 4px;
+             position: relative; }
+  .pa-card h3 { font-size: 13px; margin: 0 0 4px; }
+  .pa-card-bd p { font-size: 11.5px; color: #5b6776; margin: 0; }
+  .pa-btn { padding: 4px 8px; border: 1px solid #888; background: #f0f0f0; border-radius: 3px; cursor: pointer; }
+
+  /* Augment.js will rewrite the Instance th into a grid; pre-populate
+     a th.fmn-instance-merged-ish target manually so the registry's
+     [data-fmn-col=ip] selector has something to bind to without
+     waiting for the full augmentTable path. */
+  th.fmn-instance-merged { padding: 0; }
+  .fmn-hdr-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; padding: 0; }
+  .fmn-hdr-grid > * { padding: 4px 8px; border-right: 1px solid #eee; }
+</style>
+</head>
+<body>
+<h1>FMN-169: info-bubble augment harness</h1>
+<div>
+  Heartbeat:
+  <span id="hb" class="heartbeat" data-tick="0">0</span>
+  (must keep ticking; freezes mean an augment-loop regression)
+</div>
+<div>
+  Status: <span id="status">booting</span>
+</div>
+
+<div class="panel">
+  <h2>Faked omni-search top bar (FMN-152 anchor)</h2>
+  <!-- augment.js will inject #fmn-omni-search-container itself when the
+       feature is on. For the harness, build the relevant subtree
+       directly so the info-bubble's "icon"-mode anchor has somewhere to
+       land regardless of the omni-search code path. -->
+  <div id="fmn-omni-search-container">
+    <span class="fmn-omni-chip">FM TK</span>
+    <input id="fmn-omni-search-input" type="text" placeholder="Search all fields" />
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Faked action bar with Columns button (FMN-71/151 anchor)</h2>
+  <div id="action-bar">
+    <button>Add</button>
+    <button>Move</button>
+    <button id="fmn-columns-button">
+      <span class="fmn-tk-chip">FM TK</span>
+      Columns
+      <span class="fmn-caret">▾</span>
+    </button>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Faked Instances thead with merged Instance cell (FMN-153 anchor)</h2>
+  <table class="pa-table_outage">
+    <thead>
+      <tr>
+        <th>
+          <input class="pa-table-row-checkbox" type="checkbox" />
+        </th>
+        <th class="fmn-instance-merged">
+          <div class="fmn-hdr-grid">
+            <span data-fmn-col="instance">Instance</span>
+            <span data-fmn-col="ip">IP Address</span>
+            <span data-fmn-col="dns">DNS Name</span>
+          </div>
+        </th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><input class="pa-table-row-checkbox" type="checkbox" value="s-42024060" /></td>
+        <td class="instance-column">fgvm-prod-01</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="panel">
+  <h2>Faked Snapshot &amp; Diff card (FMN-154 anchor)</h2>
+  <div class="pa-hList">
+    <div class="pa-card fmn-pa-card-ribbon-host" data-fmn-entry="fmn-snapshot-diff-card">
+      <span class="fmn-pa-card-ribbon" aria-hidden="true"></span>
+      <h3>Snapshot &amp; Diff</h3>
+      <div class="pa-card-bd"><p>Save the deployment; see what changed between snapshots.</p></div>
+    </div>
+  </div>
+</div>
+
+<!--
+  Stub chrome.* before loading augment.js. The harness lives at
+  file:// (or localhost:8765) and has no real extension context.
+  Storage starts with the master flag ON (default for fresh
+  installs - this is what the spec asserts).
+-->
+<script>
+  window.__hbTicks = 0;
+  const hb = document.getElementById('hb');
+  setInterval(() => {
+    window.__hbTicks++;
+    hb.textContent = String(window.__hbTicks);
+    hb.dataset.tick = String(window.__hbTicks);
+  }, 50);
+
+  // Seed: master flag ON (default-on for fresh installs is already the
+  // documented behavior, but explicit is friendlier to read), and
+  // omni-search flag ON so augment.js does not tear down our static
+  // #fmn-omni-search-container anchor.
+  const storageState = {
+    'fm:showInfoBubbles': true,
+    'fm:omniSearchEnabled': true,
+  };
+  const storageListeners = [];
+
+  window.chrome = {
+    runtime: {
+      getURL: (p) => 'chrome-extension://harness/' + p,
+      sendMessage: () => Promise.resolve(),
+      onMessage: { addListener: () => {} },
+      lastError: null,
+    },
+    storage: {
+      local: {
+        get: (keyOrKeys) => {
+          if (typeof keyOrKeys === 'string') {
+            return Promise.resolve({ [keyOrKeys]: storageState[keyOrKeys] });
+          }
+          if (Array.isArray(keyOrKeys)) {
+            const out = {};
+            for (const k of keyOrKeys) out[k] = storageState[k];
+            return Promise.resolve(out);
+          }
+          return Promise.resolve({ ...storageState });
+        },
+        set: (obj) => {
+          const changes = {};
+          for (const [k, v] of Object.entries(obj)) {
+            changes[k] = { oldValue: storageState[k], newValue: v };
+            storageState[k] = v;
+          }
+          for (const fn of storageListeners) fn(changes, 'local');
+          return Promise.resolve();
+        },
+      },
+      onChanged: {
+        addListener: (fn) => storageListeners.push(fn),
+      },
+    },
+    cookies: {
+      get: () => Promise.resolve(null),
+    },
+  };
+  document.getElementById('status').textContent = 'chrome stubbed; loading augment.js…';
+</script>
+
+<!-- augment.js is normally a content script; the spec inlines it into
+     a routed response (see the Playwright spec) rather than loading
+     here directly. Keep this marker so the spec's regex-replace works. -->
+<script src="../../extension/src/content/augment.js"></script>
+
+<script>
+  document.getElementById('status').textContent = 'augment.js loaded';
+</script>
+</body>
+</html>

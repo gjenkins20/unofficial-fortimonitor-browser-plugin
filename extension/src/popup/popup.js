@@ -36,8 +36,11 @@ import {
   isBulkComposerEnabled,
   setBulkComposerEnabled,
   isNoiseAnalyzerEnabled,
-  setNoiseAnalyzerEnabled
+  setNoiseAnalyzerEnabled,
+  isShowInfoBubblesEnabled,
+  setShowInfoBubblesEnabled
 } from '../lib/settings.js';
+import { mountInfoBubbles } from '../lib/info-bubble.js';
 import {
   UPDATE_CHECK_RESULT_KEY,
   UPDATE_CHECK_SNOOZE_KEY
@@ -319,6 +322,12 @@ async function loadSidebarLauncherIntoToggle() {
 async function loadShowFeatureBadgesIntoToggle() {
   const toggle = document.getElementById('feature-badges-toggle');
   toggle.checked = await isShowFeatureBadgesEnabled();
+}
+
+async function loadShowInfoBubblesIntoToggle() {
+  const toggle = document.getElementById('info-bubbles-toggle');
+  if (!toggle) return;
+  toggle.checked = await isShowInfoBubblesEnabled();
 }
 
 async function loadOmniSearchIntoToggle() {
@@ -1116,6 +1125,13 @@ function init() {
   renderUpdateBanner();
   triggerBackgroundUpdateCheck();
 
+  // FMN-169: mount per-feature info bubbles. Best-effort - failure
+  // here must not block popup init. The mount itself is idempotent so
+  // it is safe to call once at init even though the visibility of the
+  // Bulk Composer tile and the update banner can change mid-session;
+  // the bubble's anchors live on stable parents.
+  mountInfoBubbles(document, { surface: 'popup' }).catch(() => { /* swallow */ });
+
   const snoozeBtn = document.getElementById('update-snooze');
   if (snoozeBtn) snoozeBtn.addEventListener('click', () => snoozeUpdateBanner(SNOOZE_7_DAYS_MS));
   const dismissBtn = document.getElementById('update-dismiss');
@@ -1164,6 +1180,7 @@ function init() {
     await loadSsoConfigIntoToggle();
     await loadSidebarLauncherIntoToggle();
     await loadShowFeatureBadgesIntoToggle();
+    await loadShowInfoBubblesIntoToggle();
     await loadOmniSearchIntoToggle();
     await loadSnapshotDiffIntoToggle();
     await loadUpdateCheckIntoToggle();
@@ -1238,6 +1255,18 @@ function init() {
   document.getElementById('feature-badges-toggle').addEventListener('change', async (e) => {
     await setShowFeatureBadgesEnabled(e.target.checked);
   });
+
+  // FMN-169: feature info bubbles master toggle. Flipping off hides
+  // bubbles immediately (the bubble module's storage subscription
+  // closes any open bubble and short-circuits future hovers). Flipping
+  // back on preserves per-feature dismissals - they live under a
+  // separate storage key and are not touched here.
+  const infoBubblesToggle = document.getElementById('info-bubbles-toggle');
+  if (infoBubblesToggle) {
+    infoBubblesToggle.addEventListener('change', async (e) => {
+      await setShowInfoBubblesEnabled(e.target.checked);
+    });
+  }
 
   document.getElementById('ask-claude-toggle').addEventListener('change', async (e) => {
     await setAskClaudeEnabled(e.target.checked);

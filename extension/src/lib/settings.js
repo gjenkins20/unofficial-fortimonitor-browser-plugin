@@ -48,6 +48,16 @@ export const BULK_COMPOSER_ENABLED_KEY = 'fm:bulkComposerEnabled';
 // tab. Off by default; toggling on surfaces the analyzer's instance and
 // metric noise rankings inside the BPA viewer.
 export const NOISE_ANALYZER_ENABLED_KEY = 'fm:noiseAnalyzerEnabled';
+// FMN-169: master toggle for the per-feature info bubbles. On by default
+// on fresh installs so new operators see contextual explanations of each
+// toolkit feature; flipping off suppresses every bubble regardless of
+// per-feature dismissal state. Per-tool flag (not a shared umbrella) per
+// memory per_tool_visibility_flag.md.
+export const SHOW_INFO_BUBBLES_KEY = 'fm:showInfoBubbles';
+// FMN-169: per-feature "don't show me this again" set. Stored as an Array
+// in chrome.storage.local (Sets are not JSON-serializable). Each entry is
+// a featureId from extension/src/lib/info-bubble-registry.js.
+export const DISMISSED_INFO_BUBBLES_KEY = 'fm:dismissedInfoBubbles';
 
 export const ASK_CLAUDE_TOOL_TIERS = ['readonly', 'readwrite', 'all'];
 export const DEFAULT_ASK_CLAUDE_TOOL_TIER = 'readonly';
@@ -585,6 +595,90 @@ export async function isUpdateCheckEnabled(storage = defaultStorage()) {
  */
 export async function setUpdateCheckEnabled(enabled, storage = defaultStorage()) {
   await storage.set({ [UPDATE_CHECK_ENABLED_KEY]: Boolean(enabled) });
+}
+
+/**
+ * FMN-169: read the master "show info bubbles" flag. Defaults true on
+ * fresh installs (undefined value) so new operators see contextual
+ * explanations of each toolkit feature; only false when the operator has
+ * explicitly flipped the toggle off. Storage errors fail open (return
+ * true) so a transient storage blip never silently suppresses bubbles.
+ *
+ * @param {{ get: (key: string) => Promise<Record<string, any>> }} [storage]
+ */
+export async function isShowInfoBubblesEnabled(storage = defaultStorage()) {
+  try {
+    const data = await storage.get(SHOW_INFO_BUBBLES_KEY);
+    const value = data?.[SHOW_INFO_BUBBLES_KEY];
+    return value === undefined ? true : Boolean(value);
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * FMN-169: persist the master "show info bubbles" flag. Toggling back on
+ * preserves the per-feature dismissal set (those live under a separate
+ * key) so the operator does not get re-prompted on already-dismissed
+ * features.
+ *
+ * @param {boolean} enabled
+ * @param {{ set: (obj: Record<string, any>) => Promise<void> }} [storage]
+ */
+export async function setShowInfoBubblesEnabled(enabled, storage = defaultStorage()) {
+  await storage.set({ [SHOW_INFO_BUBBLES_KEY]: Boolean(enabled) });
+}
+
+/**
+ * FMN-169: read the per-feature dismissal set. Returns an Array (never a
+ * Set) so callers can wrap it into a Set themselves without worrying
+ * about storage-layer JSON serialization. Storage errors return an empty
+ * list so a transient blip cannot resurrect dismissed-by-operator
+ * bubbles.
+ *
+ * @param {{ get: (key: string) => Promise<Record<string, any>> }} [storage]
+ * @returns {Promise<string[]>}
+ */
+export async function getDismissedInfoBubbles(storage = defaultStorage()) {
+  try {
+    const data = await storage.get(DISMISSED_INFO_BUBBLES_KEY);
+    const value = data?.[DISMISSED_INFO_BUBBLES_KEY];
+    if (Array.isArray(value)) return value.filter((v) => typeof v === 'string');
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * FMN-169: add a featureId to the per-feature dismissal set. No-op if the
+ * id is already dismissed. Storage errors are swallowed - we never want
+ * to throw out of a "don't show me this again" click handler.
+ *
+ * @param {string} featureId
+ * @param {{ get: (key: string) => Promise<Record<string, any>>, set: (obj: Record<string, any>) => Promise<void> }} [storage]
+ */
+export async function addDismissedInfoBubble(featureId, storage = defaultStorage()) {
+  if (typeof featureId !== 'string' || !featureId) return;
+  try {
+    const current = await getDismissedInfoBubbles(storage);
+    if (current.includes(featureId)) return;
+    const next = current.concat([featureId]);
+    await storage.set({ [DISMISSED_INFO_BUBBLES_KEY]: next });
+  } catch { /* swallowed - dismissal is best-effort */ }
+}
+
+/**
+ * FMN-169: clear the per-feature dismissal set entirely. Not wired to a
+ * popup control today; exposed for tests and future "reset info bubbles"
+ * affordances.
+ *
+ * @param {{ set: (obj: Record<string, any>) => Promise<void> }} [storage]
+ */
+export async function clearDismissedInfoBubbles(storage = defaultStorage()) {
+  try {
+    await storage.set({ [DISMISSED_INFO_BUBBLES_KEY]: [] });
+  } catch { /* swallowed */ }
 }
 
 function defaultStorage() {

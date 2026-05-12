@@ -2874,6 +2874,378 @@
     },
   });
 
+  // FMN-169: per-feature info bubbles on hover. Mirror of the content-
+  // surface entries in src/lib/info-bubble-registry.js (the ES module
+  // version popup.js consumes). Augment.js cannot `import` because it
+  // is a classic IIFE content script; inlining keeps both surfaces in
+  // sync without a build pipeline. Order/featureIds MUST match the
+  // module's INFO_BUBBLE_REGISTRY for the unit-test cross-check below.
+  const INFO_BUBBLE_FLAG_KEY = 'fm:showInfoBubbles';
+  const INFO_BUBBLE_DISMISS_KEY = 'fm:dismissedInfoBubbles';
+  const INFO_BUBBLE_READY_ATTR = 'data-fmn-info-bubble-ready';
+  const INFO_BUBBLE_ICON_ATTR = 'data-fmn-info-bubble-icon';
+  const INFO_BUBBLE_BUBBLE_ATTR = 'data-fmn-info-bubble';
+  const INFO_BUBBLE_FEATURE_ATTR = 'data-fmn-info-bubble-feature';
+  const INFO_BUBBLE_STYLE_ID = 'fmn-info-bubble-styles';
+  const INFO_BUBBLE_HOVER_DELAY_MS = 500;
+  const INFO_BUBBLE_LEARN_MORE_BASE = 'https://github.com/gjenkins20/unofficial-fortimonitor-browser-plugin/blob/main/docs/planning/';
+
+  const INFO_BUBBLE_REGISTRY_CONTENT = [
+    {
+      featureId: 'omni-search',
+      anchorSelector: '#fmn-omni-search-container .fmn-omni-chip',
+      anchorMode: 'icon',
+      mountTarget: 'after',
+      title: 'FM TK Search',
+      body: 'Searches every server field at once: name, FQDN, IP addresses, description, tags, attributes (Operating System, Model, custom), device type, agent version, server group, and applied template. Replaces FortiMonitor\'s narrow Search Instances input.',
+      learnMoreUrl: INFO_BUBBLE_LEARN_MORE_BASE + 'omni-search.md',
+    },
+    {
+      featureId: 'search-by-id',
+      anchorSelector: '#fmn-omni-search-container .fmn-omni-id-hint',
+      anchorMode: 'self',
+      title: 'Search by Server ID',
+      body: 'Paste a numeric server id (e.g. 42024060) or the s-<id> token from FortiMonitor URLs into the search box to jump straight to that instance. No need to remember the name.',
+      learnMoreUrl: INFO_BUBBLE_LEARN_MORE_BASE + 'search-by-id.md',
+    },
+    {
+      featureId: 'ip-dns-columns',
+      anchorSelector: 'th.fmn-instance-merged [data-fmn-col="ip"], th.fmn-instance-merged [data-fmn-col="dns"]',
+      anchorMode: 'self',
+      title: 'IP / DNS Columns',
+      body: 'Adds IP Address and DNS Name sub-columns to the Instances list. Values come from each server\'s primary fqdn(s); names like server.example.com and bare hostnames are classified locally rather than trusting FortiMonitor\'s ipTypes hint.',
+      learnMoreUrl: INFO_BUBBLE_LEARN_MORE_BASE + 'ip-dns-columns.md',
+    },
+    {
+      featureId: 'native-column-reorder',
+      anchorSelector: '#fmn-columns-button',
+      anchorMode: 'icon',
+      mountTarget: 'after',
+      title: 'Columns Menu',
+      body: 'Reorders and hides FortiMonitor\'s native columns (Parent Group, Alert Timeline, Tags, Agent Version, Device Heartbeat) without losing pagination or sort. Drag sub-headers directly or use the popover.',
+      learnMoreUrl: INFO_BUBBLE_LEARN_MORE_BASE + 'native-column-reorder.md',
+    },
+    {
+      // FMN-86 ribbon is pointer-events:none; anchor on the card's
+      // h3 title and insert an icon there instead.
+      featureId: 'snapshot-diff-card',
+      anchorSelector: '[data-fmn-entry="fmn-snapshot-diff-card"] h3',
+      anchorMode: 'icon',
+      mountTarget: 'append',
+      title: 'Snapshot & Diff',
+      body: 'Takes a point-in-time snapshot of your deployment (servers, users, templates, server groups) and compares any two snapshots to show what changed. Snapshots live only on this Chrome profile; nothing is uploaded.',
+      learnMoreUrl: INFO_BUBBLE_LEARN_MORE_BASE + 'snapshot-diff-card.md',
+    },
+  ];
+
+  // Live state for the bubble subsystem. The flag default is true so a
+  // fresh install shows bubbles immediately on first paint - matches the
+  // ticket's "default ON for fresh installs" requirement. The dismissal
+  // Set is empty until storage is read.
+  let infoBubblesEnabled = true;
+  let infoBubblesDismissed = new Set();
+  let infoBubblesLoaded = false;
+  const infoBubbleState = {
+    openBubble: null,
+    openAnchor: null,
+    hoverTimer: null,
+  };
+
+  async function loadInfoBubbleFlags() {
+    try {
+      const data = await chrome.storage.local.get([INFO_BUBBLE_FLAG_KEY, INFO_BUBBLE_DISMISS_KEY]);
+      const flag = data && data[INFO_BUBBLE_FLAG_KEY];
+      infoBubblesEnabled = flag === undefined ? true : Boolean(flag);
+      const dismissed = data && data[INFO_BUBBLE_DISMISS_KEY];
+      infoBubblesDismissed = new Set(Array.isArray(dismissed) ? dismissed : []);
+    } catch {
+      infoBubblesEnabled = true;
+      infoBubblesDismissed = new Set();
+    }
+    infoBubblesLoaded = true;
+  }
+
+  function subscribeInfoBubbleFlags() {
+    if (!chrome.storage || !chrome.storage.onChanged) return;
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName && areaName !== 'local') return;
+      const flagChange = changes && changes[INFO_BUBBLE_FLAG_KEY];
+      if (flagChange) {
+        const next = flagChange.newValue;
+        infoBubblesEnabled = next === undefined ? true : Boolean(next);
+        if (!infoBubblesEnabled) hideInfoBubble();
+      }
+      const dismissChange = changes && changes[INFO_BUBBLE_DISMISS_KEY];
+      if (dismissChange) {
+        const next = dismissChange.newValue;
+        infoBubblesDismissed = new Set(Array.isArray(next) ? next : []);
+      }
+    });
+  }
+
+  async function persistInfoBubbleDismissal(featureId) {
+    try {
+      const data = await chrome.storage.local.get(INFO_BUBBLE_DISMISS_KEY);
+      const list = Array.isArray(data && data[INFO_BUBBLE_DISMISS_KEY])
+        ? data[INFO_BUBBLE_DISMISS_KEY]
+        : [];
+      if (list.includes(featureId)) return;
+      list.push(featureId);
+      await chrome.storage.local.set({ [INFO_BUBBLE_DISMISS_KEY]: list });
+    } catch { /* swallow - best-effort */ }
+  }
+
+  function ensureInfoBubbleStyles() {
+    if (document.getElementById(INFO_BUBBLE_STYLE_ID)) return;
+    const style = document.createElement('style');
+    style.id = INFO_BUBBLE_STYLE_ID;
+    style.textContent = `
+      .fmn-info-bubble-icon {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 14px; height: 14px; border-radius: 50%;
+        background: #1f6feb; color: #fff;
+        font: 600 9px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        cursor: help; margin: 0 4px; vertical-align: middle; user-select: none;
+        flex: 0 0 auto;
+      }
+      .fmn-info-bubble-icon::before { content: "i"; font-style: italic; }
+      .fmn-info-bubble-icon:hover { background: #1858c4; }
+      .fmn-info-bubble {
+        position: fixed; z-index: 2147483647;
+        max-width: 320px; min-width: 200px;
+        padding: 10px 12px;
+        background: #fffef5; color: #2a3142;
+        border: 1px solid #e0d9b8; border-radius: 6px;
+        box-shadow: 0 6px 22px rgba(16, 22, 26, 0.18);
+        font: 12px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        pointer-events: auto;
+      }
+      .fmn-info-bubble[hidden] { display: none !important; }
+      .fmn-info-bubble-title {
+        font-size: 12px; font-weight: 600; margin: 0 0 4px; color: #1f2535;
+      }
+      .fmn-info-bubble-body {
+        font-size: 11.5px; line-height: 1.45; margin: 0 0 8px;
+        color: #4a5160; word-wrap: break-word;
+      }
+      .fmn-info-bubble-footer {
+        display: flex; gap: 10px; justify-content: space-between;
+        align-items: center; font-size: 11px;
+      }
+      .fmn-info-bubble-learn {
+        color: #1f6feb; text-decoration: none; font-weight: 500;
+      }
+      .fmn-info-bubble-learn:hover { text-decoration: underline; }
+      .fmn-info-bubble-dismiss {
+        background: none; border: none; padding: 0;
+        color: #8b8678; font: inherit; cursor: pointer; text-decoration: underline;
+      }
+      .fmn-info-bubble-dismiss:hover { color: #2a3142; }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function hideInfoBubble() {
+    if (infoBubbleState.hoverTimer) {
+      clearTimeout(infoBubbleState.hoverTimer);
+      infoBubbleState.hoverTimer = null;
+    }
+    if (infoBubbleState.openBubble) {
+      if (infoBubbleState.openBubble.parentNode) {
+        infoBubbleState.openBubble.parentNode.removeChild(infoBubbleState.openBubble);
+      }
+      infoBubbleState.openBubble = null;
+      infoBubbleState.openAnchor = null;
+    }
+  }
+
+  function positionInfoBubble(triggerEl, bubble) {
+    const rect = triggerEl.getBoundingClientRect();
+    const vw = window.innerWidth || document.documentElement.clientWidth;
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    const margin = 8;
+    bubble.style.left = '0px';
+    bubble.style.top = '0px';
+    const bw = bubble.offsetWidth || 280;
+    const bh = bubble.offsetHeight || 100;
+    let top = rect.bottom + margin;
+    if (top + bh > vh - 4 && rect.top - margin - bh > 4) {
+      top = rect.top - margin - bh;
+    }
+    let left = rect.left;
+    if (left + bw > vw - 4) left = Math.max(4, vw - bw - 4);
+    bubble.style.top = Math.max(4, top) + 'px';
+    bubble.style.left = Math.max(4, left) + 'px';
+  }
+
+  function showInfoBubble(entry, triggerEl) {
+    if (!infoBubblesEnabled) return;
+    if (infoBubblesDismissed.has(entry.featureId)) return;
+    hideInfoBubble();
+    ensureInfoBubbleStyles();
+
+    const bubble = document.createElement('div');
+    bubble.className = 'fmn-info-bubble';
+    bubble.setAttribute(INFO_BUBBLE_BUBBLE_ATTR, '1');
+    bubble.setAttribute(INFO_BUBBLE_FEATURE_ATTR, entry.featureId);
+    bubble.setAttribute('role', 'tooltip');
+
+    const title = document.createElement('div');
+    title.className = 'fmn-info-bubble-title';
+    title.textContent = entry.title;
+    bubble.appendChild(title);
+
+    const body = document.createElement('p');
+    body.className = 'fmn-info-bubble-body';
+    body.textContent = entry.body;
+    bubble.appendChild(body);
+
+    const footer = document.createElement('div');
+    footer.className = 'fmn-info-bubble-footer';
+
+    const learn = document.createElement('a');
+    learn.className = 'fmn-info-bubble-learn';
+    learn.href = entry.learnMoreUrl;
+    learn.target = '_blank';
+    learn.rel = 'noopener noreferrer';
+    learn.textContent = 'Learn more →';
+    footer.appendChild(learn);
+
+    const dismiss = document.createElement('button');
+    dismiss.type = 'button';
+    dismiss.className = 'fmn-info-bubble-dismiss';
+    dismiss.textContent = "× don't show me this again";
+    dismiss.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      infoBubblesDismissed.add(entry.featureId);
+      hideInfoBubble();
+      await persistInfoBubbleDismissal(entry.featureId);
+    });
+    footer.appendChild(dismiss);
+
+    bubble.appendChild(footer);
+    document.body.appendChild(bubble);
+
+    infoBubbleState.openBubble = bubble;
+    infoBubbleState.openAnchor = triggerEl;
+    positionInfoBubble(triggerEl, bubble);
+  }
+
+  function buildInfoBubbleIcon(featureId) {
+    const span = document.createElement('span');
+    span.className = 'fmn-info-bubble-icon';
+    span.setAttribute(INFO_BUBBLE_ICON_ATTR, '1');
+    span.setAttribute(INFO_BUBBLE_FEATURE_ATTR, featureId);
+    span.setAttribute('role', 'button');
+    span.setAttribute('tabindex', '0');
+    span.setAttribute('aria-label', 'About this toolkit feature');
+    return span;
+  }
+
+  function placeInfoBubbleIcon(anchorEl, iconEl, mountTarget) {
+    switch (mountTarget) {
+      case 'before':
+        if (anchorEl.parentNode) anchorEl.parentNode.insertBefore(iconEl, anchorEl);
+        break;
+      case 'after':
+        if (anchorEl.parentNode) anchorEl.parentNode.insertBefore(iconEl, anchorEl.nextSibling);
+        break;
+      case 'prepend':
+        anchorEl.insertBefore(iconEl, anchorEl.firstChild);
+        break;
+      case 'append':
+      default:
+        anchorEl.appendChild(iconEl);
+        break;
+    }
+  }
+
+  function attachInfoBubbleHandlers(entry, triggerEl) {
+    if (triggerEl.hasAttribute(INFO_BUBBLE_READY_ATTR)) return;
+    triggerEl.setAttribute(INFO_BUBBLE_READY_ATTR, '1');
+    triggerEl.addEventListener('mouseenter', () => {
+      if (infoBubbleState.hoverTimer) clearTimeout(infoBubbleState.hoverTimer);
+      infoBubbleState.hoverTimer = setTimeout(() => {
+        showInfoBubble(entry, triggerEl);
+      }, INFO_BUBBLE_HOVER_DELAY_MS);
+    });
+    triggerEl.addEventListener('mouseleave', (e) => {
+      if (infoBubbleState.hoverTimer) {
+        clearTimeout(infoBubbleState.hoverTimer);
+        infoBubbleState.hoverTimer = null;
+      }
+      const next = e.relatedTarget;
+      if (next && infoBubbleState.openBubble &&
+        (next === infoBubbleState.openBubble || infoBubbleState.openBubble.contains(next))) {
+        return;
+      }
+      setTimeout(() => {
+        if (!infoBubbleState.openBubble) return;
+        const hovered = infoBubbleState.openBubble.matches(':hover');
+        const onAnchor = triggerEl.matches && triggerEl.matches(':hover');
+        if (!hovered && !onAnchor) hideInfoBubble();
+      }, 80);
+    });
+    triggerEl.addEventListener('click', (e) => {
+      if (infoBubbleState.openBubble && infoBubbleState.openAnchor === triggerEl) {
+        hideInfoBubble();
+      } else {
+        showInfoBubble(entry, triggerEl);
+      }
+      e.stopPropagation();
+    });
+  }
+
+  let infoBubbleGlobalsInstalled = false;
+  function installInfoBubbleGlobals() {
+    if (infoBubbleGlobalsInstalled) return;
+    document.addEventListener('click', (e) => {
+      if (!infoBubbleState.openBubble) return;
+      const target = e.target;
+      if (infoBubbleState.openBubble.contains(target)) return;
+      if (infoBubbleState.openAnchor && infoBubbleState.openAnchor.contains
+          && infoBubbleState.openAnchor.contains(target)) return;
+      hideInfoBubble();
+    }, true);
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && infoBubbleState.openBubble) hideInfoBubble();
+    });
+    infoBubbleGlobalsInstalled = true;
+  }
+
+  // The mount loop is idempotent via the READY_ATTR marker on each
+  // anchor (or icon, for icon-mode entries). Subsequent calls cost
+  // a single attribute read per matched element. No new DOM is
+  // appended on a no-op pass, so the MutationObserver feedback loop
+  // FMN-72 shipped once cannot fire here.
+  register({
+    id: 'info-bubbles',
+    mount() {
+      if (!infoBubblesLoaded) return;
+      ensureInfoBubbleStyles();
+      installInfoBubbleGlobals();
+      for (const entry of INFO_BUBBLE_REGISTRY_CONTENT) {
+        let matches;
+        try {
+          matches = document.querySelectorAll(entry.anchorSelector);
+        } catch { continue; }
+        for (const el of matches) {
+          if (el.hasAttribute(INFO_BUBBLE_READY_ATTR)) continue;
+          if (entry.anchorMode === 'self') {
+            attachInfoBubbleHandlers(entry, el);
+          } else {
+            el.setAttribute(INFO_BUBBLE_READY_ATTR, '1');
+            const mountTarget = entry.mountTarget || 'append';
+            const icon = buildInfoBubbleIcon(entry.featureId);
+            placeInfoBubbleIcon(el, icon, mountTarget);
+            attachInfoBubbleHandlers(entry, icon);
+          }
+        }
+      }
+    },
+  });
+
   function start() {
     // Attach storage listeners synchronously, before awaiting initial
     // loads. Otherwise a storage change that fires between content-script
@@ -2886,6 +3258,7 @@
     subscribeSidebarLauncherFlag();
     subscribeOmniSearchFlag();
     subscribeSnapshotDiffFlag();
+    subscribeInfoBubbleFlags();
 
     // Load persisted column order and the sidebar-launcher flag before the
     // first ensureAll() so the initial mount paints in the operator's
@@ -2899,6 +3272,7 @@
       loadShowFeatureBadgesFlag(),
       loadOmniSearchFlag(),
       loadSnapshotDiffFlag(),
+      loadInfoBubbleFlags(),
     ]).finally(() => {
       ensureAll();
       const observer = new MutationObserver(() => ensureAll());
