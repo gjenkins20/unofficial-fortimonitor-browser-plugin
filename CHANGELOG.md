@@ -18,15 +18,22 @@ place.
 
 ## Unreleased
 
-- FMN-154 (phase 1): Deployment Snapshot &amp; Diff. New toolkit card on
-  FortiMonitor's Canned Reports page (`/report/ListReports`), styled to
-  match native `.pa-card` tiles and tagged with the FMN-86 attribution
-  ribbon. "Take Snapshot Now" runs a BPA scan and persists a condensed
-  result to `chrome.storage.local` (two-slot model: current + previous).
-  "Open Snapshot &amp; Diff" launches a viewer that shows added / removed
-  / modified servers between the two snapshots with field-level prev →
-  next changes. Phase 2 (separate ticket) will add N-rotation, multi-tab
-  diffs, and export.
+- FMN-154 (phase 1, behind flag): Deployment Snapshot &amp; Diff. New
+  toolkit card on FortiMonitor's Canned Reports page
+  (`/report/ListReports`), styled to match native `.pa-card` tiles and
+  tagged with the FMN-86 attribution ribbon. "Take Snapshot" runs a BPA
+  scan and persists a condensed result to `chrome.storage.local`
+  (two-slot model: current + previous). "Open diff" launches a viewer
+  that shows added / removed / modified servers between the two
+  snapshots with field-level prev → next changes. The card includes a
+  pre-click ETA (last run's duration as a gauge, or a 30s default for
+  the first scan), a real progress bar driven by the BPA fetcher's
+  endpoint-done events during the run, and an inline "safe to leave the
+  page" reassurance. **Off by default** behind the new
+  `fm:snapshotDiffEnabled` flag (FMN-129 per-tool gating pattern);
+  toggle it on under popup &rarr; Settings &rarr; "Deployment Snapshot
+  &amp; Diff (Beta)". Phase 2 (separate ticket) will add N-rotation,
+  multi-tab diffs, and export.
 
 ## v1.2.0 - 2026-05-11
 

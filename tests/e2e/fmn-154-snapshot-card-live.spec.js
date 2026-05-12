@@ -29,10 +29,21 @@ const test = base.extend({
       );
     }
     const ctx = browser.contexts()[0];
+    // Enable the snapshot-diff flag via the SW so the content script
+    // mounts the card. The flag is off by default (FMN-154 phase 1
+    // ships hidden until operator validates the diff output).
+    let sw = ctx.serviceWorkers().find((s) => s.url().includes('service-worker.js'));
+    if (!sw) sw = await ctx.waitForEvent('serviceworker', { timeout: 8_000 }).catch(() => null);
+    if (sw) await sw.evaluate(() => chrome.storage.local.set({ 'fm:snapshotDiffEnabled': true }));
+
     let page = ctx.pages().find((p) => p.url().startsWith(FM));
     if (!page) page = await ctx.newPage();
     if (!page.url().includes('/report/ListReports')) {
       await page.goto(REPORTS_URL, { waitUntil: 'domcontentloaded' });
+    } else {
+      // Flag was off when the existing tab loaded; reload so augment.js
+      // sees the new flag value on mount.
+      await page.reload({ waitUntil: 'domcontentloaded' });
     }
     if (await page.locator('input[type="password"]').count()) {
       throw new Error('FortiMonitor is at a login screen. Sign in in the launcher window and re-run.');
@@ -140,6 +151,27 @@ test.describe('FMN-154 phase 1: Snapshot & Diff card on Canned Reports', () => {
     expect(keys).toContain('bpa-snapshots:status');
     expect(keys).toContain('bpa-snapshots:take');
     expect(keys).toContain('bpa-snapshots:diff');
+  });
+
+  test('card disappears when the snapshot-diff flag is toggled off via storage', async ({ livePage }) => {
+    const page = livePage;
+    const ctx = page.context();
+    let sw = ctx.serviceWorkers().find((s) => s.url().includes('service-worker.js'));
+    if (!sw) sw = await ctx.waitForEvent('serviceworker', { timeout: 8_000 }).catch(() => null);
+
+    // Card is present (fixture turned the flag on). Now turn it off and
+    // confirm augment.js's storage.onChanged listener removes it.
+    await sw.evaluate(() => chrome.storage.local.set({ 'fm:snapshotDiffEnabled': false }));
+    await page.waitForFunction(
+      () => !document.querySelector('[data-fmn-entry="fmn-snapshot-diff-card"]'),
+      { timeout: 10_000 }
+    );
+    const present = await page.locator('[data-fmn-entry="fmn-snapshot-diff-card"]').count();
+    expect(present).toBe(0);
+
+    // Flip back on; card mounts again on the next ensureAll tick.
+    await sw.evaluate(() => chrome.storage.local.set({ 'fm:snapshotDiffEnabled': true }));
+    await page.waitForSelector('[data-fmn-entry="fmn-snapshot-diff-card"]', { timeout: 10_000 });
   });
 
   test('bpa-diff tool page opens and renders the empty state when no snapshot exists', async ({ livePage }) => {

@@ -28,7 +28,9 @@ import {
   isShowFeatureBadgesEnabled,
   setShowFeatureBadgesEnabled,
   isOmniSearchEnabled,
-  setOmniSearchEnabled
+  setOmniSearchEnabled,
+  isSnapshotDiffEnabled,
+  setSnapshotDiffEnabled
 } from '../lib/settings.js';
 import {
   listAugmentations,
@@ -313,6 +315,12 @@ async function loadOmniSearchIntoToggle() {
   const toggle = document.getElementById('omni-search-toggle');
   if (!toggle) return;
   toggle.checked = await isOmniSearchEnabled();
+}
+
+async function loadSnapshotDiffIntoToggle() {
+  const toggle = document.getElementById('snapshot-diff-toggle');
+  if (!toggle) return;
+  toggle.checked = await isSnapshotDiffEnabled();
 }
 
 async function applyExperimentalVisibility() {
@@ -885,6 +893,7 @@ function init() {
     await loadSidebarLauncherIntoToggle();
     await loadShowFeatureBadgesIntoToggle();
     await loadOmniSearchIntoToggle();
+    await loadSnapshotDiffIntoToggle();
     await loadWebguiColumnsIntoSettings();
     await applyExperimentalVisibility();
     showSettings();
@@ -907,6 +916,10 @@ function init() {
 
   document.getElementById('omni-search-toggle').addEventListener('change', async (e) => {
     await setOmniSearchEnabled(e.target.checked);
+  });
+
+  document.getElementById('snapshot-diff-toggle').addEventListener('change', async (e) => {
+    await setSnapshotDiffEnabled(e.target.checked);
   });
 
   document.getElementById('feature-badges-toggle').addEventListener('change', async (e) => {

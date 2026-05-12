@@ -27,6 +27,10 @@ export const SSO_CONFIG_ENABLED_KEY = 'fm:ssoConfigEnabled';
 // tags, attributes, model, OS, agent version, group, template). Off by
 // default; operator opts in via popup Settings.
 export const OMNI_SEARCH_ENABLED_KEY = 'fm:omniSearchEnabled';
+// FMN-154: per-tool flag for the Deployment Snapshot & Diff card injected
+// on FortiMonitor's Canned Reports page. Off by default until the
+// operator has compared a few reports and validated the diff output.
+export const SNAPSHOT_DIFF_ENABLED_KEY = 'fm:snapshotDiffEnabled';
 
 export const ASK_CLAUDE_TOOL_TIERS = ['readonly', 'readwrite', 'all'];
 export const DEFAULT_ASK_CLAUDE_TOOL_TIER = 'readonly';
@@ -321,6 +325,32 @@ export async function isOmniSearchEnabled(storage = defaultStorage()) {
  */
 export async function setOmniSearchEnabled(enabled, storage = defaultStorage()) {
   await storage.set({ [OMNI_SEARCH_ENABLED_KEY]: Boolean(enabled) });
+}
+
+/**
+ * Read the FMN-154 snapshot-diff-enabled flag. Off by default so the
+ * Deployment Snapshot & Diff card stays out of FortiMonitor's Canned
+ * Reports page until the operator opts in via Settings.
+ *
+ * @param {{ get: (key: string) => Promise<Record<string, any>> }} [storage]
+ */
+export async function isSnapshotDiffEnabled(storage = defaultStorage()) {
+  try {
+    const data = await storage.get(SNAPSHOT_DIFF_ENABLED_KEY);
+    return Boolean(data?.[SNAPSHOT_DIFF_ENABLED_KEY]);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Persist the FMN-154 snapshot-diff-enabled flag.
+ *
+ * @param {boolean} enabled
+ * @param {{ set: (obj: Record<string, any>) => Promise<void> }} [storage]
+ */
+export async function setSnapshotDiffEnabled(enabled, storage = defaultStorage()) {
+  await storage.set({ [SNAPSHOT_DIFF_ENABLED_KEY]: Boolean(enabled) });
 }
 
 /**

@@ -2429,6 +2429,37 @@
   const SNAPSHOT_CARD_ID = 'fmn-snapshot-diff-card';
   const SNAPSHOT_CARD_STYLE_ID = 'fmn-snapshot-card-styles';
   const SNAPSHOT_TOOL_URL = chrome.runtime.getURL('src/ui/bpa-diff/app.html');
+  // FMN-154 per-tool visibility flag. Card stays out of the Canned
+  // Reports page until the operator opts in via popup Settings.
+  const SNAPSHOT_DIFF_KEY = 'fm:snapshotDiffEnabled';
+  let snapshotDiffFlagLoaded = false;
+  let snapshotDiffEnabled = false;
+
+  async function loadSnapshotDiffFlag() {
+    try {
+      const data = await chrome.storage.local.get(SNAPSHOT_DIFF_KEY);
+      snapshotDiffEnabled = Boolean(data && data[SNAPSHOT_DIFF_KEY]);
+    } catch { snapshotDiffEnabled = false; }
+    snapshotDiffFlagLoaded = true;
+  }
+
+  function subscribeSnapshotDiffFlag() {
+    if (!chrome.storage || !chrome.storage.onChanged) return;
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName && areaName !== 'local') return;
+      const change = changes && changes[SNAPSHOT_DIFF_KEY];
+      if (!change) return;
+      const next = Boolean(change.newValue);
+      if (next === snapshotDiffEnabled) return;
+      snapshotDiffEnabled = next;
+      if (!next) {
+        const existing = document.querySelector(`[${ENTRY_ATTR}="${SNAPSHOT_CARD_ID}"]`);
+        if (existing) existing.remove();
+      } else {
+        ensureAll();
+      }
+    });
+  }
 
   function ensureSnapshotCardStyles() {
     if (document.getElementById(SNAPSHOT_CARD_STYLE_ID)) return;
@@ -2784,6 +2815,13 @@
     id: SNAPSHOT_CARD_ID,
     mount() {
       if (location.pathname !== REPORTS_PATH) return;
+      // Flag must be loaded AND on. Without the flag-loaded check, the
+      // mount could race the initial load and flicker on then off.
+      if (!snapshotDiffFlagLoaded || !snapshotDiffEnabled) {
+        const existing = document.querySelector(`[${ENTRY_ATTR}="${SNAPSHOT_CARD_ID}"]`);
+        if (existing) existing.remove();
+        return;
+      }
       const existing = document.querySelector(`[${ENTRY_ATTR}="${SNAPSHOT_CARD_ID}"]`);
       if (existing && document.body.contains(existing)) return;
       const host = document.querySelector('.pa-hList');
@@ -2806,6 +2844,7 @@
     subscribeNativeColumnOrder();
     subscribeSidebarLauncherFlag();
     subscribeOmniSearchFlag();
+    subscribeSnapshotDiffFlag();
 
     // Load persisted column order and the sidebar-launcher flag before the
     // first ensureAll() so the initial mount paints in the operator's
@@ -2818,6 +2857,7 @@
       loadSidebarLauncherFlag(),
       loadShowFeatureBadgesFlag(),
       loadOmniSearchFlag(),
+      loadSnapshotDiffFlag(),
     ]).finally(() => {
       ensureAll();
       const observer = new MutationObserver(() => ensureAll());

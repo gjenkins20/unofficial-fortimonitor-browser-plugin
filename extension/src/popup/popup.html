@@ -490,6 +490,17 @@
     </div>
 
     <div class="settings-section">
+      <label class="settings-label" for="snapshot-diff-toggle">Deployment Snapshot &amp; Diff (Beta)</label>
+      <p class="settings-help">
+        Off by default. When on, the toolkit adds a <strong>Snapshot &amp; Diff</strong> tile to FortiMonitor's <em>Canned Reports</em> page. The tile lets you take a point-in-time snapshot of your deployment (servers, users, templates, server groups) and compare any two snapshots to see what changed. Snapshots are stored only on this Chrome profile - they are <strong>not</strong> synced to other devices or to FortiMonitor's servers. Requires a configured RW API key to scan the v2 API; the scan continues in the background if you leave the page.
+      </p>
+      <label class="toggle-row">
+        <input id="snapshot-diff-toggle" type="checkbox">
+        <span>Show Snapshot &amp; Diff tile on Canned Reports</span>
+      </label>
+    </div>
+
+    <div class="settings-section">
       <label class="settings-label" for="feature-badges-toggle">"FM Toolkit" attribution badges</label>
       <p class="settings-help">
         On by default. When on, each visible UI feature this extension adds to FortiMonitor pages carries a small diagonal <strong>FM Toolkit</strong> ribbon in its top-right corner, so you can tell at a glance which controls come from this extension vs. native FortiMonitor. The ribbons are click-through and persist for the page lifetime. Toggle off to hide them; the change takes effect on the next page load.
