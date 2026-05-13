@@ -56,6 +56,60 @@ test('list-fabric-system-data tolerates per-id failures (rejected fetches map to
   assert.ok(out.byServerId[3]);
 });
 
+// ---------- bulk-composer:list-tags-batch (FMN-206) ----------
+
+test('list-tags-batch returns tag arrays from PanoptaClient.getServer', async () => {
+  const panopta = {
+    async getServer(id) {
+      if (id === 10) return { id: 10, name: 's10', tags: ['prod', 'edge'] };
+      if (id === 11) return { id: 11, name: 's11', tags: [] };
+      return { id, name: 's' + id, tags: ['other'] };
+    }
+  };
+  const handlers = makeHandlers({ panoptaClient: panopta });
+  const out = await handlers['bulk-composer:list-tags-batch']({ serverIds: [10, 11, 12] });
+  assert.deepEqual(out.byServerId[10], ['prod', 'edge']);
+  assert.deepEqual(out.byServerId[11], []);
+  assert.deepEqual(out.byServerId[12], ['other']);
+});
+
+test('list-tags-batch maps failed GETs to null', async () => {
+  const panopta = {
+    async getServer(id) {
+      if (id === 20) throw new Error('boom');
+      return { id, tags: ['ok'] };
+    }
+  };
+  const handlers = makeHandlers({ panoptaClient: panopta });
+  const out = await handlers['bulk-composer:list-tags-batch']({ serverIds: [19, 20, 21] });
+  assert.deepEqual(out.byServerId[19], ['ok']);
+  assert.equal(out.byServerId[20], null);
+  assert.deepEqual(out.byServerId[21], ['ok']);
+});
+
+test('list-tags-batch returns empty array (not null) when server has no tags field', async () => {
+  const panopta = {
+    async getServer(id) {
+      return { id, name: 's' + id }; // no tags field
+    }
+  };
+  const handlers = makeHandlers({ panoptaClient: panopta });
+  const out = await handlers['bulk-composer:list-tags-batch']({ serverIds: [30] });
+  assert.deepEqual(out.byServerId[30], [], 'absent tags field treated as no tags, not unknown');
+});
+
+test('list-tags-batch returns empty map for empty input', async () => {
+  const handlers = makeHandlers({ panoptaClient: {} });
+  const out = await handlers['bulk-composer:list-tags-batch']({ serverIds: [] });
+  assert.deepEqual(out.byServerId, {});
+});
+
+test('list-tags-batch ignores non-array serverIds', async () => {
+  const handlers = makeHandlers({ panoptaClient: {} });
+  const out = await handlers['bulk-composer:list-tags-batch']({});
+  assert.deepEqual(out.byServerId, {});
+});
+
 // ---------- bulk-composer:list-monitoring-policy-vocab ----------
 
 test('list-monitoring-policy-vocab returns rulesets and nounOptions from the live envelope', async () => {

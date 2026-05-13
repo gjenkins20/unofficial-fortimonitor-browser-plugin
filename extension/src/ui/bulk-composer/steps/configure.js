@@ -65,7 +65,7 @@ export function render({ container, store, navigate, call }) {
   }
 
   if (store.actionId === 'add-tag' || store.actionId === 'remove-tag') {
-    renderTagForm({ body, store, refreshNextDisabled });
+    renderTagForm({ body, store, refreshNextDisabled, call });
   } else if (store.actionId === 'apply-template') {
     renderTemplateForm({ body, store, refreshNextDisabled, call, stateLabel });
   } else if (store.actionId === 'apply-best-practice-fabric') {
@@ -88,74 +88,35 @@ export function render({ container, store, navigate, call }) {
   refreshNextDisabled();
 }
 
-function renderTagForm({ body, store, refreshNextDisabled }) {
+function renderTagForm({ body, store, refreshNextDisabled, call }) {
   body.appendChild(h('h3', { class: 'subhead' }, 'Tag'));
 
-  // FMN-155 QA enhancement: for remove-tag, surface the union of tags
-  // found across the selected instances as clickable chips. Operator
-  // picks from the live list rather than having to remember the exact
-  // string. Custom-text input remains available for tags absent from
-  // the corpus cache (rare).
+  // FMN-155 / FMN-206: for remove-tag, surface the union of tags found
+  // across the selected instances as clickable chips. The chip row is
+  // mounted as a placeholder and filled async after fetching tags - the
+  // pick step only stamps { id, name } onto store.targets, so the tag
+  // list has to be looked up here. Cache-first (omni-search), v2 GET
+  // fallback for IDs the cache doesn't know about. Manual input renders
+  // immediately so the form is usable while the lookup runs.
   const isRemove = store.actionId === 'remove-tag';
-  if (isRemove) {
-    const tagCounts = new Map();
-    for (const t of (store.targets || [])) {
-      if (!Array.isArray(t.tags)) continue;
-      for (const tag of t.tags) {
-        if (!tag) continue;
-        tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
-      }
-    }
-    const sortedTags = Array.from(tagCounts.entries())
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-    if (sortedTags.length === 0) {
-      body.appendChild(h('p', {
-        class: 'muted',
-        style: 'font-size:0.85rem;color:var(--text-muted);margin:0 0 0.5rem;'
-      }, 'No tags found on the selected instances. Enter a tag manually below.'));
-    } else {
-      body.appendChild(h('h4', {
-        style: 'font-size:0.9rem;margin:0.2rem 0 0.5rem;font-weight:600;'
-      }, 'Tags found across selected instances'));
-      const chipRow = h('div', {
-        'data-test': 'configure-existing-tags',
-        style: 'display:flex;flex-wrap:wrap;gap:0.35rem;margin-bottom:0.5rem;'
-      });
-      const chipFor = new Map();
-      for (const [tag, count] of sortedTags) {
-        const chip = h('button', {
-          type: 'button',
-          class: 'chip-pickable',
-          'data-test': 'existing-tag-chip',
-          'data-tag': tag,
-          style: 'background:#eef2f7;border:1px solid #c4c8cf;border-radius:12px;padding:0.18rem 0.55rem;font-size:0.85rem;cursor:pointer;display:inline-flex;align-items:center;gap:0.3rem;'
-        },
-          h('span', {}, tag),
-          h('span', {
-            style: 'opacity:0.55;font-size:0.75rem;'
-          }, `×${count}`)
-        );
-        chip.addEventListener('click', () => {
-          store.params = { ...store.params, tag };
-          input.value = tag;
-          highlight();
-          refreshNextDisabled();
-        });
-        chipRow.appendChild(chip);
-        chipFor.set(tag, chip);
-      }
-      body.appendChild(chipRow);
 
-      var highlight = () => {
-        const current = (store.params?.tag ?? '').trim();
-        for (const [tag, chip] of chipFor) {
-          const active = tag === current;
-          chip.style.background = active ? '#d0e5ff' : '#eef2f7';
-          chip.style.borderColor = active ? '#1f6feb' : '#c4c8cf';
-          chip.style.fontWeight = active ? '600' : '400';
-        }
-      };
-    }
+  // Highlight gets set when chips actually render; staying null in the
+  // empty / loading paths is fine.
+  let highlight = null;
+
+  // Stable mount point for the chip block (header + row OR empty-state
+  // copy). Rendered before manual input so the visual order is consistent
+  // regardless of lookup outcome.
+  const chipMount = isRemove
+    ? h('div', { 'data-test': 'configure-chip-mount' })
+    : null;
+  if (isRemove) {
+    chipMount.appendChild(h('p', {
+      'data-test': 'configure-tags-loading',
+      class: 'muted',
+      style: 'font-size:0.85rem;color:var(--text-muted);margin:0 0 0.5rem;'
+    }, 'Loading existing tags...'));
+    body.appendChild(chipMount);
     body.appendChild(h('h4', {
       style: 'font-size:0.9rem;margin:0.6rem 0 0.3rem;font-weight:600;'
     }, 'Or enter a tag manually'));
@@ -181,7 +142,137 @@ function renderTagForm({ body, store, refreshNextDisabled }) {
     refreshNextDisabled();
   });
 
-  if (isRemove && typeof highlight === 'function') highlight();
+  if (isRemove) {
+    // Fire the async tag fetch; final chip render replaces the placeholder.
+    void fetchAndRenderTagChips({
+      chipMount,
+      store,
+      input,
+      call,
+      refreshNextDisabled,
+      onHighlightReady: (fn) => { highlight = fn; }
+    });
+  }
+}
+
+// FMN-206: enrich store.targets with tags (cache-first, live fallback)
+// and render the chip row into chipMount. Idempotent if tags are already
+// populated - cache lookup just confirms what's there.
+async function fetchAndRenderTagChips({ chipMount, store, input, call, refreshNextDisabled, onHighlightReady }) {
+  const targets = Array.isArray(store.targets) ? store.targets : [];
+  const ids = targets.map((t) => t?.id).filter((id) => Number.isFinite(id));
+
+  let cacheMap = {};
+  try {
+    const res = await call('omni-search:lookup-by-ids', { serverIds: ids });
+    cacheMap = (res && res.byServerId) || {};
+  } catch {
+    cacheMap = {};
+  }
+
+  // Apply cache hits onto store.targets. Tags are an array on hit (may
+  // be empty); IDs missing from cacheMap are skipped here and resolved
+  // by the live fallback below.
+  for (const t of targets) {
+    if (!t || t.id == null) continue;
+    const hit = cacheMap[t.id];
+    if (hit && Array.isArray(hit.tags)) t.tags = hit.tags.slice();
+    if (hit && hit.name && !t.name) t.name = hit.name;
+  }
+
+  // IDs the cache didn't cover -> live fallback. Keep this scoped so we
+  // never re-fetch IDs the cache already answered for.
+  const missing = targets
+    .filter((t) => t && t.id != null && !Array.isArray(t.tags))
+    .map((t) => t.id);
+
+  if (missing.length > 0) {
+    try {
+      const res = await call('bulk-composer:list-tags-batch', { serverIds: missing });
+      const liveMap = (res && res.byServerId) || {};
+      for (const t of targets) {
+        if (Array.isArray(t.tags)) continue;
+        const tags = liveMap[t.id];
+        if (Array.isArray(tags)) t.tags = tags.slice();
+      }
+    } catch {
+      // Live fallback failed; targets stay without tags and the chip
+      // row falls through to the manual-input-only empty state.
+    }
+  }
+
+  renderTagChipRow({ chipMount, store, input, refreshNextDisabled, onHighlightReady });
+}
+
+// Replaces the loading-placeholder inside chipMount with either the chip
+// row (when at least one tag was found) or the empty-state copy.
+function renderTagChipRow({ chipMount, store, input, refreshNextDisabled, onHighlightReady }) {
+  while (chipMount.firstChild) chipMount.removeChild(chipMount.firstChild);
+
+  const tagCounts = new Map();
+  for (const t of (store.targets || [])) {
+    if (!Array.isArray(t.tags)) continue;
+    for (const tag of t.tags) {
+      if (!tag) continue;
+      tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
+    }
+  }
+  const sortedTags = Array.from(tagCounts.entries())
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+
+  if (sortedTags.length === 0) {
+    chipMount.appendChild(h('p', {
+      class: 'muted',
+      style: 'font-size:0.85rem;color:var(--text-muted);margin:0 0 0.5rem;'
+    }, 'No tags found on the selected instances. Enter a tag manually below.'));
+    return;
+  }
+
+  chipMount.appendChild(h('h4', {
+    style: 'font-size:0.9rem;margin:0.2rem 0 0.5rem;font-weight:600;'
+  }, 'Tags found across selected instances'));
+
+  const chipRow = h('div', {
+    'data-test': 'configure-existing-tags',
+    style: 'display:flex;flex-wrap:wrap;gap:0.35rem;margin-bottom:0.5rem;'
+  });
+  const chipFor = new Map();
+  const highlight = () => {
+    const current = (store.params?.tag ?? '').trim();
+    for (const [tag, chip] of chipFor) {
+      const active = tag === current;
+      chip.style.background = active ? '#d0e5ff' : '#eef2f7';
+      chip.style.borderColor = active ? '#1f6feb' : '#c4c8cf';
+      chip.style.fontWeight = active ? '600' : '400';
+    }
+  };
+
+  for (const [tag, count] of sortedTags) {
+    const chip = h('button', {
+      type: 'button',
+      class: 'chip-pickable',
+      'data-test': 'existing-tag-chip',
+      'data-tag': tag,
+      style: 'background:#eef2f7;border:1px solid #c4c8cf;border-radius:12px;padding:0.18rem 0.55rem;font-size:0.85rem;cursor:pointer;display:inline-flex;align-items:center;gap:0.3rem;'
+    },
+      h('span', {}, tag),
+      h('span', {
+        style: 'opacity:0.55;font-size:0.75rem;'
+      }, `×${count}`)
+    );
+    chip.addEventListener('click', () => {
+      store.params = { ...store.params, tag };
+      input.value = tag;
+      highlight();
+      refreshNextDisabled();
+    });
+    chipRow.appendChild(chip);
+    chipFor.set(tag, chip);
+  }
+  chipMount.appendChild(chipRow);
+
+  if (typeof onHighlightReady === 'function') onHighlightReady(highlight);
+  highlight();
 }
 
 function renderTemplateForm({ body, store, refreshNextDisabled, call, stateLabel }) {

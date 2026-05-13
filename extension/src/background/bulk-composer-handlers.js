@@ -184,6 +184,37 @@ export function createBulkComposerHandlers({ events = {}, getClient, getFortimon
       }
     },
 
+    // ---------------- FMN-206 fetch handlers ----------------
+
+    /**
+     * Batch-fetch the current tag list for a set of server ids by hitting
+     * v2 GET /server/{id}. Returns a map keyed by id; failures map to
+     * null and the caller treats null as "tags unknown" (the Remove Tag
+     * chip UI just omits that server from its aggregation). Used as a
+     * fallback when the omni-search cache doesn't cover all picked IDs.
+     *
+     * Concurrency capped to keep the v2 API happy.
+     */
+    'bulk-composer:list-tags-batch': async (payload = {}) => {
+      const ids = Array.isArray(payload?.serverIds) ? payload.serverIds.slice(0, MAX_TARGETS) : [];
+      if (ids.length === 0) return { byServerId: {} };
+      const client = await factory();
+      const concurrency = Math.max(1, Math.min(10, payload?.concurrency || DEFAULT_CONCURRENCY));
+      const settled = await mapConcurrent(ids, async (id) => {
+        try {
+          const server = await client.getServer(id);
+          return { id, tags: Array.isArray(server?.tags) ? server.tags : [] };
+        } catch {
+          return { id, tags: null };
+        }
+      }, { concurrency });
+      const byServerId = {};
+      for (const r of settled) {
+        if (r.status === 'fulfilled') byServerId[r.value.id] = r.value.tags;
+      }
+      return { byServerId };
+    },
+
     // ---------------- FMN-196 fetch handlers ----------------
 
     /**
