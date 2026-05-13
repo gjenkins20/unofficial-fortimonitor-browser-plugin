@@ -147,28 +147,33 @@ The `/config/createServerTemplate` endpoint matches the `/config/save_port_selec
 
 ---
 
-## Gaps (filed as FMN-205)
+## Companion findings: add-resource path (FMN-203)
 
-The following endpoints were NOT captured in this round and need a second pairing pass:
+The gaps left by this round (add-agent-resource, threshold-set, etc.) are covered by parallel work in **FMN-203**, which captured the metric-add write call. See `docs/api-discovery/template-create-from-device.md` for that contract. Highlights relevant to FMN-200:
 
-1. **Add-agent-resource to template.** The actual "what does this template monitor" payload. The operator did not exercise this; the captured template is an empty shell.
-2. **Set / change threshold.** Probably an `alert_item`-shaped POST.
-3. **Edit / rename template metadata.** Likely a `POST /config/editServerTemplate` or similar.
-4. **Delete template.** Likely a `POST /config/deleteServerTemplate`.
-5. **Duplicate-name error path.** Sending a second `createServerTemplate` with the same `template_name` - does the server respond with `success: false`, a specific error code, or a 4xx?
+- `POST /config/monitoring/editAgentMetric` (lowercase `e`) is the add-metric write. `Content-Type: application/x-www-form-urlencoded`, `X-Requested-With: XMLHttpRequest`. No `X-XSRF-Token` observed.
+- The metric catalog is at `GET /report/ManageCategoryVue2?server_id={template_id}&category_textkey=fortinet.fortigate`.
+- Verified end-to-end against empty Fabric template 44017104 (3 metrics added successfully).
+- "Create Template from Device" is the same `POST /config/createServerTemplate` with `server_id` set to the source device id. Captured templates: shell at 44017019 (operator's), populated at 44017228 (operator's, FGVM01TM24006844 Template).
 
-For FMN-200 to actually build useful templates (not empty shells), endpoints 1 + 2 are blocking. Endpoints 3 + 4 + 5 are needed for the full idempotence-and-delete story but not strictly blocking for a first MVP that only creates new templates.
+### Things NOT yet captured (small follow-ups)
+
+1. **Threshold / `alert_items` write path** - FMN-203 added metrics without thresholds. Likely the same `editAgentMetric` endpoint with `alert_items[...]` populated; verify with one more HAR.
+2. **Edit / rename template metadata** - probably another `/config/*` endpoint.
+3. **Delete template** - likely `POST /config/deleteServerTemplate`.
+4. **Duplicate-name behavior** - not yet probed.
+
+None block FMN-200's first-ship surface (create + populate + attach via Monitoring Policy).
 
 ---
 
 ## Recommendation for FMN-200 (implementation)
 
-The capture is sufficient to start a `FortimonitorClient.createTemplateShell(...)` SW handler today, but the toolkit can't yet populate it with monitoring resources. Options:
+Combined with FMN-203's findings, the wire shape is complete for the create-and-populate path. FMN-200 can build the full flow:
 
-- (A) Wait on FMN-205 capture before starting FMN-200 in earnest.
-- (B) Start FMN-200's pure-logic layer (clustering, profile-to-template proposal mapping) now since it doesn't depend on the wire shape. Stub the create+populate handler to throw a clear "FMN-205 capture missing" error until the wire is known.
-
-Option B parallelizes well with FMN-205 and is the recommended path.
+1. `POST /config/createServerTemplate` with `template_type: "fabric_template"` and either `server_id: null` (empty shell) or `server_id: {source_device_id}` (clone-from-device).
+2. For each Best-Practice metric: `POST /config/monitoring/editAgentMetric` with `check_method=fabric`, `action=add`, `isTemplate=true`, `template_from_scratch=true`, plus `plugin_textkey` + `resource_textkey` from the catalog.
+3. Idempotence: `GET /report/get_monitoring_config_data?server_id={template_id}` before each metric write; skip if the resource textkey is already present.
 
 ---
 
