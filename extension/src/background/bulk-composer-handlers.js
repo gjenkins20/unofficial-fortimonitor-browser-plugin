@@ -27,6 +27,7 @@ import {
 import { createProductionClient as createProductionFortimonitorClient } from '../lib/fortimonitor-client.js';
 import { mapConcurrent } from '../lib/concurrency.js';
 import { getAction } from '../lib/bulk-actions/index.js';
+import { ensureTemplate } from '../lib/template-ensurer.js';
 
 const DRAFT_STORAGE_KEY = 'fm:bulkDrafts';
 const SELECTION_STORAGE_KEY = 'fm:bulkComposerSelection';
@@ -324,87 +325,9 @@ export function createBulkComposerHandlers({ events = {}, getClient, getFortimon
      *   6. Return template id.
      */
     'bulk-composer:ensure-template': async (payload = {}) => {
-      const {
-        name,
-        templateType,
-        destinationGroup,
-        sourceServerId = null,
-        resources = [],
-        dryRun = false
-      } = payload || {};
-      if (!name || typeof name !== 'string') {
-        throw new Error('ensure-template: name is required');
-      }
-      if (!templateType || typeof templateType !== 'string') {
-        throw new Error('ensure-template: templateType is required');
-      }
-      if (!destinationGroup || typeof destinationGroup !== 'string') {
-        throw new Error('ensure-template: destinationGroup is required');
-      }
       const panopta = await factory();
       const fmClient = await fmFactory();
-
-      const existing = (await panopta.listTemplates()).find((t) => t.name === name);
-      if (existing) {
-        return {
-          templateId: existing.id,
-          name: existing.name,
-          created: false,
-          reused: true,
-          populated_count: 0,
-          dry_run: !!dryRun
-        };
-      }
-      if (dryRun) {
-        return {
-          templateId: null,
-          name,
-          created: false,
-          reused: false,
-          would_create: true,
-          would_populate_count: Array.isArray(resources) ? resources.length : 0,
-          dry_run: true
-        };
-      }
-
-      // Create. The response body is thin; look up the new id via list
-      // after create (one extra GET, but deterministic).
-      await fmClient.createServerTemplate({
-        name,
-        templateType,
-        destinationGroup,
-        sourceServerId
-      });
-      const created = (await panopta.listTemplates()).find((t) => t.name === name);
-      if (!created) {
-        throw new Error('createServerTemplate succeeded but new template not findable by name');
-      }
-
-      // Populate. Skip when clone-from-device (sourceServerId set) was
-      // used; the clone path populates automatically.
-      let populated_count = 0;
-      if (!sourceServerId && Array.isArray(resources) && resources.length > 0) {
-        for (const r of resources) {
-          if (!r || !r.resource_textkey) continue;
-          await fmClient.addTemplateMetric({
-            templateId: created.id,
-            pluginTextkey: r.plugin_textkey || 'fortinet.fortigate',
-            resourceTextkey: r.resource_textkey,
-            pluginName: r.name || r.resource_textkey,
-            resourceName: r.name || r.resource_textkey,
-            units: r.units || ''
-          });
-          populated_count += 1;
-        }
-      }
-      return {
-        templateId: created.id,
-        name: created.name,
-        created: true,
-        reused: false,
-        populated_count,
-        dry_run: false
-      };
+      return ensureTemplate({ panopta, fmClient }, payload || {});
     },
 
     // ---------------- FMN-196 (pre-existing) fetch handlers ----------------
