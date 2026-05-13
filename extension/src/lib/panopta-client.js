@@ -298,6 +298,49 @@ export class PanoptaClient {
     return parseListResponse(body, 'server_group_list', this.baseUrl);
   }
 
+  /**
+   * Create a new server group by name (FMN-200 follow-up). Returns
+   * `{ id, name, resourceUrl }` matching the parseListResponse shape.
+   *
+   * v2 POST /server_group expects `{ name }`. Other fields (parent,
+   * customer, etc.) are accepted optionally; we omit them for the
+   * top-level "FM Toolkit Templates"-style groups the Bulk Composer
+   * creates.
+   *
+   * Frontend session-auth alternative is not yet captured; v2 fallback
+   * per FMN-196 operator decision (frontend-primary, v2-fallback).
+   *
+   * @param {string} name
+   */
+  async createServerGroup(name) {
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      throw new TypeError('createServerGroup: name is required');
+    }
+    const { body, res } = await this._request('POST', `/server_group`, {
+      body: { name: name.trim() }
+    });
+    if (!body || typeof body !== 'object') {
+      throw new PanoptaError('Malformed server_group create response', {
+        phase: 'write',
+        responseBody: body,
+        status: res.status
+      });
+    }
+    // v2 typically returns the created resource directly. Normalize to
+    // the same shape parseListResponse produces.
+    const url = typeof body.url === 'string' ? body.url : null;
+    let id = body.id ?? null;
+    if (id == null && url) {
+      const m = url.match(/\/server_group\/(\d+)\/?$/);
+      if (m) id = Number(m[1]);
+    }
+    return {
+      id,
+      name: body.name ?? name.trim(),
+      resourceUrl: url
+    };
+  }
+
   async listOnsightGroups({ limit = 100 } = {}) {
     const { body } = await this._request('GET', `/onsight_group?limit=${limit}`);
     return parseListResponse(body, 'onsight_group_list', this.baseUrl);

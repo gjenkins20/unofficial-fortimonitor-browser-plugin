@@ -42,8 +42,12 @@ export function validate(params = {}) {
     return { ok: false, error: 'No clusters opted in. Check at least one row in the Configure step.' };
   }
   const destGroup = String(params?.destination_group ?? '').trim();
-  if (!destGroup) {
-    return { ok: false, error: 'destination_group is required (e.g. "grp-617598").' };
+  const newGroupName = String(params?.destination_group_create_name ?? '').trim();
+  if (!destGroup && !newGroupName) {
+    return { ok: false, error: 'Destination group is required: pick an existing group or enter a new group name.' };
+  }
+  if (destGroup && newGroupName) {
+    return { ok: false, error: 'Pick either an existing group OR enter a new group name, not both.' };
   }
   for (const c of optedIn) {
     if (!c.key || typeof c.key !== 'string') {
@@ -60,7 +64,8 @@ export function validate(params = {}) {
     ok: true,
     value: {
       dry_run: params?.dry_run === true,
-      destination_group: destGroup,
+      destination_group: destGroup || null,
+      destination_group_create_name: newGroupName || null,
       template_type: typeof params?.template_type === 'string' && params.template_type.trim()
         ? params.template_type.trim()
         : 'fabric_template',
@@ -107,7 +112,7 @@ export function describe(target, params) {
 export async function commit(target, params, ctx = {}) {
   const v = validate(params);
   if (!v.ok) throw new Error(v.error);
-  const { dry_run: dryRun, destination_group, template_type, clusters } = v.value;
+  const { dry_run: dryRun, destination_group, destination_group_create_name, template_type, clusters } = v.value;
   const { client, fortimonitorClient, sharedState } = ctx;
   if (!client) throw new Error('PanoptaClient required for template attach + name lookup.');
   if (!fortimonitorClient) throw new Error('FortimonitorClient required for template create.');
@@ -120,11 +125,22 @@ export async function commit(target, params, ctx = {}) {
     return { status: 200, noop: true, reason: 'no-matching-cluster', dry_run: dryRun };
   }
 
+  // Resolve destination group: pick the prefixed id directly, or ensure
+  // the named group exists (memoized so concurrent commits for the same
+  // run don't race to create the group multiple times).
+  const resolvedDestGroup = await ensureDestinationGroup({
+    destination_group,
+    destination_group_create_name,
+    panopta: client,
+    sharedState,
+    dryRun
+  });
+
   const ensureResult = await ensureForCluster(cluster, {
     panopta: client,
     fmClient: fortimonitorClient,
     sharedState,
-    destination_group,
+    destination_group: resolvedDestGroup,
     template_type,
     dryRun
   });
@@ -204,6 +220,47 @@ function buildTemplateUrlFromId(templateId, client) {
   if (templateId == null) return null;
   const base = (client?.baseUrl || '').replace(/\/$/, '');
   return `${base}/server_template/${encodeURIComponent(templateId)}`;
+}
+
+/**
+ * Resolve the destination server group. Two paths:
+ *
+ *   1. destination_group set (e.g. "grp-617598") - return as-is.
+ *   2. destination_group_create_name set - look up by name; if found,
+ *      return its prefixed id. If not found, create via
+ *      PanoptaClient.createServerGroup, then return.
+ *
+ * Memoized in sharedState by the input key, so concurrent commits for
+ * the same run share one resolution / create operation.
+ *
+ * Dry-run: looks up by name (read); if not found, returns a placeholder
+ * value WITHOUT creating. The placeholder is "(would-create) <name>"
+ * which downstream surfaces in the dry-run row's note.
+ */
+async function ensureDestinationGroup({ destination_group, destination_group_create_name, panopta, sharedState, dryRun }) {
+  if (destination_group) return destination_group;
+  const name = destination_group_create_name;
+  const cacheKey = `server_group:${dryRun ? 'dry:' : ''}${name}`;
+  const cached = sharedState.get(cacheKey);
+  if (cached) return cached;
+  const promise = (async () => {
+    const groups = await panopta.listServerGroups();
+    const existing = groups.find((g) => g && g.name === name);
+    if (existing) return `grp-${existing.id}`;
+    if (dryRun) {
+      // Dry-run: do not create. Return a placeholder string so the
+      // downstream ensureTemplate input validation passes (the value
+      // never reaches the wire in dry-run mode).
+      return `(would-create) ${name}`;
+    }
+    const created = await panopta.createServerGroup(name);
+    if (!created || created.id == null) {
+      throw new Error(`createServerGroup for "${name}" returned no id`);
+    }
+    return `grp-${created.id}`;
+  })();
+  sharedState.set(cacheKey, promise);
+  return promise;
 }
 
 /**

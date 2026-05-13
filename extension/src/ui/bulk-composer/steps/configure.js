@@ -58,7 +58,11 @@ export function render({ container, store, navigate, call }) {
       const clusters = Array.isArray(params.clusters) ? params.clusters : [];
       const optedIn = clusters.filter((c) => c && c.opted_in === true);
       const destGroup = String(params.destination_group ?? '').trim();
-      nextBtn.disabled = optedIn.length === 0 || destGroup === '';
+      const newGroupName = String(params.destination_group_create_name ?? '').trim();
+      // Exactly one must be set (matches action.validate()).
+      const destOk = (destGroup !== '' && newGroupName === '')
+        || (destGroup === '' && newGroupName !== '');
+      nextBtn.disabled = optedIn.length === 0 || !destOk;
     } else {
       nextBtn.disabled = true;
     }
@@ -574,20 +578,41 @@ function statusCell(r) {
 function renderProfileAndCreateTemplatesForm({ body, store, refreshNextDisabled, call, stateLabel }) {
   body.appendChild(h('h3', { class: 'subhead' }, 'Profile + Create Templates'));
 
-  // Destination group + dry-run controls
-  const destGroupInput = h('input', {
-    type: 'text',
+  // Destination group: dropdown of existing groups + "+ Add new group..."
+  // option that reveals a name input.
+  const SENTINEL_NEW = '__new__';
+  const destSelect = h('select', {
     'data-test': 'configure-pact-destination-group',
-    placeholder: 'grp-{id}  (e.g. grp-617598 = INCOMING SERVERS)',
     style: 'width:100%;padding:0.4rem 0.55rem;font-family:inherit;border:1px solid var(--border-strong);border-radius:4px;'
   });
-  destGroupInput.value = store.params?.destination_group ?? '';
+  destSelect.disabled = true;
+  destSelect.appendChild(h('option', { value: '' }, 'Loading server groups...'));
   body.appendChild(h('label', {
     style: 'display:flex;flex-direction:column;gap:0.2rem;margin:0.4rem 0;font-size:0.9rem;'
   },
     h('span', {}, 'Destination server group (where new templates live)'),
-    destGroupInput
+    destSelect
   ));
+
+  // Name input for the "+ Add new group..." path. Hidden until that
+  // option is selected.
+  const newGroupInput = h('input', {
+    type: 'text',
+    'data-test': 'configure-pact-new-group-name',
+    placeholder: 'New group name (e.g. "FM Toolkit Templates")',
+    style: 'width:100%;padding:0.4rem 0.55rem;font-family:inherit;border:1px solid var(--border-strong);border-radius:4px;margin-bottom:0.4rem;'
+  });
+  const newGroupWrapper = h('div', {
+    'data-test': 'configure-pact-new-group-wrapper',
+    style: 'display:none;margin:0.2rem 0 0.4rem;'
+  },
+    h('p', {
+      class: 'muted',
+      style: 'font-size:0.82rem;color:var(--text-muted);margin:0 0 0.25rem;'
+    }, 'A new server group will be created on commit (or referenced if it already exists).'),
+    newGroupInput
+  );
+  body.appendChild(newGroupWrapper);
 
   const dryRunChk = h('input', {
     type: 'checkbox',
@@ -604,7 +629,7 @@ function renderProfileAndCreateTemplatesForm({ body, store, refreshNextDisabled,
   const status = h('p', {
     class: 'muted',
     style: 'font-size:0.85rem;color:var(--text-muted);margin:0.2rem 0 0.8rem;'
-  }, 'Fetching device details, monitoring configs, and port scopes...');
+  }, 'Fetching device details, monitoring configs, port scopes, and server groups...');
   body.appendChild(status);
 
   const tableHost = h('div', { 'data-test': 'configure-pact-table-host', style: 'margin-top:0.5rem;' });
@@ -618,28 +643,35 @@ function renderProfileAndCreateTemplatesForm({ body, store, refreshNextDisabled,
   body.appendChild(unmatchedNote);
 
   function emit() {
+    const isNew = destSelect.value === SENTINEL_NEW;
     store.params = {
       ...(store.params || {}),
       dry_run: dryRunChk.checked,
-      destination_group: destGroupInput.value.trim(),
+      destination_group: isNew ? '' : (destSelect.value || ''),
+      destination_group_create_name: isNew ? newGroupInput.value.trim() : '',
       template_type: 'fabric_template'
     };
     refreshNextDisabled();
   }
 
-  destGroupInput.addEventListener('input', emit);
+  destSelect.addEventListener('change', () => {
+    newGroupWrapper.style.display = destSelect.value === SENTINEL_NEW ? 'block' : 'none';
+    emit();
+  });
+  newGroupInput.addEventListener('input', emit);
   dryRunChk.addEventListener('change', emit);
 
   (async () => {
     const targets = Array.isArray(store.targets) ? store.targets : [];
     const serverIds = targets.map((t) => t.id).filter((id) => id != null);
 
-    let fsd, monitoringConfig, portScope;
+    let fsd, monitoringConfig, portScope, groups;
     try {
-      [fsd, monitoringConfig, portScope] = await Promise.all([
+      [fsd, monitoringConfig, portScope, groups] = await Promise.all([
         call('bulk-composer:list-fabric-system-data', { serverIds }),
         call('bulk-composer:list-monitoring-config-batch', { serverIds }),
-        call('bulk-composer:list-port-scope-batch', { serverIds })
+        call('bulk-composer:list-port-scope-batch', { serverIds }),
+        call('bulk-composer:list-server-groups', {})
       ]);
     } catch (err) {
       status.textContent = `Could not load data: ${err?.message ?? err}`;
@@ -647,6 +679,26 @@ function renderProfileAndCreateTemplatesForm({ body, store, refreshNextDisabled,
       stateLabel.textContent = 'Configure failed - see error above.';
       stateLabel.className = 'execute-state error';
       return;
+    }
+
+    // Populate the server-group dropdown.
+    while (destSelect.firstChild) destSelect.removeChild(destSelect.firstChild);
+    const groupList = Array.isArray(groups?.groups) ? groups.groups : [];
+    destSelect.appendChild(h('option', { value: '' }, `- pick a destination server group (${groupList.length} available) -`));
+    destSelect.appendChild(h('option', { value: SENTINEL_NEW }, '+ Add new group...'));
+    for (const g of groupList) {
+      if (g?.id == null) continue;
+      destSelect.appendChild(h('option', { value: `grp-${g.id}` }, g.name || `(unnamed #${g.id})`));
+    }
+    destSelect.disabled = false;
+    // Restore prior selection if present.
+    const prior = store.params?.destination_group;
+    if (prior && [...destSelect.options].some((o) => o.value === prior)) {
+      destSelect.value = prior;
+    } else if (store.params?.destination_group_create_name) {
+      destSelect.value = SENTINEL_NEW;
+      newGroupWrapper.style.display = 'block';
+      newGroupInput.value = store.params.destination_group_create_name;
     }
 
     // Assemble devices for the clusterer
@@ -669,10 +721,12 @@ function renderProfileAndCreateTemplatesForm({ body, store, refreshNextDisabled,
       clone_from_device: false
     }));
 
+    const isNewSelected = destSelect.value === SENTINEL_NEW;
     store.params = {
       ...(store.params || {}),
       dry_run: dryRunChk.checked,
-      destination_group: destGroupInput.value.trim(),
+      destination_group: isNewSelected ? '' : (destSelect.value || ''),
+      destination_group_create_name: isNewSelected ? newGroupInput.value.trim() : '',
       template_type: 'fabric_template',
       clusters: decorated
     };

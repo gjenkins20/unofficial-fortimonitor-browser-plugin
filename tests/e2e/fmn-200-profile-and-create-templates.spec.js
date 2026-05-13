@@ -38,9 +38,14 @@ const STUB_PORTS = {
   42024063: [0, 1, 2, 3, 4]
 };
 
+const STUB_SERVER_GROUPS = [
+  { id: 617598, name: 'INCOMING SERVERS', resourceUrl: 'https://api2.panopta.com/v2/server_group/617598/' },
+  { id: 985142, name: 'FM Toolkit Templates', resourceUrl: 'https://api2.panopta.com/v2/server_group/985142/' }
+];
+
 async function installSwStub(page, responses = {}) {
   await page.evaluate((args) => {
-    const { responses, fsd, mc, ps } = args;
+    const { responses, fsd, mc, ps, groups } = args;
     const real = chrome.runtime.sendMessage.bind(chrome.runtime);
     chrome.runtime.sendMessage = function patched(msg, cb) {
       const type = msg?.type;
@@ -75,10 +80,13 @@ async function installSwStub(page, responses = {}) {
           respondWith({ byServerId });
           return true;
         }
+        case 'bulk-composer:list-server-groups':
+          respondWith({ groups });
+          return true;
       }
       return real(msg, cb);
     };
-  }, { responses, fsd: STUB_FSD, mc: STUB_MONITORING, ps: STUB_PORTS });
+  }, { responses, fsd: STUB_FSD, mc: STUB_MONITORING, ps: STUB_PORTS, groups: STUB_SERVER_GROUPS });
 }
 
 async function openConfigure(page, extensionId, targets, { stubResponses } = {}) {
@@ -112,22 +120,67 @@ test.describe('FMN-200: Configure step clusters and renders proposals', () => {
     await page.close();
   });
 
-  test('Next button gated on destination_group + at least one opted-in cluster', async ({ extensionContext, extensionId }) => {
+  test('Next button gated on destination-group selection + at least one opted-in cluster', async ({ extensionContext, extensionId }) => {
     const page = await extensionContext.newPage();
     await openConfigure(page, extensionId, [
       { id: 42024061, name: 'FGVM-A', template_names: [] }
     ]);
     await expect(page.locator('[data-test="configure-pact-table"]')).toBeVisible({ timeout: 10000 });
 
-    // No destination group -> disabled despite opted-in row.
+    // No destination group picked -> disabled despite opted-in row.
     await expect(page.locator('[data-test="configure-next"]')).toBeDisabled();
 
-    await page.locator('[data-test="configure-pact-destination-group"]').fill('grp-617598');
+    await page.locator('[data-test="configure-pact-destination-group"]').selectOption('grp-617598');
     await expect(page.locator('[data-test="configure-next"]')).toBeEnabled();
 
     // Uncheck only row -> disabled again.
     await page.locator('[data-test="configure-pact-opt-in"]').first().uncheck();
     await expect(page.locator('[data-test="configure-next"]')).toBeDisabled();
+
+    await page.close();
+  });
+
+  test('Existing groups appear as options in the destination dropdown', async ({ extensionContext, extensionId }) => {
+    const page = await extensionContext.newPage();
+    await openConfigure(page, extensionId, [
+      { id: 42024061, name: 'FGVM-A', template_names: [] }
+    ]);
+    await expect(page.locator('[data-test="configure-pact-table"]')).toBeVisible({ timeout: 10000 });
+    const select = page.locator('[data-test="configure-pact-destination-group"]');
+    // Expect a placeholder, the "+ Add new" option, and two stubbed groups = 4 options.
+    const optionValues = await select.locator('option').evaluateAll((els) => els.map((e) => e.value));
+    expect(optionValues).toContain('grp-617598');
+    expect(optionValues).toContain('grp-985142');
+    expect(optionValues).toContain('__new__');
+    await page.close();
+  });
+
+  test('Picking "+ Add new group..." reveals the new-group name input', async ({ extensionContext, extensionId }) => {
+    const page = await extensionContext.newPage();
+    await openConfigure(page, extensionId, [
+      { id: 42024061, name: 'FGVM-A', template_names: [] }
+    ]);
+    await expect(page.locator('[data-test="configure-pact-table"]')).toBeVisible({ timeout: 10000 });
+
+    const wrapper = page.locator('[data-test="configure-pact-new-group-wrapper"]');
+    await expect(wrapper).toBeHidden();
+
+    await page.locator('[data-test="configure-pact-destination-group"]').selectOption('__new__');
+    await expect(wrapper).toBeVisible();
+
+    // Empty name -> Next stays disabled.
+    await expect(page.locator('[data-test="configure-next"]')).toBeDisabled();
+
+    // Type a name -> Next enables; params has create_name.
+    await page.locator('[data-test="configure-pact-new-group-name"]').fill('FM Toolkit Templates');
+    await expect(page.locator('[data-test="configure-next"]')).toBeEnabled();
+
+    const params = await page.evaluate(async () => {
+      const mod = await import('./app.js');
+      return mod.store.params;
+    });
+    expect(params.destination_group).toBe('');
+    expect(params.destination_group_create_name).toBe('FM Toolkit Templates');
 
     await page.close();
   });

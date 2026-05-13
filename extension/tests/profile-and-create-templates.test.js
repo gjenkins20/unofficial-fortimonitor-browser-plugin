@@ -41,10 +41,30 @@ test('validate accepts well-formed params', () => {
   assert.equal(v.value.dry_run, false);
 });
 
-test('validate rejects when destination_group missing', () => {
+test('validate rejects when neither destination_group nor create_name provided', () => {
   const v = action.validate({ clusters: [CLUSTER] });
   assert.equal(v.ok, false);
-  assert.match(v.error, /destination_group/);
+  assert.match(v.error, /Destination group is required/);
+});
+
+test('validate accepts destination_group_create_name as an alternative to destination_group', () => {
+  const v = action.validate({
+    destination_group_create_name: 'FM Toolkit Templates',
+    clusters: [CLUSTER]
+  });
+  assert.equal(v.ok, true);
+  assert.equal(v.value.destination_group, null);
+  assert.equal(v.value.destination_group_create_name, 'FM Toolkit Templates');
+});
+
+test('validate rejects when both destination_group AND create_name are set', () => {
+  const v = action.validate({
+    destination_group: 'grp-1',
+    destination_group_create_name: 'FM Toolkit Templates',
+    clusters: [CLUSTER]
+  });
+  assert.equal(v.ok, false);
+  assert.match(v.error, /either an existing group OR enter a new group name/);
 });
 
 test('validate rejects when no clusters opted in', () => {
@@ -107,16 +127,22 @@ test('describe skips unmatched targets', () => {
 // commit
 // =====================================================================
 
-function makeClients({ existingTemplates = [], createdTemplate = null, existingMappings = [] } = {}) {
+function makeClients({ existingTemplates = [], createdTemplate = null, existingMappings = [], existingGroups = [], createdGroup = null } = {}) {
   const createCalls = [];
   const metricCalls = [];
   const attachCalls = [];
+  const groupCalls = [];
   const panopta = {
     baseUrl: 'https://api2.panopta.com/v2',
     async listTemplates() {
       return createCalls.length > 0 && createdTemplate
         ? existingTemplates.concat([createdTemplate])
         : existingTemplates;
+    },
+    async listServerGroups() { return existingGroups; },
+    async createServerGroup(name) {
+      groupCalls.push({ name });
+      return createdGroup || { id: 9999, name, resourceUrl: null };
     },
     async listServerTemplateMappings(serverId) {
       return existingMappings.filter((m) => m.serverId === serverId);
@@ -130,7 +156,7 @@ function makeClients({ existingTemplates = [], createdTemplate = null, existingM
     async createServerTemplate(opts) { createCalls.push(opts); return { success: true }; },
     async addTemplateMetric(opts) { metricCalls.push(opts); return { success: true }; }
   };
-  return { panopta, fortimonitor, createCalls, metricCalls, attachCalls };
+  return { panopta, fortimonitor, createCalls, metricCalls, attachCalls, groupCalls };
 }
 
 test('commit creates template + populates + attaches on first target', async () => {
@@ -270,6 +296,71 @@ test('clone-from-device: commit passes sourceServerId + skips per-metric populat
 
 // =====================================================================
 // Ctx validation
+// =====================================================================
+
+// =====================================================================
+// Destination group: create-new path
+// =====================================================================
+
+test('commit with destination_group_create_name looks up existing group by name (no create)', async () => {
+  const { panopta, fortimonitor, createCalls, groupCalls } = makeClients({
+    existingGroups: [{ id: 555, name: 'FM Toolkit Templates' }],
+    createdTemplate: { id: 44017900, name: 'FortiGate FGVMA6 Best Practice' }
+  });
+  const sharedState = new Map();
+  await action.commit(
+    { id: 42024061, template_names: [] },
+    { destination_group_create_name: 'FM Toolkit Templates', clusters: [CLUSTER] },
+    { client: panopta, fortimonitorClient: fortimonitor, sharedState }
+  );
+  // Group existed: no createServerGroup call.
+  assert.equal(groupCalls.length, 0);
+  // Resolved grp-id was passed into createServerTemplate.
+  assert.equal(createCalls[0].destinationGroup, 'grp-555');
+});
+
+test('commit with destination_group_create_name creates the group when missing', async () => {
+  const { panopta, fortimonitor, createCalls, groupCalls } = makeClients({
+    existingGroups: [],
+    createdGroup: { id: 7777, name: 'FM Toolkit Templates' },
+    createdTemplate: { id: 44017900, name: 'FortiGate FGVMA6 Best Practice' }
+  });
+  const sharedState = new Map();
+  await action.commit(
+    { id: 42024061, template_names: [] },
+    { destination_group_create_name: 'FM Toolkit Templates', clusters: [CLUSTER] },
+    { client: panopta, fortimonitorClient: fortimonitor, sharedState }
+  );
+  assert.equal(groupCalls.length, 1);
+  assert.equal(groupCalls[0].name, 'FM Toolkit Templates');
+  assert.equal(createCalls[0].destinationGroup, 'grp-7777');
+});
+
+test('commit memoizes group resolution: two targets share one group lookup/create', async () => {
+  const { panopta, fortimonitor, groupCalls } = makeClients({
+    existingGroups: [],
+    createdGroup: { id: 7777, name: 'FM Toolkit Templates' },
+    createdTemplate: { id: 44017900, name: 'FortiGate FGVMA6 Best Practice' }
+  });
+  const sharedState = new Map();
+  await action.commit({ id: 42024061, template_names: [] }, { destination_group_create_name: 'FM Toolkit Templates', clusters: [CLUSTER] }, { client: panopta, fortimonitorClient: fortimonitor, sharedState });
+  await action.commit({ id: 42024062, template_names: [] }, { destination_group_create_name: 'FM Toolkit Templates', clusters: [CLUSTER] }, { client: panopta, fortimonitorClient: fortimonitor, sharedState });
+  assert.equal(groupCalls.length, 1, 'group created once across both commits');
+});
+
+test('dry-run with destination_group_create_name does not call createServerGroup', async () => {
+  const { panopta, fortimonitor, groupCalls } = makeClients({
+    existingGroups: []
+  });
+  const sharedState = new Map();
+  await action.commit(
+    { id: 42024061, template_names: [] },
+    { dry_run: true, destination_group_create_name: 'FM Toolkit Templates', clusters: [CLUSTER] },
+    { client: panopta, fortimonitorClient: fortimonitor, sharedState }
+  );
+  assert.equal(groupCalls.length, 0);
+});
+
 // =====================================================================
 
 test('commit requires sharedState Map', async () => {

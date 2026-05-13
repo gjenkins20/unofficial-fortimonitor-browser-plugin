@@ -361,6 +361,23 @@ export function createBulkComposerHandlers({ events = {}, getClient, getFortimon
       return ensureTemplate({ panopta, fmClient }, payload || {});
     },
 
+    /**
+     * List the tenant's server groups (for the Configure step's
+     * destination-group picker). Returns the parseListResponse shape
+     * straight from PanoptaClient.listServerGroups.
+     *
+     * Returns: { groups: [{ id, name, resourceUrl }, ...] }
+     */
+    'bulk-composer:list-server-groups': async () => {
+      const client = await factory();
+      try {
+        const groups = await client.listServerGroups();
+        return { groups };
+      } catch {
+        return { groups: [] };
+      }
+    },
+
     // ---------------- FMN-196 (pre-existing) fetch handlers ----------------
 
     /**
