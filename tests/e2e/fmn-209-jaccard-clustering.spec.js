@@ -143,7 +143,7 @@ test.describe('FMN-209: Jaccard clustering controls', () => {
     await page.close();
   });
 
-  test('download report button triggers a JSON download with cluster metadata', async ({ extensionContext, extensionId }) => {
+  test('download report button triggers a CSV download with similarity rationale per device', async ({ extensionContext, extensionId }) => {
     const page = await extensionContext.newPage();
     await openConfigure(page, extensionId);
     // Wait for the button to enable (post initial fetch)
@@ -156,16 +156,18 @@ test.describe('FMN-209: Jaccard clustering controls', () => {
     const chunks = [];
     for await (const c of stream) chunks.push(c);
     const text = Buffer.concat(chunks).toString('utf8');
-    const report = JSON.parse(text);
-    expect(report.schema_version).toBe(1);
-    expect(report.summary.target_count).toBe(3);
-    expect(report.summary.cluster_count).toBeGreaterThanOrEqual(2);
-    expect(report.clusters[0]).toHaveProperty('proposed_template_name');
-    expect(report.clusters[0]).toHaveProperty('resource_union');
-    expect(report.clusters[0]).toHaveProperty('resource_intersection');
-    expect(report.clusters[0]).toHaveProperty('member_devices');
-    expect(Array.isArray(report.clusters[0].member_devices)).toBe(true);
-    expect(download.suggestedFilename()).toMatch(/^template-suggestions-.*\.json$/);
+
+    // Banner contains run summary
+    expect(text).toMatch(/^# Template Suggestions Report/);
+    expect(text).toMatch(/# Similarity threshold: 0\.80/);
+    expect(text).toMatch(/# Devices: 3/);
+    // Header row present after the banner
+    expect(text).toContain('cluster_id,proposed_template,make,model,cluster_size');
+    expect(text).toContain('rationale');
+    // Rationale strings appear for clustered devices
+    expect(text).toMatch(/Seeded cluster|Joined cluster|Identical signature/);
+    // Filename is .csv
+    expect(download.suggestedFilename()).toMatch(/^template-suggestions-.*\.csv$/);
     await page.close();
   });
 

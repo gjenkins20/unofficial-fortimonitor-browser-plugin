@@ -91,10 +91,10 @@ export function describe(target, params) {
   const tName = cluster.proposed_template_name;
   if (templates === null) {
     return {
-      prev: '(templates unknown)',
+      prev: '',
       next: `${dryRun ? '(dry-run) ' : ''}+ ${tName}`,
       willChange: true,
-      note: `${dryRun ? 'Dry-run: no writes will be made. ' : ''}Template list not in cache; commit will pre-flight.`
+      note: `${dryRun ? 'Dry-run: no writes will be made. ' : ''}Will ensure cluster template "${tName}" and attach it to this device (skipped at commit if already attached).`
     };
   }
   const has = templates.includes(tName);

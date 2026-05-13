@@ -257,20 +257,54 @@ function msSinceStart(start, end) {
   try { return Math.round((new Date(end) - new Date(start)) / 1000); } catch { return '?'; }
 }
 
-function buildCsv(result) {
-  const headers = ['id', 'name', 'status', 'noop', 'error', 'errorStatus'];
+export function buildCsv(result) {
+  const headers = ['id', 'name', 'status', 'outcome', 'template', 'noop', 'error', 'errorStatus'];
   const lines = [headers.join(',')];
   for (const r of (result?.rows ?? [])) {
     lines.push([
       csvField(r.id),
       csvField(r.name),
       csvField(r.status),
+      csvField(describeOutcome(r)),
+      csvField(extractTemplate(r)),
       csvField(r.noop ? 'true' : 'false'),
       csvField(r.error ?? ''),
       csvField(r.errorStatus ?? '')
     ].join(','));
   }
   return lines.join('\n');
+}
+
+// Per-action outcome summary for the CSV. Reads detail.reason +
+// detail.template / detail.tag and produces a human-readable string.
+// Returns '' when the action doesn't supply enough info (back-compat
+// with older actions).
+function describeOutcome(row) {
+  const d = row?.detail;
+  if (!d) return '';
+  if (row.status === 'failed') return d.reason || 'failed';
+  if (d.reason === 'dry-run') {
+    if (d.template?.would_create) return `dry-run: would create+attach "${d.template.name}"`;
+    return 'dry-run';
+  }
+  if (d.reason === 'template-already-attached') return 'already-attached';
+  if (d.reason === 'no-matching-cluster') return 'no-matching-cluster';
+  if (d.template) {
+    const t = d.template;
+    if (t.created) return `created+attached (${t.populated_count ?? 0} metric${t.populated_count === 1 ? '' : 's'} populated)`;
+    if (t.reused) return 'reused+attached';
+    return 'attached';
+  }
+  if (typeof d.tag === 'string') return d.added ? `tag added: ${d.tag}` : d.removed ? `tag removed: ${d.tag}` : `tag: ${d.tag}`;
+  if (d.reason) return d.reason;
+  return '';
+}
+
+function extractTemplate(row) {
+  const d = row?.detail;
+  if (!d) return '';
+  if (d.template?.name) return d.template.name;
+  return '';
 }
 function csvField(v) {
   if (v === null || v === undefined) return '';

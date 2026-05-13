@@ -851,7 +851,7 @@ function renderProfileAndCreateTemplatesForm({ body, store, refreshNextDisabled,
   });
 
   downloadBtn.addEventListener('click', () => {
-    const report = buildSuggestionsReport({
+    const csv = buildSuggestionsCsv({
       clusters: store.params?.clusters || [],
       unclassified: lastUnclassified,
       targets: lastTargets,
@@ -859,7 +859,11 @@ function renderProfileAndCreateTemplatesForm({ body, store, refreshNextDisabled,
       destinationGroup: store.params?.destination_group || store.params?.destination_group_create_name || '(unset)',
       dryRun: dryRunChk.checked
     });
-    triggerDownload(`template-suggestions-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`, JSON.stringify(report, null, 2), 'application/json');
+    triggerDownload(
+      `template-suggestions-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.csv`,
+      csv,
+      'text/csv'
+    );
   });
 }
 
@@ -868,57 +872,113 @@ function formatThreshold(t) {
   return t.toFixed(2);
 }
 
-function buildSuggestionsReport({ clusters, unclassified, targets, threshold, destinationGroup, dryRun }) {
-  return {
-    generated_at: new Date().toISOString(),
-    schema_version: 1,
-    config: {
-      similarity_threshold: threshold,
-      destination_group: destinationGroup,
-      dry_run: dryRun
-    },
-    summary: {
-      target_count: targets.length,
-      cluster_count: clusters.length,
-      unclassified_count: unclassified.length,
-      opted_in_count: clusters.filter((c) => c.opted_in === true).length
-    },
-    clusters: clusters.map((c) => ({
-      key: c.key,
-      make: c.make,
-      model: c.model,
-      proposed_template_name: c.proposed_template_name,
-      opted_in: c.opted_in === true,
-      clone_from_device: c.clone_from_device === true,
-      resource_strategy: c.resource_strategy,
-      device_count: c.applies_to_server_ids.length,
-      applies_to_server_ids: c.applies_to_server_ids,
-      member_devices: (c.member_signatures || []).map((ms) => {
-        const target = targets.find((t) => t.id === ms.server_id);
-        return {
-          server_id: ms.server_id,
-          name: target?.name ?? null,
-          resource_count: ms.resource_keys.length,
-          resource_keys: ms.resource_keys,
-          port_keys: ms.port_keys
-        };
-      }),
-      resource_union: c.resource_union || [],
-      resource_intersection: c.resource_intersection || [],
-      proposed_resources: (c.proposed_resources || []).map((r) => ({
-        resource_textkey: r.resource_textkey,
-        plugin_textkey: r.plugin_textkey,
-        name: r.name,
-        alert_items_count: Array.isArray(r.alert_items) ? r.alert_items.length : 0
-      })),
-      port_signature: c.port_signature
-    })),
-    unclassified: unclassified.map((u) => ({
-      reason: u.reason,
-      device_id: u.device?.id ?? null,
-      device_name: u.device?.name ?? null
-    }))
-  };
+// CSV: one row per (cluster, device). Cluster-level metadata duplicates
+// across each member row so the operator can sort/filter in Excel or
+// Numbers and read the rationale per device. Unclassified rows are
+// appended with cluster_id blank.
+function buildSuggestionsCsv({ clusters, unclassified, targets, threshold, destinationGroup, dryRun }) {
+  const targetById = new Map((targets || []).map((t) => [t.id, t]));
+  const headers = [
+    'cluster_id',
+    'proposed_template',
+    'make',
+    'model',
+    'cluster_size',
+    'opted_in',
+    'clone_from_device',
+    'resource_strategy',
+    'similarity_threshold',
+    'device_id',
+    'device_name',
+    'device_resource_count',
+    'cluster_intersection_count',
+    'cluster_union_count',
+    'unique_to_this_device_count',
+    'unique_to_this_device_keys',
+    'jaccard_to_representative',
+    'port_count',
+    'rationale'
+  ];
+  const rows = [];
+  for (const [idx, c] of (clusters || []).entries()) {
+    const clusterId = idx + 1;
+    const interset = new Set(c.resource_intersection || []);
+    for (const ms of (c.member_signatures || [])) {
+      const memberKeys = ms.resource_keys || [];
+      const unique = memberKeys.filter((k) => !interset.has(k));
+      const target = targetById.get(ms.server_id);
+      const name = ms.device_name ?? target?.name ?? '';
+      rows.push([
+        clusterId,
+        c.proposed_template_name,
+        c.make,
+        c.model,
+        c.applies_to_server_ids.length,
+        c.opted_in === true ? 'yes' : 'no',
+        c.clone_from_device === true ? 'yes' : 'no',
+        c.resource_strategy,
+        threshold.toFixed(2),
+        ms.server_id,
+        name,
+        memberKeys.length,
+        (c.resource_intersection || []).length,
+        (c.resource_union || []).length,
+        unique.length,
+        unique.join('; '),
+        typeof ms.jaccard_to_representative === 'number' ? ms.jaccard_to_representative.toFixed(3) : '',
+        Array.isArray(ms.port_keys) ? ms.port_keys.length : '',
+        ms.rationale || ''
+      ]);
+    }
+  }
+  for (const u of (unclassified || [])) {
+    rows.push([
+      '',
+      '(unclassified)',
+      u.device?.fabricSystemData?.model_name ?? '',
+      u.device?.fabricSystemData?.model_number ?? '',
+      '',
+      'no',
+      '',
+      '',
+      threshold.toFixed(2),
+      u.device?.id ?? '',
+      u.device?.name ?? '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      `Excluded: ${u.reason}`
+    ]);
+  }
+  // Prepend a comment block summarizing the run. Comment lines start
+  // with "#" and most spreadsheet tools tolerate them on import; if not,
+  // the operator deletes the first few rows.
+  const banner = [
+    `# Template Suggestions Report`,
+    `# Generated: ${new Date().toISOString()}`,
+    `# Similarity threshold: ${threshold.toFixed(2)} (Jaccard on resource sets within same Make+Model)`,
+    `# Destination group: ${destinationGroup}`,
+    `# Dry run: ${dryRun ? 'yes' : 'no'}`,
+    `# Devices: ${(targets || []).length}  Clusters: ${(clusters || []).length}  Unclassified: ${(unclassified || []).length}`,
+    `# Rationale column explains why each device is grouped where it is.`,
+    ``
+  ].join('\n');
+  return banner + [headers, ...rows].map(rowToCsv).join('\n');
+}
+
+function rowToCsv(arr) {
+  return arr.map(csvFieldLocal).join(',');
+}
+
+function csvFieldLocal(v) {
+  if (v === null || v === undefined) return '';
+  const s = String(v);
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
 }
 
 function triggerDownload(filename, content, mime) {

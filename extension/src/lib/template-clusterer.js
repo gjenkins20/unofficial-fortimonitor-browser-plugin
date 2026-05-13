@@ -69,10 +69,20 @@
  *
  * @typedef {Object} MemberSnapshot
  * @property {number|string} server_id
+ * @property {string|null} device_name
  * @property {string[]} resource_keys             Sorted resource keys for
  *                                                this member.
  * @property {(number|string)[]|null} port_keys   Sorted port keys, or null.
  * @property {Record<string,string>} threshold_signature_by_resource
+ * @property {number} jaccard_to_representative   Jaccard similarity of
+ *                                                this device's resource
+ *                                                set to the cluster
+ *                                                representative's set
+ *                                                (1.0 for the seed and
+ *                                                in exact-match mode).
+ * @property {string} rationale                   Human-readable reason
+ *                                                this device joined or
+ *                                                seeded this cluster.
  *
  * @typedef {Object} Cluster
  * @property {string} key                     Stable cluster identity.
@@ -177,13 +187,24 @@ function clusterExact(sigs, resourceStrategy) {
   for (const { device, sig } of sigs) {
     const key = makeClusterKey(sig);
     let cluster = byKey.get(key);
+    let isSeed = false;
     if (!cluster) {
       cluster = newCluster(sig, device, key, resourceStrategy);
+      cluster.__rep_keys_set = sig.resKeysSet;
       byKey.set(key, cluster);
+      isSeed = true;
     }
-    addMember(cluster, device, sig);
+    addMember(cluster, device, sig, {
+      jaccard: 1.0,
+      rationale: isSeed
+        ? 'Seeded cluster (exact-match mode: same Make+Model + identical resource/threshold/port signature)'
+        : 'Identical signature to representative (Make+Model+resources+thresholds+ports all match)'
+    });
   }
-  for (const cluster of byKey.values()) finalizeCluster(cluster, resourceStrategy);
+  for (const cluster of byKey.values()) {
+    delete cluster.__rep_keys_set;
+    finalizeCluster(cluster, resourceStrategy);
+  }
   return [...byKey.values()];
 }
 
@@ -211,14 +232,26 @@ function clusterJaccard(sigs, threshold, resourceStrategy) {
         bestScore = score;
       }
     }
+    let isSeed = false;
+    let memberJaccard;
+    let memberRationale;
     if (!target) {
       const idx = bucket.length;
       const key = `${bucketKey}${CLUSTER_KEY_SEPARATOR}j::${idx}`;
       target = newCluster(sig, device, key, resourceStrategy);
       target.__rep_keys_set = sig.resKeysSet;
       bucket.push(target);
+      isSeed = true;
+      memberJaccard = 1.0;
+      memberRationale = bucket.length === 1 && sig.resKeysSet.size === 0
+        ? `Seeded cluster (no current monitoring config; cannot Jaccard-merge with non-empty clusters at threshold ${threshold.toFixed(2)})`
+        : `Seeded cluster (no existing cluster met Jaccard threshold ${threshold.toFixed(2)} for same Make+Model)`;
+    } else {
+      memberJaccard = bestScore;
+      memberRationale = `Joined cluster: Jaccard ${bestScore.toFixed(2)} with representative resource set ≥ threshold ${threshold.toFixed(2)} (same Make+Model)`;
     }
-    addMember(target, device, sig);
+    addMember(target, device, sig, { jaccard: memberJaccard, rationale: memberRationale });
+    void isSeed;
   }
   const all = [];
   for (const bucket of buckets.values()) {
@@ -240,13 +273,16 @@ function jaccard(setA, setB) {
   return intersection / union;
 }
 
-function addMember(cluster, device, sig) {
+function addMember(cluster, device, sig, { jaccard = 1.0, rationale = '' } = {}) {
   cluster.applies_to_server_ids.push(device.id);
   cluster.member_signatures.push({
     server_id: device.id,
+    device_name: device.name ?? null,
     resource_keys: [...sig.resKeys],
     port_keys: sig.portKeys === null ? null : [...sig.portKeys],
-    threshold_signature_by_resource: Object.fromEntries(sig.resourcesByKey)
+    threshold_signature_by_resource: Object.fromEntries(sig.resourcesByKey),
+    jaccard_to_representative: jaccard,
+    rationale
   });
   // Track per-resource metric metadata once per cluster so we can build
   // proposed_resources for the union later. First sighting wins.

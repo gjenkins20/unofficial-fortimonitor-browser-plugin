@@ -399,3 +399,44 @@ test('jaccard groups disjoint resource sets into separate clusters', () => {
   // jaccard = 0 / 2 = 0; below threshold; separate clusters
   assert.equal(out.clusters.length, 2);
 });
+
+// =====================================================================
+// Per-member rationale + jaccard (FMN-209 fix)
+// =====================================================================
+
+test('seed member has rationale + jaccard=1.0 in exact-match mode', () => {
+  const out = buildTemplateClusters([
+    fortigate(1, { metrics: [metric('cpu', 'CPU')] }),
+    fortigate(2, { metrics: [metric('cpu', 'CPU')] })
+  ]);
+  const c = out.clusters[0];
+  assert.equal(c.member_signatures.length, 2);
+  assert.equal(c.member_signatures[0].jaccard_to_representative, 1.0);
+  assert.match(c.member_signatures[0].rationale, /Seeded cluster/);
+  assert.equal(c.member_signatures[1].jaccard_to_representative, 1.0);
+  assert.match(c.member_signatures[1].rationale, /Identical signature/);
+});
+
+test('jaccard mode: subsequent members carry the computed score + threshold rationale', () => {
+  const baseMetrics = Array.from({ length: 31 }, (_, i) => metric(`r${i}`, `R${i}`));
+  const dev32 = [...baseMetrics, metric('r31', 'R31')];
+  const dev33 = [...baseMetrics, metric('r31', 'R31'), metric('r32', 'R32')];
+  const out = buildTemplateClusters(
+    [fortigate(1, { metrics: dev32 }), fortigate(2, { metrics: dev33 })],
+    { threshold: 0.8 }
+  );
+  const c = out.clusters[0];
+  assert.equal(c.member_signatures.length, 2);
+  assert.equal(c.member_signatures[0].jaccard_to_representative, 1.0);
+  assert.match(c.member_signatures[0].rationale, /Seeded cluster/);
+  const joinedJaccard = c.member_signatures[1].jaccard_to_representative;
+  assert.ok(joinedJaccard >= 0.8 && joinedJaccard < 1.0, `expected 0.8 <= jaccard < 1.0, got ${joinedJaccard}`);
+  assert.match(c.member_signatures[1].rationale, /Joined cluster.*Jaccard.*threshold 0\.80/);
+});
+
+test('member snapshot carries device_name when device.name is set', () => {
+  const out = buildTemplateClusters([
+    fortigate(1, { metrics: [metric('cpu', 'CPU')] })
+  ]);
+  assert.equal(out.clusters[0].member_signatures[0].device_name, 'device-1');
+});
