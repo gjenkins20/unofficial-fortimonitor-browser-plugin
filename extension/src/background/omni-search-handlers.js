@@ -374,37 +374,6 @@ export function createOmniSearchHandlers({ events = {}, getClient } = {}) {
       return searchCache(cache, query, Number.isFinite(max) ? max : MAX_RESULTS_DEFAULT);
     },
 
-    // FMN-206: cheap by-id lookup against the warm cache for callers that
-    // already know the server IDs (e.g., Bulk Composer's Configure step
-    // for Remove Tag). Returns only the fields tag-aware UIs actually
-    // need - keeping the response narrow avoids the mv3_sendmessage
-    // multi-MB stall on large selections. Missing IDs are simply absent
-    // from the result map; the caller falls back to a live read.
-    'omni-search:lookup-by-ids': async ({ serverIds, tenantOrigin } = {}) => {
-      const origin = tenantOrigin || 'api2.panopta.com';
-      const ids = Array.isArray(serverIds)
-        ? serverIds.map((x) => Number(x)).filter((n) => Number.isFinite(n))
-        : [];
-      if (ids.length === 0) return { byServerId: {} };
-      // Cache-only read: never trigger a network build for this call.
-      // If the cache hasn't been warmed yet, the caller's fallback path
-      // does the heavy lifting.
-      let cache = memCache.get(origin);
-      if (!cache) cache = await readCacheFromStorage(origin);
-      if (!cache || !Array.isArray(cache.servers)) return { byServerId: {} };
-      const idSet = new Set(ids);
-      const byServerId = {};
-      for (const s of cache.servers) {
-        if (!s || s.id == null) continue;
-        if (!idSet.has(Number(s.id))) continue;
-        byServerId[s.id] = {
-          name: s.name ?? null,
-          tags: Array.isArray(s.tags) ? s.tags.slice() : []
-        };
-      }
-      return { byServerId };
-    },
-
     'omni-search:refresh': async ({ tenantOrigin } = {}) => {
       const origin = tenantOrigin || 'api2.panopta.com';
       const cache = await getCache(origin, factory, { forceRefresh: true });

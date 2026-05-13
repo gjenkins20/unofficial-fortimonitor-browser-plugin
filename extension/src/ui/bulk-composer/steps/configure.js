@@ -159,50 +159,34 @@ function renderTagForm({ body, store, refreshNextDisabled, call }) {
   }
 }
 
-// FMN-206: enrich store.targets with tags (cache-first, live fallback)
-// and render the chip row into chipMount. Idempotent if tags are already
-// populated - cache lookup just confirms what's there.
+// FMN-206: enrich store.targets with tags via a live GET /server/{id}
+// per picked target, then render the chip row. The earlier attempt used
+// the omni-search cache as a fast path with the live batch as fallback,
+// but the cache went rapidly stale between bulk operations - PREV
+// columns in the Preview step showed tags that had been removed by an
+// earlier run, leading to "WILL CHANGE" rows that no-op'd at commit
+// time. Always-live keeps the preview honest. Cost: one GET per target
+// at chip-fetch time, bounded by the SW handler's concurrency cap.
 async function fetchAndRenderTagChips({ chipMount, store, input, call, refreshNextDisabled, onHighlightReady }) {
   const targets = Array.isArray(store.targets) ? store.targets : [];
   const ids = targets.map((t) => t?.id).filter((id) => Number.isFinite(id));
 
-  let cacheMap = {};
-  try {
-    const res = await call('omni-search:lookup-by-ids', { serverIds: ids });
-    cacheMap = (res && res.byServerId) || {};
-  } catch {
-    cacheMap = {};
+  let liveMap = {};
+  if (ids.length > 0) {
+    try {
+      const res = await call('bulk-composer:list-tags-batch', { serverIds: ids });
+      liveMap = (res && res.byServerId) || {};
+    } catch {
+      // Live fetch failed (no API key, network down). Targets stay
+      // without tags and the chip row falls through to the empty state;
+      // manual tag entry still works.
+    }
   }
 
-  // Apply cache hits onto store.targets. Tags are an array on hit (may
-  // be empty); IDs missing from cacheMap are skipped here and resolved
-  // by the live fallback below.
   for (const t of targets) {
     if (!t || t.id == null) continue;
-    const hit = cacheMap[t.id];
-    if (hit && Array.isArray(hit.tags)) t.tags = hit.tags.slice();
-    if (hit && hit.name && !t.name) t.name = hit.name;
-  }
-
-  // IDs the cache didn't cover -> live fallback. Keep this scoped so we
-  // never re-fetch IDs the cache already answered for.
-  const missing = targets
-    .filter((t) => t && t.id != null && !Array.isArray(t.tags))
-    .map((t) => t.id);
-
-  if (missing.length > 0) {
-    try {
-      const res = await call('bulk-composer:list-tags-batch', { serverIds: missing });
-      const liveMap = (res && res.byServerId) || {};
-      for (const t of targets) {
-        if (Array.isArray(t.tags)) continue;
-        const tags = liveMap[t.id];
-        if (Array.isArray(tags)) t.tags = tags.slice();
-      }
-    } catch {
-      // Live fallback failed; targets stay without tags and the chip
-      // row falls through to the manual-input-only empty state.
-    }
+    const tags = liveMap[t.id];
+    if (Array.isArray(tags)) t.tags = tags.slice();
   }
 
   renderTagChipRow({ chipMount, store, input, refreshNextDisabled, onHighlightReady });
