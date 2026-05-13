@@ -623,11 +623,50 @@ function renderProfileAndCreateTemplatesForm({ body, store, refreshNextDisabled,
     h('span', {}, 'Dry run (preview without writing - no templates created, no metrics added, no attaches)')
   ));
 
+  // FMN-209: similarity threshold slider. Lower threshold = more
+  // devices merge into the same cluster. 1.0 = exact match (original
+  // FMN-200 behavior); 0.8 (default) merges near-identical configs.
+  const initialThreshold = typeof store.params?.cluster_threshold === 'number'
+    ? store.params.cluster_threshold
+    : 0.8;
+  const thresholdSlider = h('input', {
+    type: 'range',
+    min: '0.5',
+    max: '1.0',
+    step: '0.05',
+    value: String(initialThreshold),
+    'data-test': 'configure-pact-threshold',
+    style: 'flex:1;min-width:160px;'
+  });
+  const thresholdReadout = h('span', {
+    'data-test': 'configure-pact-threshold-readout',
+    style: 'font-variant-numeric:tabular-nums;min-width:3rem;text-align:right;font-size:0.85rem;'
+  }, formatThreshold(initialThreshold));
+  body.appendChild(h('label', {
+    style: 'display:flex;align-items:center;gap:0.6rem;margin:0.2rem 0 0.8rem;font-size:0.9rem;'
+  },
+    h('span', { style: 'min-width:11rem;' }, 'Similarity threshold (Jaccard)'),
+    thresholdSlider,
+    thresholdReadout
+  ));
+  body.appendChild(h('p', {
+    class: 'muted',
+    style: 'font-size:0.8rem;color:var(--text-muted);margin:-0.4rem 0 0.6rem 11.6rem;'
+  }, 'Lower = group more loosely. 1.0 only merges identical configs; 0.8 tolerates small differences.'));
+
   const status = h('p', {
     class: 'muted',
     style: 'font-size:0.85rem;color:var(--text-muted);margin:0.2rem 0 0.8rem;'
   }, 'Fetching device details, monitoring configs, port scopes, and server groups...');
   body.appendChild(status);
+
+  const downloadBtn = h('button', {
+    type: 'button',
+    'data-test': 'configure-pact-download-report',
+    style: 'margin-top:0.4rem;padding:0.35rem 0.7rem;font-size:0.85rem;border:1px solid var(--border-strong);background:#fff;border-radius:3px;cursor:pointer;'
+  }, 'Download report');
+  downloadBtn.disabled = true;
+  body.appendChild(downloadBtn);
 
   const tableHost = h('div', { 'data-test': 'configure-pact-table-host', style: 'margin-top:0.5rem;' });
   body.appendChild(tableHost);
@@ -638,6 +677,12 @@ function renderProfileAndCreateTemplatesForm({ body, store, refreshNextDisabled,
     style: 'font-size:0.85rem;color:var(--text-muted);margin-top:0.6rem;display:none;'
   });
   body.appendChild(unmatchedNote);
+
+  // Hoisted so the threshold slider and download button can read them
+  // after the initial async fetch resolves.
+  let lastDevices = [];
+  let lastUnclassified = [];
+  let lastTargets = [];
 
   function emit() {
     const isNew = destSelect.value === SENTINEL_NEW;
@@ -702,26 +747,51 @@ function renderProfileAndCreateTemplatesForm({ body, store, refreshNextDisabled,
     const fsdMap = (fsd && fsd.byServerId) || {};
     const mcMap = (monitoringConfig && monitoringConfig.byServerId) || {};
     const psMap = (portScope && portScope.byServerId) || {};
-    const devices = targets.map((t) => ({
+    lastDevices = targets.map((t) => ({
       id: t.id,
       name: t.name,
       fabricSystemData: fsdMap[t.id] ?? null,
       monitoring_config: mcMap[t.id] ?? null,
       port_scope: psMap[t.id] ?? null
     }));
+    lastTargets = targets;
 
-    const { clusters, unclassified } = buildTemplateClusters(devices);
+    rebuildClusters();
+    downloadBtn.disabled = false;
+  })();
 
-    const decorated = clusters.map((c) => ({
-      ...c,
-      opted_in: true,
-      // FMN-200 follow-up: default clone-from-device to TRUE so the
-      // commit step uses the populated-clone wire path (FMN-203
-      // verified end-to-end). The per-metric editAgentMetric write
-      // path needs catalog textkey mapping that isn't wired up yet -
-      // operator can toggle off if they want the empty-shell path.
-      clone_from_device: true
-    }));
+  function rebuildClusters() {
+    const threshold = parseFloat(thresholdSlider.value);
+    const { clusters, unclassified } = buildTemplateClusters(lastDevices, { threshold });
+    lastUnclassified = unclassified;
+
+    // Preserve operator's per-cluster opt-in / clone / template-name /
+    // resource_strategy decisions across re-cluster. Match by cluster key
+    // since the key is deterministic for a given (devices, threshold)
+    // pair but may shift when threshold changes; fall back to defaults.
+    const priorByKey = new Map();
+    for (const c of (store.params?.clusters || [])) priorByKey.set(c.key, c);
+
+    const decorated = clusters.map((c) => {
+      const prior = priorByKey.get(c.key);
+      const strategy = (prior?.resource_strategy === 'intersection' || prior?.resource_strategy === 'union')
+        ? prior.resource_strategy
+        : c.resource_strategy;
+      const proposed = strategy === 'intersection'
+        ? c.proposed_resources_intersection
+        : c.proposed_resources_union;
+      return {
+        ...c,
+        opted_in: prior?.opted_in !== undefined ? prior.opted_in : true,
+        // FMN-200 follow-up: default clone-from-device to TRUE so the
+        // commit step uses the populated-clone wire path (FMN-203
+        // verified end-to-end).
+        clone_from_device: prior?.clone_from_device !== undefined ? prior.clone_from_device : true,
+        resource_strategy: strategy,
+        proposed_resources: proposed,
+        proposed_template_name: prior?.proposed_template_name ?? c.proposed_template_name
+      };
+    });
 
     const isNewSelected = destSelect.value === SENTINEL_NEW;
     store.params = {
@@ -730,12 +800,15 @@ function renderProfileAndCreateTemplatesForm({ body, store, refreshNextDisabled,
       destination_group: isNewSelected ? '' : (destSelect.value || ''),
       destination_group_create_name: isNewSelected ? newGroupInput.value.trim() : '',
       template_type: 'fabric_template',
+      cluster_threshold: threshold,
       clusters: decorated
     };
 
-    if (unclassified.length > 0) {
+    if (lastUnclassified.length > 0) {
       unmatchedNote.style.display = 'block';
-      unmatchedNote.textContent = `${unclassified.length} of ${targets.length} picked instance(s) lack Fabric metadata or were missing required fields; they will not be touched.`;
+      unmatchedNote.textContent = `${lastUnclassified.length} of ${lastTargets.length} picked instance(s) lack Fabric metadata or were missing required fields; they will not be touched.`;
+    } else {
+      unmatchedNote.style.display = 'none';
     }
 
     if (decorated.length === 0) {
@@ -745,21 +818,119 @@ function renderProfileAndCreateTemplatesForm({ body, store, refreshNextDisabled,
       return;
     }
 
-    status.textContent = `Found ${decorated.length} cluster${decorated.length === 1 ? '' : 's'} across ${targets.length} instance${targets.length === 1 ? '' : 's'}. Opt in/out per row, then preview & commit.`;
+    status.textContent = `Found ${decorated.length} cluster${decorated.length === 1 ? '' : 's'} across ${lastTargets.length} instance${lastTargets.length === 1 ? '' : 's'} at threshold ${formatThreshold(threshold)}.`;
+    status.className = '';
 
     renderClusterTable({
       host: tableHost,
       clusters: decorated,
       onChange: (idx, patch) => {
         const updated = store.params.clusters.slice();
-        updated[idx] = { ...updated[idx], ...patch };
+        let next = { ...updated[idx], ...patch };
+        // If strategy changed, rebuild proposed_resources from the
+        // cluster's precomputed union/intersection arrays.
+        if (Object.prototype.hasOwnProperty.call(patch, 'resource_strategy')) {
+          next.proposed_resources = patch.resource_strategy === 'intersection'
+            ? next.proposed_resources_intersection
+            : next.proposed_resources_union;
+        }
+        updated[idx] = next;
         store.params = { ...store.params, clusters: updated };
         refreshNextDisabled();
       }
     });
 
     refreshNextDisabled();
-  })();
+  }
+
+  thresholdSlider.addEventListener('input', () => {
+    thresholdReadout.textContent = formatThreshold(parseFloat(thresholdSlider.value));
+  });
+  thresholdSlider.addEventListener('change', () => {
+    if (lastDevices.length > 0) rebuildClusters();
+  });
+
+  downloadBtn.addEventListener('click', () => {
+    const report = buildSuggestionsReport({
+      clusters: store.params?.clusters || [],
+      unclassified: lastUnclassified,
+      targets: lastTargets,
+      threshold: parseFloat(thresholdSlider.value),
+      destinationGroup: store.params?.destination_group || store.params?.destination_group_create_name || '(unset)',
+      dryRun: dryRunChk.checked
+    });
+    triggerDownload(`template-suggestions-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`, JSON.stringify(report, null, 2), 'application/json');
+  });
+}
+
+function formatThreshold(t) {
+  if (typeof t !== 'number' || !Number.isFinite(t)) return '?';
+  return t.toFixed(2);
+}
+
+function buildSuggestionsReport({ clusters, unclassified, targets, threshold, destinationGroup, dryRun }) {
+  return {
+    generated_at: new Date().toISOString(),
+    schema_version: 1,
+    config: {
+      similarity_threshold: threshold,
+      destination_group: destinationGroup,
+      dry_run: dryRun
+    },
+    summary: {
+      target_count: targets.length,
+      cluster_count: clusters.length,
+      unclassified_count: unclassified.length,
+      opted_in_count: clusters.filter((c) => c.opted_in === true).length
+    },
+    clusters: clusters.map((c) => ({
+      key: c.key,
+      make: c.make,
+      model: c.model,
+      proposed_template_name: c.proposed_template_name,
+      opted_in: c.opted_in === true,
+      clone_from_device: c.clone_from_device === true,
+      resource_strategy: c.resource_strategy,
+      device_count: c.applies_to_server_ids.length,
+      applies_to_server_ids: c.applies_to_server_ids,
+      member_devices: (c.member_signatures || []).map((ms) => {
+        const target = targets.find((t) => t.id === ms.server_id);
+        return {
+          server_id: ms.server_id,
+          name: target?.name ?? null,
+          resource_count: ms.resource_keys.length,
+          resource_keys: ms.resource_keys,
+          port_keys: ms.port_keys
+        };
+      }),
+      resource_union: c.resource_union || [],
+      resource_intersection: c.resource_intersection || [],
+      proposed_resources: (c.proposed_resources || []).map((r) => ({
+        resource_textkey: r.resource_textkey,
+        plugin_textkey: r.plugin_textkey,
+        name: r.name,
+        alert_items_count: Array.isArray(r.alert_items) ? r.alert_items.length : 0
+      })),
+      port_signature: c.port_signature
+    })),
+    unclassified: unclassified.map((u) => ({
+      reason: u.reason,
+      device_id: u.device?.id ?? null,
+      device_name: u.device?.name ?? null
+    }))
+  };
+}
+
+function triggerDownload(filename, content, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function renderClusterTable({ host, clusters, onChange }) {
@@ -774,6 +945,7 @@ function renderClusterTable({ host, clusters, onChange }) {
   },
     th(''), th('Make / Model'), th('Devices'),
     th('Template name (editable)'),
+    th('Strategy'),
     th('Resources'),
     th('Clone'),
     th('Port scope')
@@ -803,25 +975,55 @@ function renderClusterTable({ host, clusters, onChange }) {
     nameInput.addEventListener('input', () => onChange(idx, { proposed_template_name: nameInput.value }));
     tr.appendChild(td(nameInput));
 
-    const resCount = (c.proposed_resources || []).length;
-    const resCell = resCount === 0
+    // Strategy: union (broadest) or intersection (common to all members).
+    // No effect on the clone-from-device path because FortiMonitor
+    // populates the template from the source device's config; relevant
+    // only when clone is off and per-metric writes are used.
+    const stratSel = h('select', {
+      'data-test': 'configure-pact-strategy',
+      style: 'padding:0.2rem;font-size:0.82rem;'
+    });
+    stratSel.appendChild(h('option', { value: 'union' }, 'Union'));
+    stratSel.appendChild(h('option', { value: 'intersection' }, 'Intersection'));
+    stratSel.value = c.resource_strategy === 'intersection' ? 'intersection' : 'union';
+    stratSel.addEventListener('change', () => onChange(idx, { resource_strategy: stratSel.value }));
+    tr.appendChild(td(stratSel));
+
+    const unionLen = (c.resource_union || []).length;
+    const interLen = (c.resource_intersection || []).length;
+    const chosenLen = (c.proposed_resources || []).length;
+    const resCell = chosenLen === 0
       ? h('span', { class: 'muted', style: 'color:#856404;' }, '0 (empty shell)')
       : h('span', {
-          title: c.proposed_resources.map((r) => r.name || r.resource_textkey).join('\n')
-        }, `${resCount} resource${resCount === 1 ? '' : 's'}`);
+          title: (c.proposed_resources || []).map((r) => r.name || r.resource_textkey).join('\n')
+        }, unionLen === interLen
+          ? `${chosenLen} resource${chosenLen === 1 ? '' : 's'}`
+          : `${chosenLen} (${interLen}-${unionLen} range)`);
     tr.appendChild(td(resCell));
 
     const cloneChk = h('input', { type: 'checkbox', 'data-test': 'configure-pact-clone', checked: c.clone_from_device === true });
     cloneChk.addEventListener('change', () => onChange(idx, { clone_from_device: cloneChk.checked }));
     tr.appendChild(td(cloneChk));
 
-    const portText = c.port_signature === null
-      ? h('span', { class: 'muted' }, '(none)')
-      : h('span', {}, c.port_signature.length === 0 ? '0 ports' : `${c.port_signature.length} port${c.port_signature.length === 1 ? '' : 's'}`);
-    tr.appendChild(td(portText));
+    tr.appendChild(td(renderPortCell(c)));
 
     tbody.appendChild(tr);
   }
   table.appendChild(tbody);
   host.appendChild(table);
+}
+
+function renderPortCell(cluster) {
+  const memberPorts = (cluster.member_signatures || []).map((m) => Array.isArray(m.port_keys) ? m.port_keys.length : null);
+  const distinct = [...new Set(memberPorts.filter((n) => n !== null))];
+  if (cluster.port_signature === null && distinct.length === 0) {
+    return h('span', { class: 'muted' }, '(none)');
+  }
+  if (distinct.length <= 1) {
+    const n = distinct[0] ?? (Array.isArray(cluster.port_signature) ? cluster.port_signature.length : 0);
+    return h('span', {}, n === 0 ? '0 ports' : `${n} port${n === 1 ? '' : 's'}`);
+  }
+  const min = Math.min(...distinct);
+  const max = Math.max(...distinct);
+  return h('span', { title: `Per-device port counts: ${memberPorts.join(', ')}` }, `${min}-${max} ports`);
 }

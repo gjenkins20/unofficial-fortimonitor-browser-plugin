@@ -11,12 +11,19 @@
 // row per cluster, lets the operator opt in/out, and on commit creates
 // the template + attaches it to the cluster's members.
 //
-// MVP signature definition (exact match):
+// MVP signature definition (exact match, threshold === 1.0):
 //   cluster = (Make, Model, sorted set of resource keys, threshold
 //             signature per resource, sorted port indices)
 //
-// Looser clustering (Jaccard similarity below 1.0 etc.) is a follow-up.
-// The current pass treats any difference as a new cluster.
+// FMN-209: Loosened clustering via Jaccard similarity on resource sets
+// (threshold < 1.0). Devices still must share Make+Model. Within a
+// (Make, Model) group, devices are clustered greedily in input order:
+// the first device seeds the cluster as its representative, and each
+// subsequent device joins if Jaccard(repKeys, deviceKeys) >= threshold,
+// otherwise it seeds a new cluster. Threshold-equality and port-scope
+// are recorded per-member as metadata but do NOT gate Jaccard merging;
+// the operator picks a `resource_strategy` (intersection or union) in
+// the UI to decide which resource set becomes the proposed template.
 
 /**
  * @typedef {Object} Metric
@@ -60,17 +67,48 @@
  * @property {string} name
  * @property {Array<*>} alert_items
  *
+ * @typedef {Object} MemberSnapshot
+ * @property {number|string} server_id
+ * @property {string[]} resource_keys             Sorted resource keys for
+ *                                                this member.
+ * @property {(number|string)[]|null} port_keys   Sorted port keys, or null.
+ * @property {Record<string,string>} threshold_signature_by_resource
+ *
  * @typedef {Object} Cluster
  * @property {string} key                     Stable cluster identity.
  * @property {string} make
  * @property {string} model
  * @property {(number|string)[]} applies_to_server_ids
- * @property {string[]} resource_signature       Sorted resource keys.
- * @property {(number|string)[]|null} port_signature  Sorted port keys,
- *                                                or null when input was null.
+ * @property {string[]} resource_signature       Sorted resource keys for
+ *                                                the cluster's representative
+ *                                                (back-compat field; in
+ *                                                exact-match mode this is
+ *                                                also the union and the
+ *                                                intersection).
+ * @property {string[]} resource_union            Union of resource keys
+ *                                                across all members.
+ * @property {string[]} resource_intersection    Intersection of resource
+ *                                                keys across all members.
+ *                                                Equals union when only
+ *                                                one member.
+ * @property {"intersection"|"union"} resource_strategy
+ *   Default 'union' (broader coverage). UI flips per cluster.
+ *   Action descriptor reads this to pick proposed_resources content
+ *   when not using clone-from-device.
+ * @property {(number|string)[]|null} port_signature  Sorted port keys
+ *                                                for the representative,
+ *                                                or null.
  * @property {Record<string,string>} threshold_signature_by_resource
+ *                                                Representative's
+ *                                                threshold sigs.
+ * @property {MemberSnapshot[]} member_signatures  Per-device snapshots
+ *                                                so UI can show ranges
+ *                                                (resource counts, port
+ *                                                scopes) for the cluster.
  * @property {string} proposed_template_name
  * @property {ProposedResource[]} proposed_resources
+ *                                                Always reflects
+ *                                                resource_strategy.
  * @property {number|string} sample_device_id     Representative device
  *                                                (used by callers that
  *                                                want the clone-from-device
@@ -99,8 +137,10 @@ export const CLUSTER_KEY_SEPARATOR = '::';
 export function buildTemplateClusters(devices, options = {}) {
   const resourceKey = options.resourceKey ?? defaultResourceKey;
   const thresholdSig = options.thresholdSignature ?? defaultThresholdSignature;
+  const threshold = clampThreshold(options.threshold);
+  const resourceStrategy = options.resourceStrategy === 'intersection' ? 'intersection' : 'union';
 
-  const clusters = new Map();
+  const sigs = [];
   const unclassified = [];
 
   for (const device of (devices ?? [])) {
@@ -114,19 +154,151 @@ export function buildTemplateClusters(devices, options = {}) {
       unclassified.push({ device, reason: 'no fabricSystemData make/model' });
       continue;
     }
-
     const sig = buildDeviceSignature(device, { resourceKey, thresholdSig, make, model });
-    const key = makeClusterKey(sig);
-
-    let cluster = clusters.get(key);
-    if (!cluster) {
-      cluster = newCluster(sig, device, key);
-      clusters.set(key, cluster);
-    }
-    cluster.applies_to_server_ids.push(device.id);
+    sigs.push({ device, sig });
   }
 
-  return { clusters: [...clusters.values()], unclassified };
+  const clusters = threshold >= 1.0
+    ? clusterExact(sigs, resourceStrategy)
+    : clusterJaccard(sigs, threshold, resourceStrategy);
+
+  return { clusters, unclassified };
+}
+
+function clampThreshold(t) {
+  if (typeof t !== 'number' || !Number.isFinite(t)) return 1.0;
+  if (t < 0) return 0;
+  if (t > 1) return 1.0;
+  return t;
+}
+
+function clusterExact(sigs, resourceStrategy) {
+  const byKey = new Map();
+  for (const { device, sig } of sigs) {
+    const key = makeClusterKey(sig);
+    let cluster = byKey.get(key);
+    if (!cluster) {
+      cluster = newCluster(sig, device, key, resourceStrategy);
+      byKey.set(key, cluster);
+    }
+    addMember(cluster, device, sig);
+  }
+  for (const cluster of byKey.values()) finalizeCluster(cluster, resourceStrategy);
+  return [...byKey.values()];
+}
+
+function clusterJaccard(sigs, threshold, resourceStrategy) {
+  // Greedy single-pass within each (make, model) bucket. The first
+  // device in a bucket seeds the cluster; subsequent devices join the
+  // first cluster whose representative's resource set is >= threshold
+  // Jaccard-similar to theirs, otherwise seed a new cluster. Bucket
+  // ordering preserves input order so the same devices always cluster
+  // the same way given the same threshold.
+  const buckets = new Map();   // "make::model" -> Cluster[]
+  for (const { device, sig } of sigs) {
+    const bucketKey = `${sig.make}${CLUSTER_KEY_SEPARATOR}${sig.model}`;
+    let bucket = buckets.get(bucketKey);
+    if (!bucket) {
+      bucket = [];
+      buckets.set(bucketKey, bucket);
+    }
+    let target = null;
+    let bestScore = -1;
+    for (const cluster of bucket) {
+      const score = jaccard(cluster.__rep_keys_set, sig.resKeysSet);
+      if (score >= threshold && score > bestScore) {
+        target = cluster;
+        bestScore = score;
+      }
+    }
+    if (!target) {
+      const idx = bucket.length;
+      const key = `${bucketKey}${CLUSTER_KEY_SEPARATOR}j::${idx}`;
+      target = newCluster(sig, device, key, resourceStrategy);
+      target.__rep_keys_set = sig.resKeysSet;
+      bucket.push(target);
+    }
+    addMember(target, device, sig);
+  }
+  const all = [];
+  for (const bucket of buckets.values()) {
+    for (const cluster of bucket) {
+      delete cluster.__rep_keys_set;
+      finalizeCluster(cluster, resourceStrategy);
+      all.push(cluster);
+    }
+  }
+  return all;
+}
+
+function jaccard(setA, setB) {
+  if (setA.size === 0 && setB.size === 0) return 1.0;
+  let intersection = 0;
+  for (const k of setA) if (setB.has(k)) intersection++;
+  const union = setA.size + setB.size - intersection;
+  if (union === 0) return 1.0;
+  return intersection / union;
+}
+
+function addMember(cluster, device, sig) {
+  cluster.applies_to_server_ids.push(device.id);
+  cluster.member_signatures.push({
+    server_id: device.id,
+    resource_keys: [...sig.resKeys],
+    port_keys: sig.portKeys === null ? null : [...sig.portKeys],
+    threshold_signature_by_resource: Object.fromEntries(sig.resourcesByKey)
+  });
+  // Track per-resource metric metadata once per cluster so we can build
+  // proposed_resources for the union later. First sighting wins.
+  for (const [rk, m] of sig.sampleMetricByResource) {
+    if (!cluster.__sample_metric_by_resource.has(rk)) {
+      cluster.__sample_metric_by_resource.set(rk, m);
+      cluster.__category_textkey_by_resource.set(rk, sig.categoryTextkeyByResource.get(rk) ?? null);
+      cluster.__threshold_sig_by_resource.set(rk, sig.resourcesByKey.get(rk) ?? '');
+    }
+  }
+}
+
+function finalizeCluster(cluster, resourceStrategy) {
+  const memberCount = cluster.member_signatures.length;
+  // Union of all members' resource keys
+  const unionSet = new Set();
+  for (const m of cluster.member_signatures) {
+    for (const k of m.resource_keys) unionSet.add(k);
+  }
+  // Intersection: keys present in every member
+  let intersectionSet;
+  if (memberCount === 0) {
+    intersectionSet = new Set();
+  } else {
+    intersectionSet = new Set(cluster.member_signatures[0].resource_keys);
+    for (let i = 1; i < memberCount; i++) {
+      const keys = new Set(cluster.member_signatures[i].resource_keys);
+      for (const k of [...intersectionSet]) {
+        if (!keys.has(k)) intersectionSet.delete(k);
+      }
+    }
+  }
+  cluster.resource_union = [...unionSet].sort();
+  cluster.resource_intersection = [...intersectionSet].sort();
+  const buildResources = (keys) => keys.map((rk) => {
+    const m = cluster.__sample_metric_by_resource.get(rk);
+    const alertItems = Array.isArray(m?.alert_items) ? deepClone(m.alert_items) : [];
+    return {
+      plugin_textkey: cluster.__category_textkey_by_resource.get(rk) ?? null,
+      resource_textkey: rk,
+      name: trimOrEmpty(m?.name) || rk,
+      alert_items: alertItems
+    };
+  });
+  cluster.proposed_resources_union = buildResources(cluster.resource_union);
+  cluster.proposed_resources_intersection = buildResources(cluster.resource_intersection);
+  cluster.proposed_resources = resourceStrategy === 'intersection'
+    ? cluster.proposed_resources_intersection
+    : cluster.proposed_resources_union;
+  delete cluster.__sample_metric_by_resource;
+  delete cluster.__category_textkey_by_resource;
+  delete cluster.__threshold_sig_by_resource;
 }
 
 // ---------- internals ----------
@@ -149,6 +321,7 @@ function buildDeviceSignature(device, { resourceKey, thresholdSig, make, model }
   }
 
   const resKeys = [...resourcesByKey.keys()].sort();
+  const resKeysSet = new Set(resKeys);
   const portKeys = Array.isArray(device.port_scope)
     ? [...device.port_scope].map(String).sort()
     : null;
@@ -157,6 +330,7 @@ function buildDeviceSignature(device, { resourceKey, thresholdSig, make, model }
     make,
     model,
     resKeys,
+    resKeysSet,
     resourcesByKey,
     categoryTextkeyByResource,
     sampleMetricByResource,
@@ -177,28 +351,25 @@ function makeClusterKey({ make, model, resKeys, resourcesByKey, portKeys }) {
   ].join(CLUSTER_KEY_SEPARATOR);
 }
 
-function newCluster(sig, sampleDevice, key) {
-  const proposed_resources = sig.resKeys.map((rk) => {
-    const m = sig.sampleMetricByResource.get(rk);
-    const alertItems = Array.isArray(m?.alert_items) ? deepClone(m.alert_items) : [];
-    return {
-      plugin_textkey: sig.categoryTextkeyByResource.get(rk) ?? null,
-      resource_textkey: rk,
-      name: trimOrEmpty(m?.name) || rk,
-      alert_items: alertItems
-    };
-  });
+function newCluster(sig, sampleDevice, key, resourceStrategy) {
   return {
     key,
     make: sig.make,
     model: sig.model,
     applies_to_server_ids: [],
     resource_signature: [...sig.resKeys],
+    resource_union: [],          // filled by finalizeCluster
+    resource_intersection: [],   // filled by finalizeCluster
+    resource_strategy: resourceStrategy,
     port_signature: sig.portKeys === null ? null : [...sig.portKeys],
     threshold_signature_by_resource: Object.fromEntries(sig.resourcesByKey),
+    member_signatures: [],
     proposed_template_name: `${sig.make} ${sig.model} Best Practice`,
-    proposed_resources,
-    sample_device_id: sampleDevice.id
+    proposed_resources: [],      // filled by finalizeCluster
+    sample_device_id: sampleDevice.id,
+    __sample_metric_by_resource: new Map(),
+    __category_textkey_by_resource: new Map(),
+    __threshold_sig_by_resource: new Map()
   };
 }
 
