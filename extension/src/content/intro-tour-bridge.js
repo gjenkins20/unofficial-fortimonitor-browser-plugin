@@ -28,33 +28,143 @@
   const STYLE_HREF = chrome.runtime.getURL('src/ui/intro-tour/styles.css');
   const ENGINE_MODULE_URL = chrome.runtime.getURL('src/ui/intro-tour/tour-engine.js');
 
-  // INTRO_TOUR_STEPS: FMN-167 ships exactly one step (Dashboards).
-  // FMN-167a (full content authoring) replaces this list with the
-  // operator-authored captioned script.
+  // INTRO_TOUR_STEPS: a 7-step walk-through of FortiMonitor's left
+  // sidebar plus floating welcome / handoff / wrap-up steps. Every
+  // anchored step targets a `li.pa-side-nav__top-level-item` in the
+  // FortiMonitor sidebar, looked up by text content via
+  // `anchorByText` and resolved to a data-attribute selector at start
+  // time (see resolveSidebarAnchors below). Steps with `anchor: 'body'`
+  // render as floating cards centered on the viewport - the renderer
+  // already supports this via the floating fallback.
   //
-  // Anchor: the FortiMonitor left-sidebar carries an unordered list of
-  // top-level entries. `li.pa-side-nav__top-level-item` is the most
-  // stable selector across tenants (seen in augment.js as well). For
-  // the Dashboards entry specifically, we filter via :has(...) when
-  // available, falling back to the first top-level item otherwise -
-  // the fallback is acceptable for a one-step POC; the captioned-script
-  // ticket validates each anchor against a live tenant.
+  // The text-based lookup keeps the tour resilient to FortiMonitor
+  // reshuffling sidebar order: as long as the entry labels stay the
+  // same, the anchor finds it.
   const INTRO_TOUR_STEPS = [
     {
-      id: 'dashboards-welcome',
-      anchor: 'li.pa-side-nav__top-level-item',
+      id: 'welcome',
+      anchor: 'body',
       anchor_fallback: 'body',
       caption_html: [
-        '<p><strong>Welcome to FortiMonitor.</strong> This short walkthrough ',
-        'will introduce you to the main areas of the FortiMonitor console.</p>',
-        '<p>The highlighted entry on the left is the start of the sidebar ',
-        'navigation. Click <strong>Next</strong> when you are ready.</p>'
+        '<p><strong>Welcome to FortiMonitor.</strong> This short walk-through ',
+        'covers the main areas of the console you will use day-to-day, ',
+        'followed by a quick 3-question check.</p>',
+        '<p>Click <strong>Next</strong> to begin.</p>'
+      ].join(''),
+      when: { always: true },
+      advance: 'next-button',
+      placement: 'auto'
+    },
+    {
+      id: 'nav-dashboards',
+      anchorByText: 'Dashboards',
+      anchor_fallback: 'body',
+      caption_html: [
+        '<p><strong>Dashboards</strong> is your at-a-glance overview. ',
+        'Operators build cards here for the servers, alerts, and metrics ',
+        'they monitor most often. It is typically where you start your day.</p>'
       ].join(''),
       when: { always: true },
       advance: 'next-button',
       placement: 'right'
+    },
+    {
+      id: 'nav-monitoring',
+      anchorByText: 'Monitoring',
+      anchor_fallback: 'body',
+      caption_html: [
+        '<p><strong>Monitoring</strong> expands to your Instances list, ',
+        'OnSight appliances, public probes, and the attributes and tags ',
+        'used to classify devices. This is where you drill into a specific ',
+        'instance and see its live metrics, configured thresholds, and ',
+        'recent alerts.</p>'
+      ].join(''),
+      when: { always: true },
+      advance: 'next-button',
+      placement: 'right'
+    },
+    {
+      id: 'nav-incidents',
+      anchorByText: 'Incidents',
+      anchor_fallback: 'body',
+      caption_html: [
+        '<p><strong>Incidents</strong> is your live operations queue - ',
+        'currently-open alerts grouped by severity. The number badge on ',
+        'the entry counts currently-active items. Resolved alerts move to ',
+        'the historical timeline elsewhere.</p>'
+      ].join(''),
+      when: { always: true },
+      advance: 'next-button',
+      placement: 'right'
+    },
+    {
+      id: 'nav-reporting',
+      anchorByText: 'Reporting',
+      anchor_fallback: 'body',
+      caption_html: [
+        '<p><strong>Reporting</strong> hosts canned reports (uptime, SLA, ',
+        'audits), on-demand exports, and your tenant&apos;s activity history. ',
+        'The Unofficial FortiMonitor Toolkit adds extra cards here when ',
+        'you enable them in its Settings.</p>'
+      ].join(''),
+      when: { always: true },
+      advance: 'next-button',
+      placement: 'right'
+    },
+    {
+      id: 'toolkit-handoff',
+      anchor: 'body',
+      anchor_fallback: 'body',
+      caption_html: [
+        '<p>This walk-through was launched by the <strong>Unofficial ',
+        'FortiMonitor Toolkit</strong> - a Chrome extension that adds bulk ',
+        'operations, snapshots, and additional reports on top of stock ',
+        'FortiMonitor.</p>',
+        '<p>Open its icon in your Chrome toolbar (top-right of the browser ',
+        'window) any time to see the full tool catalog.</p>'
+      ].join(''),
+      when: { always: true },
+      advance: 'next-button',
+      placement: 'auto'
+    },
+    {
+      id: 'wrap-up',
+      anchor: 'body',
+      anchor_fallback: 'body',
+      caption_html: [
+        '<p>That is the orientation. Click <strong>Next</strong> for a quick ',
+        'three-question check to lock in what you just covered.</p>'
+      ].join(''),
+      when: { always: true },
+      advance: 'next-button',
+      placement: 'auto'
     }
   ];
+
+  // Resolve `anchorByText` steps against the live FortiMonitor sidebar.
+  // The CSS step.anchor field is overwritten with a stable data-attribute
+  // selector pointing at the matched <li>. Steps whose text doesn't
+  // resolve fall through to their anchor_fallback (typically 'body' for
+  // a floating card). The data attribute is unique per step id so the
+  // engine's MutationObserver-based anchor wait finds the right node
+  // even if FortiMonitor re-renders the sidebar.
+  function resolveSidebarAnchors(steps) {
+    const items = document.querySelectorAll('li.pa-side-nav__top-level-item');
+    return steps.map((step) => {
+      if (!step.anchorByText) return step;
+      const needle = String(step.anchorByText).toLowerCase();
+      for (const item of items) {
+        const text = (item.textContent || '').trim().toLowerCase();
+        if (text.includes(needle)) {
+          const attr = `fmn-tour-anchor-${step.id}`;
+          item.setAttribute('data-fmn-tour-anchor', attr);
+          return { ...step, anchor: `[data-fmn-tour-anchor="${attr}"]` };
+        }
+      }
+      // Text not found - fall through to anchor_fallback (floating).
+      return { ...step, anchor: step.anchor_fallback || 'body' };
+    });
+  }
 
   // Idempotent state: only one tour instance at a time.
   let activeTour = null;
@@ -133,7 +243,13 @@
     if (activeQuiz) { activeQuiz.dispose(); activeQuiz = null; }
     ensureStyles();
     const mod = await loadEngine();
-    activeTour = new mod.IntroTour(INTRO_TOUR_STEPS, {
+    // Resolve sidebar anchors against the live DOM right before runTour.
+    // Doing this at start time (rather than at module load) gives the
+    // FortiMonitor Vue sidebar a chance to finish hydrating; the
+    // engine's MutationObserver still handles the case where the anchor
+    // arrives after start.
+    const resolvedSteps = resolveSidebarAnchors(INTRO_TOUR_STEPS);
+    activeTour = new mod.IntroTour(resolvedSteps, {
       tour_id: 'intro-fortimonitor',
       doc: document,
       storage: chrome.storage.session,
