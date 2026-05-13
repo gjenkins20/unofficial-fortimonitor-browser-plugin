@@ -245,6 +245,24 @@ test.describe('FMN-196: Configure step renders the per-profile table', () => {
     await page.close();
   });
 
+  // -----------------------------------------------------------------
+  // Route-guard happy path: ensures clicking Next from Configure
+  // actually advances to /commit (canEnter route guard has a branch
+  // for 'apply-best-practice-fabric').
+  // -----------------------------------------------------------------
+  test('Configure → Next advances to the Commit step (route guard passes)', async ({ extensionContext, extensionId }) => {
+    const page = await extensionContext.newPage();
+    await openConfigureWithFabricTargets(page, extensionId, [
+      { id: 42024061, name: 'FGVM-A', template_names: [] }
+    ]);
+    await expect(page.locator('[data-test="configure-bpf-table"]')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('[data-test="configure-next"]')).toBeEnabled();
+    await page.locator('[data-test="configure-next"]').click();
+    await expect(page.locator('.step-breadcrumbs .step.active')).toContainText('4. Preview', { timeout: 5000 });
+    expect(page.url()).toContain('#/commit');
+    await page.close();
+  });
+
   test('SW fetch failure surfaces in the status line and disables Next', async ({ extensionContext, extensionId }) => {
     const page = await extensionContext.newPage();
     // Custom installer that rejects the bulk-composer:list-* calls.

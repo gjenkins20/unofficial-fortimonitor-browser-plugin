@@ -237,6 +237,53 @@ test.describe('FMN-200: Configure step clusters and renders proposals', () => {
     await page.close();
   });
 
+  // -----------------------------------------------------------------
+  // Route-guard happy path: this catches the FMN-200 phase F regression
+  // where canEnter('/commit') silently bounced to /pick because
+  // hasRequiredParams() had no branch for 'profile-and-create-templates'.
+  // Memory rule route_guard_tracks_store_shape.md.
+  // -----------------------------------------------------------------
+  test('Configure → Next advances to the Commit step (route guard passes for profile-and-create-templates)', async ({ extensionContext, extensionId }) => {
+    const page = await extensionContext.newPage();
+    await openConfigure(page, extensionId, [
+      { id: 42024061, name: 'FGVM-A', template_names: [] },
+      { id: 42024062, name: 'FGVM-B', template_names: [] }
+    ]);
+    await expect(page.locator('[data-test="configure-pact-table"]')).toBeVisible({ timeout: 10000 });
+
+    // Set up: pick a destination group from the dropdown.
+    await page.locator('[data-test="configure-pact-destination-group"]').selectOption('grp-617598');
+    await expect(page.locator('[data-test="configure-next"]')).toBeEnabled();
+
+    // Click Next. Pre-FMN-200-phase-F-fix this silently bounced to /pick
+    // because canEnter('/commit') returned false. Post-fix we land on
+    // the Commit step.
+    await page.locator('[data-test="configure-next"]').click();
+
+    // Breadcrumb confirms we're on step 4 (Preview), not bounced back
+    // to step 1 (Pick).
+    await expect(page.locator('.step-breadcrumbs .step.active')).toContainText('4. Preview', { timeout: 5000 });
+    expect(page.url()).toContain('#/commit');
+
+    await page.close();
+  });
+
+  test('Configure → Next advances to Commit when destination_group_create_name is set', async ({ extensionContext, extensionId }) => {
+    const page = await extensionContext.newPage();
+    await openConfigure(page, extensionId, [
+      { id: 42024061, name: 'FGVM-A', template_names: [] }
+    ]);
+    await expect(page.locator('[data-test="configure-pact-table"]')).toBeVisible({ timeout: 10000 });
+
+    await page.locator('[data-test="configure-pact-destination-group"]').selectOption('__new__');
+    await page.locator('[data-test="configure-pact-new-group-name"]').fill('FM Toolkit Templates');
+    await expect(page.locator('[data-test="configure-next"]')).toBeEnabled();
+    await page.locator('[data-test="configure-next"]').click();
+    await expect(page.locator('.step-breadcrumbs .step.active')).toContainText('4. Preview', { timeout: 5000 });
+
+    await page.close();
+  });
+
   test('SW fetch failure surfaces in the status line and keeps Next disabled', async ({ extensionContext, extensionId }) => {
     const page = await extensionContext.newPage();
     await page.goto(`chrome-extension://${extensionId}/src/ui/bulk-composer/app.html#/pick`);

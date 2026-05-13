@@ -17,6 +17,7 @@ import * as action from './steps/action.js';
 import * as configure from './steps/configure.js';
 import * as commit from './steps/commit.js';
 import { onEvent, call } from '../../lib/messaging.js';
+import { getAction } from '../../lib/bulk-actions/index.js';
 
 document.documentElement.dataset.toolMode = 'bulk-composer';
 
@@ -79,6 +80,22 @@ function canEnter(route) {
 }
 
 function hasRequiredParams() {
+  if (!store.actionId) return false;
+  // FMN-200: route through the action's own validate() so the guard
+  // automatically tracks any new action without per-action branches
+  // here. Memory rule route_guard_tracks_store_shape: this exact bug
+  // (add a new action, forget to update canEnter, get silent /pick
+  // bounces) is what this delegation prevents.
+  try {
+    const a = getAction(store.actionId);
+    if (a && typeof a.validate === 'function') {
+      const v = a.validate(store.params || {});
+      if (v && typeof v.ok === 'boolean') return v.ok === true;
+    }
+  } catch { /* fall through */ }
+  // Back-compat for add-tag / remove-tag / apply-template - their
+  // validate() returns the same boolean shape so this branch is a
+  // belt-and-suspenders fallback.
   if (store.actionId === 'add-tag' || store.actionId === 'remove-tag') {
     return typeof store.params?.tag === 'string' && store.params.tag.trim().length > 0;
   }
