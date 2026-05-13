@@ -401,3 +401,224 @@ test('getServerName uses the injected origin', async () => {
   await client.getServerName(1);
   assert.match(fetchMock.calls[0].url, /^https:\/\/my\.us01\.fortimonitor\.com\/report\/get_idp_data/);
 });
+
+// =====================================================================
+// FMN-196: getFabricSystemData
+// =====================================================================
+
+test('getFabricSystemData returns the fabricSystemData blob on success', async () => {
+  const fetchMock = createFetchMock(async () => jsonResponse({
+    pageData: {
+      instance: {
+        name: 'FGVM01TM24006845',
+        fabricSystemData: { model_name: 'FortiGate', model_number: 'FGVMA6', os_version: 'v7.6.3 build3510' }
+      }
+    }
+  }));
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'tok' });
+  const fsd = await client.getFabricSystemData(42024061);
+  assert.deepEqual(fsd, { model_name: 'FortiGate', model_number: 'FGVMA6', os_version: 'v7.6.3 build3510' });
+});
+
+test('getFabricSystemData returns null when fabricSystemData is absent (non-Fortinet device)', async () => {
+  const fetchMock = createFetchMock(async () => jsonResponse({
+    pageData: { instance: { name: 'linux-server', fabricSystemData: null } }
+  }));
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'tok' });
+  assert.equal(await client.getFabricSystemData(1), null);
+});
+
+test('getFabricSystemData returns null on HTML / login redirect', async () => {
+  const fetchMock = createFetchMock(async () => htmlResponse());
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => null });
+  assert.equal(await client.getFabricSystemData(1), null);
+});
+
+test('getFabricSystemData returns null on null/undefined serverId', async () => {
+  const client = new FortimonitorClient({
+    fetch: async () => { throw new Error('should not fetch'); },
+    getCookie: async () => 'tok'
+  });
+  assert.equal(await client.getFabricSystemData(null), null);
+  assert.equal(await client.getFabricSystemData(undefined), null);
+});
+
+test('getFabricSystemData hits /report/get_idp_data on the injected origin', async () => {
+  const fetchMock = createFetchMock(async () => jsonResponse({ pageData: { instance: { fabricSystemData: {} } } }));
+  const client = new FortimonitorClient({
+    fetch: fetchMock,
+    getCookie: async () => 'tok',
+    origin: 'https://my.eu01.fortimonitor.com'
+  });
+  await client.getFabricSystemData(7);
+  assert.equal(fetchMock.calls[0].url, 'https://my.eu01.fortimonitor.com/report/get_idp_data?server_id=7');
+});
+
+// =====================================================================
+// FMN-196: getMonitoringPolicyPageData
+// =====================================================================
+
+test('getMonitoringPolicyPageData returns the parsed JSON envelope', async () => {
+  const captured = { rulesets: [{ id: 1, name: 'r1' }], nounOptions: { device_types: [] }, success: true };
+  const fetchMock = createFetchMock(async () => jsonResponse(captured));
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'tok' });
+  const out = await client.getMonitoringPolicyPageData();
+  assert.deepEqual(out.rulesets, [{ id: 1, name: 'r1' }]);
+  assert.deepEqual(out.nounOptions, { device_types: [] });
+  assert.equal(fetchMock.calls[0].url, `${FM_ORIGIN}/monitoring_policy/get_page_data`);
+});
+
+test('getMonitoringPolicyPageData throws phase=auth on HTML login redirect', async () => {
+  const fetchMock = createFetchMock(async () => htmlResponse(
+    '<!DOCTYPE html><html>login</html>',
+    { url: 'https://fortimonitor.forticloud.com/login' }
+  ));
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => null });
+  await assert.rejects(client.getMonitoringPolicyPageData(), (err) => {
+    return err instanceof FortimonitorError && err.phase === 'auth' && err.status === 200;
+  });
+});
+
+test('getMonitoringPolicyPageData throws phase=read on HTTP failure', async () => {
+  const fetchMock = createFetchMock(async () => errorResponse(500));
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'tok' });
+  await assert.rejects(client.getMonitoringPolicyPageData(), (err) => {
+    return err instanceof FortimonitorError && err.phase === 'read' && err.status === 500;
+  });
+});
+
+// =====================================================================
+// FMN-196: createMonitoringPolicy
+// =====================================================================
+
+test('createMonitoringPolicy posts form-encoded body without X-XSRF-TOKEN', async () => {
+  let captured;
+  const fetchMock = createFetchMock(async (_url, init) => {
+    captured = init;
+    return jsonResponse({ success: true, ruleset: { id: 8812, name: 'Probe', latest_version: 0, config: { rules: [] } } });
+  });
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'tok' });
+  const ruleset = await client.createMonitoringPolicy({ name: 'Probe', index: 2, description: '' });
+  assert.equal(ruleset.id, 8812);
+  assert.equal(ruleset.name, 'Probe');
+  assert.equal(captured.method, 'POST');
+  assert.equal(captured.headers['Content-Type'], 'application/x-www-form-urlencoded; charset=UTF-8');
+  assert.equal(captured.headers['X-Requested-With'], 'XMLHttpRequest');
+  assert.equal(captured.headers['X-XSRF-TOKEN'], undefined, 'monitoring_policy POSTs must not carry XSRF');
+  const params = new URLSearchParams(captured.body);
+  assert.equal(params.get('index'), '2');
+  assert.equal(params.get('name'), 'Probe');
+  assert.equal(params.get('description'), '');
+});
+
+test('createMonitoringPolicy hits /monitoring_policy/addRuleset', async () => {
+  const fetchMock = createFetchMock(async () => jsonResponse({ success: true, ruleset: { id: 1, name: 'x' } }));
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'tok' });
+  await client.createMonitoringPolicy({ name: 'x' });
+  assert.equal(fetchMock.calls[0].url, `${FM_ORIGIN}/monitoring_policy/addRuleset`);
+});
+
+test('createMonitoringPolicy throws when name missing', async () => {
+  const client = new FortimonitorClient({
+    fetch: async () => { throw new Error('should not fetch'); },
+    getCookie: async () => 'tok'
+  });
+  await assert.rejects(client.createMonitoringPolicy({}), TypeError);
+});
+
+test('createMonitoringPolicy throws phase=write when server returns success:false', async () => {
+  const fetchMock = createFetchMock(async () => jsonResponse({ success: false, error: 'duplicate name' }));
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'tok' });
+  await assert.rejects(client.createMonitoringPolicy({ name: 'x' }), (err) => {
+    return err instanceof FortimonitorError && err.phase === 'write';
+  });
+});
+
+test('createMonitoringPolicy throws when ruleset payload absent on success', async () => {
+  const fetchMock = createFetchMock(async () => jsonResponse({ success: true }));
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'tok' });
+  await assert.rejects(client.createMonitoringPolicy({ name: 'x' }), (err) => {
+    return err instanceof FortimonitorError && /ruleset/i.test(err.message);
+  });
+});
+
+// =====================================================================
+// FMN-196: updateMonitoringPolicyConfig
+// =====================================================================
+
+test('updateMonitoringPolicyConfig posts ruleset_id and url-encoded config_json', async () => {
+  let captured;
+  const fetchMock = createFetchMock(async (_url, init) => {
+    captured = init;
+    return jsonResponse({ success: true, config: { rules: [] }, ruleset_id: 8812, version_id: 10935 });
+  });
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'tok' });
+  const config = { rules: [{ enabled: true, name: 'R1', conditions: [], actions: [] }] };
+  const out = await client.updateMonitoringPolicyConfig(8812, config);
+  assert.equal(out.version_id, 10935);
+  const params = new URLSearchParams(captured.body);
+  assert.equal(params.get('ruleset_id'), '8812');
+  assert.deepEqual(JSON.parse(params.get('config_json')), config);
+});
+
+test('updateMonitoringPolicyConfig throws when args missing', async () => {
+  const client = new FortimonitorClient({
+    fetch: async () => { throw new Error('should not fetch'); },
+    getCookie: async () => 'tok'
+  });
+  await assert.rejects(client.updateMonitoringPolicyConfig(null, { rules: [] }), TypeError);
+  await assert.rejects(client.updateMonitoringPolicyConfig(1, null), TypeError);
+});
+
+// =====================================================================
+// FMN-196: updateMonitoringPolicyMetadata
+// =====================================================================
+
+test('updateMonitoringPolicyMetadata posts ruleset_id + name + description', async () => {
+  let captured;
+  const fetchMock = createFetchMock(async (_url, init) => {
+    captured = init;
+    return jsonResponse({ success: true, ruleset: { id: 8812, name: 'Renamed' } });
+  });
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'tok' });
+  await client.updateMonitoringPolicyMetadata(8812, { name: 'Renamed' });
+  const params = new URLSearchParams(captured.body);
+  assert.equal(params.get('ruleset_id'), '8812');
+  assert.equal(params.get('name'), 'Renamed');
+  assert.equal(params.get('description'), '');
+});
+
+// =====================================================================
+// FMN-196: deleteMonitoringPolicy
+// =====================================================================
+
+test('deleteMonitoringPolicy posts ruleset_id and returns the server response', async () => {
+  const fetchMock = createFetchMock(async () => jsonResponse({ success: true }));
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'tok' });
+  const out = await client.deleteMonitoringPolicy(8812);
+  assert.equal(out.success, true);
+  assert.equal(fetchMock.calls[0].url, `${FM_ORIGIN}/monitoring_policy/deleteRuleset`);
+});
+
+test('deleteMonitoringPolicy throws when rulesetId missing', async () => {
+  const client = new FortimonitorClient({
+    fetch: async () => { throw new Error('should not fetch'); },
+    getCookie: async () => 'tok'
+  });
+  await assert.rejects(client.deleteMonitoringPolicy(null), TypeError);
+});
+
+// =====================================================================
+// Cross-cutting: monitoring_policy POSTs surface auth errors on HTML
+// =====================================================================
+
+test('monitoring_policy POST surfaces phase=auth on HTML login redirect', async () => {
+  const fetchMock = createFetchMock(async () => htmlResponse(
+    '<!DOCTYPE html><html>login</html>',
+    { url: 'https://fortimonitor.forticloud.com/login' }
+  ));
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => null });
+  await assert.rejects(client.createMonitoringPolicy({ name: 'x' }), (err) => {
+    return err instanceof FortimonitorError && err.phase === 'auth';
+  });
+});

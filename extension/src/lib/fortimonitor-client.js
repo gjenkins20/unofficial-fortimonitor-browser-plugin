@@ -322,6 +322,226 @@ export class FortimonitorClient {
       probe
     };
   }
+
+  // ---------------------------------------------------------------
+  // Fabric metadata (FMN-196 dependency)
+  // ---------------------------------------------------------------
+
+  /**
+   * Returns the `fabricSystemData` blob for a server, or null if the
+   * server is non-Fabric or the request fails. Used by the Bulk Composer's
+   * Best-Practice Fabric action to classify devices by (Make, Model).
+   *
+   * Per project memory idp_data_field_path_findings.md, fabricSystemData
+   * is populated only on Fortinet/Fabric-onboarded rows.
+   *
+   * @param {number|string} serverId
+   * @returns {Promise<{ model_name?: string, model_number?: string, os_version?: string } | null>}
+   */
+  async getFabricSystemData(serverId) {
+    if (serverId === undefined || serverId === null) return null;
+    const origin = await this.origin();
+    const url = `${origin}/report/get_idp_data?server_id=${encodeURIComponent(String(serverId))}`;
+    let res;
+    try {
+      res = await this.fetch(url, {
+        method: 'GET',
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' }
+      });
+    } catch {
+      return null;
+    }
+    if (!res.ok) return null;
+    const ct = (res.headers?.get?.('content-type') || '').toLowerCase();
+    if (!ct.includes('json')) return null;
+    let body;
+    try {
+      body = await res.json();
+    } catch {
+      return null;
+    }
+    const fsd = body?.pageData?.instance?.fabricSystemData;
+    return (fsd && typeof fsd === 'object') ? fsd : null;
+  }
+
+  // ---------------------------------------------------------------
+  // Monitoring Policies (FMN-194 capture, FMN-196 consumer)
+  //
+  // POST endpoints do NOT use X-XSRF-TOKEN (different from
+  // /config/save_port_selection). They take form-encoded bodies with
+  // X-Requested-With: XMLHttpRequest. See docs/api-discovery/
+  // monitoring-policies.md.
+  // ---------------------------------------------------------------
+
+  /**
+   * Fetch the Monitoring Policies page-data payload. Returns the entire
+   * envelope: `{ success, rulesets, defaultServerGroup, nounOptions,
+   * actionValueOptions, applySubAccounts, allowOverride, isSubtenant,
+   * canOverride }`. Callers typically only consume `rulesets` and
+   * `nounOptions` (the latter feeds the recommendation engine's
+   * vocabulary-driven policy-clause builder).
+   */
+  async getMonitoringPolicyPageData() {
+    return this._getFortimonitorJson('/monitoring_policy/get_page_data', 'getMonitoringPolicyPageData');
+  }
+
+  /**
+   * Create a new (empty) ruleset. Returns the server-assigned ruleset
+   * object: `{ id, name, latest_version: 0, config: { rules: [] }, ... }`.
+   * Caller typically follows up with updateMonitoringPolicyConfig() to
+   * populate the rules.
+   *
+   * @param {object} opts
+   * @param {string} opts.name           Ruleset name. Idempotence key when
+   *                                     callers check for existing policies.
+   * @param {number} [opts.index]        SPA-side ordinal. Defaults to 0;
+   *                                     the server assigns the real id.
+   * @param {string} [opts.description]
+   */
+  async createMonitoringPolicy({ name, index = 0, description = '' } = {}) {
+    if (!name || typeof name !== 'string') {
+      throw new TypeError('createMonitoringPolicy: name is required');
+    }
+    const json = await this._postMonitoringPolicy('/monitoring_policy/addRuleset', {
+      index: String(index),
+      name,
+      description
+    });
+    if (!json.ruleset || typeof json.ruleset !== 'object') {
+      throw new FortimonitorError('addRuleset response missing ruleset payload', {
+        phase: 'write',
+        responseBody: json
+      });
+    }
+    return json.ruleset;
+  }
+
+  /**
+   * Replace a ruleset's rules wholesale. The server stores it under a new
+   * version_id and bumps latest_version. Returns the full server response:
+   * `{ success, config, ruleset_id, version_id }`.
+   *
+   * @param {number|string} rulesetId
+   * @param {object} config              `{ rules: [...] }` shape per
+   *                                     docs/api-discovery/monitoring-policies.md.
+   */
+  async updateMonitoringPolicyConfig(rulesetId, config) {
+    if (rulesetId === undefined || rulesetId === null) {
+      throw new TypeError('updateMonitoringPolicyConfig: rulesetId is required');
+    }
+    if (!config || typeof config !== 'object') {
+      throw new TypeError('updateMonitoringPolicyConfig: config object is required');
+    }
+    return this._postMonitoringPolicy('/monitoring_policy/editRuleset', {
+      ruleset_id: String(rulesetId),
+      config_json: JSON.stringify(config)
+    });
+  }
+
+  /**
+   * Rename or re-describe a ruleset. Does NOT touch `config.rules`.
+   */
+  async updateMonitoringPolicyMetadata(rulesetId, { name, description = '' } = {}) {
+    if (rulesetId === undefined || rulesetId === null) {
+      throw new TypeError('updateMonitoringPolicyMetadata: rulesetId is required');
+    }
+    if (!name || typeof name !== 'string') {
+      throw new TypeError('updateMonitoringPolicyMetadata: name is required');
+    }
+    return this._postMonitoringPolicy('/monitoring_policy/editRulesetMetadata', {
+      ruleset_id: String(rulesetId),
+      name,
+      description
+    });
+  }
+
+  /**
+   * Delete a ruleset.
+   */
+  async deleteMonitoringPolicy(rulesetId) {
+    if (rulesetId === undefined || rulesetId === null) {
+      throw new TypeError('deleteMonitoringPolicy: rulesetId is required');
+    }
+    return this._postMonitoringPolicy('/monitoring_policy/deleteRuleset', {
+      ruleset_id: String(rulesetId)
+    });
+  }
+
+  // ---------------------------------------------------------------
+  // Shared GET / POST helpers for the session-auth surfaces above.
+  // ---------------------------------------------------------------
+
+  async _getFortimonitorJson(path, callerLabel) {
+    const origin = await this.origin();
+    const url = `${origin}${path}`;
+    const res = await this.fetch(url, {
+      method: 'GET',
+      credentials: 'include',
+      headers: { 'Accept': 'application/json, text/plain, */*' }
+    });
+    const responseUrl = redactSensitive(res.url ?? url);
+    const contentType = res.headers?.get?.('content-type') ?? '';
+    if (!res.ok) {
+      throw new FortimonitorError(`${callerLabel || path} failed: HTTP ${res.status}`, {
+        status: res.status,
+        phase: 'read',
+        responseUrl,
+        contentType
+      });
+    }
+    if (contentType && !contentType.toLowerCase().includes('json')) {
+      let bodyPreview = null;
+      try { const text = await res.text(); bodyPreview = redactSensitive(text.slice(0, 200)); } catch { /* */ }
+      throw new FortimonitorError(
+        'FortiMonitor returned a non-JSON response (likely a login page); session not recognized.',
+        { status: res.status, phase: 'auth', responseUrl, contentType, bodyPreview }
+      );
+    }
+    return await res.json();
+  }
+
+  async _postMonitoringPolicy(path, formParams) {
+    const origin = await this.origin();
+    const url = `${origin}${path}`;
+    const body = new URLSearchParams(formParams).toString();
+    const res = await this.fetch(url, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Accept': '*/*',
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body
+    });
+    const responseUrl = redactSensitive(res.url ?? url);
+    const contentType = res.headers?.get?.('content-type') ?? '';
+    if (!res.ok) {
+      throw new FortimonitorError(`${path} failed: HTTP ${res.status}`, {
+        status: res.status,
+        phase: 'write',
+        responseUrl,
+        contentType
+      });
+    }
+    if (contentType && !contentType.toLowerCase().includes('json')) {
+      let bodyPreview = null;
+      try { const text = await res.text(); bodyPreview = redactSensitive(text.slice(0, 200)); } catch { /* */ }
+      throw new FortimonitorError(
+        'FortiMonitor returned a non-JSON response (likely a login page); session unauthenticated for monitoring_policy operations.',
+        { status: res.status, phase: 'auth', responseUrl, contentType, bodyPreview }
+      );
+    }
+    const json = await res.json();
+    if (!json || json.success !== true) {
+      throw new FortimonitorError(`${path} rejected by server`, {
+        phase: 'write',
+        responseBody: json
+      });
+    }
+    return json;
+  }
 }
 
 /**
