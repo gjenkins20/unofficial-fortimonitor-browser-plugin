@@ -103,7 +103,7 @@ test.describe('FMN-155: Bulk Action Composer popup wiring', () => {
     await page.close();
   });
 
-  test('Flag on: action-picker shows three cards once a target is in the store', async ({ extensionContext, extensionId }) => {
+  test('Flag on: action-picker shows the registered action cards once a target is in the store', async ({ extensionContext, extensionId }) => {
     const page = await extensionContext.newPage();
     await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
     await page.evaluate(() => chrome.storage.local.set({ 'fm:bulkComposerEnabled': true }));
@@ -119,9 +119,12 @@ test.describe('FMN-155: Bulk Action Composer popup wiring', () => {
     // Wait for step 2 to render.
     await expect(page.locator('.step-breadcrumbs .step.active')).toContainText('2. Pick action', { timeout: 5000 });
     const cards = page.locator('[data-test="action-card"]');
-    await expect(cards).toHaveCount(3);
+    // FMN-196 adds 'apply-best-practice-fabric' as a fourth card.
+    await expect(cards).toHaveCount(4);
     const ids = await cards.evaluateAll((els) => els.map((e) => e.getAttribute('data-action-id')));
-    expect(ids).toEqual(expect.arrayContaining(['add-tag', 'remove-tag', 'apply-template']));
+    expect(ids).toEqual(expect.arrayContaining([
+      'add-tag', 'remove-tag', 'apply-template', 'apply-best-practice-fabric'
+    ]));
     await page.close();
   });
 
