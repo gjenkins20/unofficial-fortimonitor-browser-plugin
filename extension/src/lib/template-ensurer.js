@@ -29,6 +29,11 @@
  * @property {string} templateType        e.g. "fabric_template".
  * @property {string} destinationGroup    e.g. "grp-617598".
  * @property {number|null} [sourceServerId]  Set for clone-from-device.
+ * @property {"yes"|"no"} [selectOptions]    Mirror of the SPA's
+ *                                           select_options field.
+ *                                           FMN-203 finding: must be "yes"
+ *                                           for a populated clone when
+ *                                           sourceServerId is set.
  * @property {EnsureResourceSpec[]} [resources]
  * @property {boolean} [dryRun]
  *
@@ -61,6 +66,7 @@ export async function ensureTemplate({ panopta, fmClient }, opts = {}) {
     templateType,
     destinationGroup,
     sourceServerId = null,
+    selectOptions = sourceServerId == null ? 'no' : 'yes',
     resources = [],
     dryRun = false
   } = opts;
@@ -109,7 +115,8 @@ export async function ensureTemplate({ panopta, fmClient }, opts = {}) {
     name,
     templateType,
     destinationGroup,
-    sourceServerId
+    sourceServerId,
+    selectOptions
   });
   const created = (await panopta.listTemplates()).find((t) => t.name === name);
   if (!created) {

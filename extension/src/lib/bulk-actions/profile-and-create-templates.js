@@ -281,13 +281,21 @@ function ensureForCluster(cluster, { panopta, fmClient, sharedState, destination
       would_create: false
     }));
   }
+  const cloneFromDevice = cluster.clone_from_device === true;
   const promise = ensureTemplate(
     { panopta, fmClient },
     {
       name: cluster.proposed_template_name,
       templateType: template_type,
       destinationGroup: destination_group,
-      sourceServerId: cluster.clone_from_device === true ? cluster.sample_device_id : null,
+      sourceServerId: cloneFromDevice ? cluster.sample_device_id : null,
+      // FMN-200 follow-up: select_options must be "yes" for a populated
+      // clone (FMN-203 finding: select_options="no" produces empty shell
+      // even with sourceServerId set). For the non-clone path the value
+      // doesn't affect the populate logic (we run per-metric add via
+      // addTemplateMetric), but defaulting "yes" keeps the wire
+      // consistent with the SPA's own create-from-device flow.
+      selectOptions: cloneFromDevice ? 'yes' : 'no',
       resources: cluster.proposed_resources || [],
       dryRun
     }

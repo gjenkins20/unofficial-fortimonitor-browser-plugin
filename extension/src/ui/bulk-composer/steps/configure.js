@@ -702,7 +702,12 @@ function renderProfileAndCreateTemplatesForm({ body, store, refreshNextDisabled,
     const decorated = clusters.map((c) => ({
       ...c,
       opted_in: true,
-      clone_from_device: false
+      // FMN-200 follow-up: default clone-from-device to TRUE so the
+      // commit step uses the populated-clone wire path (FMN-203
+      // verified end-to-end). The per-metric editAgentMetric write
+      // path needs catalog textkey mapping that isn't wired up yet -
+      // operator can toggle off if they want the empty-shell path.
+      clone_from_device: true
     }));
 
     const isNewSelected = destSelect.value === SENTINEL_NEW;

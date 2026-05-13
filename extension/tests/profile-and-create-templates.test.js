@@ -294,6 +294,33 @@ test('clone-from-device: commit passes sourceServerId + skips per-metric populat
   assert.equal(metricCalls.length, 0, 'clone path skips per-metric add');
 });
 
+test('clone-from-device: commit sets selectOptions="yes" (FMN-203 finding: empty without)', async () => {
+  const cloneCluster = { ...CLUSTER, clone_from_device: true };
+  const { panopta, fortimonitor, createCalls } = makeClients({
+    createdTemplate: { id: 44017900, name: 'FortiGate FGVMA6 Best Practice' }
+  });
+  const sharedState = new Map();
+  await action.commit(
+    { id: 42024061, template_names: [] },
+    { destination_group: 'grp-1', clusters: [cloneCluster] },
+    { client: panopta, fortimonitorClient: fortimonitor, sharedState }
+  );
+  assert.equal(createCalls[0].selectOptions, 'yes');
+});
+
+test('non-clone: commit sets selectOptions="no"', async () => {
+  const { panopta, fortimonitor, createCalls } = makeClients({
+    createdTemplate: { id: 44017900, name: 'FortiGate FGVMA6 Best Practice' }
+  });
+  const sharedState = new Map();
+  await action.commit(
+    { id: 42024061, template_names: [] },
+    { destination_group: 'grp-1', clusters: [CLUSTER] },  // clone_from_device unset
+    { client: panopta, fortimonitorClient: fortimonitor, sharedState }
+  );
+  assert.equal(createCalls[0].selectOptions, 'no');
+});
+
 // =====================================================================
 // Ctx validation
 // =====================================================================
