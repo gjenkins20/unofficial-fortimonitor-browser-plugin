@@ -54,7 +54,12 @@
       <input id="search" type="text" placeholder="Search tools…">
     </div>
 
-    <!-- FMN-167 Training section. Pinned above the alphabetized tool list -->
+    <!-- FMN-208: training section + tool list share one scroll container so -->
+    <!-- the training tile scrolls together with the alphabetized tools. -->
+    <!-- DOM order keeps Training at the top (FMN-167 intent); structurally -->
+    <!-- it now lives inside the same overflow viewport as #tool-list. -->
+    <div class="tool-scroll" id="tool-scroll">
+    <!-- FMN-167 Training section. First entry in the scrollable tool list -->
     <!-- so guided walk-throughs surface to new operators on first popup -->
     <!-- open. Gated on fm:introTourEnabled (default off until authoring -->
     <!-- and operator validation complete). -->
@@ -292,6 +297,7 @@
         <div class="chevron">›</div>
       </button>
     </div>
+    </div><!-- /#tool-scroll -->
 
     <div id="no-matches" class="empty-search" hidden>
       No tools match - try a different keyword.

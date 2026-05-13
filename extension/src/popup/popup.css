@@ -171,7 +171,10 @@ html, body {
   background-color: white;
 }
 
-.tool-list {
+/* FMN-208: scroll container wraps the Training section + tool list so the
+   Training tile scrolls together with the alphabetized tools, instead of
+   sitting outside the overflow viewport. */
+.tool-scroll {
   max-height: 360px;
   overflow-y: auto;
 }
@@ -575,9 +578,9 @@ html, body {
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
     overflow: hidden;
   }
-  /* Popup constrains tool-list to 360px tall for compact display.
+  /* Popup constrains the scroll container to 360px tall for compact display.
      In a tab we have all the vertical room we need, so let it expand. */
-  .tool-list {
+  .tool-scroll {
     max-height: none;
     overflow-y: visible;
   }
