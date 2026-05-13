@@ -622,3 +622,171 @@ test('monitoring_policy POST surfaces phase=auth on HTML login redirect', async 
     return err instanceof FortimonitorError && err.phase === 'auth';
   });
 });
+
+// =====================================================================
+// FMN-200: createServerTemplate
+// =====================================================================
+
+test('createServerTemplate posts JSON body with X-XSRF-TOKEN and required fields', async () => {
+  let captured;
+  const fetchMock = createFetchMock(async (_url, init) => {
+    captured = init;
+    return jsonResponse({ success: true });
+  });
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'xsrf-value' });
+  await client.createServerTemplate({
+    name: 'FortiGate FGVMA6 Best Practice',
+    templateType: 'fabric_template',
+    destinationGroup: 'grp-617598'
+  });
+  assert.equal(captured.method, 'POST');
+  assert.equal(captured.headers['Content-Type'], 'application/json');
+  assert.equal(captured.headers['X-XSRF-TOKEN'], 'xsrf-value');
+  const body = JSON.parse(captured.body);
+  assert.equal(body.template_name, 'FortiGate FGVMA6 Best Practice');
+  assert.equal(body.template_type, 'fabric_template');
+  assert.equal(body.element_ids, 'grp-617598');
+  assert.equal(body.server_id, null);                  // shell mode
+  assert.equal(body.select_options, 'no');             // shell default
+  assert.equal(body.instance_grp_name, 'FortiGate FGVMA6 Best Practice');
+  assert.equal(body.notification_schedule, 0);
+});
+
+test('createServerTemplate clone-from-device sets server_id', async () => {
+  let captured;
+  const fetchMock = createFetchMock(async (_url, init) => {
+    captured = init;
+    return jsonResponse({ success: true });
+  });
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'xsrf' });
+  await client.createServerTemplate({
+    name: 'Cloned',
+    templateType: 'fabric_template',
+    destinationGroup: 'grp-1',
+    sourceServerId: 42024075
+  });
+  const body = JSON.parse(captured.body);
+  assert.equal(body.server_id, 42024075);
+});
+
+test('createServerTemplate throws when XSRF cookie is missing', async () => {
+  const fetchMock = createFetchMock(async () => jsonResponse({ success: true }));
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => null });
+  await assert.rejects(
+    client.createServerTemplate({ name: 'x', templateType: 'fabric_template', destinationGroup: 'grp-1' }),
+    (err) => err instanceof FortimonitorError && err.phase === 'auth'
+  );
+  assert.equal(fetchMock.calls.length, 0, 'no fetch when XSRF missing');
+});
+
+test('createServerTemplate throws on missing required args', async () => {
+  const client = new FortimonitorClient({
+    fetch: async () => { throw new Error('should not fetch'); },
+    getCookie: async () => 'xsrf'
+  });
+  await assert.rejects(client.createServerTemplate({}), TypeError);
+  await assert.rejects(client.createServerTemplate({ name: 'x' }), TypeError);
+  await assert.rejects(client.createServerTemplate({ name: 'x', templateType: 'fabric_template' }), TypeError);
+});
+
+test('createServerTemplate synthesizes a {success:true} envelope when response body is empty', async () => {
+  const fetchMock = createFetchMock(async () => ({
+    ok: true, status: 200, url: null,
+    headers: new Map([['content-type', 'application/json; charset=utf-8']]),
+    async json() { throw new SyntaxError('Unexpected end of JSON input'); },
+    async text() { return ''; }
+  }));
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'xsrf' });
+  const out = await client.createServerTemplate({ name: 'x', templateType: 'fabric_template', destinationGroup: 'grp-1' });
+  assert.deepEqual(out, { success: true });
+});
+
+test('createServerTemplate hits /config/createServerTemplate on the injected origin', async () => {
+  let url;
+  const fetchMock = createFetchMock(async (u) => { url = u; return jsonResponse({ success: true }); });
+  const client = new FortimonitorClient({
+    fetch: fetchMock,
+    getCookie: async () => 'xsrf',
+    origin: 'https://my.us02.fortimonitor.com'
+  });
+  await client.createServerTemplate({ name: 'x', templateType: 'fabric_template', destinationGroup: 'grp-1' });
+  assert.equal(url, 'https://my.us02.fortimonitor.com/config/createServerTemplate');
+});
+
+// =====================================================================
+// FMN-200: addTemplateMetric
+// =====================================================================
+
+test('addTemplateMetric posts form-encoded body with required field set and no XSRF', async () => {
+  let captured;
+  const fetchMock = createFetchMock(async (_url, init) => {
+    captured = init;
+    return jsonResponse({ success: true, server_resource_id: -123456 });
+  });
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'xsrf' });
+  await client.addTemplateMetric({
+    templateId: 44017104,
+    pluginTextkey: 'fortigate.resources',
+    resourceTextkey: 'memory_usage_percent',
+    pluginName: 'Memory Usage',
+    resourceName: 'Memory Usage',
+    units: '%'
+  });
+  assert.equal(captured.method, 'POST');
+  assert.equal(captured.headers['Content-Type'], 'application/x-www-form-urlencoded');
+  assert.equal(captured.headers['X-Requested-With'], 'XMLHttpRequest');
+  assert.equal(captured.headers['X-XSRF-TOKEN'], undefined, 'editAgentMetric must not send XSRF');
+  const params = new URLSearchParams(captured.body);
+  assert.equal(params.get('server_id'), '44017104');
+  assert.equal(params.get('plugin_textkey'), 'fortigate.resources');
+  assert.equal(params.get('resource_textkey'), 'memory_usage_percent');
+  assert.equal(params.get('check_method'), 'fabric');
+  assert.equal(params.get('action'), 'add');
+  assert.equal(params.get('isTemplate'), 'true');
+  assert.equal(params.get('template_from_scratch'), 'true');
+  assert.equal(params.get('match_type'), 'positive_pattern');
+  assert.equal(params.get('send_new'), 'true');
+  assert.equal(params.get('frequency'), '60');
+  assert.equal(params.get('units'), '%');
+  assert.equal(params.get('server_resource_id'), '');
+});
+
+test('addTemplateMetric throws on missing required args', async () => {
+  const client = new FortimonitorClient({
+    fetch: async () => { throw new Error('should not fetch'); },
+    getCookie: async () => 'xsrf'
+  });
+  await assert.rejects(client.addTemplateMetric({}), TypeError);
+  await assert.rejects(client.addTemplateMetric({ templateId: 1 }), TypeError);
+  await assert.rejects(client.addTemplateMetric({ templateId: 1, pluginTextkey: 'p' }), TypeError);
+});
+
+test('addTemplateMetric hits the lowercase /editAgentMetric endpoint', async () => {
+  let url;
+  const fetchMock = createFetchMock(async (u) => { url = u; return jsonResponse({ success: true }); });
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'xsrf' });
+  await client.addTemplateMetric({
+    templateId: 1,
+    pluginTextkey: 'p',
+    resourceTextkey: 'r'
+  });
+  // Important per FMN-203: capital E /EditAgentMetric is the form load
+  // (read); lowercase e /editAgentMetric is the write.
+  assert.match(url, /\/config\/monitoring\/editAgentMetric$/);
+});
+
+// =====================================================================
+// FMN-200: getCreateServerTemplateData
+// =====================================================================
+
+test('getCreateServerTemplateData returns the JSON envelope', async () => {
+  const fetchMock = createFetchMock(async () => jsonResponse({
+    success: true,
+    template_type_options: [{ value: 'fabric_template', label: 'Fabric Template' }],
+    alert_timeline_options: [{ value: 0, label: 'Inherit' }]
+  }));
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'tok' });
+  const out = await client.getCreateServerTemplateData();
+  assert.equal(out.template_type_options[0].value, 'fabric_template');
+  assert.equal(fetchMock.calls[0].url, `${FM_ORIGIN}/config/get_create_server_template_data`);
+});

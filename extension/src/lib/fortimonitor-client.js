@@ -469,6 +469,139 @@ export class FortimonitorClient {
   }
 
   // ---------------------------------------------------------------
+  // Server templates (FMN-199 + FMN-203 capture, FMN-200 consumer)
+  //
+  // /config/createServerTemplate takes JSON and DOES require
+  // X-XSRF-TOKEN. /config/monitoring/editAgentMetric is form-encoded
+  // and does NOT (FMN-203 finding). See:
+  //   docs/api-discovery/templates-create.md
+  //   docs/api-discovery/template-create-from-device.md
+  // ---------------------------------------------------------------
+
+  /**
+   * Create a server template. Two modes:
+   *   - Shell:        omit `sourceServerId` or pass null.
+   *   - Clone-from:   pass `sourceServerId` to copy that server's
+   *                   monitoring config + metrics into the new template.
+   *
+   * @param {object} opts
+   * @param {string} opts.name              Template name. Idempotence key.
+   * @param {string} opts.templateType      e.g. "fabric_template". One of
+   *                                        the values from
+   *                                        get_create_server_template_data.
+   * @param {string} opts.destinationGroup  Server-group prefixed id
+   *                                        (e.g. "grp-617598"). Where the
+   *                                        new template lives in the UI.
+   * @param {number} [opts.notificationSchedule]  Alert-timeline id
+   *                                              (0 = inherit). Default 0.
+   * @param {string} [opts.instanceGroupName]     UI group label. Defaults
+   *                                              to `name` (FMN-203 capture
+   *                                              showed operator using
+   *                                              `template_name` as the
+   *                                              instance_grp_name).
+   * @param {number|null} [opts.sourceServerId]   For clone-from-device.
+   * @param {"yes"|"no"} [opts.selectOptions]     `"no"` skips the picker
+   *                                              and produces an empty
+   *                                              shell when sourceServerId
+   *                                              is null. Default "no".
+   * @returns {Promise<object>}  Server response JSON. Body shape not yet
+   *                             fully captured; status is the
+   *                             authoritative success signal.
+   */
+  async createServerTemplate({
+    name,
+    templateType,
+    destinationGroup,
+    notificationSchedule = 0,
+    instanceGroupName,
+    sourceServerId = null,
+    selectOptions = 'no'
+  } = {}) {
+    if (!name || typeof name !== 'string') {
+      throw new TypeError('createServerTemplate: name is required');
+    }
+    if (!templateType || typeof templateType !== 'string') {
+      throw new TypeError('createServerTemplate: templateType is required');
+    }
+    if (!destinationGroup || typeof destinationGroup !== 'string') {
+      throw new TypeError('createServerTemplate: destinationGroup is required (e.g. "grp-617598")');
+    }
+    const body = {
+      server_id: sourceServerId ?? null,
+      template_name: name,
+      template_type: templateType,
+      select_options: selectOptions,
+      instance_grp_name: instanceGroupName ?? name,
+      notification_schedule: Number(notificationSchedule) || 0,
+      element_ids: destinationGroup
+    };
+    return this._postFortimonitorJsonWithXsrf('/config/createServerTemplate', body);
+  }
+
+  /**
+   * Get the create-template form's option vocabulary. Returns the
+   * `template_type_options` and `alert_timeline_options` arrays the
+   * SPA's New Template form populates from.
+   */
+  async getCreateServerTemplateData() {
+    return this._getFortimonitorJson('/config/get_create_server_template_data', 'getCreateServerTemplateData');
+  }
+
+  /**
+   * Add a Fabric agent_metric to an existing template.
+   *
+   * Form-encoded POST (NOT JSON). No X-XSRF-Token observed in the
+   * captured SPA traffic; X-Requested-With: XMLHttpRequest is required.
+   *
+   * @param {object} opts
+   * @param {number|string} opts.templateId
+   * @param {string} opts.pluginTextkey      e.g. "fortigate.resources"
+   * @param {string} opts.resourceTextkey    e.g. "memory_usage_percent"
+   * @param {string} opts.pluginName         display label
+   * @param {string} opts.resourceName       display label
+   * @param {string} [opts.units]            e.g. "%". Default empty.
+   * @param {number} [opts.frequency]        Polling interval seconds. Default 60.
+   * @param {string} [opts.checkMethod]      Discriminator. Default "fabric".
+   * @param {string} [opts.matchType]        Default "positive_pattern".
+   * @param {boolean} [opts.templateFromScratch]  Default true.
+   */
+  async addTemplateMetric({
+    templateId,
+    pluginTextkey,
+    resourceTextkey,
+    pluginName,
+    resourceName,
+    units = '',
+    frequency = 60,
+    checkMethod = 'fabric',
+    matchType = 'positive_pattern',
+    templateFromScratch = true
+  } = {}) {
+    if (templateId === undefined || templateId === null) {
+      throw new TypeError('addTemplateMetric: templateId is required');
+    }
+    if (!pluginTextkey || !resourceTextkey) {
+      throw new TypeError('addTemplateMetric: pluginTextkey and resourceTextkey are required');
+    }
+    return this._postFortimonitorForm('/config/monitoring/editAgentMetric', {
+      server_id: String(templateId),
+      plugin_textkey: pluginTextkey,
+      resource_textkey: resourceTextkey,
+      check_method: checkMethod,
+      plugin_name: pluginName ?? pluginTextkey,
+      resource_name: resourceName ?? resourceTextkey,
+      server_resource_id: '',           // empty = create new
+      action: 'add',
+      frequency: String(frequency),
+      units,
+      isTemplate: 'true',
+      template_from_scratch: templateFromScratch ? 'true' : 'false',
+      match_type: matchType,
+      send_new: 'true'
+    });
+  }
+
+  // ---------------------------------------------------------------
   // Shared GET / POST helpers for the session-auth surfaces above.
   // ---------------------------------------------------------------
 
@@ -541,6 +674,105 @@ export class FortimonitorClient {
       });
     }
     return json;
+  }
+
+  /**
+   * POST helper: JSON body + X-XSRF-TOKEN (required). Used by
+   * /config/createServerTemplate per FMN-199/203 capture.
+   */
+  async _postFortimonitorJsonWithXsrf(path, jsonBody) {
+    const origin = await this.origin();
+    const xsrf = await this.getCookie(XSRF_COOKIE_NAME, origin);
+    if (!xsrf) {
+      throw new FortimonitorError(
+        `No ${XSRF_COOKIE_NAME} cookie - user is not logged in to FortiMonitor.`,
+        { phase: 'auth' }
+      );
+    }
+    const url = `${origin}${path}`;
+    const res = await this.fetch(url, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Accept': 'application/json, text/plain, */*',
+        'Content-Type': 'application/json',
+        'X-XSRF-TOKEN': xsrf
+      },
+      body: JSON.stringify(jsonBody)
+    });
+    const responseUrl = redactSensitive(res.url ?? url);
+    const contentType = res.headers?.get?.('content-type') ?? '';
+    if (!res.ok) {
+      throw new FortimonitorError(`${path} failed: HTTP ${res.status}`, {
+        status: res.status,
+        phase: 'write',
+        responseUrl,
+        contentType
+      });
+    }
+    if (contentType && !contentType.toLowerCase().includes('json')) {
+      let bodyPreview = null;
+      try { const text = await res.text(); bodyPreview = redactSensitive(text.slice(0, 200)); } catch { /* */ }
+      throw new FortimonitorError(
+        'FortiMonitor returned a non-JSON response (likely a login page); session unauthenticated.',
+        { status: res.status, phase: 'auth', responseUrl, contentType, bodyPreview }
+      );
+    }
+    // Response body may be empty on success for some FortiMonitor write
+    // endpoints (observed FMN-199 capture). Try to parse; if empty,
+    // return a synthesized success envelope so callers can treat the
+    // 200 as authoritative.
+    try {
+      const json = await res.json();
+      return json ?? { success: true };
+    } catch {
+      return { success: true };
+    }
+  }
+
+  /**
+   * POST helper: form-encoded body, no X-XSRF-TOKEN, with
+   * X-Requested-With. Used by /config/monitoring/editAgentMetric
+   * per FMN-203 capture.
+   */
+  async _postFortimonitorForm(path, formParams) {
+    const origin = await this.origin();
+    const url = `${origin}${path}`;
+    const body = new URLSearchParams(formParams).toString();
+    const res = await this.fetch(url, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Accept': 'application/json, text/plain, */*',
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body
+    });
+    const responseUrl = redactSensitive(res.url ?? url);
+    const contentType = res.headers?.get?.('content-type') ?? '';
+    if (!res.ok) {
+      throw new FortimonitorError(`${path} failed: HTTP ${res.status}`, {
+        status: res.status,
+        phase: 'write',
+        responseUrl,
+        contentType
+      });
+    }
+    if (contentType && !contentType.toLowerCase().includes('json')) {
+      let bodyPreview = null;
+      try { const text = await res.text(); bodyPreview = redactSensitive(text.slice(0, 200)); } catch { /* */ }
+      throw new FortimonitorError(
+        'FortiMonitor returned a non-JSON response (likely a login page); session unauthenticated.',
+        { status: res.status, phase: 'auth', responseUrl, contentType, bodyPreview }
+      );
+    }
+    try {
+      const json = await res.json();
+      return json ?? { success: true };
+    } catch {
+      return { success: true };
+    }
   }
 }
 
