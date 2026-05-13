@@ -3,10 +3,16 @@
 // (Fabric) "Load devices from CSV" step. Drop-zone + paste textarea + green
 // format-hint card + parse-result preview table + single Continue button.
 //
-// Replaces the FMN-155 layout that led with an omni-search dropdown plus
-// clipboard / page-selection loader buttons and rendered the selection as
-// chips. Operator-confirmed 2026-05-13: the screenshot of Add to Port Scope's
-// load step IS the whole step. No omni-search. No loader buttons. No chips.
+// Operator-confirmed 2026-05-13: the screenshot of Add to Port Scope's load
+// step IS the whole step. No omni-search input. No loader buttons. No chips.
+//
+// Name resolution: parseServerList accepts numeric server IDs only and warns
+// on anything else. To match the operator's natural workflow (which starts
+// from FortiMonitor's UI showing device names, not IDs), this step silently
+// routes the non-numeric warning tokens through the omni-search SW handler.
+// Resolved names land in the parse-result table alongside numeric IDs;
+// genuinely unknown tokens stay as warnings. The UI is unchanged either way -
+// only the parser gets smarter.
 //
 // Downstream contract preserved: store.targets is an array of
 //   { id: number, name: string | null }
@@ -14,9 +20,14 @@
 
 import { h, titleBar } from '../../../lib/dom.js';
 import { parseServerList } from '../../parse-csv.js';
+import { call } from '../../../lib/messaging.js';
 import { bulkBreadcrumbs } from './breadcrumbs.js';
 
 const TOOL_NAME = 'Bulk Action Composer';
+
+// Pattern used by parseServerList's "not a numeric server ID" warning so we
+// can pluck the non-numeric tokens back out and try them as names.
+const NON_NUMERIC_WARNING_RE = /^Line \d+: "(.+?)" is not a numeric server ID/;
 
 export function render({ container, store, navigate }) {
   const frame = h('div', { class: 'mockup-frame' });
@@ -24,8 +35,8 @@ export function render({ container, store, navigate }) {
 
   frame.appendChild(h('div', { class: 'step-header' },
     bulkBreadcrumbs('pick'),
-    h('h2', {}, 'Load instances by ID'),
-    h('p', {}, 'Provide the list of FortiMonitor server IDs you want to operate on. The Composer resolves each ID against your active FortiMonitor session and takes you to the action picker.')
+    h('h2', {}, 'Load instances by ID or name'),
+    h('p', {}, 'Provide the list of FortiMonitor server IDs or device names you want to operate on. Names are resolved against the FM TK Search cache. The Composer then takes you to the action picker.')
   ));
 
   const body = h('div', { class: 'body-section' });
@@ -38,7 +49,7 @@ export function render({ container, store, navigate }) {
       'Drop CSV here, or ',
       h('span', { class: 'dz-link' }, 'click to browse')
     ),
-    h('div', { class: 'dz-secondary' }, 'Accepts .csv or plain text · one server ID per line'),
+    h('div', { class: 'dz-secondary' }, 'Accepts .csv or plain text · one server ID or device name per line'),
     fileInput
   );
   body.appendChild(dropZone);
@@ -47,7 +58,7 @@ export function render({ container, store, navigate }) {
 
   const paste = h('textarea', {
     class: 'paste-area',
-    placeholder: '42024060\n42024061\n42024075\n...'
+    placeholder: '42024060\nFGT-Branch-001\n42024075\n...'
   });
   // If the operator already picked instances on a prior pass, rebuild the
   // paste value from the existing targets so the step is idempotent on revisit.
@@ -57,8 +68,8 @@ export function render({ container, store, navigate }) {
   body.appendChild(paste);
 
   body.appendChild(h('div', { class: 'format-hint', html:
-    '<strong>Format:</strong> plain list of server IDs (one per line) <em>or</em> a CSV with a <code>server_id</code> column.' +
-    '<pre># plain list\n42024060\n42024061\n\n# or CSV\nserver_id,device_name\n42024060,FGT-Branch-001\n42024061,FGT-Branch-002</pre>'
+    '<strong>Format:</strong> plain list of server IDs or device names (one per line) <em>or</em> a CSV with a <code>server_id</code> column. Device names are resolved against the cached FM TK Search corpus.' +
+    '<pre># plain list (IDs or names mixed)\n42024060\nFGT-Branch-001\n42024075\n\n# or CSV\nserver_id,device_name\n42024060,FGT-Branch-001\n42024061,FGT-Branch-002</pre>'
   }));
 
   const parseResult = h('div', { class: 'parse-result empty' });
@@ -80,58 +91,145 @@ export function render({ container, store, navigate }) {
 
   container.appendChild(frame);
 
-  function updateParseResult() {
-    const parsed = parseServerList(paste.value);
+  // Generation counter so a stale async resolution callback can't clobber
+  // the result of a later updateParseResult() call (paste-fast scenarios).
+  let resolveGen = 0;
 
-    if (parsed.serverIds.length === 0) {
-      // Empty state - match Port Scope's exact copy.
-      parseResult.className = 'parse-result empty';
-      parseResult.replaceChildren(
-        h('div', { class: 'headline' }, 'No server IDs detected'),
-        h('div', { class: 'sub' }, 'Paste a list above or drop a CSV file.')
-      );
-      store.targets = [];
-      nextBtn.disabled = true;
-      return;
-    }
+  function renderEmpty() {
+    parseResult.className = 'parse-result empty';
+    parseResult.replaceChildren(
+      h('div', { class: 'headline' }, 'No server IDs detected'),
+      h('div', { class: 'sub' }, 'Paste a list above or drop a CSV file.')
+    );
+    store.targets = [];
+    nextBtn.disabled = true;
+  }
 
+  // Render the parse-result panel from a merged set of {serverIds, nameById,
+  // totalLines, warnings}. Pass resolvingCount > 0 to show a "resolving N
+  // name(s)..." indicator and keep Continue disabled.
+  function renderParsed({ serverIds, nameById, totalLines, warnings, resolvingCount = 0 }) {
     parseResult.className = 'parse-result';
-    const namedCount = Object.keys(parsed.nameById).length;
+    const namedCount = Object.keys(nameById).length;
+
+    const subParts = [`${totalLines} line${totalLines === 1 ? '' : 's'} read`];
+    subParts.push(`${namedCount} named from CSV / resolved`);
+    if (namedCount < serverIds.length) subParts.push('(unnamed rows resolve by ID downstream)');
+    if (resolvingCount > 0) subParts.push(`resolving ${resolvingCount} name${resolvingCount === 1 ? '' : 's'}…`);
+
     const kids = [
       h('div', { class: 'headline' },
-        `${parsed.serverIds.length} instance${parsed.serverIds.length === 1 ? '' : 's'} ready to operate on`),
-      h('div', { class: 'sub' },
-        `${parsed.totalLines} line${parsed.totalLines === 1 ? '' : 's'} read · ${namedCount} named from CSV` +
-        (namedCount < parsed.serverIds.length ? ' (unnamed rows resolve by ID downstream)' : '')),
-      renderSampleTable(parsed.serverIds, parsed.nameById)
+        `${serverIds.length} instance${serverIds.length === 1 ? '' : 's'} ready to operate on`),
+      h('div', { class: 'sub' }, subParts.join(' · ')),
+      renderSampleTable(serverIds, nameById)
     ];
-    if (parsed.warnings.length) {
+    if (warnings.length) {
       kids.push(h('div', { class: 'warn-list' },
-        h('strong', {}, `${parsed.warnings.length} warning${parsed.warnings.length === 1 ? '' : 's'}: `),
-        h('ul', {}, ...parsed.warnings.map((w) => h('li', {}, w)))
+        h('strong', {}, `${warnings.length} warning${warnings.length === 1 ? '' : 's'}: `),
+        h('ul', {}, ...warnings.map((w) => h('li', {}, w)))
       ));
     }
     parseResult.replaceChildren(...kids);
 
-    // Mirror the parsed result onto store.targets so action / configure /
-    // commit get the same data shape they did under the chip-based UI.
-    // .id is numeric (downstream PATCH calls send the int), .name is the
-    // operator-supplied display name or null.
-    store.targets = parsed.serverIds.map((id) => ({
+    store.targets = serverIds.map((id) => ({
       id: Number(id),
-      name: parsed.nameById[id] ?? null
+      name: nameById[id] ?? null
     }));
-    nextBtn.disabled = false;
+    // Disable Continue while resolution is in-flight so the operator can't
+    // press it before the table fills in.
+    nextBtn.disabled = serverIds.length === 0 || resolvingCount > 0;
   }
 
-  paste.addEventListener('input', updateParseResult);
+  async function updateParseResult() {
+    const myGen = ++resolveGen;
+    const parsed = parseServerList(paste.value);
+
+    // Pull non-numeric tokens out of the parser's warnings so we can try
+    // them as names. Each warning maps 1:1 to one offending input line.
+    const nonNumericTokens = [];
+    for (const w of parsed.warnings) {
+      const m = w.match(NON_NUMERIC_WARNING_RE);
+      if (m && m[1]) nonNumericTokens.push(m[1]);
+    }
+
+    // Pure-empty input: render the placeholder and stop.
+    if (parsed.serverIds.length === 0 && nonNumericTokens.length === 0) {
+      renderEmpty();
+      return;
+    }
+
+    // Initial render with whatever we have from parseServerList.
+    renderParsed({
+      serverIds: parsed.serverIds,
+      nameById: parsed.nameById,
+      totalLines: parsed.totalLines,
+      warnings: parsed.warnings,
+      resolvingCount: nonNumericTokens.length
+    });
+
+    if (nonNumericTokens.length === 0) return;
+
+    // Resolve names against the omni-search cache in parallel. Each token
+    // gets one query; we accept ONLY an exact case-insensitive name match.
+    // Substring / single-result fallbacks are intentionally absent because
+    // omni-search returns fuzzy matches and silently picking a near-match
+    // would attach the operator's action to the wrong device.
+    const lookups = await Promise.all(nonNumericTokens.map(async (token) => {
+      try {
+        const result = await call('omni-search:query', { query: token, max: 10 });
+        const matches = Array.isArray(result?.matches) ? result.matches : [];
+        const pick = matches.find((m) => (m.name || '').toLowerCase() === token.toLowerCase()) || null;
+        return { token, pick };
+      } catch {
+        return { token, pick: null };
+      }
+    }));
+
+    // If a newer update started while we were awaiting, drop this result.
+    if (myGen !== resolveGen) return;
+
+    const resolved = new Map(); // token (lowercased) -> { id: string, name: string|null }
+    for (const { token, pick } of lookups) {
+      if (pick && pick.id != null) {
+        resolved.set(token.toLowerCase(), { id: String(pick.id), name: pick.name ?? null });
+      }
+    }
+
+    // Merge: keep parser's numeric IDs, append resolved-by-name IDs (de-dup),
+    // strip warnings whose token resolved, keep warnings whose token didn't.
+    const serverIds = [...parsed.serverIds];
+    const nameById = { ...parsed.nameById };
+    const seen = new Set(serverIds);
+    for (const { id, name } of resolved.values()) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      serverIds.push(id);
+      if (name) nameById[id] = name;
+    }
+    const finalWarnings = [];
+    for (const w of parsed.warnings) {
+      const m = w.match(NON_NUMERIC_WARNING_RE);
+      if (m && resolved.has(m[1].toLowerCase())) continue;
+      finalWarnings.push(w);
+    }
+
+    renderParsed({
+      serverIds,
+      nameById,
+      totalLines: parsed.totalLines,
+      warnings: finalWarnings,
+      resolvingCount: 0
+    });
+  }
+
+  paste.addEventListener('input', () => { void updateParseResult(); });
 
   fileInput.addEventListener('change', async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const text = await file.text();
     paste.value = text;
-    updateParseResult();
+    void updateParseResult();
   });
 
   dropZone.addEventListener('dragover', (e) => {
@@ -146,13 +244,13 @@ export function render({ container, store, navigate }) {
     if (!file) return;
     const text = await file.text();
     paste.value = text;
-    updateParseResult();
+    void updateParseResult();
   });
 
   clearBtn.addEventListener('click', () => {
     paste.value = '';
     store.targets = [];
-    updateParseResult();
+    void updateParseResult();
   });
 
   nextBtn.addEventListener('click', () => {
@@ -162,7 +260,7 @@ export function render({ container, store, navigate }) {
 
   // Always render the parse-result once on mount so the empty state shows
   // its "No server IDs detected" headline immediately (matches Port Scope).
-  updateParseResult();
+  void updateParseResult();
 }
 
 // Two-column Name | Server ID preview, same shape as Port Scope's. Up to 25
