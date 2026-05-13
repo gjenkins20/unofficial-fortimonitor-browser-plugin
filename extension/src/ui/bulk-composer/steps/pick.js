@@ -105,17 +105,40 @@ export function render({ container, store, navigate }) {
     nextBtn.disabled = true;
   }
 
-  // Render the parse-result panel from a merged set of {serverIds, nameById,
-  // totalLines, warnings}. Pass resolvingCount > 0 to show a "resolving N
-  // name(s)..." indicator and keep Continue disabled.
-  function renderParsed({ serverIds, nameById, totalLines, warnings, resolvingCount = 0 }) {
+  // Validating state - lookups are in-flight. We deliberately hide the
+  // parser's "not a numeric server ID" warnings here because they read as
+  // hard failures when in fact the lookup hasn't yet had a chance to
+  // resolve them. Operators get a calm "Validating N entries..." message
+  // until the lookups finish.
+  function renderValidating({ resolvingCount, partialServerIds = [], partialNameById = {} }) {
+    parseResult.className = 'parse-result';
+    const kids = [
+      h('div', { class: 'headline' },
+        `Validating ${resolvingCount} entr${resolvingCount === 1 ? 'y' : 'ies'}…`),
+      h('div', { class: 'sub' },
+        `Looking up device name${resolvingCount === 1 ? '' : 's'} in the FM TK Search cache.` +
+        (partialServerIds.length ? ` ${partialServerIds.length} numeric ID${partialServerIds.length === 1 ? '' : 's'} already accepted.` : ''))
+    ];
+    if (partialServerIds.length > 0) {
+      kids.push(renderSampleTable(partialServerIds, partialNameById));
+    }
+    parseResult.replaceChildren(...kids);
+
+    store.targets = partialServerIds.map((id) => ({
+      id: Number(id),
+      name: partialNameById[id] ?? null
+    }));
+    nextBtn.disabled = true;
+  }
+
+  // Final populated render after all lookups finish.
+  function renderParsed({ serverIds, nameById, totalLines, warnings }) {
     parseResult.className = 'parse-result';
     const namedCount = Object.keys(nameById).length;
 
     const subParts = [`${totalLines} line${totalLines === 1 ? '' : 's'} read`];
-    subParts.push(`${namedCount} named from CSV / resolved`);
+    subParts.push(`${namedCount} named / resolved`);
     if (namedCount < serverIds.length) subParts.push('(unnamed rows resolve by ID downstream)');
-    if (resolvingCount > 0) subParts.push(`resolving ${resolvingCount} name${resolvingCount === 1 ? '' : 's'}…`);
 
     const kids = [
       h('div', { class: 'headline' },
@@ -135,90 +158,99 @@ export function render({ container, store, navigate }) {
       id: Number(id),
       name: nameById[id] ?? null
     }));
-    // Disable Continue while resolution is in-flight so the operator can't
-    // press it before the table fills in.
-    nextBtn.disabled = serverIds.length === 0 || resolvingCount > 0;
+    nextBtn.disabled = serverIds.length === 0;
   }
 
   async function updateParseResult() {
     const myGen = ++resolveGen;
     const parsed = parseServerList(paste.value);
 
-    // Pull non-numeric tokens out of the parser's warnings so we can try
-    // them as names. Each warning maps 1:1 to one offending input line.
-    const nonNumericTokens = [];
+    // Partition the parser's warnings: non-numeric-token warnings are
+    // candidates for name lookup (and stay hidden until the lookup either
+    // confirms or refutes them). Other warnings (duplicates, blank lines)
+    // are surfaced immediately - they're real input problems regardless.
+    const nameCandidates = [];   // [{ token, originalWarning }]
+    const nonNameWarnings = [];
     for (const w of parsed.warnings) {
       const m = w.match(NON_NUMERIC_WARNING_RE);
-      if (m && m[1]) nonNumericTokens.push(m[1]);
+      if (m && m[1]) nameCandidates.push({ token: m[1], originalWarning: w });
+      else nonNameWarnings.push(w);
     }
 
     // Pure-empty input: render the placeholder and stop.
-    if (parsed.serverIds.length === 0 && nonNumericTokens.length === 0) {
+    if (parsed.serverIds.length === 0 && nameCandidates.length === 0) {
       renderEmpty();
       return;
     }
 
-    // Initial render with whatever we have from parseServerList.
-    renderParsed({
-      serverIds: parsed.serverIds,
-      nameById: parsed.nameById,
-      totalLines: parsed.totalLines,
-      warnings: parsed.warnings,
-      resolvingCount: nonNumericTokens.length
-    });
+    if (nameCandidates.length > 0) {
+      // Show the calm "Validating..." state with whatever numeric IDs we
+      // already accepted; deliberately suppress the alarmist non-numeric
+      // warnings until the lookups confirm or refute.
+      renderValidating({
+        resolvingCount: nameCandidates.length,
+        partialServerIds: parsed.serverIds,
+        partialNameById: parsed.nameById
+      });
+    } else {
+      // All numeric, nothing to resolve. Render the final state immediately.
+      renderParsed({
+        serverIds: parsed.serverIds,
+        nameById: parsed.nameById,
+        totalLines: parsed.totalLines,
+        warnings: nonNameWarnings
+      });
+      return;
+    }
 
-    if (nonNumericTokens.length === 0) return;
-
-    // Resolve names against the omni-search cache in parallel. Each token
-    // gets one query; we accept ONLY an exact case-insensitive name match.
-    // Substring / single-result fallbacks are intentionally absent because
-    // omni-search returns fuzzy matches and silently picking a near-match
-    // would attach the operator's action to the wrong device.
-    const lookups = await Promise.all(nonNumericTokens.map(async (token) => {
+    // Run lookups in parallel. Strict exact case-insensitive name match
+    // only - no fuzzy fallback (a wrong match here would attach the
+    // operator's action to the wrong device).
+    const lookups = await Promise.all(nameCandidates.map(async ({ token, originalWarning }) => {
       try {
         const result = await call('omni-search:query', { query: token, max: 10 });
         const matches = Array.isArray(result?.matches) ? result.matches : [];
         const pick = matches.find((m) => (m.name || '').toLowerCase() === token.toLowerCase()) || null;
-        return { token, pick };
+        return { token, pick, originalWarning };
       } catch {
-        return { token, pick: null };
+        return { token, pick: null, originalWarning };
       }
     }));
 
-    // If a newer update started while we were awaiting, drop this result.
+    // Drop stale callbacks if a newer paste landed while we were awaiting.
     if (myGen !== resolveGen) return;
 
-    const resolved = new Map(); // token (lowercased) -> { id: string, name: string|null }
-    for (const { token, pick } of lookups) {
-      if (pick && pick.id != null) {
-        resolved.set(token.toLowerCase(), { id: String(pick.id), name: pick.name ?? null });
-      }
-    }
-
-    // Merge: keep parser's numeric IDs, append resolved-by-name IDs (de-dup),
-    // strip warnings whose token resolved, keep warnings whose token didn't.
+    // Merge resolved -> serverIds + nameById; for unresolved tokens
+    // rewrite the parser warning to friendlier copy that acknowledges
+    // the lookup happened.
     const serverIds = [...parsed.serverIds];
     const nameById = { ...parsed.nameById };
     const seen = new Set(serverIds);
-    for (const { id, name } of resolved.values()) {
-      if (seen.has(id)) continue;
-      seen.add(id);
-      serverIds.push(id);
-      if (name) nameById[id] = name;
-    }
-    const finalWarnings = [];
-    for (const w of parsed.warnings) {
-      const m = w.match(NON_NUMERIC_WARNING_RE);
-      if (m && resolved.has(m[1].toLowerCase())) continue;
-      finalWarnings.push(w);
+    const finalWarnings = [...nonNameWarnings];
+
+    for (const { token, pick, originalWarning } of lookups) {
+      if (pick && pick.id != null) {
+        const idStr = String(pick.id);
+        if (!seen.has(idStr)) {
+          seen.add(idStr);
+          serverIds.push(idStr);
+        }
+        // Backfill the name onto the row even if the numeric ID was already
+        // present from an earlier line - the operator pasted both refs and
+        // we should show the name in either case.
+        if (pick.name && !nameById[idStr]) nameById[idStr] = pick.name;
+      } else {
+        const lineMatch = originalWarning.match(/^(Line \d+):/);
+        const linePrefix = lineMatch ? lineMatch[1] : 'Input';
+        finalWarnings.push(`${linePrefix}: "${token}" - device name not found in the FM TK Search cache`);
+      }
     }
 
     renderParsed({
       serverIds,
       nameById,
       totalLines: parsed.totalLines,
-      warnings: finalWarnings,
-      resolvingCount: 0
+      warnings: finalWarnings
     });
   }
 
