@@ -122,6 +122,67 @@ export function buildFabricConnectionPayload({
  */
 const LIST_ITEM_URL_ID_RE = /\/(\d+)\/?$/;
 
+// FMN-206: surface structured v2 API errors. The API uses three
+// different error-body shapes depending on endpoint and validation
+// path. Returns a single human-readable string or null when the body
+// has nothing useful in it (callers fall back to method/path).
+export function extractApiErrorMessage(parsed) {
+  if (!parsed || typeof parsed !== 'object') return null;
+  if (typeof parsed.message === 'string' && parsed.message.trim()) {
+    return parsed.message;
+  }
+  if (typeof parsed.error === 'string' && parsed.error.trim()) {
+    return parsed.error;
+  }
+  // Per-field validation errors: { field_name: "Please enter a ..." }.
+  // Surface as "field1: msg1; field2: msg2" so the operator sees
+  // exactly which fields the server rejected.
+  const fieldEntries = Object.entries(parsed)
+    .filter(([, v]) => typeof v === 'string' && v.trim());
+  if (fieldEntries.length > 0) {
+    return fieldEntries.map(([k, v]) => `${k}: ${v}`).join('; ');
+  }
+  return null;
+}
+
+// FMN-206: GET /server/{id} returns several fields the PUT validator
+// then refuses to accept echoed-back unchanged. Reconcile them before
+// any PUT round-trip so a tag flip doesn't randomly 400 on instances
+// the operator never customized.
+//
+// Cases observed on a live tenant (2026-05-13 HAR):
+//   - geo_latitude / geo_longitude come back as quoted strings ("61.21")
+//     but PUT rejects with "Please enter a valid integer or float".
+//   - snmp_heartbeat_enabled=true paired with snmp_scan_frequency=0 yields
+//     "Can't enable SNMP heartbeat on a non-SNMP instance." The instance
+//     was migrated into an inconsistent state; we conform the body to
+//     what the validator accepts (heartbeat disabled when scanning is off).
+//
+// The helper only adjusts fields that fail validation. Fields the
+// operator intends to change (e.g. tags) are passed through untouched.
+export function sanitizeServerBodyForPut(server) {
+  if (!server || typeof server !== 'object') return server;
+  const out = { ...server };
+
+  const coerceLatLong = (key) => {
+    if (out[key] === null || out[key] === undefined) return;
+    if (typeof out[key] === 'number') return;
+    const n = parseFloat(out[key]);
+    out[key] = Number.isFinite(n) ? n : null;
+  };
+  coerceLatLong('geo_latitude');
+  coerceLatLong('geo_longitude');
+
+  // SNMP heartbeat can only be enabled when SNMP scanning is configured.
+  // snmp_scan_frequency = 0 / null / undefined means SNMP is off.
+  if (out.snmp_heartbeat_enabled === true && !out.snmp_scan_frequency) {
+    out.snmp_heartbeat_enabled = false;
+    out.snmp_heartbeat_notification_schedule = null;
+  }
+
+  return out;
+}
+
 export function parseListResponse(json, wrapperKey, baseUrl = PANOPTA_BASE) {
   if (!wrapperKey || typeof wrapperKey !== 'string') {
     throw new TypeError('parseListResponse: wrapperKey is required');
@@ -259,7 +320,15 @@ export class PanoptaClient {
       try { parsed = await res.text(); } catch { parsed = null; }
     }
     if (!res.ok) {
-      const baseMessage = (parsed && typeof parsed === 'object' && parsed.message)
+      // FMN-206: the v2 API surfaces three error-body shapes we want to
+      // expose in the UI instead of the generic `${method} ${path} failed`:
+      //   { message: "..." }                  - canonical
+      //   { error: "human prose" }            - some endpoints
+      //   { field1: "This field is invalid",  - PUT validation errors
+      //     field2: "..." }
+      // extractApiErrorMessage tries each in turn; falls back to the
+      // method/path line so callers always get *something* useful.
+      const baseMessage = extractApiErrorMessage(parsed)
         || `${method} ${path} failed: HTTP ${res.status}`;
       const isWriteMethod = WRITE_METHODS.has(method);
       const isAuthLikeWriteFailure = isWriteMethod && AUTH_LIKE_STATUSES.has(res.status);
@@ -829,7 +898,7 @@ export class PanoptaClient {
     return body;
   }
 
-  // ---- Server tag management (FMN-155) ---------------------------------
+  // ---- Server tag management (FMN-155 / FMN-206) -----------------------
   //
   // The v2 API exposes server `tags` as a string-array attribute on the
   // /server/{id} record. There is no dedicated /tag endpoint - mutations
@@ -843,6 +912,16 @@ export class PanoptaClient {
   // Returns { status, tagsBefore, tagsAfter, addedTags, removedTags }
   // so callers can render a coherent prev->next diff in the preview
   // table without re-fetching.
+  //
+  // FMN-206 caveat: the GET response carries fields the PUT validator
+  // rejects when echoed back unchanged. Known cases (collected from a
+  // live tenant HAR, 2026-05-13):
+  //   - geo_latitude / geo_longitude come back as strings; PUT requires
+  //     numeric values ("This field is invalid: Please enter a valid
+  //     integer or float").
+  //   - snmp_heartbeat_enabled=true paired with snmp_scan_frequency=0
+  //     yields "Can't enable SNMP heartbeat on a non-SNMP instance".
+  // sanitizeServerBodyForPut() reconciles these before PUT.
 
   async addServerTag(serverId, tags) {
     if (!serverId) throw new TypeError('addServerTag: serverId is required');
@@ -859,7 +938,7 @@ export class PanoptaClient {
     }
     const after = before.concat(added);
     const { res } = await this._request('PUT', `/server/${encodeURIComponent(serverId)}`, {
-      body: { ...server, tags: after }
+      body: sanitizeServerBodyForPut({ ...server, tags: after })
     });
     return { status: res.status, tagsBefore: before, tagsAfter: after, addedTags: added, removedTags: [] };
   }
@@ -879,7 +958,7 @@ export class PanoptaClient {
       return { status: 200, tagsBefore: before, tagsAfter: before, addedTags: [], removedTags: [] };
     }
     const { res } = await this._request('PUT', `/server/${encodeURIComponent(serverId)}`, {
-      body: { ...server, tags: after }
+      body: sanitizeServerBodyForPut({ ...server, tags: after })
     });
     return { status: res.status, tagsBefore: before, tagsAfter: after, addedTags: [], removedTags: removed };
   }

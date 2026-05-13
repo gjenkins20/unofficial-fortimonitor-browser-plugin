@@ -42,11 +42,22 @@ export function describe(target, params) {
 export async function commit(target, params, { client }) {
   const v = validate(params);
   if (!v.ok) throw new Error(v.error);
-  const result = await client.removeServerTag(target.id, [v.value.tag]);
-  return {
-    status: result.status,
-    removedTags: result.removedTags,
-    tagsAfter: result.tagsAfter,
-    noop: result.removedTags.length === 0
-  };
+  try {
+    const result = await client.removeServerTag(target.id, [v.value.tag]);
+    return {
+      status: result.status,
+      removedTags: result.removedTags,
+      tagsAfter: result.tagsAfter,
+      noop: result.removedTags.length === 0
+    };
+  } catch (err) {
+    // FMN-206: GET 404 means the operator handed us a server ID that
+    // doesn't exist on this tenant (typos, bogus IDs, deleted instances).
+    // Re-throw with operator-friendly copy so the preview's detail row
+    // doesn't read like a stack trace.
+    if (err?.status === 404) {
+      throw new Error(`Instance #${target.id} not found on this tenant.`);
+    }
+    throw err;
+  }
 }
