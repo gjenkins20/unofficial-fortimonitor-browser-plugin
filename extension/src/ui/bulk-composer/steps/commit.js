@@ -62,9 +62,6 @@ export function render({ container, store, navigate, events, call }) {
         style: `font-size:0.75rem;padding:0.1rem 0.45rem;border-radius:10px;background:${desc.willChange ? '#eef2f7' : '#f1f1f1'};color:${desc.willChange ? 'var(--text)' : 'var(--text-muted)'};`
       }, desc.error ? 'invalid' : (desc.willChange ? 'will change' : 'no-op'))
     );
-    const detailCell = h('td', { style: tdStyle() },
-      h('span', { class: 'detail muted', style: 'color:var(--text-muted);font-size:0.78rem;' }, desc.note || desc.error || '')
-    );
     const tr = h('tr', {
       'data-test': 'bulk-preview-row',
       'data-id': String(t.id ?? ''),
@@ -79,15 +76,31 @@ export function render({ container, store, navigate, events, call }) {
       h('td', { style: tdStyle() + 'max-width:200px;overflow:hidden;text-overflow:ellipsis;', title: desc.next || '' }, String(desc.next ?? '-')),
       statusCell
     );
-    // The detail row hangs underneath in a colspan span to keep the table compact.
-    const detailTr = h('tr', { 'data-test': 'bulk-preview-detail', style: 'border-bottom:1px solid var(--border);' },
+    // The detail row hangs underneath in a colspan cell to keep the
+    // table compact. Always created so commit-time errors have a place
+    // to land; hidden via display:none when there is nothing to show.
+    const initialDetailText = desc.note || desc.error || '';
+    const detailSpan = h('span', {
+      class: 'detail muted',
+      'data-test': 'bulk-preview-detail-text',
+      style: 'color:var(--text-muted);font-size:0.78rem;white-space:pre-wrap;'
+    }, initialDetailText);
+    const detailTr = h('tr', {
+      'data-test': 'bulk-preview-detail',
+      style: 'border-bottom:1px solid var(--border);' + (initialDetailText ? '' : 'display:none;')
+    },
       h('td', { colspan: '5', style: tdStyle() + 'padding-top:0;color:var(--text-muted);font-size:0.78rem;' },
-        detailCell.firstChild
+        detailSpan
       )
     );
     tbody.appendChild(tr);
-    if ((desc.note || desc.error)) tbody.appendChild(detailTr);
-    rowByTargetId.set(t.id, { tr, statusEl: statusCell.firstChild, detailEl: detailCell.firstChild });
+    tbody.appendChild(detailTr);
+    rowByTargetId.set(t.id, {
+      tr,
+      detailTr,
+      statusEl: statusCell.firstChild,
+      detailEl: detailSpan
+    });
   }
 
   const summary = h('div', {
@@ -148,7 +161,17 @@ export function render({ container, store, navigate, events, call }) {
           row.statusEl.textContent = 'failed';
           row.statusEl.style.background = '#fde0dc';
           row.statusEl.style.color = '#a02216';
-          if (row.detailEl) row.detailEl.textContent = payload.error ?? '';
+          // Surface the real failure reason on the detail row. Falls
+          // back to a placeholder if the SW omitted both error and
+          // errorStatus so the row never reads as silently broken.
+          if (row.detailEl) {
+            const parts = [];
+            if (payload.error) parts.push(payload.error);
+            if (payload.errorStatus) parts.push(`(HTTP ${payload.errorStatus})`);
+            row.detailEl.textContent = parts.join(' ') || '(no error message returned)';
+            row.detailEl.style.color = '#a02216';
+          }
+          if (row.detailTr) row.detailTr.style.display = '';
         }
       }
       done++;
