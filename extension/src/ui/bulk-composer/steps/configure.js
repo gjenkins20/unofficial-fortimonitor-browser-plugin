@@ -11,6 +11,7 @@ import { bulkBreadcrumbs } from './breadcrumbs.js';
 import { getAction } from '../../../lib/bulk-actions/index.js';
 import { buildFabricProfile } from '../../../lib/fabric-profile.js';
 import { buildRecommendations } from '../../../lib/recommendation-engine.js';
+import { buildTemplateClusters } from '../../../lib/template-clusterer.js';
 
 const STOCK_GROUP_NAME = 'Default Monitoring Templates';
 
@@ -53,6 +54,11 @@ export function render({ container, store, navigate, call }) {
       const recs = Array.isArray(params.recommendations) ? params.recommendations : [];
       const optedIn = recs.filter((r) => r && r.opted_in === true && r.chosen_template);
       nextBtn.disabled = optedIn.length === 0;
+    } else if (store.actionId === 'profile-and-create-templates') {
+      const clusters = Array.isArray(params.clusters) ? params.clusters : [];
+      const optedIn = clusters.filter((c) => c && c.opted_in === true);
+      const destGroup = String(params.destination_group ?? '').trim();
+      nextBtn.disabled = optedIn.length === 0 || destGroup === '';
     } else {
       nextBtn.disabled = true;
     }
@@ -64,6 +70,8 @@ export function render({ container, store, navigate, call }) {
     renderTemplateForm({ body, store, refreshNextDisabled, call, stateLabel });
   } else if (store.actionId === 'apply-best-practice-fabric') {
     renderBestPracticeFabricForm({ body, store, refreshNextDisabled, call, stateLabel });
+  } else if (store.actionId === 'profile-and-create-templates') {
+    renderProfileAndCreateTemplatesForm({ body, store, refreshNextDisabled, call, stateLabel });
   } else {
     body.appendChild(h('p', {}, 'Unknown action; pick again on the previous step.'));
   }
@@ -460,4 +468,213 @@ function statusCell(r) {
     return h('span', {}, 'policy reused');
   }
   return h('span', {}, 'will create policy');
+}
+
+// =====================================================================
+// FMN-200: Profile + Create Templates from similar devices
+// =====================================================================
+//
+// On mount, fetches each picked device's fabricSystemData,
+// monitoring_config, and (for FortiGates) port_scope. Clusters them via
+// buildTemplateClusters; renders per-cluster rows with opt-in checkbox,
+// editable template name, and an optional clone-from-device toggle.
+// Emits the action's params shape to store.params on every change.
+
+function renderProfileAndCreateTemplatesForm({ body, store, refreshNextDisabled, call, stateLabel }) {
+  body.appendChild(h('h3', { class: 'subhead' }, 'Profile + Create Templates'));
+
+  // Destination group + dry-run controls
+  const destGroupInput = h('input', {
+    type: 'text',
+    'data-test': 'configure-pact-destination-group',
+    placeholder: 'grp-{id}  (e.g. grp-617598 = INCOMING SERVERS)',
+    style: 'width:100%;padding:0.4rem 0.55rem;font-family:inherit;border:1px solid var(--border-strong);border-radius:4px;'
+  });
+  destGroupInput.value = store.params?.destination_group ?? '';
+  body.appendChild(h('label', {
+    style: 'display:flex;flex-direction:column;gap:0.2rem;margin:0.4rem 0;font-size:0.9rem;'
+  },
+    h('span', {}, 'Destination server group (where new templates live)'),
+    destGroupInput
+  ));
+
+  const dryRunChk = h('input', {
+    type: 'checkbox',
+    'data-test': 'configure-pact-dry-run',
+    checked: store.params?.dry_run === true
+  });
+  body.appendChild(h('label', {
+    style: 'display:flex;gap:0.4rem;align-items:center;margin:0.2rem 0 0.8rem;font-size:0.9rem;'
+  },
+    dryRunChk,
+    h('span', {}, 'Dry run (preview without writing - no templates created, no metrics added, no attaches)')
+  ));
+
+  const status = h('p', {
+    class: 'muted',
+    style: 'font-size:0.85rem;color:var(--text-muted);margin:0.2rem 0 0.8rem;'
+  }, 'Fetching device details, monitoring configs, and port scopes...');
+  body.appendChild(status);
+
+  const tableHost = h('div', { 'data-test': 'configure-pact-table-host', style: 'margin-top:0.5rem;' });
+  body.appendChild(tableHost);
+
+  const unmatchedNote = h('p', {
+    'data-test': 'configure-pact-unmatched',
+    class: 'muted',
+    style: 'font-size:0.85rem;color:var(--text-muted);margin-top:0.6rem;display:none;'
+  });
+  body.appendChild(unmatchedNote);
+
+  function emit() {
+    store.params = {
+      ...(store.params || {}),
+      dry_run: dryRunChk.checked,
+      destination_group: destGroupInput.value.trim(),
+      template_type: 'fabric_template'
+    };
+    refreshNextDisabled();
+  }
+
+  destGroupInput.addEventListener('input', emit);
+  dryRunChk.addEventListener('change', emit);
+
+  (async () => {
+    const targets = Array.isArray(store.targets) ? store.targets : [];
+    const serverIds = targets.map((t) => t.id).filter((id) => id != null);
+
+    let fsd, monitoringConfig, portScope;
+    try {
+      [fsd, monitoringConfig, portScope] = await Promise.all([
+        call('bulk-composer:list-fabric-system-data', { serverIds }),
+        call('bulk-composer:list-monitoring-config-batch', { serverIds }),
+        call('bulk-composer:list-port-scope-batch', { serverIds })
+      ]);
+    } catch (err) {
+      status.textContent = `Could not load data: ${err?.message ?? err}`;
+      status.className = 'execute-state error';
+      stateLabel.textContent = 'Configure failed - see error above.';
+      stateLabel.className = 'execute-state error';
+      return;
+    }
+
+    // Assemble devices for the clusterer
+    const fsdMap = (fsd && fsd.byServerId) || {};
+    const mcMap = (monitoringConfig && monitoringConfig.byServerId) || {};
+    const psMap = (portScope && portScope.byServerId) || {};
+    const devices = targets.map((t) => ({
+      id: t.id,
+      name: t.name,
+      fabricSystemData: fsdMap[t.id] ?? null,
+      monitoring_config: mcMap[t.id] ?? null,
+      port_scope: psMap[t.id] ?? null
+    }));
+
+    const { clusters, unclassified } = buildTemplateClusters(devices);
+
+    const decorated = clusters.map((c) => ({
+      ...c,
+      opted_in: true,
+      clone_from_device: false
+    }));
+
+    store.params = {
+      ...(store.params || {}),
+      dry_run: dryRunChk.checked,
+      destination_group: destGroupInput.value.trim(),
+      template_type: 'fabric_template',
+      clusters: decorated
+    };
+
+    if (unclassified.length > 0) {
+      unmatchedNote.style.display = 'block';
+      unmatchedNote.textContent = `${unclassified.length} of ${targets.length} picked instance(s) lack Fabric metadata or were missing required fields; they will not be touched.`;
+    }
+
+    if (decorated.length === 0) {
+      status.textContent = 'No clusterable Fabric instances in the selection. Pick at least one Fabric-onboarded device.';
+      status.className = 'execute-state warning';
+      refreshNextDisabled();
+      return;
+    }
+
+    status.textContent = `Found ${decorated.length} cluster${decorated.length === 1 ? '' : 's'} across ${targets.length} instance${targets.length === 1 ? '' : 's'}. Opt in/out per row, then preview & commit.`;
+
+    renderClusterTable({
+      host: tableHost,
+      clusters: decorated,
+      onChange: (idx, patch) => {
+        const updated = store.params.clusters.slice();
+        updated[idx] = { ...updated[idx], ...patch };
+        store.params = { ...store.params, clusters: updated };
+        refreshNextDisabled();
+      }
+    });
+
+    refreshNextDisabled();
+  })();
+}
+
+function renderClusterTable({ host, clusters, onChange }) {
+  while (host.firstChild) host.removeChild(host.firstChild);
+
+  const table = h('table', {
+    'data-test': 'configure-pact-table',
+    style: 'width:100%;border-collapse:collapse;margin-top:0.3rem;font-size:0.88rem;'
+  });
+  table.appendChild(h('thead', {}, h('tr', {
+    style: 'background:#f4f6f8;border-bottom:1px solid var(--border-strong);'
+  },
+    th(''), th('Make / Model'), th('Devices'),
+    th('Template name (editable)'),
+    th('Resources'),
+    th('Clone'),
+    th('Port scope')
+  )));
+
+  const tbody = h('tbody', {});
+  for (const [idx, c] of clusters.entries()) {
+    const tr = h('tr', {
+      'data-test': 'configure-pact-row',
+      'data-cluster-key': c.key,
+      style: 'border-bottom:1px solid var(--border-weak);'
+    });
+
+    const optChk = h('input', { type: 'checkbox', 'data-test': 'configure-pact-opt-in', checked: c.opted_in === true });
+    optChk.addEventListener('change', () => onChange(idx, { opted_in: optChk.checked }));
+    tr.appendChild(td(optChk));
+
+    tr.appendChild(td(h('span', {}, `${c.make} / ${c.model}`)));
+    tr.appendChild(td(String(c.applies_to_server_ids.length)));
+
+    const nameInput = h('input', {
+      type: 'text',
+      'data-test': 'configure-pact-template-name',
+      style: 'width:100%;padding:0.25rem 0.4rem;border:1px solid var(--border-strong);border-radius:3px;font-size:0.85rem;'
+    });
+    nameInput.value = c.proposed_template_name;
+    nameInput.addEventListener('input', () => onChange(idx, { proposed_template_name: nameInput.value }));
+    tr.appendChild(td(nameInput));
+
+    const resCount = (c.proposed_resources || []).length;
+    const resCell = resCount === 0
+      ? h('span', { class: 'muted', style: 'color:#856404;' }, '0 (empty shell)')
+      : h('span', {
+          title: c.proposed_resources.map((r) => r.name || r.resource_textkey).join('\n')
+        }, `${resCount} resource${resCount === 1 ? '' : 's'}`);
+    tr.appendChild(td(resCell));
+
+    const cloneChk = h('input', { type: 'checkbox', 'data-test': 'configure-pact-clone', checked: c.clone_from_device === true });
+    cloneChk.addEventListener('change', () => onChange(idx, { clone_from_device: cloneChk.checked }));
+    tr.appendChild(td(cloneChk));
+
+    const portText = c.port_signature === null
+      ? h('span', { class: 'muted' }, '(none)')
+      : h('span', {}, c.port_signature.length === 0 ? '0 ports' : `${c.port_signature.length} port${c.port_signature.length === 1 ? '' : 's'}`);
+    tr.appendChild(td(portText));
+
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  host.appendChild(table);
 }
