@@ -13,7 +13,13 @@ import { answerCurrent, scoreQuiz } from './quiz.js';
 export function renderQuiz({ doc, state, onAnswer, onFinish } = {}) {
   if (!doc) throw new Error('renderQuiz: doc is required');
   const host = doc.createElement('div');
-  host.className = 'fmn-tour-overlay fmn-tour-quiz-overlay';
+  // FMN-167 bugfix: do NOT also tag with `.fmn-tour-overlay` - that
+  // class sets width:0/height:0 on the host (correct for the zero-sized
+  // spotlight host the engine uses) and the inset:0 on
+  // .fmn-tour-quiz-overlay does not override width/height. The result
+  // was a 0x0 host, and the centered card landed at viewport (0,0)
+  // half-off-screen. The quiz needs its own viewport-filling host.
+  host.className = 'fmn-tour-quiz-overlay';
   host.setAttribute('role', 'dialog');
   host.setAttribute('aria-modal', 'false');
   host.setAttribute('aria-label', 'FortiMonitor tour quiz');

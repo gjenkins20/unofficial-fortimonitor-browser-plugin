@@ -104,6 +104,42 @@ test.describe('FMN-167 quiz renderer (headless)', () => {
     expect(errors).toEqual([]);
   });
 
+  // Regression for the FMN-167 quiz-host CSS bug: combining the host
+  // with .fmn-tour-overlay shrank it to 0x0 (that class sets width:0/
+  // height:0 for the spotlight host) and the centered card landed at
+  // viewport (0,0) - half off-screen left + above. This test asserts
+  // the card actually sits inside the viewport, not at the origin.
+  test('quiz card is centered inside the viewport (not flushed to 0,0)', async ({ ctx }) => {
+    const { page, errors } = await gotoHarness(ctx);
+    await page.click('#mount');
+    const cardBox = await page.locator('.fmn-tour-quiz-card').boundingBox();
+    const viewport = page.viewportSize();
+    expect(cardBox).not.toBeNull();
+    // Card must be fully inside the viewport on all sides.
+    expect(cardBox.x).toBeGreaterThan(0);
+    expect(cardBox.y).toBeGreaterThan(0);
+    expect(cardBox.x + cardBox.width).toBeLessThan(viewport.width);
+    expect(cardBox.y + cardBox.height).toBeLessThan(viewport.height);
+    // Center of card should be near center of viewport.
+    const cardCenterX = cardBox.x + cardBox.width / 2;
+    const cardCenterY = cardBox.y + cardBox.height / 2;
+    expect(Math.abs(cardCenterX - viewport.width / 2)).toBeLessThan(20);
+    expect(Math.abs(cardCenterY - viewport.height / 2)).toBeLessThan(20);
+    expect(errors).toEqual([]);
+  });
+
+  // Regression for the same bug at the host level: the overlay must
+  // fill the viewport so the centered card has a real coordinate space.
+  test('quiz overlay host fills the viewport', async ({ ctx }) => {
+    const { page, errors } = await gotoHarness(ctx);
+    await page.click('#mount');
+    const hostBox = await page.locator('.fmn-tour-quiz-overlay').boundingBox();
+    const viewport = page.viewportSize();
+    expect(hostBox.width).toBeGreaterThanOrEqual(viewport.width - 1);
+    expect(hostBox.height).toBeGreaterThanOrEqual(viewport.height - 1);
+    expect(errors).toEqual([]);
+  });
+
   test('correct answer: option marked correct, explanation appears, advance after delay', async ({ ctx }) => {
     const { page, errors } = await gotoHarness(ctx);
     await page.click('#mount');
