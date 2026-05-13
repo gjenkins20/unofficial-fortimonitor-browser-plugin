@@ -28,32 +28,55 @@
   const STYLE_HREF = chrome.runtime.getURL('src/ui/intro-tour/styles.css');
   const ENGINE_MODULE_URL = chrome.runtime.getURL('src/ui/intro-tour/tour-engine.js');
 
-  // INTRO_TOUR_STEPS: a 7-step walk-through of FortiMonitor's left
-  // sidebar plus floating welcome / handoff / wrap-up steps. Every
-  // anchored step targets a `li.pa-side-nav__top-level-item` in the
-  // FortiMonitor sidebar, looked up by text content via
-  // `anchorByText` and resolved to a data-attribute selector at start
-  // time (see resolveSidebarAnchors below). Steps with `anchor: 'body'`
-  // render as floating cards centered on the viewport - the renderer
-  // already supports this via the floating fallback.
+  // INTRO_TOUR_STEPS: a 12-step walk-through covering the FortiMonitor
+  // UI layout, every top-level sidebar entry (Dashboards, Monitoring,
+  // Incidents, Maintenance, Reporting, Teams & Activity), the +Add
+  // button and the sidebar collapse icon, plus a toolkit handoff and a
+  // wrap-up before the quiz.
   //
-  // The text-based lookup keeps the tour resilient to FortiMonitor
-  // reshuffling sidebar order: as long as the entry labels stay the
-  // same, the anchor finds it.
+  // Anchor types:
+  //   - anchorBySelector: an explicit CSS selector resolved verbatim.
+  //     Used for the sidebar container in the layout overview.
+  //   - anchorByText: text match against any element under the sidebar.
+  //     The resolver tags the first match with a data attribute.
+  //   - anchorByAriaLabel: aria-label match for icon-only controls (the
+  //     collapse icon doesn't carry visible text).
+  //   - anchor: 'body' renders as a centered floating card via the
+  //     renderer's existing floating fallback.
+  //
+  // Unresolved anchors fall back to step.anchor_fallback (default 'body'),
+  // so a renamed entry degrades to a floating caption rather than
+  // hanging the tour.
   const INTRO_TOUR_STEPS = [
     {
       id: 'welcome',
       anchor: 'body',
       anchor_fallback: 'body',
       caption_html: [
-        '<p><strong>Welcome to FortiMonitor.</strong> This short walk-through ',
-        'covers the main areas of the console you will use day-to-day, ',
-        'followed by a quick 3-question check.</p>',
+        '<p><strong>Welcome to FortiMonitor.</strong> This walk-through ',
+        'covers the layout of the console and every entry in the left-side ',
+        'menu, followed by a quick 3-question check at the end.</p>',
         '<p>Click <strong>Next</strong> to begin.</p>'
       ].join(''),
       when: { always: true },
       advance: 'next-button',
       placement: 'auto'
+    },
+    {
+      id: 'layout-overview',
+      anchorBySelector: '.pa-side-nav, nav.pa-side-nav, nav[role="navigation"]',
+      anchor_fallback: 'body',
+      caption_html: [
+        '<p>The FortiMonitor UI has three regions. The <strong>left sidebar</strong> ',
+        '(highlighted) is your primary navigation - each entry opens a ',
+        'workspace. The <strong>top bar</strong> holds search, your account, ',
+        'and tenant-level controls. The <strong>main content area</strong> on ',
+        'the right is whichever workspace you currently have open.</p>',
+        '<p>The next few steps walk you through each sidebar entry.</p>'
+      ].join(''),
+      when: { always: true },
+      advance: 'next-button',
+      placement: 'right'
     },
     {
       id: 'nav-dashboards',
@@ -98,14 +121,70 @@
       placement: 'right'
     },
     {
+      id: 'nav-maintenance',
+      anchorByText: 'Maintenance',
+      anchor_fallback: 'body',
+      caption_html: [
+        '<p><strong>Maintenance</strong> is where you schedule planned ',
+        'downtime windows. While a window is active FortiMonitor suppresses ',
+        'alerts for the affected instances, so a planned reboot or upgrade ',
+        'does not page the on-call rotation.</p>'
+      ].join(''),
+      when: { always: true },
+      advance: 'next-button',
+      placement: 'right'
+    },
+    {
       id: 'nav-reporting',
       anchorByText: 'Reporting',
       anchor_fallback: 'body',
       caption_html: [
         '<p><strong>Reporting</strong> hosts canned reports (uptime, SLA, ',
         'audits), on-demand exports, and your tenant&apos;s activity history. ',
-        'The Unofficial FortiMonitor Toolkit adds extra cards here when ',
-        'you enable them in its Settings.</p>'
+        'The Unofficial FortiMonitor Toolkit adds extra report cards here ',
+        'when you enable them in its Settings.</p>'
+      ].join(''),
+      when: { always: true },
+      advance: 'next-button',
+      placement: 'right'
+    },
+    {
+      id: 'nav-teams-activity',
+      anchorByText: 'Teams & Activity',
+      anchor_fallback: 'body',
+      caption_html: [
+        '<p><strong>Teams &amp; Activity</strong> is your user, role, and ',
+        'integration management. Okta / SAML SSO, notification rules, ',
+        'PagerDuty / Teams / Slack hooks, and shift schedules all live here. ',
+        'New operator onboarding usually starts in this section.</p>'
+      ].join(''),
+      when: { always: true },
+      advance: 'next-button',
+      placement: 'right'
+    },
+    {
+      id: 'sidebar-add',
+      anchorByText: '+ Add',
+      anchor_fallback: 'body',
+      caption_html: [
+        '<p>The <strong>+ Add</strong> button at the bottom of the sidebar is ',
+        'the universal "add a new thing" entry point. It opens a picker for ',
+        'new instances, dashboards, users, schedules, and other resources - ',
+        'whatever the current tenant context supports.</p>'
+      ].join(''),
+      when: { always: true },
+      advance: 'next-button',
+      placement: 'right'
+    },
+    {
+      id: 'sidebar-collapse',
+      anchorByAriaLabel: 'collapse',
+      anchor_fallback: 'body',
+      caption_html: [
+        '<p>The <strong>collapse</strong> icon at the bottom of the sidebar ',
+        'shrinks the menu to a thin icon-only strip - useful on smaller ',
+        'screens, or when you want maximum real estate for the main content ',
+        'area. Click it again to expand back to the full labels.</p>'
       ].join(''),
       when: { always: true },
       advance: 'next-button',
@@ -141,27 +220,91 @@
     }
   ];
 
-  // Resolve `anchorByText` steps against the live FortiMonitor sidebar.
-  // The CSS step.anchor field is overwritten with a stable data-attribute
-  // selector pointing at the matched <li>. Steps whose text doesn't
-  // resolve fall through to their anchor_fallback (typically 'body' for
-  // a floating card). The data attribute is unique per step id so the
-  // engine's MutationObserver-based anchor wait finds the right node
-  // even if FortiMonitor re-renders the sidebar.
-  function resolveSidebarAnchors(steps) {
-    const items = document.querySelectorAll('li.pa-side-nav__top-level-item');
-    return steps.map((step) => {
-      if (!step.anchorByText) return step;
-      const needle = String(step.anchorByText).toLowerCase();
-      for (const item of items) {
-        const text = (item.textContent || '').trim().toLowerCase();
-        if (text.includes(needle)) {
-          const attr = `fmn-tour-anchor-${step.id}`;
-          item.setAttribute('data-fmn-tour-anchor', attr);
-          return { ...step, anchor: `[data-fmn-tour-anchor="${attr}"]` };
-        }
+  // Resolve the various anchor hint fields against the live DOM right
+  // before runTour, rewriting step.anchor to a stable selector the
+  // engine can use:
+  //   - anchorBySelector: used verbatim (resolver verifies the selector
+  //     resolves to something before rewriting).
+  //   - anchorByText: searches the sidebar for any element whose own
+  //     direct text (NOT its descendants') contains the needle. This
+  //     biases the match toward leaf labels like the "Dashboards" entry
+  //     rather than the entire <nav> container.
+  //   - anchorByAriaLabel: searches the sidebar for an element whose
+  //     aria-label contains the needle. Used for icon-only buttons that
+  //     have no visible text (the sidebar collapse control).
+  // Matched nodes are tagged with `data-fmn-tour-anchor="<step-id>"`
+  // and step.anchor is rewritten to that attribute selector so the
+  // engine's MutationObserver wait + the renderer's querySelector both
+  // find the same node, even across re-renders.
+  function sidebarRoot() {
+    return document.querySelector('.pa-side-nav') ||
+           document.querySelector('nav.pa-side-nav') ||
+           document.querySelector('nav[role="navigation"]') ||
+           document.body;
+  }
+
+  function findByOwnText(root, needle) {
+    const wanted = String(needle).trim().toLowerCase();
+    const candidates = root.querySelectorAll('*');
+    let best = null;
+    let bestLen = Infinity;
+    for (const el of candidates) {
+      // Collect direct text content (children's text omitted).
+      let own = '';
+      for (const node of el.childNodes) {
+        if (node.nodeType === 3 /* TEXT_NODE */) own += node.nodeValue;
       }
-      // Text not found - fall through to anchor_fallback (floating).
+      const trimmed = own.trim().toLowerCase();
+      if (!trimmed) continue;
+      if (trimmed.includes(wanted) && trimmed.length < bestLen) {
+        best = el;
+        bestLen = trimmed.length;
+      }
+    }
+    if (best) return best;
+    // Fallback: any element whose total textContent contains the
+    // needle, biased toward small subtrees so we don't end up
+    // anchoring the whole <nav>.
+    bestLen = Infinity;
+    for (const el of candidates) {
+      const t = (el.textContent || '').trim().toLowerCase();
+      if (t.includes(wanted) && t.length < bestLen) {
+        best = el;
+        bestLen = t.length;
+      }
+    }
+    return best;
+  }
+
+  function findByAriaLabel(root, needle) {
+    const wanted = String(needle).trim().toLowerCase();
+    const candidates = root.querySelectorAll('[aria-label]');
+    for (const el of candidates) {
+      const label = (el.getAttribute('aria-label') || '').trim().toLowerCase();
+      if (label.includes(wanted)) return el;
+    }
+    return null;
+  }
+
+  function resolveSidebarAnchors(steps) {
+    const root = sidebarRoot();
+    return steps.map((step) => {
+      const tag = `fmn-tour-anchor-${step.id}`;
+      let target = null;
+      if (step.anchorBySelector) {
+        try { target = document.querySelector(step.anchorBySelector); } catch { target = null; }
+      } else if (step.anchorByText) {
+        target = findByOwnText(root, step.anchorByText);
+      } else if (step.anchorByAriaLabel) {
+        target = findByAriaLabel(root, step.anchorByAriaLabel);
+      } else {
+        return step;
+      }
+      if (target) {
+        target.setAttribute('data-fmn-tour-anchor', tag);
+        return { ...step, anchor: `[data-fmn-tour-anchor="${tag}"]` };
+      }
+      // Unresolved hints fall back to floating.
       return { ...step, anchor: step.anchor_fallback || 'body' };
     });
   }
