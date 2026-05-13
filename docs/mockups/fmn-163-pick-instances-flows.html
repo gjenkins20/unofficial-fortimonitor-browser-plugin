@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<!--
+  FMN-163 mockup: Bulk Composer Pick Instances vs Add Port Scope (Fabric) Load Devices.
+  Built by Gregori Jenkins · https://www.linkedin.com/in/gregorijenkins
+
+  Three panels:
+    1. CURRENT - Bulk Action Composer "Pick instances" (live shipping code).
+    2. REFERENCE - "Add to Port Scope (Fabric)" Step 1 "Load devices from CSV".
+    3. PROPOSED - Bulk Composer "Pick instances" after the FMN-163 alignment.
+
+  Renders straight against the real toolkit stylesheet so the side-by-side
+  comparison shows true colors, spacing, and chrome.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FMN-163 - Pick Instances flow comparison</title>
+<link rel="stylesheet" href="../../extension/src/ui/styles.css">
+<style>
+  body {
+    padding: 24px 16px 80px;
+  }
+  .compare-wrap {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 24px;
+    max-width: 2700px;
+    margin: 0 auto;
+  }
+  .compare-col {
+    min-width: 0;
+  }
+  .compare-col > .col-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin: 0 0 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .compare-col > .col-label .tag {
+    background: white;
+    border: 1px solid var(--border-strong);
+    border-radius: 100px;
+    padding: 2px 10px;
+    font-weight: 500;
+    color: var(--text);
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 11px;
+  }
+  .compare-col.current > .col-label .tag { color: var(--text); }
+  .compare-col.reference > .col-label .tag { color: var(--ok); border-color: #b8dfc2; background: var(--ok-soft); }
+  .compare-col.proposed > .col-label .tag { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+  .compare-col > .col-note {
+    margin: 0 0 12px;
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+  .mockup-frame {
+    max-width: none; /* let the column dictate width */
+  }
+  /* Tighter overrides so each frame fits within its column at typical zooms. */
+  .step-header h2 { font-size: 14px; }
+  .step-header p { font-size: 11.5px; }
+  .body-section { padding: 16px; }
+  .drop-zone { padding: 24px 16px; }
+  .drop-zone .dz-icon { width: 32px; height: 32px; font-size: 16px; margin-bottom: 8px; }
+  .drop-zone .dz-primary { font-size: 12px; }
+  .drop-zone .dz-secondary { font-size: 11px; }
+  textarea.paste-area { min-height: 90px; }
+
+  .deck-header {
+    max-width: 2700px;
+    margin: 0 auto 16px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .deck-header h1 { margin: 0; font-size: 15px; }
+  .deck-header .crumb {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .deck-header .crumb code {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-size: 11px;
+  }
+
+  /* Bulk Composer mini chrome (subheads + chips + dropdown rows) */
+  .subhead {
+    margin: 14px 0 6px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .subhead .num {
+    display: inline-grid;
+    place-items: center;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--muted-soft);
+    color: var(--text);
+    font-size: 10px;
+    font-weight: 700;
+    margin-right: 6px;
+  }
+  .search-input {
+    width: 100%;
+    font-family: inherit;
+    font-size: 12px;
+    padding: 7px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: 5px;
+  }
+  .search-hint, .csv-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+  .search-dropdown {
+    margin-top: 6px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    max-height: 160px;
+    overflow-y: auto;
+  }
+  .search-row {
+    padding: 6px 10px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+  }
+  .search-row:last-child { border-bottom: none; }
+  .search-row:hover { background: #fafbfc; }
+  .search-row .fqdn { color: var(--text-muted); font-size: 11px; }
+  .loader-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .loader-status {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 6px;
+    min-height: 1em;
+  }
+  .chips-host {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-height: 40px;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+  .chip {
+    background: var(--muted-soft);
+    border: 1px solid var(--border-strong);
+    border-radius: 100px;
+    padding: 3px 8px 3px 10px;
+    font-size: 11.5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .chip .id-part {
+    opacity: 0.55;
+    font-size: 10.5px;
+    margin-left: 2px;
+  }
+  .chip .x {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 0 2px;
+    line-height: 1;
+    color: var(--text-muted);
+  }
+  .chips-count {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 6px;
+  }
+
+  /* Annotation callouts attached to each panel */
+  .panel-callouts {
+    margin-top: 10px;
+    background: white;
+    border: 1px dashed var(--border-strong);
+    border-radius: 5px;
+    padding: 10px 12px;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--text);
+  }
+  .panel-callouts ul { margin: 4px 0 0; padding-left: 16px; }
+  .panel-callouts h4 {
+    margin: 0 0 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .panel-callouts .diff-add { color: var(--ok); }
+  .panel-callouts .diff-remove { color: var(--danger); text-decoration: line-through; }
+  .panel-callouts .diff-keep { color: var(--text-muted); }
+
+  @media (max-width: 1200px) {
+    .compare-wrap { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="deck-header">
+  <h1>FMN-163 - Pick Instances flow comparison</h1>
+  <div class="crumb">
+    sources: <code>extension/src/ui/bulk-composer/steps/pick.js</code> ·
+    <code>extension/src/ui/steps/start.js</code>
+  </div>
+</div>
+
+<div class="compare-wrap">
+
+  <!-- ============================================================
+       COLUMN 1: CURRENT Bulk Composer Pick Instances
+       ============================================================ -->
+  <div class="compare-col current">
+    <div class="col-label">
+      <span>Current</span>
+      <span class="tag">Bulk Action Composer · Pick instances</span>
+    </div>
+    <p class="col-note">
+      Shipping today. Leads with the omni-search input; clipboard / page-selection
+      loaders are secondary buttons; selected instances render as chips.
+    </p>
+
+    <div class="mockup-frame">
+      <div class="title-bar">
+        <h1><span class="icon">F</span>Bulk Action Composer<span class="subtitle">- Pick instances</span></h1>
+      </div>
+
+      <div class="step-header">
+        <div class="step-breadcrumbs">
+          <span class="step active">1. Pick instances</span>
+          <span class="arrow">›</span>
+          <span class="step">2. Pick action</span>
+          <span class="arrow">›</span>
+          <span class="step">3. Configure</span>
+          <span class="arrow">›</span>
+          <span class="step">4. Preview &amp; commit</span>
+        </div>
+        <h2>Pick a subset of instances to operate on</h2>
+        <p>Type to search across every server field (name, fqdn, ip, tags, attributes, template, group). Pick rows into the chip list below, or load a list from your clipboard.</p>
+      </div>
+
+      <div class="body-section">
+
+        <div class="subhead"><span class="num">1</span>Search</div>
+        <input class="search-input" type="search" placeholder="Type at least 2 characters..." value="branch">
+        <div class="search-hint">Searches the FM TK Search corpus (cached for 5 min).</div>
+        <div class="search-dropdown">
+          <div class="search-row">
+            <span style="flex:1;">FGT-Branch-001</span>
+            <span class="fqdn">fgt-branch-001.lab.local</span>
+          </div>
+          <div class="search-row">
+            <span style="flex:1;">FGT-Branch-002</span>
+            <span class="fqdn">fgt-branch-002.lab.local</span>
+          </div>
+          <div class="search-row" style="opacity:0.5;cursor:default;">
+            <span style="flex:1;">FGT-Branch-003</span>
+            <span class="fqdn">fgt-branch-003.lab.local</span>
+            <span class="fqdn" style="font-style:italic;">(added)</span>
+          </div>
+        </div>
+
+        <div class="subhead" style="margin-top:16px;"><span class="num">2</span>Or load a list</div>
+        <div class="loader-row">
+          <button class="btn btn-secondary" type="button">Load from clipboard CSV</button>
+          <button class="btn btn-secondary" type="button">Load from current page selection</button>
+        </div>
+        <div class="csv-hint">Clipboard: paste server IDs or names, one per line or comma-separated. Page selection: read the last subset you ticked on /report/ListServers.</div>
+        <div class="loader-status">Loaded 3 instances from clipboard.</div>
+
+        <div class="subhead" style="margin-top:16px;"><span class="num">3</span>Selected instances</div>
+        <div class="chips-host">
+          <span class="chip">FGT-Branch-003<span class="id-part">#42024061</span><button class="x" type="button">×</button></span>
+          <span class="chip">FGT-HQ-Core<span class="id-part">#42024075</span><button class="x" type="button">×</button></span>
+          <span class="chip">FGT-DR-Site<span class="id-part">#42024062</span><button class="x" type="button">×</button></span>
+        </div>
+        <div class="chips-count">3 instances selected.</div>
+
+      </div>
+
+      <div class="action-bar">
+        <div class="left"><span style="color:var(--text-muted);font-style:italic;">3 matches</span></div>
+        <div class="right">
+          <button class="btn btn-secondary">Clear all</button>
+          <button class="btn btn-primary">Continue to action picker →</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-callouts">
+      <h4>What's here</h4>
+      <ul>
+        <li>Search-first layout (omni-search dropdown is the primary affordance).</li>
+        <li>Loaders are secondary buttons, side-by-side, below the search.</li>
+        <li>Selected instances render as <strong>chips</strong> only - no preview table.</li>
+        <li>Action-bar left slot carries the live search-result count.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       COLUMN 2: REFERENCE Add to Port Scope (Fabric) - Load Devices
+       ============================================================ -->
+  <div class="compare-col reference">
+    <div class="col-label">
+      <span>Reference</span>
+      <span class="tag">Add to Port Scope (Fabric) · Load devices from CSV</span>
+    </div>
+    <p class="col-note">
+      The shipping pattern we're aligning to. Drop-zone leads, paste textarea
+      below, green format-hint card, parse-result table preview, single
+      session footer line in the action bar.
+    </p>
+
+    <div class="mockup-frame">
+      <div class="title-bar">
+        <h1><span class="icon">F</span>Add to Port Scope (Fabric)<span class="subtitle">- Start Batch</span></h1>
+      </div>
+
+      <div class="step-header">
+        <div class="step-breadcrumbs">
+          <span class="step active">1. Load devices</span>
+          <span class="arrow">›</span>
+          <span class="step">2. Review groups</span>
+          <span class="arrow">›</span>
+          <span class="step">3. Audit queue</span>
+          <span class="arrow">›</span>
+          <span class="step">4. Execute</span>
+        </div>
+        <h2>Load devices from CSV</h2>
+        <p>Provide the list of FortiMonitor server IDs you want to review. The plugin will read each device's port scope using your active FortiMonitor session, group devices by identical interface state, and surface one review prompt per unique group.</p>
+      </div>
+
+      <div class="body-section">
+        <label class="drop-zone">
+          <div class="dz-icon">↑</div>
+          <div class="dz-primary">Drop CSV here, or <span class="dz-link">click to browse</span></div>
+          <div class="dz-secondary">Accepts .csv or plain text · one server ID per line</div>
+        </label>
+
+        <div class="divider">or paste below</div>
+
+        <textarea class="paste-area" placeholder="42024060&#10;42024061&#10;42024075&#10;...">42024060,FGT-Branch-001
+42024061,FGT-Branch-002
+42024075,FGT-HQ-Core</textarea>
+
+        <div class="format-hint">
+          <strong>Format:</strong> plain list of server IDs (one per line) <em>or</em> a CSV with a <code>server_id</code> column.
+          <pre># plain list
+42024060
+42024061
+
+# or CSV
+server_id,device_name
+42024060,FGT-Branch-001
+42024061,FGT-Branch-002</pre>
+        </div>
+
+        <div class="parse-result">
+          <div class="headline">3 devices ready to review</div>
+          <div class="sub">3 lines read · 3 named from CSV</div>
+          <div class="sample-table-wrap">
+            <table class="sample-table">
+              <thead>
+                <tr><th class="name">Device name</th><th class="id">Server ID</th></tr>
+              </thead>
+              <tbody>
+                <tr><td class="name">FGT-Branch-001</td><td class="id">42024060</td></tr>
+                <tr><td class="name">FGT-Branch-002</td><td class="id">42024061</td></tr>
+                <tr><td class="name">FGT-HQ-Core</td><td class="id">42024075</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="action-bar">
+        <div class="left">Uses your active FortiMonitor session (cookies)</div>
+        <div class="right">
+          <button class="btn btn-secondary">Clear</button>
+          <button class="btn btn-primary">Start review →</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-callouts">
+      <h4>Pattern primitives</h4>
+      <ul>
+        <li><code>.drop-zone</code> CSV target with circular icon.</li>
+        <li><code>.divider</code> "or paste below" between zone and textarea.</li>
+        <li><code>textarea.paste-area</code> with mono font, ID-style placeholder.</li>
+        <li><code>.format-hint</code> green card with <code>&lt;pre&gt;</code> example.</li>
+        <li><code>.parse-result</code> + <code>.sample-table</code> live preview.</li>
+        <li>Footer line: "Uses your active FortiMonitor session (cookies)".</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       COLUMN 3: PROPOSED Bulk Composer Pick Instances (FMN-163 target)
+       ============================================================ -->
+  <div class="compare-col proposed">
+    <div class="col-label">
+      <span>Proposed</span>
+      <span class="tag">Bulk Action Composer · Pick instances (post-FMN-163)</span>
+    </div>
+    <p class="col-note">
+      Bulk Composer Pick Instances after the alignment: drop-zone + paste +
+      format hint lead, omni-search demoted to a secondary "or search by name
+      / tag" panel, parse-result table replaces the chip list as the preview
+      surface (operator preference: parity with Port Scope).
+    </p>
+
+    <div class="mockup-frame">
+      <div class="title-bar">
+        <h1><span class="icon">F</span>Bulk Action Composer<span class="subtitle">- Pick instances</span></h1>
+      </div>
+
+      <div class="step-header">
+        <div class="step-breadcrumbs">
+          <span class="step active">1. Pick instances</span>
+          <span class="arrow">›</span>
+          <span class="step">2. Pick action</span>
+          <span class="arrow">›</span>
+          <span class="step">3. Configure</span>
+          <span class="arrow">›</span>
+          <span class="step">4. Preview &amp; commit</span>
+        </div>
+        <h2>Load instances by ID or paste a list</h2>
+        <p>Provide the FortiMonitor server IDs you want to act on. Drop a CSV or paste a list below; the Composer resolves each ID against the cached server corpus and shows you exactly what it loaded before you continue. Need to look one up? Use the search panel further down.</p>
+      </div>
+
+      <div class="body-section">
+        <label class="drop-zone">
+          <div class="dz-icon">↑</div>
+          <div class="dz-primary">Drop CSV here, or <span class="dz-link">click to browse</span></div>
+          <div class="dz-secondary">Accepts .csv or plain text · one server ID per line</div>
+        </label>
+
+        <div class="divider">or paste below</div>
+
+        <textarea class="paste-area" placeholder="42024060&#10;42024061&#10;42024075&#10;...">42024061
+42024075
+42024062</textarea>
+
+        <div class="format-hint">
+          <strong>Format:</strong> plain list of server IDs (one per line) <em>or</em> a CSV with a <code>server_id</code> column. You can also use device names if they're cached in the FM TK Search corpus.
+          <pre># plain list
+42024060
+42024061
+
+# or CSV
+server_id,device_name
+42024060,FGT-Branch-001
+42024061,FGT-Branch-002</pre>
+        </div>
+
+        <div class="parse-result">
+          <div class="headline">3 instances ready to operate on</div>
+          <div class="sub">3 lines read · 3 resolved from FM TK Search cache</div>
+          <div class="sample-table-wrap">
+            <table class="sample-table">
+              <thead>
+                <tr><th class="name">Instance name</th><th class="id">Server ID</th></tr>
+              </thead>
+              <tbody>
+                <tr><td class="name">FGT-Branch-003</td><td class="id">42024061</td></tr>
+                <tr><td class="name">FGT-HQ-Core</td><td class="id">42024075</td></tr>
+                <tr><td class="name">FGT-DR-Site</td><td class="id">42024062</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="divider">or search by name / tag</div>
+
+        <input class="search-input" type="search" placeholder="Type at least 2 characters - searches name, fqdn, tags, attributes...">
+        <div class="search-hint">Searches the FM TK Search corpus (cached for 5 min). Click a row to add it to the list above.</div>
+
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-secondary" type="button">Load from clipboard CSV</button>
+          <button class="btn btn-secondary" type="button">Load from current page selection</button>
+        </div>
+      </div>
+
+      <div class="action-bar">
+        <div class="left">Uses your active FortiMonitor session (cookies)</div>
+        <div class="right">
+          <button class="btn btn-secondary">Clear</button>
+          <button class="btn btn-primary">Continue to action picker →</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-callouts">
+      <h4>Diff vs current</h4>
+      <ul>
+        <li><span class="diff-add">+ drop-zone + paste textarea as the lead affordance</span></li>
+        <li><span class="diff-add">+ green format-hint card with example</span></li>
+        <li><span class="diff-add">+ parse-result preview table (Name | Server ID), replaces chip list</span></li>
+        <li><span class="diff-add">+ "Uses your active FortiMonitor session (cookies)" footer note</span></li>
+        <li><span class="diff-keep">~ omni-search retained, demoted under "or search by name / tag" divider</span></li>
+        <li><span class="diff-keep">~ clipboard + page-selection loaders kept as side buttons under the search</span></li>
+        <li><span class="diff-remove">- numbered "1. Search / 2. Or load / 3. Selected" subhead structure</span></li>
+        <li><span class="diff-remove">- chip list as primary selection surface</span></li>
+      </ul>
+      <h4 style="margin-top:8px;">Open questions for operator</h4>
+      <ul>
+        <li>Keep chips somewhere (e.g., compact strip above the parse table for quick remove), or accept that the table row is the only display?</li>
+        <li>Show resolved-vs-unresolved warnings inline in the table (e.g., red row for "not in cache"), or in a <code>.warn-list</code> below?</li>
+        <li>Should "Load from current page selection" stay a button, or auto-trigger when the page-selection cookie is fresh?</li>
+      </ul>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

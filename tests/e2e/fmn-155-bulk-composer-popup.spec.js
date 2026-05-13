@@ -39,7 +39,7 @@ test.describe('FMN-155: Bulk Action Composer popup wiring', () => {
     await page.close();
   });
 
-  test('Step 1 (pick) renders with disabled Continue button and chip list empty', async ({ extensionContext, extensionId }) => {
+  test('Step 1 (pick) renders the Port Scope-style load UI with disabled Continue button (FMN-163)', async ({ extensionContext, extensionId }) => {
     const page = await extensionContext.newPage();
     await page.goto(`chrome-extension://${extensionId}/src/ui/bulk-composer/app.html#/pick`);
 
@@ -51,15 +51,46 @@ test.describe('FMN-155: Bulk Action Composer popup wiring', () => {
     // Title bar no longer shows a Beta badge (FMN-201).
     await expect(page.locator('.title-bar h1 .badge.beta')).toHaveCount(0);
 
-    // Search input rendered.
-    await expect(page.locator('input[type="search"]')).toBeVisible();
+    // FMN-163: drop-zone + paste textarea + format-hint replace the
+    // search-led layout. No omni-search input, no chip list.
+    await expect(page.locator('.drop-zone')).toBeVisible();
+    await expect(page.locator('textarea.paste-area')).toBeVisible();
+    await expect(page.locator('.format-hint')).toBeVisible();
+    await expect(page.locator('input[type="search"]')).toHaveCount(0);
+    await expect(page.locator('[data-test="bulk-chips-count"]')).toHaveCount(0);
 
-    // Chips host empty.
-    await expect(page.locator('[data-test="bulk-chips-count"]')).toContainText('0 instances');
+    // Empty parse-result placeholder appears.
+    await expect(page.locator('.parse-result.empty .headline')).toContainText('No server IDs detected');
 
-    // Continue button disabled until something is picked.
+    // Continue button disabled until something is parsed.
     const nextBtn = page.locator('[data-test="pick-next"]');
     await expect(nextBtn).toBeDisabled();
+    await expect(nextBtn).toContainText('Continue to action picker');
+
+    await page.close();
+  });
+
+  test('Pasting valid IDs populates store.targets and enables Continue (FMN-163)', async ({ extensionContext, extensionId }) => {
+    const page = await extensionContext.newPage();
+    await page.goto(`chrome-extension://${extensionId}/src/ui/bulk-composer/app.html#/pick`);
+
+    // CSV with a header so parseServerList picks up the device_name column.
+    await page.locator('textarea.paste-area').fill('server_id,device_name\n42024060,FGT-Branch-001\n42024061,');
+
+    // Parse-result shows 2 instances with a sample table.
+    await expect(page.locator('.parse-result .headline')).toContainText('2 instances ready');
+    await expect(page.locator('.sample-table tbody tr')).toHaveCount(2);
+    await expect(page.locator('[data-test="pick-next"]')).toBeEnabled();
+
+    // store.targets has the canonical { id, name } shape downstream steps expect.
+    const targets = await page.evaluate(async () => {
+      const mod = await import('./app.js');
+      return mod.store.targets;
+    });
+    expect(targets).toEqual([
+      { id: 42024060, name: 'FGT-Branch-001' },
+      { id: 42024061, name: null }
+    ]);
 
     await page.close();
   });
@@ -125,19 +156,20 @@ test.describe('FMN-155: Bulk Action Composer popup wiring', () => {
     await page.close();
   });
 
-  test('Chip list de-dupes (adding the same id twice keeps one chip)', async ({ extensionContext, extensionId }) => {
+  test('Duplicate IDs in paste input dedupe to a single target with a warning (FMN-163)', async ({ extensionContext, extensionId }) => {
     const page = await extensionContext.newPage();
     await page.goto(`chrome-extension://${extensionId}/src/ui/bulk-composer/app.html#/pick`);
-    // Drive the store directly to skip the SW omni-search call.
-    await page.evaluate(async () => {
+    // parseServerList dedupes duplicates with a warning - assert the warning
+    // surfaces in the .warn-list block and store.targets carries one entry.
+    await page.locator('textarea.paste-area').fill('42024060\n42024060\n42024060');
+    await expect(page.locator('.parse-result .headline')).toContainText('1 instance');
+    await expect(page.locator('.warn-list li').first()).toContainText('duplicate');
+    await expect(page.locator('.warn-list li')).toHaveCount(2); // line 2 + line 3 are dupes
+    const targets = await page.evaluate(async () => {
       const mod = await import('./app.js');
-      mod.store.targets = [{ id: 7, name: 's7' }];
-      // Re-render by toggling the hash (the hashchange listener does the work).
-      window.location.hash = '#/pick';
+      return mod.store.targets;
     });
-    // Force a re-render via dispatchEvent since #/pick to #/pick won't trigger hashchange.
-    await page.evaluate(() => window.dispatchEvent(new HashChangeEvent('hashchange')));
-    await expect(page.locator('[data-test="bulk-chips-count"]')).toContainText('1 instance selected', { timeout: 5000 });
+    expect(targets).toEqual([{ id: 42024060, name: null }]);
     await page.close();
   });
 });

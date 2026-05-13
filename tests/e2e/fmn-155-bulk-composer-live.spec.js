@@ -104,7 +104,7 @@ test.describe('live - FMN-155 Bulk Action Composer end-to-end', () => {
     expect(keys).toContain('bulk-composer:save-draft');
   });
 
-  test('live - Tool app loads + step 1 renders search UI', async ({ liveCtx }) => {
+  test('live - Tool app loads + step 1 renders Port Scope-style load UI (FMN-163)', async ({ liveCtx }) => {
     const { ctx, sw } = liveCtx;
     test.skip(!sw, 'No SW connected.');
     const keys = await sw.evaluate(() => globalThis.__fmDebugHandlerKeys || []);
@@ -114,38 +114,16 @@ test.describe('live - FMN-155 Bulk Action Composer end-to-end', () => {
     const page = await ctx.newPage();
     await page.goto(bulkAppUrl(extensionId, '/pick'));
     await expect(page.locator('.title-bar h1')).toContainText('Bulk Action Composer');
-    await expect(page.locator('input[type="search"]')).toBeVisible();
+    // FMN-163 layout: drop-zone + paste-area + format-hint, no search.
+    await expect(page.locator('.drop-zone')).toBeVisible();
+    await expect(page.locator('textarea.paste-area')).toBeVisible();
+    await expect(page.locator('.format-hint')).toBeVisible();
+    await expect(page.locator('input[type="search"]')).toHaveCount(0);
     await expect(page.locator('[data-test="pick-next"]')).toBeDisabled();
     await page.close();
   });
 
-  test('live - Typing in the search input streams matches via omni-search:query', async ({ liveCtx }) => {
-    const { ctx, sw } = liveCtx;
-    test.skip(!sw, 'No SW connected.');
-    const keys = await sw.evaluate(() => globalThis.__fmDebugHandlerKeys || []);
-    test.skip(!keys.includes('bulk-composer:commit'),
-      'Launcher extension does not have bulk-composer wired; reload extension to pick up FMN-155.');
-    const apiKey = await apiKeyConfigured(sw);
-    test.skip(!apiKey, 'No FortiMonitor API key configured; the omni-search cache cannot warm.');
-    const sample = await getCachedServers(sw, 5);
-    test.skip(sample.length === 0, 'Omni-search cache is empty.');
-
-    const extensionId = sw.url().split('/')[2];
-    const page = await ctx.newPage();
-    await page.goto(bulkAppUrl(extensionId, '/pick'));
-
-    // Use a 3-char substring from a known server name so we get >= 1 match
-    // and stay loose w/r/t tenant data shape.
-    const seed = String(sample[0].name || '').slice(0, 3);
-    test.skip(!seed || seed.length < 2, 'Cached server has no usable name seed.');
-    await page.locator('input[type="search"]').fill(seed);
-    await page.waitForSelector('[data-test="bulk-search-row"]', { timeout: 10_000 });
-    const rows = await page.locator('[data-test="bulk-search-row"]').count();
-    expect(rows).toBeGreaterThan(0);
-    await page.close();
-  });
-
-  test('live - End-to-end: pick 2 instances + Add Tag + commit (uses FM-TK-test- prefix tag)', async ({ liveCtx }) => {
+  test('live - End-to-end: paste 2 instance IDs + Add Tag + commit (uses FM-TK-test- prefix tag)', async ({ liveCtx }) => {
     const { ctx, sw } = liveCtx;
     test.skip(!sw, 'No SW connected.');
     const keys = await sw.evaluate(() => globalThis.__fmDebugHandlerKeys || []);
@@ -160,36 +138,15 @@ test.describe('live - FMN-155 Bulk Action Composer end-to-end', () => {
     const page = await ctx.newPage();
     await page.goto(bulkAppUrl(extensionId, '/pick'));
 
-    // Pre-seed the targets directly to avoid coupling this test to the
-    // tenant's search results. Drives the store via storage.session by
-    // navigating step-by-step through the wizard hash routes after click.
-    const targets = sample.slice(0, 2).map((s) => ({
-      id: s.id, name: s.name, tags: s.tags || [], template_names: s.template_names || []
-    }));
-    await page.evaluate((targets) => {
-      // Seed via the app module since the store lives in module scope.
-      // We can't reach into the closure, so instead we drive the UI by
-      // typing into search and clicking rows; but the simplest robust
-      // path is to dispatch a custom event the spec listens to.
-      window.__bulkSeed = targets;
-    }, targets);
+    // FMN-163: pick step is now paste-only. Build a CSV of the first two
+    // sample IDs (with their names so the preview table has labels).
+    const targets = sample.slice(0, 2);
+    const pasteValue = targets.map((s) => `${s.id},${(s.name ?? '').replace(/,/g, ' ')}`).join('\n');
+    await page.locator('textarea.paste-area').fill(pasteValue);
 
-    // Drive the UI: type each target's name into search, pick from dropdown.
-    for (const t of targets) {
-      const seed = (t.name || '').slice(0, Math.min(8, (t.name || '').length));
-      if (!seed) continue;
-      await page.locator('input[type="search"]').fill(seed);
-      await page.waitForSelector('[data-test="bulk-search-row"]', { timeout: 8_000 });
-      const row = page.locator(`[data-test="bulk-search-row"][data-id="${t.id}"]`).first();
-      const visible = await row.count();
-      if (visible === 0) {
-        test.skip(true, `Search for "${seed}" did not surface id=${t.id}; tenant data shape mismatch.`);
-        return;
-      }
-      await row.click();
-    }
-    const chipCount = await page.locator('[data-test="bulk-chip"]').count();
-    expect(chipCount).toBeGreaterThanOrEqual(2);
+    // Parse-result should show two rows; Continue enables.
+    await expect(page.locator('.sample-table tbody tr')).toHaveCount(2);
+    await expect(page.locator('[data-test="pick-next"]')).toBeEnabled();
 
     await page.locator('[data-test="pick-next"]').click();
     await expect(page.locator('.step-breadcrumbs .step.active')).toContainText('2. Pick action', { timeout: 5000 });
