@@ -174,17 +174,18 @@ async function installSendMessageStub(page, { resolvedByLower, numericReal, bogu
           const id = Number(t.id);
           fire('bulk-composer:row-start', { index: i, id: t.id, name: t.name });
 
-          if (state.bogusIds.includes(id)) {
-            const errPayload = {
+          // FMN-207: chip-fetch returned null tags for bogus IDs ->
+          // action.commit short-circuits to skipped without an API call.
+          // The SW emits succeeded + noop = "skip" in the UI.
+          if (t.tags === null || t.tags === undefined) {
+            const skipPayload = {
               index: i, id: t.id, name: t.name,
-              status: 'failed',
-              error: `Instance #${id} not found on this tenant.`,
-              errorStatus: 404,
-              retryable: false
+              status: 'succeeded', noop: true,
+              detail: { skipped: true, status: 0 }
             };
-            fire('bulk-composer:row-done', errPayload);
-            rows.push(errPayload);
-            failed++;
+            fire('bulk-composer:row-done', skipPayload);
+            rows.push(skipPayload);
+            noops++;
             continue;
           }
 
@@ -290,17 +291,18 @@ test.describe('FMN-206 e2e: Add Tag then Remove Tag with the operator 50-line pa
 
     await expect(page.locator('[data-test="bulk-run-summary"]')).toContainText('22/22 complete', { timeout: 10_000 });
     await expect(page.locator('[data-test="bulk-run-summary"]')).toContainText('17 committed');
-    await expect(page.locator('[data-test="bulk-run-summary"]')).toContainText('5 failed');
-    await expect(page.locator('[data-test="bulk-run-summary"]')).toContainText('0 no-op');
+    await expect(page.locator('[data-test="bulk-run-summary"]')).toContainText('0 failed');
+    await expect(page.locator('[data-test="bulk-run-summary"]')).toContainText('5 skipped');
 
-    // Pick one failed row and confirm the friendly 404 wording lands.
-    const failedDetail = page.locator('[data-test="bulk-preview-detail-text"]').filter({ hasText: 'Instance #' }).first();
-    await expect(failedDetail).toContainText(/Instance #\d+ not found on this tenant/);
+    // Bogus IDs render as "skip" in the preview (FMN-207), not WILL CHANGE.
+    // Check one of them carries the "Instance not found" preview note.
+    const skipDetail = page.locator('[data-test="bulk-preview-detail-text"]').filter({ hasText: 'Instance not found' }).first();
+    await expect(skipDetail).toContainText('Instance not found on this tenant; will skip.');
 
     await page.close();
   });
 
-  test('Remove Tag run cleans up the tag we just added and surfaces 404s the same way', async ({ extensionContext, extensionId }) => {
+  test('Remove Tag run cleans up the tag we just added; bogus IDs skip', async ({ extensionContext, extensionId }) => {
     const page = await extensionContext.newPage();
 
     await installStubs(page, { mode: 'remove' });
@@ -356,11 +358,12 @@ test.describe('FMN-206 e2e: Add Tag then Remove Tag with the operator 50-line pa
 
     await expect(page.locator('[data-test="bulk-run-summary"]')).toContainText('22/22 complete', { timeout: 10_000 });
     await expect(page.locator('[data-test="bulk-run-summary"]')).toContainText('17 committed');
-    await expect(page.locator('[data-test="bulk-run-summary"]')).toContainText('5 failed');
+    await expect(page.locator('[data-test="bulk-run-summary"]')).toContainText('0 failed');
+    await expect(page.locator('[data-test="bulk-run-summary"]')).toContainText('5 skipped');
 
-    // 404 wording sanity-check on remove path too.
-    const failedDetail = page.locator('[data-test="bulk-preview-detail-text"]').filter({ hasText: 'Instance #' }).first();
-    await expect(failedDetail).toContainText(/Instance #\d+ not found on this tenant/);
+    // Bogus IDs surface as skips with the "Instance not found" preview note.
+    const skipDetail = page.locator('[data-test="bulk-preview-detail-text"]').filter({ hasText: 'Instance not found' }).first();
+    await expect(skipDetail).toContainText('Instance not found on this tenant; will skip.');
 
     await page.close();
   });

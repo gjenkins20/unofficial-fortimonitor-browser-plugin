@@ -60,7 +60,7 @@ export function render({ container, store, navigate, events, call }) {
         class: 'status pending',
         'data-test': 'preview-status',
         style: `font-size:0.75rem;padding:0.1rem 0.45rem;border-radius:10px;background:${desc.willChange ? '#eef2f7' : '#f1f1f1'};color:${desc.willChange ? 'var(--text)' : 'var(--text-muted)'};`
-      }, desc.error ? 'invalid' : (desc.willChange ? 'will change' : 'no-op'))
+      }, desc.error ? 'invalid' : (desc.willChange ? 'will change' : 'skip'))
     );
     const tr = h('tr', {
       'data-test': 'bulk-preview-row',
@@ -107,7 +107,7 @@ export function render({ container, store, navigate, events, call }) {
     class: 'bulk-preview-summary',
     'data-test': 'bulk-preview-summary',
     style: 'margin-top:0.7rem;font-size:0.9rem;'
-  }, `${willChangeCount} row${willChangeCount === 1 ? '' : 's'} will change · ${store.targets.length - willChangeCount} no-op · ${store.targets.length} total.`);
+  }, `${willChangeCount} row${willChangeCount === 1 ? '' : 's'} will change · ${store.targets.length - willChangeCount} will skip · ${store.targets.length} total.`);
   body.appendChild(summary);
 
   // Per-row run state (filled by events / on completion)
@@ -121,7 +121,13 @@ export function render({ container, store, navigate, events, call }) {
   // Action bar
   const backBtn = h('button', { class: 'btn btn-secondary', type: 'button' }, '← Back');
   const exportBtn = h('button', { class: 'btn btn-secondary', 'data-test': 'export-csv', type: 'button', disabled: true }, 'Export CSV');
-  const applyBtn = h('button', { class: 'btn btn-primary', 'data-test': 'apply-btn', type: 'button' }, `Apply to ${willChangeCount || store.targets.length} instance${(willChangeCount || store.targets.length) === 1 ? '' : 's'}`);
+  // FMN-207: when nothing will change, label the button accordingly so
+  // the operator doesn't think "Apply to 22 instances" is going to do
+  // 22 writes. Button stays enabled for confirmation runs.
+  const applyLabel = willChangeCount === 0
+    ? `Apply (all ${store.targets.length} will skip)`
+    : `Apply to ${willChangeCount} instance${willChangeCount === 1 ? '' : 's'}`;
+  const applyBtn = h('button', { class: 'btn btn-primary', 'data-test': 'apply-btn', type: 'button' }, applyLabel);
   const stateLabel = h('span', { class: 'execute-state muted', 'data-test': 'commit-state' }, '');
   const actionBar = h('div', { class: 'action-bar' },
     h('div', { class: 'left' }, stateLabel),
@@ -135,7 +141,7 @@ export function render({ container, store, navigate, events, call }) {
   // ============================================================
   // Per-row event listener (streams in once commit starts)
   // ============================================================
-  let done = 0, succeeded = 0, failed = 0, noops = 0;
+  let done = 0, succeeded = 0, failed = 0, skipped = 0;
   const total = store.targets.length;
   const unsubscribe = events.on((event, payload) => {
     if (event === 'bulk-composer:row-start') {
@@ -150,7 +156,7 @@ export function render({ container, store, navigate, events, call }) {
       const row = rowByTargetId.get(payload?.id);
       if (row) {
         if (payload.status === 'succeeded' && payload.noop) {
-          row.statusEl.textContent = 'no-op';
+          row.statusEl.textContent = 'skip';
           row.statusEl.style.background = '#e6f4ea';
           row.statusEl.style.color = '#1b6033';
         } else if (payload.status === 'succeeded') {
@@ -175,10 +181,10 @@ export function render({ container, store, navigate, events, call }) {
         }
       }
       done++;
-      if (payload.status === 'succeeded' && payload.noop) noops++;
+      if (payload.status === 'succeeded' && payload.noop) skipped++;
       else if (payload.status === 'succeeded') succeeded++;
       else failed++;
-      runSummary.textContent = `${done}/${total} complete · ${succeeded} committed · ${failed} failed · ${noops} no-op`;
+      runSummary.textContent = `${done}/${total} complete · ${succeeded} committed · ${failed} failed · ${skipped} skipped`;
     }
   });
 
@@ -212,7 +218,7 @@ export function render({ container, store, navigate, events, call }) {
         concurrency: 3
       });
       store.runResult = result;
-      stateLabel.textContent = `Done in ${msSinceStart(result.startedAt, result.finishedAt)}s · ${result.succeeded} ok · ${result.failed} failed · ${result.noops} no-op`;
+      stateLabel.textContent = `Done in ${msSinceStart(result.startedAt, result.finishedAt)}s · ${result.succeeded} ok · ${result.failed} failed · ${result.noops} skipped`;
       exportBtn.disabled = false;
       // FMN-155 QA fix: re-enable the button and re-label it so the operator
       // has a one-click path back to step 1. Previously the button stayed

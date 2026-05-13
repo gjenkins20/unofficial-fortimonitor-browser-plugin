@@ -30,13 +30,16 @@ export function describe(target, params) {
   if (!v.ok) return { prev: '-', next: '-', willChange: false, error: v.error };
   const { tag } = v.value;
   const existing = Array.isArray(target?.tags) ? target.tags : null;
+  // FMN-207: target.tags === null after the always-live chip-fetch
+  // (FMN-206) means the live GET 404'd - the instance doesn't exist on
+  // this tenant. Skip with clear copy.
   if (existing === null) {
-    // Cache didn't carry tags; we can still describe at a coarse level.
     return {
-      prev: '(tags unknown)',
-      next: `+ ${tag}`,
-      willChange: true,
-      note: 'Server tag list not in cache; commit will read-modify-write.'
+      prev: '(not found)',
+      next: '(not found)',
+      willChange: false,
+      skip: true,
+      note: 'Instance not found on this tenant; will skip.'
     };
   }
   const has = existing.includes(tag);
@@ -44,20 +47,28 @@ export function describe(target, params) {
     prev: existing.length ? existing.join(', ') : '(none)',
     next: has ? existing.join(', ') : existing.concat([tag]).join(', '),
     willChange: !has,
-    note: has ? 'Already tagged; commit will be a no-op.' : null
+    skip: has,
+    note: has ? 'Already tagged; will skip.' : null
   };
 }
 
 export async function commit(target, params, { client }) {
   const v = validate(params);
   if (!v.ok) throw new Error(v.error);
+  // FMN-207: chip-fetch already learned the instance doesn't exist
+  // (target.tags === null). Skip the commit-time GET round-trip and
+  // report as a skip without an API call.
+  if (target?.tags === null || target?.tags === undefined) {
+    return { status: 0, addedTags: [], tagsAfter: null, noop: true, skipped: true };
+  }
   try {
     const result = await client.addServerTag(target.id, [v.value.tag]);
     return {
       status: result.status,
       addedTags: result.addedTags,
       tagsAfter: result.tagsAfter,
-      noop: result.addedTags.length === 0
+      noop: result.addedTags.length === 0,
+      skipped: result.addedTags.length === 0
     };
   } catch (err) {
     // FMN-206: GET 404 means the operator handed us a server ID that

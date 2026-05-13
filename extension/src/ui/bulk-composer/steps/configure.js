@@ -146,17 +146,20 @@ function renderTagForm({ body, store, refreshNextDisabled, call }) {
     refreshNextDisabled();
   });
 
-  if (isRemove) {
-    // Fire the async tag fetch; final chip render replaces the placeholder.
-    void fetchAndRenderTagChips({
-      chipMount,
-      store,
-      input,
-      call,
-      refreshNextDisabled,
-      onHighlightReady: (fn) => { highlight = fn; }
-    });
-  }
+  // FMN-207: live-fetch tags for BOTH actions, not just remove-tag. The
+  // Preview step's describe() needs target.tags populated to compute
+  // willChange / skip correctly - without it, Add Tag would mis-classify
+  // every row as "instance not found; will skip". Chip row only renders
+  // on remove-tag (chipMount === null for add-tag short-circuits the
+  // chip render).
+  void fetchAndRenderTagChips({
+    chipMount,
+    store,
+    input,
+    call,
+    refreshNextDisabled,
+    onHighlightReady: (fn) => { highlight = fn; }
+  });
 }
 
 // FMN-206: enrich store.targets with tags via a live GET /server/{id}
@@ -183,13 +186,23 @@ async function fetchAndRenderTagChips({ chipMount, store, input, call, refreshNe
     }
   }
 
+  // FMN-207: assign tags=null for IDs the live fetch could not resolve
+  // (chip-fetch handler returned null for them). describe() relies on
+  // this to mark the row as "instance not found; will skip" instead of
+  // "(tags unknown)" / "will change". Array hits land as the tag list.
   for (const t of targets) {
     if (!t || t.id == null) continue;
     const tags = liveMap[t.id];
     if (Array.isArray(tags)) t.tags = tags.slice();
+    else if (Object.prototype.hasOwnProperty.call(liveMap, t.id)) t.tags = null;
   }
 
-  renderTagChipRow({ chipMount, store, input, refreshNextDisabled, onHighlightReady });
+  // Only the remove-tag flow has a chip row to render. add-tag still
+  // benefits from the tag enrichment above (drives describe() accuracy)
+  // but doesn't have anywhere to show chips.
+  if (chipMount) {
+    renderTagChipRow({ chipMount, store, input, refreshNextDisabled, onHighlightReady });
+  }
 }
 
 // Replaces the loading-placeholder inside chipMount with either the chip
