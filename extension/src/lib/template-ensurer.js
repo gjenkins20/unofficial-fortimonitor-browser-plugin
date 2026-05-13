@@ -111,16 +111,53 @@ export async function ensureTemplate({ panopta, fmClient }, opts = {}) {
     };
   }
 
-  await fmClient.createServerTemplate({
-    name,
-    templateType,
-    destinationGroup,
-    sourceServerId,
-    selectOptions
-  });
-  const created = (await panopta.listTemplates()).find((t) => t.name === name);
+  // Live tenant observation (2026-05-13): /config/createServerTemplate
+  // often returns HTTP 504 even though the server-side create finished
+  // (verified: 10/10 504-failed attempts during FMN-200 phase F QA
+  // created the template anyway, just couldn't deliver the success
+  // response under the gateway's ~90s window). Strategy: race the create
+  // fetch against a poll loop that watches for the new template name to
+  // appear in listTemplates. Whichever resolves first wins. The poll
+  // pessimistically caps at 120s so true failures still surface.
+  const createPromise = fmClient.createServerTemplate({
+    name, templateType, destinationGroup, sourceServerId, selectOptions
+  }).then(() => ({ source: 'create' }), (err) => ({ source: 'create-error', err }));
+
+  const pollPromise = (async () => {
+    const maxMs = 120_000;
+    const start = Date.now();
+    let lastListSize = -1;
+    while (Date.now() - start < maxMs) {
+      await new Promise((r) => setTimeout(r, 3_000));
+      const list = await panopta.listTemplates();
+      lastListSize = list.length;
+      const hit = list.find((t) => t.name === name);
+      if (hit) return { source: 'poll', hit };
+    }
+    return { source: 'poll-timeout', lastListSize };
+  })();
+
+  const raceResult = await Promise.race([createPromise, pollPromise]);
+
+  let created = null;
+  if (raceResult.source === 'poll') {
+    created = raceResult.hit;
+  } else if (raceResult.source === 'create') {
+    // create resolved cleanly; do one more list to grab the id
+    const list = await panopta.listTemplates();
+    created = list.find((t) => t.name === name) || null;
+  } else if (raceResult.source === 'create-error') {
+    // create threw; await the poll to either find the template (server
+    // succeeded despite the error) or report poll-timeout (real failure).
+    const polled = await pollPromise;
+    if (polled.source === 'poll') {
+      created = polled.hit;
+    } else {
+      throw raceResult.err;
+    }
+  }
   if (!created) {
-    throw new Error('createServerTemplate succeeded but new template not findable by name');
+    throw new Error('createServerTemplate completed but new template not findable by name');
   }
 
   let populated_count = 0;
