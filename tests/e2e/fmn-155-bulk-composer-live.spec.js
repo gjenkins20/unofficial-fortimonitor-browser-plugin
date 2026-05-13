@@ -30,13 +30,12 @@ const test = base.extend({
     const ctx = browser.contexts()[0];
     if (!ctx) throw new Error('CDP browser has no contexts');
 
-    // Enable the bulk-composer flag and ensure FM is open so the SW
-    // bookkeeping is in scope.
+    // FMN-201: bulk-composer flag removed; only the omni-search flag
+    // still needs priming for this spec.
     let sw = ctx.serviceWorkers().find((s) => s.url().includes('service-worker.js'));
     if (!sw) sw = await ctx.waitForEvent('serviceworker', { timeout: 8_000 }).catch(() => null);
     if (sw) {
       await sw.evaluate(() => chrome.storage.local.set({
-        'fm:bulkComposerEnabled': true,
         'fm:omniSearchEnabled': true
       }));
     }

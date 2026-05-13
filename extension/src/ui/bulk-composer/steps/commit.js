@@ -13,7 +13,7 @@ const TOOL_NAME = 'Bulk Action Composer';
 
 export function render({ container, store, navigate, events, call }) {
   const frame = h('div', { class: 'mockup-frame' });
-  frame.appendChild(titleBar('Preview & commit', { toolName: TOOL_NAME, beta: true }));
+  frame.appendChild(titleBar('Preview & commit', { toolName: TOOL_NAME }));
 
   const action = getAction(store.actionId);
   frame.appendChild(h('div', { class: 'step-header' },

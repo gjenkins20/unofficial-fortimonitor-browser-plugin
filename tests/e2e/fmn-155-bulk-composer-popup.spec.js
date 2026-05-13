@@ -17,57 +17,30 @@
 import { test, expect } from './fixtures.js';
 
 test.describe('FMN-155: Bulk Action Composer popup wiring', () => {
-  test('Tile is hidden by default; appears when toggle is enabled', async ({ extensionContext, extensionId }) => {
+  test('Tile is visible by default (FMN-201: beta gate removed)', async ({ extensionContext, extensionId }) => {
     const page = await extensionContext.newPage();
     await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
 
     const tile = page.locator('.tool-card[data-tool="bulk-composer"]');
     await expect(tile).toBeAttached();
-    await expect(tile).toBeHidden();
-
-    await page.locator('#settings-toggle').click();
-    const toggle = page.locator('#bulk-composer-toggle');
-    await expect(toggle).toBeAttached();
-    await expect(toggle).not.toBeChecked();
-
-    await toggle.check();
-    await page.locator('#settings-back').click();
     await expect(tile).toBeVisible();
     await expect(tile.locator('.tool-name')).toContainText('Bulk Action Composer');
-    await expect(tile.locator('.tool-name .badge.beta')).toHaveText('Beta');
+    // Beta badge is removed in FMN-201; assert it's gone.
+    await expect(tile.locator('.tool-name .badge.beta')).toHaveCount(0);
 
     await page.close();
   });
 
-  test('Settings toggle copy is "Show Bulk Action Composer"', async ({ extensionContext, extensionId }) => {
+  test('Settings panel no longer carries a Bulk Action Composer toggle (FMN-201)', async ({ extensionContext, extensionId }) => {
     const page = await extensionContext.newPage();
     await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
     await page.locator('#settings-toggle').click();
-    const toggleSpan = page.locator('label.toggle-row:has(#bulk-composer-toggle) span');
-    await expect(toggleSpan).toBeAttached();
-    const text = (await toggleSpan.textContent())?.trim() ?? '';
-    expect(text).toBe('Show Bulk Action Composer');
+    await expect(page.locator('#bulk-composer-toggle')).toHaveCount(0);
     await page.close();
   });
 
-  test('Flag off: opening the tool URL shows the "enable in Settings" stub', async ({ extensionContext, extensionId }) => {
+  test('Step 1 (pick) renders with disabled Continue button and chip list empty', async ({ extensionContext, extensionId }) => {
     const page = await extensionContext.newPage();
-    // Make sure the flag is off.
-    await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
-    await page.evaluate(() => chrome.storage.local.set({ 'fm:bulkComposerEnabled': false }));
-
-    await page.goto(`chrome-extension://${extensionId}/src/ui/bulk-composer/app.html`);
-    await expect(page.locator('.title-bar h1')).toContainText('Bulk Action Composer');
-    await expect(page.locator('.body-section h2')).toContainText('disabled');
-    await expect(page.locator('.body-section')).toContainText('Show Bulk Action Composer');
-    await page.close();
-  });
-
-  test('Flag on: step 1 (pick) renders with disabled Continue button and chip list empty', async ({ extensionContext, extensionId }) => {
-    const page = await extensionContext.newPage();
-    await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
-    await page.evaluate(() => chrome.storage.local.set({ 'fm:bulkComposerEnabled': true }));
-
     await page.goto(`chrome-extension://${extensionId}/src/ui/bulk-composer/app.html#/pick`);
 
     // Breadcrumbs render with step 1 active.
@@ -75,8 +48,8 @@ test.describe('FMN-155: Bulk Action Composer popup wiring', () => {
     await expect(crumbs).toHaveCount(4);
     await expect(crumbs.nth(0)).toHaveClass(/active/);
 
-    // Title bar shows Beta badge.
-    await expect(page.locator('.title-bar h1 .badge.beta')).toHaveText('Beta');
+    // Title bar no longer shows a Beta badge (FMN-201).
+    await expect(page.locator('.title-bar h1 .badge.beta')).toHaveCount(0);
 
     // Search input rendered.
     await expect(page.locator('input[type="search"]')).toBeVisible();
@@ -91,11 +64,8 @@ test.describe('FMN-155: Bulk Action Composer popup wiring', () => {
     await page.close();
   });
 
-  test('Flag on: route guards bounce to /pick when targets is empty', async ({ extensionContext, extensionId }) => {
+  test('Route guards bounce to /pick when targets is empty', async ({ extensionContext, extensionId }) => {
     const page = await extensionContext.newPage();
-    await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
-    await page.evaluate(() => chrome.storage.local.set({ 'fm:bulkComposerEnabled': true }));
-
     // Try to jump straight to /commit with no targets - should land on /pick.
     await page.goto(`chrome-extension://${extensionId}/src/ui/bulk-composer/app.html#/commit`);
     await expect(page.locator('.step-breadcrumbs .step.active')).toContainText('1. Pick');
@@ -103,11 +73,8 @@ test.describe('FMN-155: Bulk Action Composer popup wiring', () => {
     await page.close();
   });
 
-  test('Flag on: action-picker shows the registered action cards once a target is in the store', async ({ extensionContext, extensionId }) => {
+  test('Action-picker shows the registered action cards once a target is in the store', async ({ extensionContext, extensionId }) => {
     const page = await extensionContext.newPage();
-    await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
-    await page.evaluate(() => chrome.storage.local.set({ 'fm:bulkComposerEnabled': true }));
-
     // Inject a target then navigate to /action - exercises the canEnter gate
     // and action-card rendering without needing the omni-search corpus.
     await page.goto(`chrome-extension://${extensionId}/src/ui/bulk-composer/app.html#/pick`);
@@ -128,11 +95,8 @@ test.describe('FMN-155: Bulk Action Composer popup wiring', () => {
     await page.close();
   });
 
-  test('Flag on: choosing Add Tag and entering a tag enables Preview & commit nav', async ({ extensionContext, extensionId }) => {
+  test('Choosing Add Tag and entering a tag enables Preview & commit nav', async ({ extensionContext, extensionId }) => {
     const page = await extensionContext.newPage();
-    await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
-    await page.evaluate(() => chrome.storage.local.set({ 'fm:bulkComposerEnabled': true }));
-
     await page.goto(`chrome-extension://${extensionId}/src/ui/bulk-composer/app.html#/pick`);
     await page.evaluate(async () => {
       const mod = await import('./app.js');
@@ -161,11 +125,8 @@ test.describe('FMN-155: Bulk Action Composer popup wiring', () => {
     await page.close();
   });
 
-  test('Flag on: chip list de-dupes (adding the same id twice keeps one chip)', async ({ extensionContext, extensionId }) => {
+  test('Chip list de-dupes (adding the same id twice keeps one chip)', async ({ extensionContext, extensionId }) => {
     const page = await extensionContext.newPage();
-    await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
-    await page.evaluate(() => chrome.storage.local.set({ 'fm:bulkComposerEnabled': true }));
-
     await page.goto(`chrome-extension://${extensionId}/src/ui/bulk-composer/app.html#/pick`);
     // Drive the store directly to skip the SW omni-search call.
     await page.evaluate(async () => {

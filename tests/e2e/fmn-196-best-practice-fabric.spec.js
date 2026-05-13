@@ -113,12 +113,9 @@ async function installSwStub(page, responses = {}) {
 }
 
 async function openConfigureWithFabricTargets(page, extensionId, targets, { stubResponses } = {}) {
-  // Open popup first so chrome.runtime / chrome.storage are available.
-  await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
-  await page.evaluate(() => chrome.storage.local.set({ 'fm:bulkComposerEnabled': true }));
-  // Open the bulk-composer app page (still under the same extension origin)
-  // and install the SW stub on this page BEFORE the Configure step's
-  // on-mount fetches run.
+  // FMN-201: gate removed; the bulk-composer app loads without any flag.
+  // Open the bulk-composer app and install the SW stub on this page
+  // BEFORE the Configure step's on-mount fetches run.
   await page.goto(`chrome-extension://${extensionId}/src/ui/bulk-composer/app.html#/pick`);
   await installSwStub(page, stubResponses ?? {});
   await page.evaluate(async (targets) => {
@@ -251,8 +248,6 @@ test.describe('FMN-196: Configure step renders the per-profile table', () => {
   test('SW fetch failure surfaces in the status line and disables Next', async ({ extensionContext, extensionId }) => {
     const page = await extensionContext.newPage();
     // Custom installer that rejects the bulk-composer:list-* calls.
-    await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
-    await page.evaluate(() => chrome.storage.local.set({ 'fm:bulkComposerEnabled': true }));
     await page.goto(`chrome-extension://${extensionId}/src/ui/bulk-composer/app.html#/pick`);
     await page.evaluate(() => {
       const real = chrome.runtime.sendMessage.bind(chrome.runtime);

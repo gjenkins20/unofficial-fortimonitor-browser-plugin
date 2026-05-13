@@ -33,8 +33,6 @@ import {
   setSnapshotDiffEnabled,
   isUpdateCheckEnabled,
   setUpdateCheckEnabled,
-  isBulkComposerEnabled,
-  setBulkComposerEnabled,
   isNoiseAnalyzerEnabled,
   setNoiseAnalyzerEnabled,
   isShowInfoBubblesEnabled,
@@ -356,12 +354,6 @@ async function loadSnapshotDiffIntoToggle() {
   toggle.checked = await isSnapshotDiffEnabled();
 }
 
-async function loadBulkComposerIntoToggle() {
-  const toggle = document.getElementById('bulk-composer-toggle');
-  if (!toggle) return;
-  toggle.checked = await isBulkComposerEnabled();
-}
-
 async function loadNoiseAnalyzerIntoToggle() {
   const toggle = document.getElementById('noise-analyzer-toggle');
   if (!toggle) return;
@@ -399,10 +391,6 @@ async function applyExperimentalVisibility() {
   const ssoConfigOn = await isSsoConfigEnabled();
   for (const el of document.querySelectorAll('[data-experimental="sso-config"]')) {
     el.hidden = !ssoConfigOn;
-  }
-  const bulkComposerOn = await isBulkComposerEnabled();
-  for (const el of document.querySelectorAll('[data-experimental="bulk-composer"]')) {
-    el.hidden = !bulkComposerOn;
   }
 }
 
@@ -1204,7 +1192,6 @@ function init() {
     await loadOmniSearchIntoToggle();
     await loadSnapshotDiffIntoToggle();
     await loadUpdateCheckIntoToggle();
-    await loadBulkComposerIntoToggle();
     await loadNoiseAnalyzerIntoToggle();
     await loadWebguiColumnsIntoSettings();
     await applyExperimentalVisibility();
@@ -1259,12 +1246,6 @@ function init() {
       runManualUpdateCheck();
     });
   }
-
-  document.getElementById('bulk-composer-toggle').addEventListener('change', async (e) => {
-    await setBulkComposerEnabled(e.target.checked);
-    await applyExperimentalVisibility();
-    await refreshGuards();
-  });
 
   // FMN-156 post-rework: noise-analyzer toggle removed from the popup.
   // The Noise Analysis content is folded into Incident Summary and runs

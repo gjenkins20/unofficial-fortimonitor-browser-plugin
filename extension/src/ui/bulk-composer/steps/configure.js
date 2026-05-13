@@ -18,7 +18,7 @@ const TOOL_NAME = 'Bulk Action Composer';
 
 export function render({ container, store, navigate, call }) {
   const frame = h('div', { class: 'mockup-frame' });
-  frame.appendChild(titleBar('Configure', { toolName: TOOL_NAME, beta: true }));
+  frame.appendChild(titleBar('Configure', { toolName: TOOL_NAME }));
 
   const action = getAction(store.actionId);
   frame.appendChild(h('div', { class: 'step-header' },

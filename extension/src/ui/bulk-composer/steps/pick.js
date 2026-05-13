@@ -24,7 +24,7 @@ const DEBOUNCE_MS = 150;
 
 export function render({ container, store, navigate, call }) {
   const frame = h('div', { class: 'mockup-frame' });
-  frame.appendChild(titleBar('Pick instances', { toolName: TOOL_NAME, beta: true }));
+  frame.appendChild(titleBar('Pick instances', { toolName: TOOL_NAME }));
 
   frame.appendChild(h('div', { class: 'step-header' },
     bulkBreadcrumbs('pick'),

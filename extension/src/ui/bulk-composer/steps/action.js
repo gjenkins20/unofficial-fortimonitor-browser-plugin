@@ -13,7 +13,7 @@ const TOOL_NAME = 'Bulk Action Composer';
 
 export function render({ container, store, navigate }) {
   const frame = h('div', { class: 'mockup-frame' });
-  frame.appendChild(titleBar('Pick action', { toolName: TOOL_NAME, beta: true }));
+  frame.appendChild(titleBar('Pick action', { toolName: TOOL_NAME }));
 
   frame.appendChild(h('div', { class: 'step-header' },
     bulkBreadcrumbs('action'),
