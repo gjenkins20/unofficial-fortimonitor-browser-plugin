@@ -76,6 +76,9 @@ tools/discovery/sso-capture-*.json
 # FMN-194 Monitoring Policies discovery captures (contain session cookies)
 tools/discovery/fmn-194-capture-*.json
 
+# FMN-199 Templates create discovery captures (contain session cookies)
+tools/discovery/fmn-199-capture-*.json
+
 # FMN-151 live-FortiMonitor reproduction profile (cookies, local storage)
 tests/e2e/.profile-fmn-live/
 tests/e2e/.profile-fmn-live-cookies.json
