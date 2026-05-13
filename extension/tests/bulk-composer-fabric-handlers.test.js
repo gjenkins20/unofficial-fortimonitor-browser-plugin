@@ -135,6 +135,166 @@ test('list-templates-with-groups falls through gracefully when listServerGroups 
   assert.equal(out.templates[0].server_group_name, null);
 });
 
+// =====================================================================
+// FMN-200: monitoring-config + port-scope batch fetches
+// =====================================================================
+
+test('list-monitoring-config-batch returns categories.added per server', async () => {
+  const fmClient = {
+    async _getFortimonitorJson(path) {
+      const id = Number(path.split('server_id=')[1]);
+      if (id === 1) return { success: true, categories: { added: [{ name: 'CPU' }] } };
+      if (id === 2) return { success: true, categories: { added: [] } };
+      throw new Error('fail');
+    }
+  };
+  const handlers = makeHandlers({ fortimonitorClient: fmClient });
+  const out = await handlers['bulk-composer:list-monitoring-config-batch']({ serverIds: [1, 2, 3] });
+  assert.deepEqual(out.byServerId[1], [{ name: 'CPU' }]);
+  assert.deepEqual(out.byServerId[2], []);
+  assert.equal(out.byServerId[3], null);
+});
+
+test('list-monitoring-config-batch returns empty map for empty input', async () => {
+  const handlers = makeHandlers({ fortimonitorClient: {} });
+  const out = await handlers['bulk-composer:list-monitoring-config-batch']({ serverIds: [] });
+  assert.deepEqual(out.byServerId, {});
+});
+
+test('list-port-scope-batch returns active port indices per server', async () => {
+  const fmClient = {
+    async getDevicePorts(id) {
+      if (id === 1) return { ports: [{ index: 0, isActive: true }, { index: 1, isActive: false }, { index: 2, isActive: true }] };
+      if (id === 2) return { ports: [] };
+      throw new Error('non-FortiGate');
+    }
+  };
+  const handlers = makeHandlers({ fortimonitorClient: fmClient });
+  const out = await handlers['bulk-composer:list-port-scope-batch']({ serverIds: [1, 2, 3] });
+  assert.deepEqual(out.byServerId[1], [0, 2]);
+  assert.deepEqual(out.byServerId[2], []);
+  assert.equal(out.byServerId[3], null);
+});
+
+// =====================================================================
+// FMN-200: ensure-template
+// =====================================================================
+
+function makeEnsureMocks({ existingTemplates = [], createdTemplate = null } = {}) {
+  let listCalls = 0;
+  let createCalls = [];
+  let metricCalls = [];
+  const panopta = {
+    async listTemplates() {
+      listCalls++;
+      // First call: just the existing list. After create, include the new one.
+      return createCalls.length > 0 && createdTemplate
+        ? existingTemplates.concat([createdTemplate])
+        : existingTemplates;
+    }
+  };
+  const fmClient = {
+    async createServerTemplate(opts) {
+      createCalls.push(opts);
+      return { success: true };
+    },
+    async addTemplateMetric(opts) {
+      metricCalls.push(opts);
+      return { success: true };
+    }
+  };
+  return { panopta, fmClient, getListCalls: () => listCalls, createCalls, metricCalls };
+}
+
+test('ensure-template reuses an existing template by name (no create, no populate)', async () => {
+  const { panopta, fmClient, createCalls, metricCalls } = makeEnsureMocks({
+    existingTemplates: [{ id: 12345, name: 'FortiGate FGVMA6 Best Practice' }]
+  });
+  const handlers = makeHandlers({ panoptaClient: panopta, fortimonitorClient: fmClient });
+  const out = await handlers['bulk-composer:ensure-template']({
+    name: 'FortiGate FGVMA6 Best Practice',
+    templateType: 'fabric_template',
+    destinationGroup: 'grp-1',
+    resources: [{ plugin_textkey: 'p', resource_textkey: 'r', name: 'R' }]
+  });
+  assert.equal(out.reused, true);
+  assert.equal(out.created, false);
+  assert.equal(out.templateId, 12345);
+  assert.equal(createCalls.length, 0);
+  assert.equal(metricCalls.length, 0);
+});
+
+test('ensure-template creates + populates when name is new', async () => {
+  const { panopta, fmClient, createCalls, metricCalls } = makeEnsureMocks({
+    existingTemplates: [],
+    createdTemplate: { id: 99, name: 'New' }
+  });
+  const handlers = makeHandlers({ panoptaClient: panopta, fortimonitorClient: fmClient });
+  const out = await handlers['bulk-composer:ensure-template']({
+    name: 'New',
+    templateType: 'fabric_template',
+    destinationGroup: 'grp-1',
+    resources: [
+      { plugin_textkey: 'fortinet.fortigate', resource_textkey: 'cpu', name: 'CPU' },
+      { plugin_textkey: 'fortinet.fortigate', resource_textkey: 'memory', name: 'Memory' }
+    ]
+  });
+  assert.equal(out.created, true);
+  assert.equal(out.reused, false);
+  assert.equal(out.templateId, 99);
+  assert.equal(out.populated_count, 2);
+  assert.equal(createCalls.length, 1);
+  assert.equal(metricCalls.length, 2);
+  assert.equal(metricCalls[0].resourceTextkey, 'cpu');
+  assert.equal(metricCalls[1].resourceTextkey, 'memory');
+});
+
+test('ensure-template dry-run skips writes and reports would_create', async () => {
+  const { panopta, fmClient, createCalls, metricCalls } = makeEnsureMocks({
+    existingTemplates: []
+  });
+  const handlers = makeHandlers({ panoptaClient: panopta, fortimonitorClient: fmClient });
+  const out = await handlers['bulk-composer:ensure-template']({
+    name: 'New',
+    templateType: 'fabric_template',
+    destinationGroup: 'grp-1',
+    resources: [{ resource_textkey: 'cpu', name: 'CPU' }],
+    dryRun: true
+  });
+  assert.equal(out.dry_run, true);
+  assert.equal(out.would_create, true);
+  assert.equal(out.would_populate_count, 1);
+  assert.equal(out.templateId, null);
+  assert.equal(createCalls.length, 0);
+  assert.equal(metricCalls.length, 0);
+});
+
+test('ensure-template clone-from-device skips per-metric populate', async () => {
+  const { panopta, fmClient, createCalls, metricCalls } = makeEnsureMocks({
+    existingTemplates: [],
+    createdTemplate: { id: 100, name: 'Cloned' }
+  });
+  const handlers = makeHandlers({ panoptaClient: panopta, fortimonitorClient: fmClient });
+  const out = await handlers['bulk-composer:ensure-template']({
+    name: 'Cloned',
+    templateType: 'fabric_template',
+    destinationGroup: 'grp-1',
+    sourceServerId: 42024075,
+    resources: [{ resource_textkey: 'cpu' }, { resource_textkey: 'memory' }]
+  });
+  assert.equal(out.created, true);
+  assert.equal(out.populated_count, 0, 'clone path skips per-metric add');
+  assert.equal(createCalls[0].sourceServerId, 42024075);
+  assert.equal(metricCalls.length, 0);
+});
+
+test('ensure-template throws on missing required args', async () => {
+  const handlers = makeHandlers({ panoptaClient: { async listTemplates() { return []; } }, fortimonitorClient: {} });
+  await assert.rejects(handlers['bulk-composer:ensure-template']({}), /name/);
+  await assert.rejects(handlers['bulk-composer:ensure-template']({ name: 'x' }), /templateType/);
+  await assert.rejects(handlers['bulk-composer:ensure-template']({ name: 'x', templateType: 'fabric_template' }), /destinationGroup/);
+});
+
 // ---------- commit ctx extensions ----------
 
 test('commit passes fortimonitorClient + sharedState into action.commit ctx', async () => {

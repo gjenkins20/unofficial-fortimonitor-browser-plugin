@@ -230,6 +230,185 @@ export function createBulkComposerHandlers({ events = {}, getClient, getFortimon
       };
     },
 
+    // ---------------- FMN-200 fetch handlers ----------------
+
+    /**
+     * Batch-fetch get_monitoring_config_data for a list of server (or
+     * template) ids. Returns a map keyed by id. Servers whose fetch
+     * fails (auth, 404, etc.) get null entries; callers treat null as
+     * "no config available" and route to unclassified.
+     *
+     * Concurrency-capped because the live tenant doesn't enjoy 50
+     * parallel reads against the same surface.
+     */
+    'bulk-composer:list-monitoring-config-batch': async (payload = {}) => {
+      const ids = Array.isArray(payload?.serverIds) ? payload.serverIds.slice(0, MAX_TARGETS) : [];
+      if (ids.length === 0) return { byServerId: {} };
+      const fmClient = await fmFactory();
+      const concurrency = Math.max(1, Math.min(10, payload?.concurrency || DEFAULT_CONCURRENCY));
+      const settled = await mapConcurrent(ids, async (id) => {
+        try {
+          const json = await fmClient._getFortimonitorJson(
+            `/report/get_monitoring_config_data?server_id=${encodeURIComponent(String(id))}`,
+            'monitoring_config'
+          );
+          // FMN-135 read-shape: { success, categories: { added: [...] }, ... }
+          const categories = Array.isArray(json?.categories?.added) ? json.categories.added : [];
+          return { id, categories };
+        } catch {
+          return { id, categories: null };
+        }
+      }, { concurrency });
+      const byServerId = {};
+      for (const r of settled) {
+        if (r.status === 'fulfilled') byServerId[r.value.id] = r.value.categories;
+      }
+      return { byServerId };
+    },
+
+    /**
+     * Batch-fetch getDevicePorts for a list of server ids (FortiGate
+     * devices only). Returns a map keyed by id, value = array of
+     * selected port indices or null on failure. Non-FortiGate devices
+     * naturally fail this fetch with an HTML/error response; we treat
+     * those as null (caller's clusterer reads null as "no port scope
+     * information" and clusters accordingly).
+     */
+    'bulk-composer:list-port-scope-batch': async (payload = {}) => {
+      const ids = Array.isArray(payload?.serverIds) ? payload.serverIds.slice(0, MAX_TARGETS) : [];
+      if (ids.length === 0) return { byServerId: {} };
+      const fmClient = await fmFactory();
+      const concurrency = Math.max(1, Math.min(10, payload?.concurrency || DEFAULT_CONCURRENCY));
+      const settled = await mapConcurrent(ids, async (id) => {
+        try {
+          const parsed = await fmClient.getDevicePorts(id);
+          // parseDevicePortsResponse output: { filter_type, portFilters, ports[{ name, index, isActive, ... }] }
+          const selectedIndices = (parsed?.ports || [])
+            .filter((p) => p && p.isActive)
+            .map((p) => p.index);
+          return { id, ports: selectedIndices };
+        } catch {
+          return { id, ports: null };
+        }
+      }, { concurrency });
+      const byServerId = {};
+      for (const r of settled) {
+        if (r.status === 'fulfilled') byServerId[r.value.id] = r.value.ports;
+      }
+      return { byServerId };
+    },
+
+    /**
+     * Idempotent create-and-populate for a Best-Practice template.
+     *
+     * Input: { name, templateType, destinationGroup, sourceServerId?,
+     *          resources: [{ plugin_textkey, resource_textkey, name,
+     *                        units? }, ...],
+     *          dryRun? }
+     *
+     * Output: { templateId, name, created, populated_count, dry_run,
+     *           reused }
+     *
+     * Behavior:
+     *   1. Look up existing template by name via PanoptaClient.listTemplates
+     *      (v2 read; per FMN-196 frontend-primary + v2-fallback rule).
+     *   2. If found, return { reused: true, templateId, created: false }.
+     *   3. If not found and dryRun, return would_create signal.
+     *   4. If not found and live, POST /config/createServerTemplate
+     *      (FortimonitorClient.createServerTemplate). Look up the new
+     *      id via listTemplates after create (the FMN-199 response body
+     *      is too thin to extract id reliably).
+     *   5. For each resource, POST /config/monitoring/editAgentMetric.
+     *      Skip when sourceServerId was set (clone-from-device populates
+     *      automatically).
+     *   6. Return template id.
+     */
+    'bulk-composer:ensure-template': async (payload = {}) => {
+      const {
+        name,
+        templateType,
+        destinationGroup,
+        sourceServerId = null,
+        resources = [],
+        dryRun = false
+      } = payload || {};
+      if (!name || typeof name !== 'string') {
+        throw new Error('ensure-template: name is required');
+      }
+      if (!templateType || typeof templateType !== 'string') {
+        throw new Error('ensure-template: templateType is required');
+      }
+      if (!destinationGroup || typeof destinationGroup !== 'string') {
+        throw new Error('ensure-template: destinationGroup is required');
+      }
+      const panopta = await factory();
+      const fmClient = await fmFactory();
+
+      const existing = (await panopta.listTemplates()).find((t) => t.name === name);
+      if (existing) {
+        return {
+          templateId: existing.id,
+          name: existing.name,
+          created: false,
+          reused: true,
+          populated_count: 0,
+          dry_run: !!dryRun
+        };
+      }
+      if (dryRun) {
+        return {
+          templateId: null,
+          name,
+          created: false,
+          reused: false,
+          would_create: true,
+          would_populate_count: Array.isArray(resources) ? resources.length : 0,
+          dry_run: true
+        };
+      }
+
+      // Create. The response body is thin; look up the new id via list
+      // after create (one extra GET, but deterministic).
+      await fmClient.createServerTemplate({
+        name,
+        templateType,
+        destinationGroup,
+        sourceServerId
+      });
+      const created = (await panopta.listTemplates()).find((t) => t.name === name);
+      if (!created) {
+        throw new Error('createServerTemplate succeeded but new template not findable by name');
+      }
+
+      // Populate. Skip when clone-from-device (sourceServerId set) was
+      // used; the clone path populates automatically.
+      let populated_count = 0;
+      if (!sourceServerId && Array.isArray(resources) && resources.length > 0) {
+        for (const r of resources) {
+          if (!r || !r.resource_textkey) continue;
+          await fmClient.addTemplateMetric({
+            templateId: created.id,
+            pluginTextkey: r.plugin_textkey || 'fortinet.fortigate',
+            resourceTextkey: r.resource_textkey,
+            pluginName: r.name || r.resource_textkey,
+            resourceName: r.name || r.resource_textkey,
+            units: r.units || ''
+          });
+          populated_count += 1;
+        }
+      }
+      return {
+        templateId: created.id,
+        name: created.name,
+        created: true,
+        reused: false,
+        populated_count,
+        dry_run: false
+      };
+    },
+
+    // ---------------- FMN-196 (pre-existing) fetch handlers ----------------
+
     /**
      * Returns the tenant's templates with their server_group_name
      * attached. The recommendation engine partitions stock vs customer
