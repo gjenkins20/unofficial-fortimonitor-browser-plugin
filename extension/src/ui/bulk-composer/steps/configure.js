@@ -645,14 +645,19 @@ function renderProfileAndCreateTemplatesForm({ body, store, refreshNextDisabled,
   body.appendChild(h('label', {
     style: 'display:flex;align-items:center;gap:0.6rem;margin:0.2rem 0 0.8rem;font-size:0.9rem;'
   },
-    h('span', { style: 'min-width:11rem;' }, 'Similarity threshold (Jaccard)'),
+    h('span', { style: 'min-width:11rem;' }, 'Similarity threshold'),
     thresholdSlider,
     thresholdReadout
   ));
   body.appendChild(h('p', {
     class: 'muted',
     style: 'font-size:0.8rem;color:var(--text-muted);margin:-0.4rem 0 0.6rem 11.6rem;'
-  }, 'Lower = group more loosely. 1.0 only merges identical configs; 0.8 tolerates small differences.'));
+  },
+    'Lower = group more loosely. 1.0 only merges identical configs; the default 0.8 tolerates small differences. ',
+    'Each cluster\'s proposed template covers the ',
+    h('strong', {}, 'union'),
+    ' of resources across its devices, so a broader cluster yields a more complete template.'
+  ));
 
   const status = h('p', {
     class: 'muted',
@@ -664,9 +669,15 @@ function renderProfileAndCreateTemplatesForm({ body, store, refreshNextDisabled,
     type: 'button',
     'data-test': 'configure-pact-download-report',
     style: 'margin-top:0.4rem;padding:0.35rem 0.7rem;font-size:0.85rem;border:1px solid var(--border-strong);background:#fff;border-radius:3px;cursor:pointer;'
-  }, 'Download report');
+  }, 'Download report (CSV)');
   downloadBtn.disabled = true;
-  body.appendChild(downloadBtn);
+  const downloadPdfBtn = h('button', {
+    type: 'button',
+    'data-test': 'configure-pact-download-report-pdf',
+    style: 'margin-top:0.4rem;margin-left:0.4rem;padding:0.35rem 0.7rem;font-size:0.85rem;border:1px solid var(--border-strong);background:#fff;border-radius:3px;cursor:pointer;'
+  }, 'Download report (PDF)');
+  downloadPdfBtn.disabled = true;
+  body.appendChild(h('div', {}, downloadBtn, downloadPdfBtn));
 
   const tableHost = h('div', { 'data-test': 'configure-pact-table-host', style: 'margin-top:0.5rem;' });
   body.appendChild(tableHost);
@@ -783,6 +794,7 @@ function renderProfileAndCreateTemplatesForm({ body, store, refreshNextDisabled,
     // table renders immediately; defaults stitch in when they resolve.
     void resolveClusterTemplateTypes();
     downloadBtn.disabled = false;
+    downloadPdfBtn.disabled = false;
   })();
 
   async function resolveClusterTemplateTypes() {
@@ -899,20 +911,29 @@ function renderProfileAndCreateTemplatesForm({ body, store, refreshNextDisabled,
     if (lastDevices.length > 0) rebuildClusters();
   });
 
-  downloadBtn.addEventListener('click', () => {
-    const csv = buildSuggestionsCsv({
+  function currentReportContext() {
+    return {
       clusters: store.params?.clusters || [],
       unclassified: lastUnclassified,
       targets: lastTargets,
       threshold: parseFloat(thresholdSlider.value),
       destinationGroup: store.params?.destination_group || store.params?.destination_group_create_name || '(unset)',
       dryRun: dryRunChk.checked
-    });
+    };
+  }
+
+  downloadBtn.addEventListener('click', () => {
+    const csv = buildSuggestionsCsv(currentReportContext());
     triggerDownload(
       `template-suggestions-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.csv`,
       csv,
       'text/csv'
     );
+  });
+
+  downloadPdfBtn.addEventListener('click', () => {
+    const html = buildSuggestionsPrintableHtml(currentReportContext());
+    triggerPrintToPdf(html);
   });
 }
 
@@ -1009,7 +1030,7 @@ function buildSuggestionsCsv({ clusters, unclassified, targets, threshold, desti
   const banner = [
     `# Template Suggestions Report`,
     `# Generated: ${new Date().toISOString()}`,
-    `# Similarity threshold: ${threshold.toFixed(2)} (Jaccard on resource sets within same Make+Model)`,
+    `# Similarity threshold: ${threshold.toFixed(2)} (1.0 = identical only; 0.8 default = near-identical merge within same Make+Model)`,
     `# Destination group: ${destinationGroup}`,
     `# Dry run: ${dryRun ? 'yes' : 'no'}`,
     `# Devices: ${(targets || []).length}  Clusters: ${(clusters || []).length}  Unclassified: ${(unclassified || []).length}`,
@@ -1042,6 +1063,160 @@ function triggerDownload(filename, content, mime) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// PDF report: builds a self-contained HTML doc with the same data the
+// CSV carries, mounts it in a hidden off-screen iframe, and invokes
+// window.print() so the operator gets Chrome's "Save as PDF" target.
+// Same pattern bpa-pdf.js uses for the Best-Practice Assessment.
+function buildSuggestionsPrintableHtml({ clusters, unclassified, targets, threshold, destinationGroup, dryRun }) {
+  const targetById = new Map((targets || []).map((t) => [t.id, t]));
+  const generatedAt = new Date().toISOString();
+  const summary = {
+    targets: (targets || []).length,
+    clusters: (clusters || []).length,
+    unclassified: (unclassified || []).length,
+    optedIn: (clusters || []).filter((c) => c.opted_in === true).length
+  };
+  const head = `
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8">
+<title>Template Suggestions</title>
+<style>
+  body { font: 12px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif; color: #111; margin: 24px; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  h2 { font-size: 14px; margin: 16px 0 6px; border-bottom: 1px solid #ccc; padding-bottom: 2px; }
+  .meta { color: #555; font-size: 11px; margin-bottom: 12px; }
+  .meta strong { color: #111; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 16px; font-size: 10.5px; }
+  th, td { border: 1px solid #d0d0d0; padding: 4px 6px; text-align: left; vertical-align: top; }
+  th { background: #f4f6f8; font-weight: 600; }
+  td.devices { max-width: 240px; word-wrap: break-word; }
+  td.rationale { max-width: 320px; word-wrap: break-word; }
+  .cluster-block { page-break-inside: avoid; margin-bottom: 18px; }
+  .footer { color: #777; font-size: 10px; margin-top: 24px; border-top: 1px solid #ddd; padding-top: 6px; }
+  @page { size: letter landscape; margin: 0.5in; }
+</style>
+</head><body>`;
+  const headerBlock = `
+<h1>Template Suggestions Report</h1>
+<div class="meta">
+  <strong>Generated:</strong> ${esc(generatedAt)} &middot;
+  <strong>Similarity threshold:</strong> ${threshold.toFixed(2)} (1.0 = identical only; 0.8 default = near-identical merge) &middot;
+  <strong>Destination group:</strong> ${esc(destinationGroup)} &middot;
+  <strong>Dry run:</strong> ${dryRun ? 'yes' : 'no'}
+</div>
+<div class="meta">
+  <strong>Devices:</strong> ${summary.targets} &middot;
+  <strong>Clusters:</strong> ${summary.clusters} &middot;
+  <strong>Opted in:</strong> ${summary.optedIn} &middot;
+  <strong>Unclassified:</strong> ${summary.unclassified}
+</div>`;
+
+  let body = '';
+  for (const [idx, c] of (clusters || []).entries()) {
+    const clusterId = idx + 1;
+    const interset = new Set(c.resource_intersection || []);
+    const memberRows = (c.member_signatures || []).map((ms) => {
+      const memberKeys = ms.resource_keys || [];
+      const unique = memberKeys.filter((k) => !interset.has(k));
+      const target = targetById.get(ms.server_id);
+      const name = ms.device_name ?? target?.name ?? '';
+      return `<tr>
+        <td>${esc(ms.server_id)}</td>
+        <td class="devices">${esc(name)}</td>
+        <td>${memberKeys.length}</td>
+        <td>${unique.length}</td>
+        <td>${unique.length ? esc(unique.join(', ')) : '-'}</td>
+        <td>${typeof ms.jaccard_to_representative === 'number' ? ms.jaccard_to_representative.toFixed(3) : '-'}</td>
+        <td>${Array.isArray(ms.port_keys) ? ms.port_keys.length : '-'}</td>
+        <td class="rationale">${esc(ms.rationale || '')}</td>
+      </tr>`;
+    }).join('');
+    body += `
+<section class="cluster-block">
+  <h2>Cluster ${clusterId}: ${esc(c.proposed_template_name || '')}</h2>
+  <div class="meta">
+    <strong>Make / Model:</strong> ${esc(c.make)} / ${esc(c.model)} &middot;
+    <strong>Devices:</strong> ${c.applies_to_server_ids.length} &middot;
+    <strong>Opted in:</strong> ${c.opted_in === true ? 'yes' : 'no'} &middot;
+    <strong>Clone from device:</strong> ${c.clone_from_device === true ? 'yes' : 'no'} &middot;
+    <strong>Resource intersection:</strong> ${(c.resource_intersection || []).length} &middot;
+    <strong>Resource union:</strong> ${(c.resource_union || []).length}
+  </div>
+  <table>
+    <thead><tr>
+      <th>Device ID</th>
+      <th>Device name</th>
+      <th>Resource count</th>
+      <th>Unique to this device</th>
+      <th>Unique resource keys</th>
+      <th>Jaccard to representative</th>
+      <th>Port count</th>
+      <th>Rationale</th>
+    </tr></thead>
+    <tbody>${memberRows}</tbody>
+  </table>
+</section>`;
+  }
+
+  if ((unclassified || []).length > 0) {
+    const uncRows = (unclassified || []).map((u) => `<tr>
+      <td>${esc(u.device?.id ?? '')}</td>
+      <td>${esc(u.device?.name ?? '')}</td>
+      <td>${esc(u.reason || '')}</td>
+    </tr>`).join('');
+    body += `
+<section class="cluster-block">
+  <h2>Unclassified devices</h2>
+  <table>
+    <thead><tr><th>Device ID</th><th>Device name</th><th>Reason</th></tr></thead>
+    <tbody>${uncRows}</tbody>
+  </table>
+</section>`;
+  }
+
+  const footer = `<div class="footer">Built by Gregori Jenkins - <a href="https://www.linkedin.com/in/gregorijenkins">linkedin.com/in/gregorijenkins</a></div>`;
+  return head + headerBlock + body + footer + '</body></html>';
+}
+
+function esc(v) {
+  if (v === null || v === undefined) return '';
+  return String(v).replace(/[&<>"']/g, (ch) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[ch]));
+}
+
+function triggerPrintToPdf(html) {
+  return new Promise((resolve) => {
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('aria-hidden', 'true');
+    iframe.setAttribute('data-test', 'configure-pact-pdf-iframe');
+    iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;';
+    iframe.srcdoc = html;
+    let cleaned = false;
+    const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
+      setTimeout(() => {
+        if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+      }, 0);
+    };
+    iframe.addEventListener('load', () => {
+      const win = iframe.contentWindow;
+      if (!win) { cleanup(); resolve(); return; }
+      try { win.addEventListener('afterprint', cleanup); } catch { /* not supported */ }
+      try {
+        win.focus();
+        win.print();
+      } catch { /* print rejected */ }
+      // Fallback if afterprint never fires (operator closes the dialog fast).
+      setTimeout(cleanup, 60_000);
+      resolve();
+    });
+    document.body.appendChild(iframe);
+  });
+}
+
 function renderClusterTable({ host, clusters, onChange }) {
   while (host.firstChild) host.removeChild(host.firstChild);
 
@@ -1052,9 +1227,8 @@ function renderClusterTable({ host, clusters, onChange }) {
   table.appendChild(h('thead', {}, h('tr', {
     style: 'background:#f4f6f8;border-bottom:1px solid var(--border-strong);'
   },
-    th(''), th('Make / Model'), th('Devices'),
+    th(''), th('Make / Model'), th('Devices in scope'),
     th('Template name (editable)'),
-    th('Strategy'),
     th('Resources'),
     th('Clone'),
     th('Port scope')
@@ -1073,7 +1247,7 @@ function renderClusterTable({ host, clusters, onChange }) {
     tr.appendChild(td(optChk));
 
     tr.appendChild(td(h('span', {}, `${c.make} / ${c.model}`)));
-    tr.appendChild(td(String(c.applies_to_server_ids.length)));
+    tr.appendChild(td(renderDevicesCell(c)));
 
     const nameInput = h('input', {
       type: 'text',
@@ -1084,30 +1258,15 @@ function renderClusterTable({ host, clusters, onChange }) {
     nameInput.addEventListener('input', () => onChange(idx, { proposed_template_name: nameInput.value }));
     tr.appendChild(td(nameInput));
 
-    // Strategy: union (broadest) or intersection (common to all members).
-    // No effect on the clone-from-device path because FortiMonitor
-    // populates the template from the source device's config; relevant
-    // only when clone is off and per-metric writes are used.
-    const stratSel = h('select', {
-      'data-test': 'configure-pact-strategy',
-      style: 'padding:0.2rem;font-size:0.82rem;'
-    });
-    stratSel.appendChild(h('option', { value: 'union' }, 'Union'));
-    stratSel.appendChild(h('option', { value: 'intersection' }, 'Intersection'));
-    stratSel.value = c.resource_strategy === 'intersection' ? 'intersection' : 'union';
-    stratSel.addEventListener('change', () => onChange(idx, { resource_strategy: stratSel.value }));
-    tr.appendChild(td(stratSel));
-
-    const unionLen = (c.resource_union || []).length;
-    const interLen = (c.resource_intersection || []).length;
-    const chosenLen = (c.proposed_resources || []).length;
-    const resCell = chosenLen === 0
+    // Strategy selector removed (FMN-211 follow-up): every cluster's
+    // proposed template uses the union of resources across its devices.
+    // Internal `resource_strategy` field still defaults to 'union'.
+    const resCount = (c.proposed_resources || []).length;
+    const resCell = resCount === 0
       ? h('span', { class: 'muted', style: 'color:#856404;' }, '0 (empty shell)')
       : h('span', {
           title: (c.proposed_resources || []).map((r) => r.name || r.resource_textkey).join('\n')
-        }, unionLen === interLen
-          ? `${chosenLen} resource${chosenLen === 1 ? '' : 's'}`
-          : `${chosenLen} (${interLen}-${unionLen} range)`);
+        }, `${resCount} resource${resCount === 1 ? '' : 's'}`);
     tr.appendChild(td(resCell));
 
     const cloneChk = h('input', { type: 'checkbox', 'data-test': 'configure-pact-clone', checked: c.clone_from_device === true });
@@ -1120,6 +1279,25 @@ function renderClusterTable({ host, clusters, onChange }) {
   }
   table.appendChild(tbody);
   host.appendChild(table);
+}
+
+function renderDevicesCell(cluster) {
+  const members = cluster.member_signatures || [];
+  const ids = cluster.applies_to_server_ids || [];
+  const names = members.map((m, i) => m.device_name || `id ${m.server_id ?? ids[i] ?? '?'}`);
+  if (names.length === 0) return h('span', { class: 'muted' }, '(none)');
+  const fullList = names.join(', ');
+  const PREVIEW = 3;
+  if (names.length <= PREVIEW) {
+    return h('span', { 'data-test': 'configure-pact-devices', title: fullList }, fullList);
+  }
+  const visible = names.slice(0, PREVIEW).join(', ');
+  const extra = names.length - PREVIEW;
+  return h('span', {
+    'data-test': 'configure-pact-devices',
+    title: fullList,
+    style: 'white-space:normal;'
+  }, `${visible}, +${extra} more`);
 }
 
 function renderPortCell(cluster) {

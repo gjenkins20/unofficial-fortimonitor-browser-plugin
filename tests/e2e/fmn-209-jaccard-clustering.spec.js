@@ -99,10 +99,15 @@ test.describe('FMN-209: Jaccard clustering controls', () => {
     await openConfigure(page, extensionId);
     // 0.8 should yield 2 clusters: {61,62} and {63}
     await expect.poll(() => rowCount(page)).toBe(2);
-    // The merged cluster's resource cell should show a range "X-Y range"
-    const cells = page.locator('[data-test="configure-pact-row"]');
-    const mergedRow = cells.filter({ hasText: '32 (32-33 range)' }).or(cells.filter({ hasText: '33 (32-33 range)' }));
-    await expect(mergedRow).toHaveCount(1);
+    // Verify the merge from store.params (strategy column was removed
+    // so the resource-cell range string isn't a reliable selector).
+    const merged = await page.evaluate(async () => {
+      const mod = await import('./app.js');
+      return (mod.store.params?.clusters || []).find((c) => c.applies_to_server_ids.length === 2);
+    });
+    expect(merged).toBeTruthy();
+    expect(merged.resource_intersection.length).toBeGreaterThanOrEqual(31);
+    expect(merged.resource_union.length).toBeGreaterThanOrEqual(32);
     await page.close();
   });
 
@@ -115,31 +120,72 @@ test.describe('FMN-209: Jaccard clustering controls', () => {
     await page.close();
   });
 
-  test('per-cluster strategy selector flips proposed_resources between union and intersection', async ({ extensionContext, extensionId }) => {
+  test('Strategy column is gone; all clusters default to union (FMN-211 follow-up)', async ({ extensionContext, extensionId }) => {
     const page = await extensionContext.newPage();
     await openConfigure(page, extensionId);
-    // Find the merged-cluster row (member count = 2)
-    const rows = page.locator('[data-test="configure-pact-row"]');
-    const mergedRow = rows.filter({ has: page.locator('td', { hasText: /^2$/ }) }).first();
-    const strategy = mergedRow.locator('[data-test="configure-pact-strategy"]');
-    await expect(strategy).toHaveValue('union');
-    // Switch to intersection
-    await strategy.selectOption('intersection');
-    await expect(strategy).toHaveValue('intersection');
-    // Verify store reflects strategy change
-    const live = await page.evaluate(async () => {
+    // Strategy selector was removed entirely; never renders.
+    await expect(page.locator('[data-test="configure-pact-strategy"]')).toHaveCount(0);
+    // Internal resource_strategy still defaults to 'union' on every cluster.
+    const strategies = await page.evaluate(async () => {
       const mod = await import('./app.js');
-      const merged = (mod.store.params?.clusters || []).find((c) => c.applies_to_server_ids.length === 2);
-      return {
-        strategy: merged?.resource_strategy,
-        proposed_count: merged?.proposed_resources?.length,
-        intersection_count: merged?.resource_intersection?.length,
-        union_count: merged?.resource_union?.length
-      };
+      return (mod.store.params?.clusters || []).map((c) => c.resource_strategy);
     });
-    expect(live.strategy).toBe('intersection');
-    expect(live.proposed_count).toBe(live.intersection_count);
-    expect(live.intersection_count).toBeLessThan(live.union_count);
+    expect(strategies.length).toBeGreaterThan(0);
+    for (const s of strategies) expect(s).toBe('union');
+    await page.close();
+  });
+
+  test('Devices in scope column lists device names', async ({ extensionContext, extensionId }) => {
+    const page = await extensionContext.newPage();
+    await openConfigure(page, extensionId);
+    const cells = page.locator('[data-test="configure-pact-devices"]');
+    await expect(cells.first()).toBeVisible();
+    const texts = await cells.allInnerTexts();
+    expect(texts.some((t) => /FGVM64-A|FGVM64-B|FGVM64-C/.test(t))).toBe(true);
+    await page.close();
+  });
+
+  test('Similarity slider label no longer says "Jaccard"', async ({ extensionContext, extensionId }) => {
+    const page = await extensionContext.newPage();
+    await openConfigure(page, extensionId);
+    const labelText = await page.locator('label', { has: page.locator('[data-test="configure-pact-threshold"]') }).innerText();
+    expect(labelText).toContain('Similarity threshold');
+    expect(labelText).not.toContain('Jaccard');
+    await page.close();
+  });
+
+  test('Download report (PDF) mounts a printable iframe with cluster + rationale content', async ({ extensionContext, extensionId }) => {
+    const page = await extensionContext.newPage();
+    await openConfigure(page, extensionId);
+    // Stub window.print so the dialog never opens during the spec.
+    await page.evaluate(() => {
+      const orig = HTMLIFrameElement.prototype;
+      const desc = Object.getOwnPropertyDescriptor(orig, 'srcdoc');
+      Object.defineProperty(orig, 'srcdoc', {
+        configurable: true,
+        set(value) {
+          if (desc?.set) desc.set.call(this, value);
+          // After srcdoc is set, the load event fires; stub the print
+          // call inside the iframe before then by overriding window.print
+          // on contentWindow once it exists.
+          this.addEventListener('load', () => {
+            try { if (this.contentWindow) this.contentWindow.print = () => {}; } catch { /* cross-origin */ }
+          });
+        },
+        get() { return desc?.get?.call(this); }
+      });
+    });
+    const btn = page.locator('[data-test="configure-pact-download-report-pdf"]');
+    await expect(btn).toBeEnabled({ timeout: 5000 });
+    await btn.click();
+    // The iframe is appended to body; verify it exists and its srcdoc has expected content.
+    const iframe = page.locator('[data-test="configure-pact-pdf-iframe"]');
+    await expect(iframe).toHaveCount(1);
+    const srcdoc = await iframe.getAttribute('srcdoc');
+    expect(srcdoc).toContain('Template Suggestions Report');
+    expect(srcdoc).toContain('Similarity threshold');
+    expect(srcdoc).toMatch(/Rationale/);
+    expect(srcdoc).toMatch(/FortiGate/);
     await page.close();
   });
 
@@ -174,9 +220,15 @@ test.describe('FMN-209: Jaccard clustering controls', () => {
   test('threshold slider re-cluster preserves per-cluster opt_in across thresholds when the cluster key matches', async ({ extensionContext, extensionId }) => {
     const page = await extensionContext.newPage();
     await openConfigure(page, extensionId);
-    // At default 0.8, two clusters. Find the small/outlier and opt it out.
-    const rows = page.locator('[data-test="configure-pact-row"]');
-    const outlierRow = rows.filter({ has: page.locator('td', { hasText: /^1$/ }) }).first();
+    // At default 0.8, two clusters. Find the outlier (single-device
+    // cluster) by store; uncheck its opt-in via its row.
+    const outlierKey = await page.evaluate(async () => {
+      const mod = await import('./app.js');
+      const outlier = (mod.store.params?.clusters || []).find((c) => c.applies_to_server_ids.length === 1);
+      return outlier?.key;
+    });
+    expect(outlierKey).toBeTruthy();
+    const outlierRow = page.locator(`[data-test="configure-pact-row"][data-cluster-key="${outlierKey}"]`);
     const optIn = outlierRow.locator('[data-test="configure-pact-opt-in"]');
     await optIn.uncheck();
     // Lower the threshold to 0.5; cluster shape unchanged (disjoint outlier
