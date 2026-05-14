@@ -16,6 +16,12 @@ import {
   writeSnapshot,
   setPreviousSnapshot,
   diffServers,
+  diffAllSections,
+  listAllSnapshots,
+  getSnapshotById,
+  clearAllSnapshots,
+  getMaxSnapshots,
+  setMaxSnapshots,
 } from '../lib/bpa-snapshots.js';
 import {
   wrapSnapshot,
@@ -210,18 +216,36 @@ export function createBpaSnapshotHandlers({
       }
     },
 
-    'bpa-snapshots:diff': async () => {
-      const { current, previous } = await readSnapshots(local);
-      if (!current) {
-        return { ok: false, reason: 'no-snapshot', message: 'Take a snapshot first.' };
+    'bpa-snapshots:diff': async (payload) => {
+      // Phase 2.3: callers may pass { baselineId, currentId } to diff an
+      // arbitrary pair. When omitted, default to the latest (current vs
+      // previous) so the phase-1 viewer behavior is preserved.
+      let baseline = null;
+      let current = null;
+      if (payload?.baselineId && payload?.currentId) {
+        baseline = await getSnapshotById(payload.baselineId, local);
+        current = await getSnapshotById(payload.currentId, local);
+        if (!baseline || !current) {
+          return { ok: false, reason: 'unknown-id', message: 'One of the selected snapshots is no longer in storage.' };
+        }
+      } else {
+        const slots = await readSnapshots(local);
+        current = slots.current;
+        baseline = slots.previous;
+        if (!current) {
+          return { ok: false, reason: 'no-snapshot', message: 'Take a snapshot first.' };
+        }
+        if (!baseline) {
+          return { ok: false, reason: 'no-previous', message: 'Only one snapshot stored. Take another snapshot after time has passed to compare.', currentTakenAt: current.takenAt };
+        }
       }
-      if (!previous) {
-        return { ok: false, reason: 'no-previous', message: 'Only one snapshot stored. Take another snapshot after time has passed to compare.', currentTakenAt: current.takenAt };
-      }
-      const servers = diffServers(previous, current);
+      const sections = diffAllSections(baseline, current);
+      // Back-compat with the phase-1 viewer: keep .servers + .counts at
+      // the top level. New viewers consume .sections.
+      const servers = sections.servers;
       return {
         ok: true,
-        prevTakenAt: previous.takenAt,
+        prevTakenAt: baseline.takenAt,
         currTakenAt: current.takenAt,
         servers,
         counts: {
@@ -229,7 +253,35 @@ export function createBpaSnapshotHandlers({
           removed: servers.removed.length,
           modified: servers.modified.length,
         },
+        sections,
       };
+    },
+
+    // Phase 2.3: enumerate all stored snapshots for the picker UI.
+    'bpa-snapshots:list': async () => {
+      const items = await listAllSnapshots(local);
+      return { ok: true, items };
+    },
+
+    // Phase 2.5: Settings affordances. Surfaced here so the popup can
+    // configure rotation without the picker being open.
+    'bpa-snapshots:get-config': async () => {
+      const maxSnapshots = await getMaxSnapshots(local);
+      return { ok: true, maxSnapshots };
+    },
+
+    'bpa-snapshots:set-max': async (payload) => {
+      const requested = Number.isFinite(payload?.maxSnapshots) ? payload.maxSnapshots : null;
+      if (requested == null) {
+        return { ok: false, reason: 'bad-input', message: 'maxSnapshots must be a finite number.' };
+      }
+      const applied = await setMaxSnapshots(requested, local);
+      return { ok: true, maxSnapshots: applied };
+    },
+
+    'bpa-snapshots:clear-all': async () => {
+      await clearAllSnapshots(local);
+      return { ok: true };
     },
   };
 }

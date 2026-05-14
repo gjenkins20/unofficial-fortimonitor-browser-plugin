@@ -36,6 +36,15 @@
   .picker .pick .slot-actions {
     margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;
   }
+  .picker .pick select.snapshot-select {
+    width: 100%; box-sizing: border-box;
+    background: #fff; border: 1px solid #c0cad7; border-radius: 4px;
+    padding: 6px 8px; font-size: 12.5px; color: #1d2733;
+    font-family: inherit;
+  }
+  .picker .pick select.snapshot-select:disabled {
+    background: #f1f4f8; color: #7c8896; cursor: not-allowed;
+  }
   .slot-btn {
     appearance: none; cursor: pointer;
     background: #f7f9fc; color: #46535f; border: 1px solid #dde2ea;
@@ -154,9 +163,9 @@
 <div class="app-shell">
   <h1 class="title">Deployment Snapshot &amp; Diff</h1>
   <p class="lede">
-    Compares your most recent BPA snapshot against the prior one. Phase 1
-    of FMN-154 supports two snapshot slots (current + previous); a future
-    phase adds N-rotation and per-tab field-level diffs.
+    Pick any two stored BPA snapshots to see what changed. Up to ten
+    snapshots are retained by default; the cap is configurable in the
+    extension's Settings.
   </p>
 
   <div id="picker-row"></div>

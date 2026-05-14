@@ -1,10 +1,8 @@
 // Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// FMN-154: Deployment Snapshot & Diff tool UI (phase 1).
+// FMN-154: Deployment Snapshot & Diff tool UI.
 // FMN-161: per-slot Download + Import baseline affordances.
-//
-// Reads the current + previous snapshot via chrome.runtime.sendMessage
-// and renders the inventory.servers diff. Two-slot model; multi-tab
-// + N-rotation deferred to phase 2.
+// Phase 2.3: snapshot picker dropdowns for arbitrary baseline/current
+// pairings out of the N-deep history.
 
 function el(tag, props = {}, ...children) {
   const node = document.createElement(tag);
@@ -69,30 +67,98 @@ async function downloadSlot(slot) {
   return result.filename;
 }
 
-function renderPicker({ prevTakenAt, currTakenAt, hasCurrent, hasPrevious }) {
+// Module state. Selections are sticky across re-renders so an Import or a
+// "Take Snapshot Now" elsewhere doesn't wipe the operator's pick.
+const state = {
+  items: [],
+  baselineId: null,
+  currentId: null,
+};
+
+function summaryLabel(item) {
+  const ts = formatTs(item.takenAt);
+  const customer = item.customer?.name || item.customer?.subdomain;
+  return customer ? `${ts}  -  ${customer}` : ts;
+}
+
+function pickInitialSelections(items) {
+  // Prefer the slots the SW exposed: current = newest, previous = second.
+  const current = items.find((s) => s.slot === 'current') ?? items[0] ?? null;
+  let baseline = items.find((s) => s.slot === 'previous');
+  if (!baseline) baseline = items.find((s) => s !== current) ?? null;
+  return {
+    currentId: current?.id ?? null,
+    baselineId: baseline?.id ?? null,
+  };
+}
+
+function renderSelect({ id, items, selectedId, disabled }) {
+  const select = el('select', { class: 'snapshot-select', id });
+  if (disabled) select.disabled = true;
+  if (items.length === 0) {
+    select.appendChild(el('option', { value: '', text: '(no snapshots yet)' }));
+    return select;
+  }
+  for (const item of items) {
+    const opt = el('option', { value: item.id, text: summaryLabel(item) });
+    if (item.id === selectedId) opt.selected = true;
+    select.appendChild(opt);
+  }
+  return select;
+}
+
+function renderPicker() {
   const row = document.getElementById('picker-row');
   row.innerHTML = '';
+
+  const items = state.items;
+  const hasItems = items.length > 0;
+  const baselineItem = items.find((s) => s.id === state.baselineId) || null;
+  const currentItem = items.find((s) => s.id === state.currentId) || null;
+
+  const baselineSelect = renderSelect({
+    id: 'baseline-select',
+    items,
+    selectedId: state.baselineId,
+    disabled: !hasItems,
+  });
+  const currentSelect = renderSelect({
+    id: 'current-select',
+    items,
+    selectedId: state.currentId,
+    disabled: !hasItems,
+  });
+
+  baselineSelect.addEventListener('change', () => {
+    state.baselineId = baselineSelect.value || null;
+    void renderDiff();
+  });
+  currentSelect.addEventListener('change', () => {
+    state.currentId = currentSelect.value || null;
+    void renderDiff();
+  });
+
   const prevActions = el('div', { class: 'slot-actions' });
   const prevBtn = el('button', { type: 'button', class: 'slot-btn', id: 'download-previous' }, 'Download');
-  prevBtn.disabled = !hasPrevious;
+  prevBtn.disabled = !baselineItem;
   prevActions.appendChild(prevBtn);
 
   const currActions = el('div', { class: 'slot-actions' });
   const currBtn = el('button', { type: 'button', class: 'slot-btn', id: 'download-current' }, 'Download');
-  currBtn.disabled = !hasCurrent;
+  currBtn.disabled = !currentItem;
   currActions.appendChild(currBtn);
 
   row.appendChild(el('div', { class: 'panel' },
     el('div', { class: 'picker' },
       el('div', { class: 'pick' },
-        el('div', { class: 'label', text: 'Baseline (previous)' }),
-        el('div', { class: 'val', text: formatTs(prevTakenAt) }),
+        el('div', { class: 'label', text: 'Baseline' }),
+        baselineSelect,
         prevActions,
       ),
       el('div', { class: 'arrow', text: '→' }),
       el('div', { class: 'pick' },
-        el('div', { class: 'label', text: 'Compare to (current)' }),
-        el('div', { class: 'val', text: formatTs(currTakenAt) }),
+        el('div', { class: 'label', text: 'Compare to' }),
+        currentSelect,
         currActions,
       ),
     )
@@ -278,9 +344,13 @@ async function handleImportFile(file) {
 }
 
 function wireSlotDownloads() {
-  for (const slot of ['current', 'previous']) {
-    const btn = document.getElementById(`download-${slot}`);
-    if (!btn || btn.dataset.wired === '1') continue;
+  // Download buttons still address the underlying current/previous slot.
+  // Until the SW grows a download-by-id surface, the dropdown is for
+  // diff-pair selection and the Download button always exports the slot
+  // attached to that picker side.
+  const wire = (btnId, slot) => {
+    const btn = document.getElementById(btnId);
+    if (!btn || btn.dataset.wired === '1') return;
     btn.dataset.wired = '1';
     btn.addEventListener('click', async () => {
       btn.disabled = true;
@@ -296,7 +366,9 @@ function wireSlotDownloads() {
         setImportStatus(`Download failed: ${err?.message || err}`, 'err');
       }
     });
-  }
+  };
+  wire('download-previous', 'previous');
+  wire('download-current', 'current');
 }
 
 function wireImport() {
@@ -333,28 +405,30 @@ function ensureIoPanel() {
   wireImport();
 }
 
-async function render() {
+async function renderDiff() {
   const content = document.getElementById('content');
   content.innerHTML = '';
-  ensureIoPanel();
-  let status = null;
-  try {
-    status = await sendMessage('bpa-snapshots:status');
-  } catch (err) {
-    renderPicker({ prevTakenAt: null, currTakenAt: null, hasCurrent: false, hasPrevious: false });
-    wireSlotDownloads();
-    content.appendChild(renderEmpty(`Failed to load snapshot status: ${err?.message || err}`, true));
+  if (state.items.length === 0) {
+    content.appendChild(renderEmpty('No snapshots stored yet. Take one from the FortiMonitor Reports page.'));
     return;
   }
-  renderPicker({
-    prevTakenAt: status?.previousTakenAt ?? null,
-    currTakenAt: status?.currentTakenAt ?? null,
-    hasCurrent: Boolean(status?.hasCurrent),
-    hasPrevious: Boolean(status?.hasPrevious),
-  });
-  wireSlotDownloads();
+  if (state.items.length === 1) {
+    content.appendChild(renderEmpty('Only one snapshot stored. Take another snapshot after time has passed to compare.'));
+    return;
+  }
+  if (!state.baselineId || !state.currentId) {
+    content.appendChild(renderEmpty('Pick a baseline and a current snapshot to diff.'));
+    return;
+  }
+  if (state.baselineId === state.currentId) {
+    content.appendChild(renderEmpty('Baseline and current are the same snapshot.'));
+    return;
+  }
   try {
-    const diff = await sendMessage('bpa-snapshots:diff');
+    const diff = await sendMessage('bpa-snapshots:diff', {
+      baselineId: state.baselineId,
+      currentId: state.currentId,
+    });
     if (!diff || diff.ok === false) {
       content.appendChild(renderEmpty(diff?.message || 'No diff available.'));
       return;
@@ -364,6 +438,36 @@ async function render() {
   } catch (err) {
     content.appendChild(renderEmpty(`Failed to load diff: ${err?.message || err}`, true));
   }
+}
+
+async function render() {
+  ensureIoPanel();
+  // Refresh the snapshot list; selections persist if the picked IDs are
+  // still present.
+  let list = null;
+  try {
+    list = await sendMessage('bpa-snapshots:list');
+  } catch (err) {
+    state.items = [];
+    state.baselineId = null;
+    state.currentId = null;
+    renderPicker();
+    wireSlotDownloads();
+    const content = document.getElementById('content');
+    content.innerHTML = '';
+    content.appendChild(renderEmpty(`Failed to load snapshot list: ${err?.message || err}`, true));
+    return;
+  }
+  state.items = Array.isArray(list?.items) ? list.items : [];
+  const ids = new Set(state.items.map((s) => s.id));
+  if (!ids.has(state.baselineId) || !ids.has(state.currentId)) {
+    const seeds = pickInitialSelections(state.items);
+    if (!ids.has(state.baselineId)) state.baselineId = seeds.baselineId;
+    if (!ids.has(state.currentId)) state.currentId = seeds.currentId;
+  }
+  renderPicker();
+  wireSlotDownloads();
+  await renderDiff();
 }
 
 function setVersion() {

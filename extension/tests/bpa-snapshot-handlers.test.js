@@ -259,6 +259,152 @@ test('round-trip: exported snapshot imports back identically into previous slot'
   assert.equal(diffOut.counts.removed, 1);
 });
 
+// =====================================================================
+// Phase 2.3: bpa-snapshots:list + diff-by-id
+// =====================================================================
+
+test('list: empty store returns ok:true with empty items', async () => {
+  const handlers = makeHandlers();
+  const out = await handlers['bpa-snapshots:list']();
+  assert.equal(out.ok, true);
+  assert.deepEqual(out.items, []);
+});
+
+test('list: returns one summary per stored snapshot, most-recent first', async () => {
+  const local = createStorageMock({
+    'fm:bpaSnapshots': {
+      schema: 2,
+      maxSnapshots: 10,
+      current: snapFixture({ takenAt: '2026-05-12T00:00:00.000Z', id: 'snap-c' }),
+      previous: snapFixture({ takenAt: '2026-05-11T00:00:00.000Z', id: 'snap-p' }),
+      history: [snapFixture({ takenAt: '2026-05-10T00:00:00.000Z', id: 'snap-h0' })],
+    },
+  });
+  const handlers = makeHandlers({ local });
+  const out = await handlers['bpa-snapshots:list']();
+  assert.equal(out.ok, true);
+  assert.equal(out.items.length, 3);
+  assert.equal(out.items[0].id, 'snap-c');
+  assert.equal(out.items[1].id, 'snap-p');
+  assert.equal(out.items[2].id, 'snap-h0');
+});
+
+test('diff: with baselineId + currentId pair from history, computes diff', async () => {
+  const local = createStorageMock({
+    'fm:bpaSnapshots': {
+      schema: 2,
+      maxSnapshots: 10,
+      current: snapFixture({
+        takenAt: '2026-05-12T00:00:00.000Z',
+        id: 'snap-c',
+        inventory: { servers: [{ id: 1, name: 'fw' }, { id: 2, name: 'sw' }], users: [], server_templates: [], server_groups: [] },
+      }),
+      previous: snapFixture({
+        takenAt: '2026-05-11T00:00:00.000Z',
+        id: 'snap-p',
+        inventory: { servers: [{ id: 1, name: 'fw' }], users: [], server_templates: [], server_groups: [] },
+      }),
+      history: [
+        snapFixture({
+          takenAt: '2026-05-10T00:00:00.000Z',
+          id: 'snap-h0',
+          inventory: { servers: [], users: [], server_templates: [], server_groups: [] },
+        }),
+      ],
+    },
+  });
+  const handlers = makeHandlers({ local });
+  // Diff history vs current.
+  const out = await handlers['bpa-snapshots:diff']({ baselineId: 'snap-h0', currentId: 'snap-c' });
+  assert.equal(out.ok, true);
+  assert.equal(out.prevTakenAt, '2026-05-10T00:00:00.000Z');
+  assert.equal(out.currTakenAt, '2026-05-12T00:00:00.000Z');
+  assert.equal(out.counts.added, 2);
+});
+
+test('diff: with unknown id returns ok:false reason:unknown-id', async () => {
+  const local = createStorageMock({
+    'fm:bpaSnapshots': { current: snapFixture(), previous: null },
+  });
+  const handlers = makeHandlers({ local });
+  const out = await handlers['bpa-snapshots:diff']({ baselineId: 'nope', currentId: 'also-nope' });
+  assert.equal(out.ok, false);
+  assert.equal(out.reason, 'unknown-id');
+});
+
+test('diff: default (no payload) still diffs current vs previous', async () => {
+  const local = createStorageMock({
+    'fm:bpaSnapshots': {
+      current: snapFixture({
+        takenAt: '2026-05-12T00:00:00.000Z',
+        inventory: { servers: [{ id: 1, name: 'fw' }], users: [], server_templates: [], server_groups: [] },
+      }),
+      previous: snapFixture({
+        takenAt: '2026-05-11T00:00:00.000Z',
+        inventory: { servers: [], users: [], server_templates: [], server_groups: [] },
+      }),
+    },
+  });
+  const handlers = makeHandlers({ local });
+  const out = await handlers['bpa-snapshots:diff']();
+  assert.equal(out.ok, true);
+  assert.equal(out.counts.added, 1);
+});
+
+test('diff: response carries .sections with all four sections', async () => {
+  const local = createStorageMock({
+    'fm:bpaSnapshots': {
+      current: snapFixture(),
+      previous: snapFixture(),
+    },
+  });
+  const handlers = makeHandlers({ local });
+  const out = await handlers['bpa-snapshots:diff']();
+  assert.ok(out.sections);
+  assert.ok(out.sections.servers);
+  assert.ok(out.sections.users);
+  assert.ok(out.sections.server_templates);
+  assert.ok(out.sections.server_groups);
+});
+
+// =====================================================================
+// Phase 2.5 prerequisites: get-config / set-max / clear-all
+// =====================================================================
+
+test('get-config: defaults to 10 when nothing stored', async () => {
+  const handlers = makeHandlers();
+  const out = await handlers['bpa-snapshots:get-config']();
+  assert.equal(out.ok, true);
+  assert.equal(out.maxSnapshots, 10);
+});
+
+test('set-max: applies clamped value and persists', async () => {
+  const local = createStorageMock();
+  const handlers = makeHandlers({ local });
+  const out = await handlers['bpa-snapshots:set-max']({ maxSnapshots: 5 });
+  assert.equal(out.ok, true);
+  assert.equal(out.maxSnapshots, 5);
+  const get = await handlers['bpa-snapshots:get-config']();
+  assert.equal(get.maxSnapshots, 5);
+});
+
+test('set-max: rejects non-finite input', async () => {
+  const handlers = makeHandlers();
+  const out = await handlers['bpa-snapshots:set-max']({ maxSnapshots: 'a lot' });
+  assert.equal(out.ok, false);
+  assert.equal(out.reason, 'bad-input');
+});
+
+test('clear-all: wipes the store, list returns empty after', async () => {
+  const local = createStorageMock({
+    'fm:bpaSnapshots': { current: snapFixture(), previous: snapFixture() },
+  });
+  const handlers = makeHandlers({ local });
+  await handlers['bpa-snapshots:clear-all']();
+  const list = await handlers['bpa-snapshots:list']();
+  assert.deepEqual(list.items, []);
+});
+
 test('status: in-flight in-memory (same-SW-session) returns the runtime start time', async () => {
   // Park take() on a never-resolving getClient. While the take handler
   // is awaiting the factory, runInFlight is true and runStartedAt is
