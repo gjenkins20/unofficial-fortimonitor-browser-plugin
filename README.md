@@ -10,6 +10,8 @@ A Chrome browser extension that turns FortiMonitor's one-device-at-a-time workfl
 
 FortiMonitor's web UI is built around the single-device case: configure port scope, attach a template, set an attribute, tag an instance, one device at a time, with no bulk equivalent. Some of those operations have v2 API endpoints, but the public CLIs require operators to paste fully-resolved resource URLs per device, which is no better than clicking through the UI. Running either flavour against 80+ devices manually is not a reasonable ask. This extension folds both classes (UI-session-only and v2-API-only) into one Load → Review → Execute UX, with **Bulk Composer** as the shared entry point and standalone tools available for cases that need a different shape.
 
+It also makes everyday single-device use of FortiMonitor a little less painful: sub-columns for IP / DNS / Model on the All Instances page, no more full-page reload after editing template metrics, paste-and-resolve omni-search, and more. See [Quality-of-Life Improvements](#quality-of-life-improvements-to-the-fortimonitor-web-ui) below.
+
 ## Tools
 
 | Tool | Auth | Status | Action |
@@ -110,16 +112,16 @@ Hidden by default; opt in via popup → ⚙ Settings → Experimental tools.
 
 Sender tools (Find Servers, Server ID Lookup) include row checkboxes plus a **Send selection to ▾** dropdown in their results bar. Picking a receiver writes the selection to `chrome.storage.session` (5-minute TTL), opens the receiver in a new tab, and the receiver consumes the blob on mount to prefill its entries. Receivers today: Bulk Composer, Manage Server Templates, Manage Server Attributes. Single-shot consume; back-button revisits do not duplicate prefills.
 
-### Page-side augmentations (FortiMonitor web UI)
+### Quality-of-Life Improvements to the FortiMonitor Web UI
 
-Separate from the launcher popup, the extension also injects UI directly into FortiMonitor pages the operator already has open:
+Separate from the launcher and the bulk tools, the extension also injects small improvements directly into FortiMonitor pages the operator already has open. Each one targets a specific friction point of everyday single-device use.
 
-- **`/report/ListServers`** ("All Instances"): adds **IP Address**, **DNS Name**, **Type**, **Model**, **Model #**, and **OS** sub-columns inside the existing Instance cell. Operators can reorder and hide/show sub-columns via a popup setting; preferences persist in `chrome.storage.local`.
-- **Side nav (any FortiMonitor page)**: optional **FM Toolkit** entry that opens the launcher in an in-page overlay instead of the toolbar popup. Off by default; opt in via popup → ⚙ Settings → *FortiMonitor sidebar entry*.
-- **Template Monitoring Config drawer**: skips the full-page reload after a metric edit by patching the open Vue drawer in place.
-- **Tour FortiMonitor (Beta)**: guided walkthrough of FortiMonitor surfaces launched from the popup's Training section. Off by default; opt in via popup → ⚙ Settings → *Tour FortiMonitor*.
-- **Omni-search box**: paste-friendly server resolver that surfaces matching instances from the cached server list as you type.
-- **Info bubbles**: contextual help bubbles on selected FortiMonitor controls, anchored to the underlying element.
+- **See IP, DNS, model, and OS at a glance on the All Instances page.** `/report/ListServers` gets **IP Address**, **DNS Name**, **Type**, **Model**, **Model #**, and **OS** as sub-columns inside the existing Instance cell, so you don't have to click into each instance to read its basics. Reorder and hide sub-columns via a popup setting; preferences persist.
+- **Edit a template's monitoring config without losing your place.** When you change a metric inside the Template Monitoring Config drawer, FortiMonitor's default behaviour is a full-page reload that bounces you back to the top and collapses the drawer. The extension intercepts that, patches the open Vue drawer in place, and lets you keep editing where you left off.
+- **Launch the toolkit straight from FortiMonitor's own side nav.** Optional **FM Toolkit** entry opens the launcher as an in-page overlay instead of forcing you up to the toolbar popup. Off by default; opt in via popup → ⚙ Settings → *FortiMonitor sidebar entry*.
+- **Paste a list of servers and see matches inline as you type.** The omni-search box resolves names, FQDNs, or IDs against the cached server list with no round-trip to a search page; useful for staging a Bulk Composer or handoff input directly from the FortiMonitor side.
+- **Contextual help anchored to the controls that benefit from a one-liner.** Lightweight info bubbles attach to specific FortiMonitor settings that aren't self-explanatory.
+- **Guided walkthrough of FortiMonitor surfaces (Beta).** Tour FortiMonitor launches from the popup's Training section and walks new operators through where things live. Off by default; opt in via popup → ⚙ Settings → *Tour FortiMonitor*.
 
 ## Install (developer mode)
 
