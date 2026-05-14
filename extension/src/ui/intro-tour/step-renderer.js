@@ -311,18 +311,41 @@ function positionCard(cardEl, anchor, placement, doc) {
   const cardRect = cardEl.getBoundingClientRect();
   const cardW = cardRect.width || 320;
   const cardH = cardRect.height || 120;
+  const docW = doc.documentElement.clientWidth || 1024;
+  const docH = doc.documentElement.clientHeight || 768;
+
+  // Room on each side of the anchor in the viewport. Used both by the
+  // 'auto' placement chooser and (FMN-192) by the oversized-anchor
+  // fallback that switches to a viewport-centered floating card when no
+  // edge has room. The Control Panel step anchors on div.pa-main which
+  // covers nearly the full viewport, so none of the edge placements fit.
+  const rightRoom = docW - rect.right;
+  const leftRoom = rect.left;
+  const topRoom = rect.top;
+  const bottomRoom = docH - rect.bottom;
 
   let resolved = placement;
   if (placement === 'auto') {
-    const docW = doc.documentElement.clientWidth || 1024;
-    const rightRoom = docW - rect.right;
-    const leftRoom = rect.left;
     resolved = rightRoom >= cardW + 20 ? 'right'
       : leftRoom >= cardW + 20 ? 'left'
-      : 'bottom';
+      : bottomRoom >= cardH + 20 ? 'bottom'
+      : topRoom >= cardH + 20 ? 'top'
+      : 'center';
   }
 
   const GAP = 12;
+
+  if (resolved === 'center') {
+    // Anchor too large for any edge placement (typical for whole-workspace
+    // anchors like div.pa-main). Float the card centered in the viewport
+    // using fixed positioning so scroll doesn't drag it off.
+    cardEl.style.position = 'fixed';
+    cardEl.style.top = `${Math.max(20, (docH - cardH) / 2)}px`;
+    cardEl.style.left = `${Math.max(20, (docW - cardW) / 2)}px`;
+    cardEl.setAttribute('data-placement-resolved', 'center');
+    return;
+  }
+
   let top, left;
   switch (resolved) {
     case 'right':
