@@ -328,15 +328,29 @@ export class FortimonitorClient {
   // ---------------------------------------------------------------
 
   /**
-   * Returns the `fabricSystemData` blob for a server, or null if the
-   * server is non-Fabric or the request fails. Used by the Bulk Composer's
-   * Best-Practice Fabric action to classify devices by (Make, Model).
+   * Returns the `fabricSystemData` blob for a server (or null on failure),
+   * augmented with `isFabric` and `deviceSubType` from the surrounding
+   * instance record so callers have everything they need to identify
+   * the device class in one network round-trip.
    *
    * Per project memory idp_data_field_path_findings.md, fabricSystemData
-   * is populated only on Fortinet/Fabric-onboarded rows.
+   * is populated only on Fortinet/Fabric-onboarded rows. FMN-211 Phase
+   * A captures showed that fabricSystemData shape varies across types
+   * (FortiGate carries model_name/model_number; FortiAP/Switch carry
+   * `model` plus `os_version` with the product code as a prefix). The
+   * canonical type signal across all three classes is `deviceSubType`
+   * (fortinet.fortigate / fortinet.fortiap / fortinet.fortiswitch),
+   * which lives on the instance, not inside fabricSystemData.
    *
    * @param {number|string} serverId
-   * @returns {Promise<{ model_name?: string, model_number?: string, os_version?: string } | null>}
+   * @returns {Promise<{
+   *   model_name?: string,
+   *   model_number?: string,
+   *   model?: string,
+   *   os_version?: string,
+   *   isFabric?: boolean|null,
+   *   deviceSubType?: string|null
+   * } | null>}
    */
   async getFabricSystemData(serverId) {
     if (serverId === undefined || serverId === null) return null;
@@ -361,8 +375,56 @@ export class FortimonitorClient {
     } catch {
       return null;
     }
-    const fsd = body?.pageData?.instance?.fabricSystemData;
-    return (fsd && typeof fsd === 'object') ? fsd : null;
+    const instance = body?.pageData?.instance || {};
+    const fsd = instance.fabricSystemData;
+    if (!fsd || typeof fsd !== 'object') return null;
+    // FMN-211: surface the identity flags from the parent `instance`
+    // alongside fabricSystemData so the clusterer can route by type.
+    return {
+      ...fsd,
+      isFabric: instance.isFabric ?? null,
+      deviceSubType: instance.deviceSubType ?? null
+    };
+  }
+
+  /**
+   * Fetch the Save-as-Template dialog defaults for a server. Powers the
+   * FMN-211 per-cluster template_type plumbing: FortiMonitor returns
+   * different `template_type_options` per device class (Fabric FortiAP
+   * and FortiSwitch -> "fabric_template"; SNMP-monitored network
+   * devices -> "network_device_template"). Reading the default from
+   * this endpoint avoids hardcoding fabric_template across all writes.
+   *
+   * @param {number|string} serverId
+   * @returns {Promise<{
+   *   template_name?: string,
+   *   template_type_options?: Array<{value: string, label: string}>,
+   *   alert_timeline_options?: Array<{value: number, label: string}>,
+   *   preselected?: string[]
+   * } | null>}
+   */
+  async getCreateTemplateDefaults(serverId) {
+    if (serverId === undefined || serverId === null) return null;
+    const origin = await this.origin();
+    const url = `${origin}/config/get_create_server_template_data?instance_id=${encodeURIComponent(String(serverId))}`;
+    let res;
+    try {
+      res = await this.fetch(url, {
+        method: 'GET',
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' }
+      });
+    } catch {
+      return null;
+    }
+    if (!res.ok) return null;
+    const ct = (res.headers?.get?.('content-type') || '').toLowerCase();
+    if (!ct.includes('json')) return null;
+    try {
+      return await res.json();
+    } catch {
+      return null;
+    }
   }
 
   // ---------------------------------------------------------------

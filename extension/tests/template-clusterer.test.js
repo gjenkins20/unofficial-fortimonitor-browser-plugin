@@ -154,11 +154,25 @@ test('device with no id is unclassified', () => {
   assert.match(out.unclassified[0].reason, /id/);
 });
 
-test('device without fabricSystemData make/model is unclassified', () => {
+test('device without any make/model signal is unclassified', () => {
+  // No fabricSystemData, no isFabric flag, no deviceSubType.
   const out = buildTemplateClusters([{ id: 1, monitoring_config: [] }]);
   assert.equal(out.clusters.length, 0);
   assert.equal(out.unclassified.length, 1);
-  assert.match(out.unclassified[0].reason, /fabricSystemData/);
+  assert.match(out.unclassified[0].reason, /Fabric|make\/model/i);
+});
+
+test('device with isFabric: null is unclassified (SNMP/OnSight path is FMN-217 scope)', () => {
+  // Matches the SNMP-monitored FortiAP capture: no fabricSystemData,
+  // isFabric: null, deviceSubType: null. Cluster must NOT touch these
+  // devices in the Fabric-only feature.
+  const out = buildTemplateClusters([{
+    id: 1,
+    pageData: { instance: { isFabric: null, deviceSubType: null, hasOnsight: true } }
+  }]);
+  assert.equal(out.clusters.length, 0);
+  assert.equal(out.unclassified.length, 1);
+  assert.match(out.unclassified[0].reason, /Fabric|isFabric/);
 });
 
 test('device with empty monitoring_config still clusters (legitimate empty-template case)', () => {
@@ -566,4 +580,128 @@ test('cross-type devices with identical resource textkeys still split (Make+Mode
     fortiap(2, { metrics: m })
   ]);
   assert.equal(out.clusters.length, 2);
+});
+
+// =====================================================================
+// FMN-211 Phase A rework: real-shape Fabric inputs (deviceSubType + os_version)
+// =====================================================================
+//
+// These fixtures mirror the actual response from /report/get_idp_data
+// for Fabric-onboarded devices captured in Phase A. The clusterer
+// must handle:
+//   - input shape with pageData.instance.{isFabric, deviceSubType}
+//   - fabricSystemData WITHOUT model_name/model_number (FortiAP/Switch)
+//   - product code extracted from os_version prefix
+//   - fabricSystemData.model being unreliable (operator's FortiAP had
+//     it overwritten to a customer string)
+
+function fabricFortiAp(id, { osVersion = 'FP431F-v7.4.6-build0771', metrics = [] } = {}) {
+  return {
+    id,
+    pageData: { instance: {
+      isFabric: true,
+      deviceSubType: 'fortinet.fortiap',
+      hasOnsight: true
+    } },
+    fabricSystemData: {
+      // model_name / model_number deliberately absent.
+      // FortiAP fabricSystemData uses `model` (often customer-overwritten),
+      // `os_version` (reliable for product code).
+      model: 'TMH',          // customer override - clusterer must NOT use this
+      os_version: osVersion,
+      serial: '<redacted>'
+    },
+    monitoring_config: [
+      { textkey: 'fortinet.fortiap', name: 'FortiAP', metrics }
+    ]
+  };
+}
+
+function fabricFortiSwitch(id, { osVersion = 'FS2F48-v7.4.8-build929,250909 (GA)', metrics = [] } = {}) {
+  return {
+    id,
+    pageData: { instance: {
+      isFabric: true,
+      deviceSubType: 'fortinet.fortiswitch'
+    } },
+    fabricSystemData: {
+      model: 'FS2F48',
+      os_version: osVersion,
+      serial: '<redacted>'
+    },
+    monitoring_config: [
+      { textkey: 'fortinet.fortiswitch', name: 'FortiSwitch', metrics }
+    ]
+  };
+}
+
+test('Fabric FortiAP (real shape: deviceSubType + os_version) clusters correctly', () => {
+  const m = [metric('radio.signal', 'Radio Signal')];
+  const out = buildTemplateClusters([
+    fabricFortiAp(1, { metrics: m }),
+    fabricFortiAp(2, { metrics: m })
+  ]);
+  assert.equal(out.clusters.length, 1);
+  const c = out.clusters[0];
+  assert.equal(c.make, 'FortiAP');
+  assert.equal(c.model, 'FP431F');                     // extracted from os_version, NOT from fabricSystemData.model (which was "TMH")
+  assert.equal(c.proposed_resources[0].plugin_textkey, 'fortinet.fortiap');
+});
+
+test('Fabric FortiSwitch (real shape) clusters correctly', () => {
+  const m = [metric('port.utilization', 'Port Utilization')];
+  const out = buildTemplateClusters([
+    fabricFortiSwitch(10, { metrics: m }),
+    fabricFortiSwitch(11, { metrics: m })
+  ]);
+  assert.equal(out.clusters.length, 1);
+  assert.equal(out.clusters[0].make, 'FortiSwitch');
+  assert.equal(out.clusters[0].model, 'FS2F48');
+  assert.equal(out.clusters[0].proposed_resources[0].plugin_textkey, 'fortinet.fortiswitch');
+});
+
+test('mixed FortiAP + FortiSwitch + FortiGate produces three clusters (no cross-type merge)', () => {
+  const m = [metric('cpu', 'CPU')];
+  const out = buildTemplateClusters([
+    fortigate(1, { metrics: m }),
+    fabricFortiAp(2, { metrics: m }),
+    fabricFortiSwitch(3, { metrics: m })
+  ], { threshold: 0.1 });
+  assert.equal(out.clusters.length, 3);
+  const makes = out.clusters.map((c) => c.make).sort();
+  assert.deepEqual(makes, ['FortiAP', 'FortiGate', 'FortiSwitch']);
+});
+
+test('Fabric device with unknown deviceSubType is unclassified', () => {
+  const out = buildTemplateClusters([{
+    id: 1,
+    pageData: { instance: { isFabric: true, deviceSubType: 'fortinet.fortiunknown' } },
+    fabricSystemData: { model: 'X', os_version: 'X-v1.0.0' }
+  }]);
+  assert.equal(out.clusters.length, 0);
+  assert.equal(out.unclassified.length, 1);
+});
+
+test('Fabric FortiAP with missing os_version falls back to fabricSystemData.model', () => {
+  const out = buildTemplateClusters([{
+    id: 1,
+    pageData: { instance: { isFabric: true, deviceSubType: 'fortinet.fortiap' } },
+    fabricSystemData: { model: 'FP-Custom', os_version: '' },
+    monitoring_config: [{ textkey: 'fortinet.fortiap', metrics: [metric('cpu', 'CPU')] }]
+  }]);
+  assert.equal(out.clusters.length, 1);
+  assert.equal(out.clusters[0].model, 'FP-Custom');
+});
+
+test('explicit model_name + model_number short-circuits the new adapter (back-compat)', () => {
+  // The existing FortiGate fixtures use this shape; must keep working.
+  const out = buildTemplateClusters([{
+    id: 1,
+    name: 'fg-1',
+    fabricSystemData: { model_name: 'FortiGate', model_number: 'FGVMA6' },
+    monitoring_config: [{ textkey: 'fortinet.fortigate', name: 'cat', metrics: [metric('cpu', 'CPU')] }]
+  }]);
+  assert.equal(out.clusters.length, 1);
+  assert.equal(out.clusters[0].make, 'FortiGate');
+  assert.equal(out.clusters[0].model, 'FGVMA6');
 });

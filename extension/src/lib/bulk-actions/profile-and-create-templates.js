@@ -136,12 +136,23 @@ export async function commit(target, params, ctx = {}) {
     dryRun
   });
 
+  // FMN-211: per-cluster template_type. The Configure step now sources
+  // each cluster's template_type from /config/get_create_server_template_data
+  // for the cluster's representative device (Fabric FortiAP/Switch
+  // returns "fabric_template"; SNMP-monitored devices return
+  // "network_device_template"). Fall back to the params-level default
+  // (always "fabric_template") for clusters that didn't have a defaults
+  // fetch resolved.
+  const clusterTemplateType = (typeof cluster.template_type === 'string' && cluster.template_type.trim())
+    ? cluster.template_type.trim()
+    : template_type;
+
   const ensureResult = await ensureForCluster(cluster, {
     panopta: client,
     fmClient: fortimonitorClient,
     sharedState,
     destination_group: resolvedDestGroup,
-    template_type,
+    template_type: clusterTemplateType,
     dryRun
   });
 

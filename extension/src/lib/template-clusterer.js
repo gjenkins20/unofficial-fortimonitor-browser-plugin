@@ -158,13 +158,12 @@ export function buildTemplateClusters(devices, options = {}) {
       unclassified.push({ device, reason: 'missing device id' });
       continue;
     }
-    const make = trimOrEmpty(device.fabricSystemData?.model_name);
-    const model = trimOrEmpty(device.fabricSystemData?.model_number);
-    if (!make || !model) {
-      unclassified.push({ device, reason: 'no fabricSystemData make/model' });
+    const identity = extractMakeAndModel(device);
+    if (!identity) {
+      unclassified.push({ device, reason: identity === null ? 'not a Fabric-onboarded device (isFabric !== true)' : 'no recognizable make/model' });
       continue;
     }
-    const sig = buildDeviceSignature(device, { resourceKey, thresholdSig, make, model });
+    const sig = buildDeviceSignature(device, { resourceKey, thresholdSig, make: identity.make, model: identity.model });
     sigs.push({ device, sig });
   }
 
@@ -173,6 +172,65 @@ export function buildTemplateClusters(devices, options = {}) {
     : clusterJaccard(sigs, threshold, resourceStrategy);
 
   return { clusters, unclassified };
+}
+
+// FMN-211: canonical (Make, Model) extraction across Fabric device
+// classes. Phase A captures (FortiGate / FortiAP / FortiSwitch) showed
+// that:
+//   - `isFabric === true` is the entry gate (SNMP-only devices are
+//     handled separately in FMN-217)
+//   - `deviceSubType` is the canonical type indicator
+//     (fortinet.fortigate / fortinet.fortiap / fortinet.fortiswitch)
+//   - fabricSystemData.model is unreliable for FortiAP (operator's
+//     Fabric FortiAP had it overwritten to "TMH" - customer name)
+//   - product code lives in os_version prefix:
+//       FortiGate:  "FGT...-vX.Y.Z..."  (TBD - verify on FortiGate)
+//       FortiAP:    "FP431F-v7.4.6-build0771"
+//       FortiSwitch:"FS2F48-v7.4.8-build929,250909 (GA)"
+//   - FortiGate alone (per FMN-203 memory) carries explicit
+//     `model_name` + `model_number` fields - we keep that as a
+//     primary source when present (back-compat with existing fixtures).
+const MAKE_BY_DEVICE_SUB_TYPE = {
+  'fortinet.fortigate': 'FortiGate',
+  'fortinet.fortiap': 'FortiAP',
+  'fortinet.fortiswitch': 'FortiSwitch',
+  'fortinet.fortiextender': 'FortiExtender'
+};
+const OS_VERSION_MODEL_RE = /^([A-Za-z][A-Za-z0-9-]+)-v/;
+
+function extractMakeAndModel(device) {
+  // Back-compat with existing tests + FortiGate captures: if explicit
+  // model_name + model_number are present, use them as-is. Many of the
+  // FMN-200 / FMN-209 unit tests build fixtures with this shape.
+  const fsd = device.fabricSystemData || {};
+  const explicitMakeName = trimOrEmpty(fsd.model_name);
+  const explicitModelNumber = trimOrEmpty(fsd.model_number);
+  if (explicitMakeName && explicitModelNumber) {
+    return { make: explicitMakeName, model: explicitModelNumber };
+  }
+
+  // Real Fabric devices (FortiAP / FortiSwitch and the operator's
+  // production FortiGates) - read deviceSubType + os_version. The
+  // clusterer accepts both top-level device.{isFabric,deviceSubType}
+  // and nested device.pageData.instance.{...} so callers can pass
+  // either the SW-handler-flattened shape or the raw idp_data
+  // response.
+  const instance = device.pageData?.instance ?? device;
+  const isFabric = instance.isFabric ?? device.isFabric;
+  const deviceSubType = instance.deviceSubType ?? device.deviceSubType ?? '';
+  if (isFabric !== true) return null;
+
+  const make = MAKE_BY_DEVICE_SUB_TYPE[deviceSubType] || null;
+  if (!make) return null;
+
+  // Model: prefer os_version prefix (reliable), fall back to
+  // fabricSystemData.model only if the regex misses.
+  const osVersion = trimOrEmpty(fsd.os_version);
+  const m = osVersion.match(OS_VERSION_MODEL_RE);
+  const model = m ? m[1] : trimOrEmpty(fsd.model);
+  if (!model) return null;
+
+  return { make, model };
 }
 
 function clampThreshold(t) {

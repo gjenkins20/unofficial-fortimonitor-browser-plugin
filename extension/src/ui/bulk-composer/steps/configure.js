@@ -709,20 +709,20 @@ function renderProfileAndCreateTemplatesForm({ body, store, refreshNextDisabled,
 
     let fsd, monitoringConfig, portScope, groups;
     try {
-      // FMN-211: port-scope is FortiGate-only. Fetch FSD + monitoring +
-      // groups in parallel, then call port-scope only for the
-      // FortiGate-shaped subset. Pure-non-FortiGate selections skip the
-      // port-scope fetch entirely (was wasting one request per device).
-      [fsd, monitoringConfig, groups] = await Promise.all([
+      // FMN-211 Phase A discovery (2026-05-13): /onboarding/getDevicePorts
+      // returns useful port data on non-FortiGate Fabric devices too
+      // (verified in FortiAP + FortiSwitch HARs - both returned populated
+      // ports[] with admin_status/oper_status/template attachments per
+      // port). Previous FortiGate-only gate dropped useful data. Run
+      // port-scope batch for ALL ids; the SW handler already swallows
+      // errors on devices that don't support the endpoint and returns
+      // null per id.
+      [fsd, monitoringConfig, portScope, groups] = await Promise.all([
         call('bulk-composer:list-fabric-system-data', { serverIds }),
         call('bulk-composer:list-monitoring-config-batch', { serverIds }),
+        call('bulk-composer:list-port-scope-batch', { serverIds }),
         call('bulk-composer:list-server-groups', {})
       ]);
-      const fsdLookup = (fsd && fsd.byServerId) || {};
-      const fortigateIds = serverIds.filter((id) => fsdLookup[id]?.model_name === 'FortiGate');
-      portScope = fortigateIds.length > 0
-        ? await call('bulk-composer:list-port-scope-batch', { serverIds: fortigateIds })
-        : { byServerId: {} };
     } catch (err) {
       status.textContent = `Could not load data: ${err?.message ?? err}`;
       status.className = 'execute-state error';
@@ -751,22 +751,63 @@ function renderProfileAndCreateTemplatesForm({ body, store, refreshNextDisabled,
       newGroupInput.value = store.params.destination_group_create_name;
     }
 
-    // Assemble devices for the clusterer
+    // Assemble devices for the clusterer.
+    //
+    // FMN-211: fortimonitor-client's getFabricSystemData augments the
+    // raw fabricSystemData block with `isFabric` and `deviceSubType`
+    // pulled from the parent instance record. Hoist those to the top
+    // level of the device object so the clusterer can read them
+    // uniformly (it also accepts pageData.instance.{...} for synthetic
+    // fixtures).
     const fsdMap = (fsd && fsd.byServerId) || {};
     const mcMap = (monitoringConfig && monitoringConfig.byServerId) || {};
     const psMap = (portScope && portScope.byServerId) || {};
-    lastDevices = targets.map((t) => ({
-      id: t.id,
-      name: t.name,
-      fabricSystemData: fsdMap[t.id] ?? null,
-      monitoring_config: mcMap[t.id] ?? null,
-      port_scope: psMap[t.id] ?? null
-    }));
+    lastDevices = targets.map((t) => {
+      const fsdRow = fsdMap[t.id] ?? null;
+      return {
+        id: t.id,
+        name: t.name,
+        isFabric: fsdRow?.isFabric ?? null,
+        deviceSubType: fsdRow?.deviceSubType ?? null,
+        fabricSystemData: fsdRow,
+        monitoring_config: mcMap[t.id] ?? null,
+        port_scope: psMap[t.id] ?? null
+      };
+    });
     lastTargets = targets;
 
     rebuildClusters();
+    // FMN-211: per-cluster template_type. After initial clustering,
+    // fire one /config/get_create_server_template_data per cluster's
+    // representative device. This runs after the first rebuild so the
+    // table renders immediately; defaults stitch in when they resolve.
+    void resolveClusterTemplateTypes();
     downloadBtn.disabled = false;
   })();
+
+  async function resolveClusterTemplateTypes() {
+    const clusters = store.params?.clusters || [];
+    if (clusters.length === 0) return;
+    const fetches = await Promise.all(clusters.map(async (c) => {
+      try {
+        const resp = await call('bulk-composer:get-create-template-defaults', { serverId: c.sample_device_id });
+        const opts = resp?.defaults?.template_type_options;
+        if (Array.isArray(opts) && opts.length > 0 && typeof opts[0]?.value === 'string') {
+          return { key: c.key, template_type: opts[0].value };
+        }
+        return { key: c.key, template_type: null };
+      } catch {
+        return { key: c.key, template_type: null };
+      }
+    }));
+    const byKey = new Map(fetches.map((f) => [f.key, f.template_type]));
+    const updated = (store.params?.clusters || []).map((c) => {
+      const tt = byKey.get(c.key);
+      if (!tt) return c;
+      return { ...c, template_type: tt };
+    });
+    store.params = { ...store.params, clusters: updated };
+  }
 
   function rebuildClusters() {
     const threshold = parseFloat(thresholdSlider.value);

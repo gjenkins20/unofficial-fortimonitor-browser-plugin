@@ -331,6 +331,25 @@ export function createBulkComposerHandlers({ events = {}, getClient, getFortimon
     },
 
     /**
+     * FMN-211: fetch the Save-as-Template dialog defaults for one
+     * server. Powers per-cluster template_type plumbing (different
+     * Fabric device classes return different template_type_options).
+     * Input: { serverId }
+     * Output: { defaults: { template_type_options, ... } | null }
+     */
+    'bulk-composer:get-create-template-defaults': async (payload = {}) => {
+      const serverId = payload?.serverId;
+      if (serverId === undefined || serverId === null) return { defaults: null };
+      const fmClient = await fmFactory();
+      try {
+        const defaults = await fmClient.getCreateTemplateDefaults(serverId);
+        return { defaults };
+      } catch {
+        return { defaults: null };
+      }
+    },
+
+    /**
      * Idempotent create-and-populate for a Best-Practice template.
      *
      * Input: { name, templateType, destinationGroup, sourceServerId?,

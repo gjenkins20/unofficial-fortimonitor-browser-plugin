@@ -406,18 +406,40 @@ test('getServerName uses the injected origin', async () => {
 // FMN-196: getFabricSystemData
 // =====================================================================
 
-test('getFabricSystemData returns the fabricSystemData blob on success', async () => {
+test('getFabricSystemData returns the fabricSystemData blob augmented with isFabric + deviceSubType (FMN-211)', async () => {
   const fetchMock = createFetchMock(async () => jsonResponse({
     pageData: {
       instance: {
         name: 'FGVM01TM24006845',
+        isFabric: true,
+        deviceSubType: 'fortinet.fortigate',
         fabricSystemData: { model_name: 'FortiGate', model_number: 'FGVMA6', os_version: 'v7.6.3 build3510' }
       }
     }
   }));
   const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'tok' });
   const fsd = await client.getFabricSystemData(42024061);
-  assert.deepEqual(fsd, { model_name: 'FortiGate', model_number: 'FGVMA6', os_version: 'v7.6.3 build3510' });
+  assert.deepEqual(fsd, {
+    model_name: 'FortiGate',
+    model_number: 'FGVMA6',
+    os_version: 'v7.6.3 build3510',
+    isFabric: true,
+    deviceSubType: 'fortinet.fortigate'
+  });
+});
+
+test('getFabricSystemData returns isFabric/deviceSubType as null when the instance lacks them (legacy response)', async () => {
+  const fetchMock = createFetchMock(async () => jsonResponse({
+    pageData: {
+      instance: {
+        fabricSystemData: { model_name: 'FortiGate', model_number: 'FGVMA6', os_version: 'v7.6.3' }
+      }
+    }
+  }));
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'tok' });
+  const fsd = await client.getFabricSystemData(1);
+  assert.equal(fsd.isFabric, null);
+  assert.equal(fsd.deviceSubType, null);
 });
 
 test('getFabricSystemData returns null when fabricSystemData is absent (non-Fortinet device)', async () => {

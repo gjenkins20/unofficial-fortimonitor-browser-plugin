@@ -105,7 +105,11 @@ test.describe('FMN-211: Multi-Fabric type support', () => {
     await page.close();
   });
 
-  test('port-scope batch is invoked only for FortiGate ids (Phase D gate)', async ({ extensionContext, extensionId }) => {
+  test('port-scope batch is invoked for ALL Fabric ids (FMN-211 Phase A reverted the FortiGate-only gate)', async ({ extensionContext, extensionId }) => {
+    // FMN-211 Phase A discovery: /onboarding/getDevicePorts returns
+    // populated ports[] on Fabric FortiAP and Fabric FortiSwitch, not
+    // only FortiGate. Earlier gate dropped that data; now we call with
+    // every id and let the SW handler return null per id that fails.
     const page = await extensionContext.newPage();
     await openConfigure(page, extensionId, [
       { id: 101, name: 'FGVMA6-A', template_names: [] },
@@ -113,21 +117,76 @@ test.describe('FMN-211: Multi-Fabric type support', () => {
       { id: 301, name: 'FSW-1', template_names: [] }
     ]);
     const calls = await page.evaluate(() => window.__fmnPortScopeCalls);
-    // Exactly one batch call, carrying only the FortiGate id.
     expect(calls.length).toBe(1);
-    expect(calls[0]).toEqual([101]);
+    expect(calls[0].sort()).toEqual([101, 201, 301]);
     await page.close();
   });
 
-  test('pure-non-FortiGate selection skips port-scope batch entirely', async ({ extensionContext, extensionId }) => {
+  test('per-cluster template_type is fetched from get-create-template-defaults SW handler', async ({ extensionContext, extensionId }) => {
     const page = await extensionContext.newPage();
-    await openConfigure(page, extensionId, [
-      { id: 201, name: 'FAP-X', template_names: [] },
-      { id: 202, name: 'FAP-Y', template_names: [] },
-      { id: 301, name: 'FSW-1', template_names: [] }
-    ]);
-    const calls = await page.evaluate(() => window.__fmnPortScopeCalls);
-    expect(calls.length).toBe(0);
+    // Install a stub that responds to get-create-template-defaults with
+    // a per-id value so we can assert it lands on the cluster.
+    await page.goto(`chrome-extension://${extensionId}/src/ui/bulk-composer/app.html#/pick`);
+    await page.evaluate((args) => {
+      const { fsd, mc, psFg, groups } = args;
+      window.__fmnPortScopeCalls = [];
+      const real = chrome.runtime.sendMessage.bind(chrome.runtime);
+      chrome.runtime.sendMessage = function patched(msg, cb) {
+        const type = msg?.type;
+        const payload = msg?.payload || {};
+        const respondWith = (result) => setTimeout(() => cb({ ok: true, result }), 0);
+        const idsFor = (m) => Array.isArray(m.serverIds) ? m.serverIds : [];
+        switch (type) {
+          case 'bulk-composer:list-fabric-system-data': {
+            const byServerId = {};
+            for (const id of idsFor(payload)) byServerId[id] = fsd[id] ?? null;
+            respondWith({ byServerId });
+            return true;
+          }
+          case 'bulk-composer:list-monitoring-config-batch': {
+            const byServerId = {};
+            for (const id of idsFor(payload)) byServerId[id] = mc[id] ?? null;
+            respondWith({ byServerId });
+            return true;
+          }
+          case 'bulk-composer:list-port-scope-batch': {
+            const byServerId = {};
+            respondWith({ byServerId });
+            return true;
+          }
+          case 'bulk-composer:list-server-groups':
+            respondWith({ groups });
+            return true;
+          case 'bulk-composer:get-create-template-defaults':
+            // FortiGate -> fabric_template; FortiAP -> fabric_template
+            // (real captures showed Fabric FortiAP returns fabric_template,
+            // not network_device_template). Echo the id so we can verify
+            // the cluster's sample_device_id was used.
+            respondWith({ defaults: { template_type_options: [{ value: payload.serverId === 201 ? 'fabric_template_ap' : 'fabric_template', label: 'X' }] } });
+            return true;
+        }
+        return real(msg, cb);
+      };
+    }, { fsd: STUB_FSD, mc: STUB_MC, psFg: STUB_PORTS_FG, groups: STUB_GROUPS });
+
+    await page.evaluate(async () => {
+      const mod = await import('./app.js');
+      mod.store.targets = [
+        { id: 101, name: 'FGVMA6-A', template_names: [] },
+        { id: 201, name: 'FAP-X', template_names: [] }
+      ];
+      mod.store.actionId = 'profile-and-create-templates';
+      window.location.hash = '#/configure';
+    });
+    await expect(page.locator('[data-test="configure-pact-table"]')).toBeVisible({ timeout: 10000 });
+
+    // Wait for the async defaults fetch to stitch in. Poll the store.
+    await expect.poll(async () => page.evaluate(async () => {
+      const mod = await import('./app.js');
+      const map = {};
+      for (const c of (mod.store.params?.clusters || [])) map[c.make] = c.template_type;
+      return map;
+    })).toEqual({ FortiGate: 'fabric_template', FortiAP: 'fabric_template_ap' });
     await page.close();
   });
 
