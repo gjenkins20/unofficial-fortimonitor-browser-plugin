@@ -31,28 +31,8 @@ It also makes everyday single-device use of FortiMonitor a little less painful: 
 
 Click the extension's toolbar icon to open the launcher and pick a tool. Each tool opens its own full-tab UI with a Load → Review → Execute → Results flow (port-scope tools add a Queue step in the middle).
 
-### Bulk Composer
-
-Bulk Composer is the toolkit's primary loop. Five steps:
-
-1. **Load** - paste a list of names or IDs, use omni-search, accept a *Send selection to* handoff from Find Servers or Server ID Lookup, or upload a CSV.
-2. **Action** - pick one of the shipped actions.
-3. **Configure** - action-specific parameters (tag name, template ID, similarity threshold, etc.).
-4. **Preview** - per-row plan with prev → next diff, "skip" status for rows that already match, error markers for rows that can't be processed.
-5. **Commit** - live writes with progress, per-row outcome CSV download.
-
-Shipped actions:
-
-- **Add Tag** - add a single tag to each selected instance. Existing tags are preserved.
-- **Remove Tag** - remove a single tag from each selected instance. Other tags are preserved.
-- **Apply Template** - attach a monitoring template. Already-attached instances are skipped.
-- **Apply Best-Practice Fabric Templates** - profile Fabric devices and create Monitoring Policies (rulesets) that auto-apply matching templates on future onboard.
-- **Profile + Create Templates** - Jaccard-cluster Fabric devices by configuration similarity, propose one template per cluster, then create + attach.
-
-Port-scope actions and the dedicated Server Templates / Server Attributes tools have not been folded into Bulk Composer yet and remain standalone for now. The plan is to migrate them once Bulk Composer's action surface stabilises.
-
 <details>
-<summary>Screenshots</summary>
+<summary>Screenshots of each tool</summary>
 
 **Popup launcher**
 
@@ -90,23 +70,35 @@ Port-scope actions and the dedicated Server Templates / Server Attributes tools 
 
 <img src="docs/marketing/screenshots/tool-find-servers.png" alt="Find Servers tool entry view" width="900">
 
-### Beta tools
-
-Hidden by default; opt in via popup → ⚙ Settings → Experimental tools.
-
-**Best-Practice Assessment** (Beta)
+**Beta tools** (hidden by default; opt in via popup → ⚙ Settings → Experimental tools)
 
 <img src="docs/marketing/screenshots/tool-bpa-audit.png" alt="Best-Practice Assessment tool entry view" width="900">
 
-**SD-WAN Report** (Beta)
-
 <img src="docs/marketing/screenshots/tool-sdwan-report.png" alt="SD-WAN Report tool entry view" width="900">
-
-**Generate SSO Configuration** (Beta)
 
 <img src="docs/marketing/screenshots/tool-sso-config.png" alt="Generate SSO Configuration tool entry view" width="900">
 
 </details>
+
+### Bulk Composer
+
+Bulk Composer is the toolkit's primary loop. Five steps:
+
+1. **Load** - paste a list of names or IDs, use omni-search, accept a *Send selection to* handoff from Find Servers or Server ID Lookup, or upload a CSV.
+2. **Action** - pick one of the shipped actions.
+3. **Configure** - action-specific parameters (tag name, template ID, similarity threshold, etc.).
+4. **Preview** - per-row plan with prev → next diff, "skip" status for rows that already match, error markers for rows that can't be processed.
+5. **Commit** - live writes with progress, per-row outcome CSV download.
+
+Shipped actions:
+
+- **Add Tag** - add a single tag to each selected instance. Existing tags are preserved.
+- **Remove Tag** - remove a single tag from each selected instance. Other tags are preserved.
+- **Apply Template** - attach a monitoring template. Already-attached instances are skipped.
+- **Apply Best-Practice Fabric Templates** - profile Fabric devices and create Monitoring Policies (rulesets) that auto-apply matching templates on future onboard.
+- **Profile + Create Templates** - Jaccard-cluster Fabric devices by configuration similarity, propose one template per cluster, then create + attach.
+
+Port-scope actions and the dedicated Server Templates / Server Attributes tools have not been folded into Bulk Composer yet and remain standalone for now. The plan is to migrate them once Bulk Composer's action surface stabilises.
 
 ### Cross-tool handoff
 
