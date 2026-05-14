@@ -74,7 +74,11 @@ test('popup launcher (configured state)', async ({ extensionContext, extensionId
   // all tool cards fit without scroll.
   await page.setViewportSize({ width: 360, height: 800 });
   await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
-  await expect(page.locator('.tool-card').first()).toBeVisible();
+  // FMN-215: the intro-tour tile (data-tool="intro-tour") sorts first in
+  // DOM but is hidden by default (gated on fm:introTourEnabled). Scope
+  // the visibility wait to non-tour tiles so we don't fail on the
+  // hidden first match.
+  await expect(page.locator('.tool-card:not([data-tool="intro-tour"])').first()).toBeVisible();
   // Wait for the session-strip + guards to settle (sessionActive() and
   // apiKeyConfigured() are async; the popup only flips into configured
   // state after both resolve).
@@ -168,6 +172,7 @@ async function stubV2Api(context) {
 }
 
 const TOOLS = [
+  { name: 'bulk-composer',         path: 'src/ui/bulk-composer/app.html',              ready: '#app-root *' },
   { name: 'remove-port-scope',     path: 'src/ui/app.html',                            ready: '#app-root *' },
   { name: 'add-port-scope',        path: 'src/ui/app.html?tool=add',                   ready: '#app-root *' },
   { name: 'add-fabric-connection', path: 'src/ui/fabric-connection/app.html',          ready: '#app-root *' },
@@ -400,7 +405,7 @@ test('hero flow: add fabric connection (4 frames)', async ({ extensionContext, e
   const popupPage = await extensionContext.newPage();
   await popupPage.setViewportSize(TOOL_VIEWPORT);
   await popupPage.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
-  await expect(popupPage.locator('.tool-card').first()).toBeVisible();
+  await expect(popupPage.locator('.tool-card:not([data-tool="intro-tour"])').first()).toBeVisible();
   await expect(popupPage.locator('#session-strip.ok')).toBeVisible();
   await popupPage.waitForTimeout(300);
   await popupPage.screenshot({ path: frame('01-popup.png'), fullPage: true });

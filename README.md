@@ -38,6 +38,10 @@ Click the extension's toolbar icon to open the launcher and pick a tool. Each to
 
 <img src="docs/marketing/screenshots/popup-launcher.png" alt="Toolbar popup launcher with all tool tiles" width="360">
 
+**Bulk Composer**
+
+<img src="docs/marketing/screenshots/tool-bulk-composer.png" alt="Bulk Composer Pick-instances step with drop zone, paste area, and format help" width="900">
+
 **Remove from Port Scope (Fabric)**
 
 <img src="docs/marketing/screenshots/tool-remove-port-scope.png" alt="Remove from Port Scope tool entry view" width="900">
