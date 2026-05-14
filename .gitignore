@@ -85,3 +85,7 @@ tests/e2e/.profile-fmn-live-cookies.json
 
 # Live-spec artifacts (screenshots + JSON capture customer data from real tenant)
 tests/e2e/__artifacts__/
+
+# Foreign-tenant captures (FMN-211 Phase A) - hand-reviewed before sharing,
+# never checked in.
+tools/qa/fmn-211-foreign-tenant-capture.json

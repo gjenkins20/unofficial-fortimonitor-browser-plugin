@@ -440,3 +440,130 @@ test('member snapshot carries device_name when device.name is set', () => {
   ]);
   assert.equal(out.clusters[0].member_signatures[0].device_name, 'device-1');
 });
+
+// =====================================================================
+// FMN-211: Cross-Fabric type fixtures (FortiAP / FortiSwitch / FortiExtender)
+// =====================================================================
+//
+// Plausible-shape fixtures: model_name comes from FortiMonitor's
+// fabricSystemData (capture pending Phase A discovery). Category
+// textkeys follow Fortinet's plugin namespace convention as seen in
+// existing FortiGate captures (fortinet.fortigate -> fortinet.fortiap,
+// fortinet.fortiswitch, fortinet.fortiextender). Will be reconciled
+// against real foreign-tenant capture when available.
+
+function fabricDevice(id, { make, model, categoryTextkey, metrics = [], portScope = null } = {}) {
+  return {
+    id,
+    name: `${make.toLowerCase()}-${id}`,
+    fabricSystemData: { model_name: make, model_number: model, os_version: 'v7.4.1' },
+    monitoring_config: [
+      { textkey: categoryTextkey, name: `${make} Stats`, metrics }
+    ],
+    port_scope: portScope
+  };
+}
+
+function fortiap(id, { metrics = [], model = 'FAP-431F' } = {}) {
+  return fabricDevice(id, { make: 'FortiAP', model, categoryTextkey: 'fortinet.fortiap', metrics });
+}
+
+function fortiswitch(id, { metrics = [], model = 'FS-148E-POE' } = {}) {
+  return fabricDevice(id, { make: 'FortiSwitch', model, categoryTextkey: 'fortinet.fortiswitch', metrics });
+}
+
+function fortiextender(id, { metrics = [], model = 'FXA21F' } = {}) {
+  return fabricDevice(id, { make: 'FortiExtender', model, categoryTextkey: 'fortinet.fortiextender', metrics });
+}
+
+test('same-model FortiAPs cluster together', () => {
+  const m = [metric('radio.signal', 'Radio Signal'), metric('cpu', 'CPU')];
+  const out = buildTemplateClusters([
+    fortiap(1, { metrics: m }),
+    fortiap(2, { metrics: m })
+  ]);
+  assert.equal(out.clusters.length, 1);
+  assert.equal(out.clusters[0].make, 'FortiAP');
+  assert.equal(out.clusters[0].model, 'FAP-431F');
+  assert.equal(out.clusters[0].proposed_resources[0].plugin_textkey, 'fortinet.fortiap');
+});
+
+test('same-model FortiSwitches cluster together', () => {
+  const m = [metric('port.utilization', 'Port Utilization')];
+  const out = buildTemplateClusters([
+    fortiswitch(10, { metrics: m }),
+    fortiswitch(11, { metrics: m })
+  ]);
+  assert.equal(out.clusters.length, 1);
+  assert.equal(out.clusters[0].proposed_resources[0].plugin_textkey, 'fortinet.fortiswitch');
+});
+
+test('same-model FortiExtenders cluster together', () => {
+  const m = [metric('signal.rsrp', 'RSRP')];
+  const out = buildTemplateClusters([
+    fortiextender(20, { metrics: m }),
+    fortiextender(21, { metrics: m })
+  ]);
+  assert.equal(out.clusters.length, 1);
+  assert.equal(out.clusters[0].proposed_resources[0].plugin_textkey, 'fortinet.fortiextender');
+});
+
+test('different makes never cluster together, even at low Jaccard threshold', () => {
+  const m = [metric('cpu', 'CPU')]; // same resource set
+  const out = buildTemplateClusters(
+    [
+      fortigate(1, { metrics: m }),
+      fortiap(2, { metrics: m }),
+      fortiswitch(3, { metrics: m }),
+      fortiextender(4, { metrics: m })
+    ],
+    { threshold: 0.1 }   // most-permissive threshold
+  );
+  assert.equal(out.clusters.length, 4);
+  // Each cluster carries the correct plugin_textkey from its own device's category.
+  const byMake = Object.fromEntries(out.clusters.map((c) => [c.make, c.proposed_resources[0].plugin_textkey]));
+  assert.equal(byMake.FortiGate, 'fortinet.fortigate');
+  assert.equal(byMake.FortiAP, 'fortinet.fortiap');
+  assert.equal(byMake.FortiSwitch, 'fortinet.fortiswitch');
+  assert.equal(byMake.FortiExtender, 'fortinet.fortiextender');
+});
+
+test('mixed-type pick produces per-type clusters with default threshold', () => {
+  const out = buildTemplateClusters([
+    fortigate(1),
+    fortigate(2),
+    fortiap(3),
+    fortiap(4),
+    fortiswitch(5)
+  ]);
+  // 5 devices in 3 type buckets. With empty metrics, devices within
+  // each (Make, Model) group cluster (empty == empty exactly).
+  assert.equal(out.clusters.length, 3);
+  const counts = out.clusters.map((c) => c.applies_to_server_ids.length).sort();
+  assert.deepEqual(counts, [1, 2, 2]);   // FortiSwitch alone, FortiGate pair, FortiAP pair
+});
+
+test('FortiAP cluster does not inherit fortinet.fortigate plugin_textkey (FMN-211 regression guard)', () => {
+  const m = [metric('radio.signal', 'Radio Signal')];
+  const out = buildTemplateClusters([fortiap(1, { metrics: m })]);
+  // The bug we are guarding against: ensureTemplate's old fallback
+  // routed any missing plugin_textkey through 'fortinet.fortigate'.
+  // The clusterer must source plugin_textkey from the device's actual
+  // monitoring_config category, not invent one.
+  const pluginTextkeys = out.clusters[0].proposed_resources.map((r) => r.plugin_textkey);
+  assert.ok(!pluginTextkeys.includes('fortinet.fortigate'), `expected no fortinet.fortigate, got ${pluginTextkeys}`);
+  assert.deepEqual(pluginTextkeys, ['fortinet.fortiap']);
+});
+
+test('cross-type devices with identical resource textkeys still split (Make+Model gate is absolute)', () => {
+  // Edge case: a FortiAP and a FortiGate both have a "cpu" metric.
+  // Despite identical resource keys, they must NOT cluster because
+  // their plugin_textkeys differ (and the resulting template would
+  // bind to the wrong device class).
+  const m = [metric('cpu', 'CPU')];
+  const out = buildTemplateClusters([
+    fortigate(1, { metrics: m }),
+    fortiap(2, { metrics: m })
+  ]);
+  assert.equal(out.clusters.length, 2);
+});

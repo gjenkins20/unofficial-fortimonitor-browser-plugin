@@ -709,12 +709,20 @@ function renderProfileAndCreateTemplatesForm({ body, store, refreshNextDisabled,
 
     let fsd, monitoringConfig, portScope, groups;
     try {
-      [fsd, monitoringConfig, portScope, groups] = await Promise.all([
+      // FMN-211: port-scope is FortiGate-only. Fetch FSD + monitoring +
+      // groups in parallel, then call port-scope only for the
+      // FortiGate-shaped subset. Pure-non-FortiGate selections skip the
+      // port-scope fetch entirely (was wasting one request per device).
+      [fsd, monitoringConfig, groups] = await Promise.all([
         call('bulk-composer:list-fabric-system-data', { serverIds }),
         call('bulk-composer:list-monitoring-config-batch', { serverIds }),
-        call('bulk-composer:list-port-scope-batch', { serverIds }),
         call('bulk-composer:list-server-groups', {})
       ]);
+      const fsdLookup = (fsd && fsd.byServerId) || {};
+      const fortigateIds = serverIds.filter((id) => fsdLookup[id]?.model_name === 'FortiGate');
+      portScope = fortigateIds.length > 0
+        ? await call('bulk-composer:list-port-scope-batch', { serverIds: fortigateIds })
+        : { byServerId: {} };
     } catch (err) {
       status.textContent = `Could not load data: ${err?.message ?? err}`;
       status.className = 'execute-state error';

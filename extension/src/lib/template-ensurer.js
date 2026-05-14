@@ -20,7 +20,17 @@
 /**
  * @typedef {Object} EnsureResourceSpec
  * @property {string} resource_textkey
- * @property {string} [plugin_textkey]    Defaults to "fortinet.fortigate".
+ * @property {string} plugin_textkey      Required - device's monitoring
+ *                                        category textkey (e.g.
+ *                                        "fortinet.fortigate",
+ *                                        "fortinet.fortiap"). Sourced
+ *                                        from the cluster's per-device
+ *                                        monitoring_config. No default
+ *                                        fallback (FMN-211): a missing
+ *                                        plugin_textkey reaching this
+ *                                        layer means the clusterer or
+ *                                        caller skipped a field; refuse
+ *                                        the write rather than guess.
  * @property {string} [name]
  * @property {string} [units]
  *
@@ -164,9 +174,18 @@ export async function ensureTemplate({ panopta, fmClient }, opts = {}) {
   if (!sourceServerId && Array.isArray(resources) && resources.length > 0) {
     for (const r of resources) {
       if (!r || !r.resource_textkey) continue;
+      if (!r.plugin_textkey || typeof r.plugin_textkey !== 'string') {
+        // FMN-211: refuse to write a metric whose plugin_textkey wasn't
+        // captured. Routing a FortiAP metric through "fortinet.fortigate"
+        // (the old fallback) would silently corrupt the template. The
+        // clusterer reads category.textkey from the device's actual
+        // monitoring_config; a missing value means the source data
+        // wasn't populated correctly.
+        throw new Error(`ensureTemplate: resource "${r.resource_textkey}" has no plugin_textkey; cannot route addTemplateMetric without knowing the device's monitoring category`);
+      }
       await fmClient.addTemplateMetric({
         templateId: created.id,
-        pluginTextkey: r.plugin_textkey || 'fortinet.fortigate',
+        pluginTextkey: r.plugin_textkey,
         resourceTextkey: r.resource_textkey,
         pluginName: r.name || r.resource_textkey,
         resourceName: r.name || r.resource_textkey,
