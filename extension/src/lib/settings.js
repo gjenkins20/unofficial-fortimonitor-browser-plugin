@@ -66,7 +66,7 @@ export const DISMISSED_INFO_BUBBLES_KEY = 'fm:dismissedInfoBubbles';
 // FMN-167: per-tool flag for the FortiMonitor intro walk-through. Off
 // by default until the framework graduates and the captioned-script
 // follow-up ticket ships real content. When on, the popup shows the
-// "Tour FortiMonitor" tile in the Training section and the content-script
+// "Introduction to FortiMonitor" tile in the Training section and the content-script
 // bridge accepts the start message. Specific to the intro tour - sibling
 // tour tickets (FMN-168 OnSight) ship their own flags per the per-tool
 // visibility rule.

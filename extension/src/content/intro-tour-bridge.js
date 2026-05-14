@@ -28,11 +28,12 @@
   const STYLE_HREF = chrome.runtime.getURL('src/ui/intro-tour/styles.css');
   const ENGINE_MODULE_URL = chrome.runtime.getURL('src/ui/intro-tour/tour-engine.js');
 
-  // INTRO_TOUR_STEPS: a 12-step walk-through covering the FortiMonitor
-  // UI layout, every top-level sidebar entry (Dashboards, Monitoring,
-  // Incidents, Maintenance, Reporting, Teams & Activity), the +Add
-  // button and the sidebar collapse icon, plus a toolkit handoff and a
-  // wrap-up before the quiz.
+  // INTRO_TOUR_STEPS: a 14-step walk-through covering the FortiMonitor
+  // UI layout (sidebar, top bar, page-header / "Control Panel"), every
+  // top-level sidebar entry (Dashboards, Monitoring, Incidents,
+  // Maintenance, Reporting, Teams & Activity), the +Add button and the
+  // sidebar collapse icon, plus a toolkit handoff and a wrap-up before
+  // the quiz.
   //
   // Anchor types:
   //   - anchorBySelector: an explicit CSS selector resolved verbatim.
@@ -53,7 +54,7 @@
       anchor: 'body',
       anchor_fallback: 'body',
       caption_html: [
-        '<p><strong>Welcome to FortiMonitor.</strong> This walk-through ',
+        '<p><strong>Welcome to FortiMonitor.</strong> This introduction ',
         'covers the layout of the console and every entry in the left-side ',
         'menu, followed by a quick 3-question check at the end.</p>',
         '<p>Click <strong>Next</strong> to begin.</p>'
@@ -68,15 +69,48 @@
       anchor_fallback: 'body',
       caption_html: [
         '<p>The FortiMonitor UI has three regions. The <strong>left sidebar</strong> ',
-        '(highlighted) is your primary navigation - each entry opens a ',
+        '(highlighted) is your primary navigation; each entry opens a ',
         'workspace. The <strong>top bar</strong> holds search, your account, ',
         'and tenant-level controls. The <strong>main content area</strong> on ',
         'the right is whichever workspace you currently have open.</p>',
-        '<p>The next few steps walk you through each sidebar entry.</p>'
+        '<p>The next two steps spotlight the top bar and the page-header ',
+        '("Control Panel") before the sidebar walk-through.</p>'
       ].join(''),
       when: { always: true },
       advance: 'next-button',
       placement: 'right'
+    },
+    {
+      id: 'top-most-bar',
+      anchorBySelector: '.fn1-header',
+      anchor_fallback: 'body',
+      caption_html: [
+        '<p>The <strong>top bar</strong> sits across the very top of every ',
+        'FortiMonitor page. It holds the global search ("Search all fields") ',
+        'for finding instances, metrics, and reports by name; your account ',
+        'menu (top right) for switching tenants, signing out, and reaching ',
+        'documentation; and the notification bell. The Unofficial FortiMonitor ',
+        'Toolkit also adds its own search chip ("FM TK") here when enabled.</p>'
+      ].join(''),
+      when: { always: true },
+      advance: 'next-button',
+      placement: 'bottom'
+    },
+    {
+      id: 'control-panel',
+      anchorBySelector: 'section.pa-page-header',
+      anchor_fallback: 'body',
+      caption_html: [
+        '<p>The <strong>Control Panel</strong> is the bar at the top of the ',
+        'main content area. It shows where you currently are in FortiMonitor: ',
+        'the page title (for example, "Canned Reports" or "Instances") and any ',
+        'page-level controls or tabs that go with it. Its contents change as ',
+        'you navigate, so it doubles as a breadcrumb and a place to launch ',
+        'the most common actions for the page you are on.</p>'
+      ].join(''),
+      when: { always: true },
+      advance: 'next-button',
+      placement: 'bottom'
     },
     {
       id: 'nav-dashboards',
@@ -164,7 +198,7 @@
     },
     {
       id: 'sidebar-add',
-      anchorByText: '+ Add',
+      anchorByText: 'Add',
       anchor_fallback: 'body',
       caption_html: [
         '<p>The <strong>+ Add</strong> button at the bottom of the sidebar is ',
@@ -178,7 +212,7 @@
     },
     {
       id: 'sidebar-collapse',
-      anchorByAriaLabel: 'collapse',
+      anchorBySelector: 'svg:has(use[*|href="#leftnav_collapse_24dp"])',
       anchor_fallback: 'body',
       caption_html: [
         '<p>The <strong>collapse</strong> icon at the bottom of the sidebar ',
