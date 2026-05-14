@@ -1,18 +1,31 @@
 // Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // FMN-154: persistent snapshot storage for BPA runs.
 //
-// Phase 1 (this ticket): two-slot model. The most-recent snapshot lands
-// in `current`; the prior one is rotated to `previous`. Diff compares
-// the two. A future phase replaces this with N-rotation + per-snapshot
-// archival, but two slots is enough to answer "what changed since last
-// time I looked" which is the operator's question.
+// Storage shape (backwards-compat with the original two-slot model):
+//   {
+//     current: <snapshot> | null,
+//     previous: <snapshot> | null,
+//     history: [<snapshot>, ...] // most-recent first, length up to maxSnapshots - 2
+//     maxSnapshots: <int>        // configurable; defaults to DEFAULT_MAX_SNAPSHOTS
+//     schema: 2                  // bumped when history landed (Phase 2.1)
+//   }
+//
+// The `current` + `previous` slots stay the source of truth for the
+// "diff against last run" default. Older runs spill into `history` so
+// the picker UI can offer arbitrary pairings. Each snapshot carries an
+// `id` field (synthesized from takenAt for legacy entries) so the UI
+// can address pairs by ID.
 //
 // Per memory mv3_sendmessage_multimb_stall: a full BPA result is
 // multi-MB. We store only the slices used by the diff (no raw analyzer
 // outputs, no raw HTML, no per-server detail beyond what TABS reads).
-// This keeps two snapshots well under the chrome.storage.local quota.
+// This keeps N snapshots well under the chrome.storage.local quota.
 
 const STORAGE_KEY = 'fm:bpaSnapshots';
+
+export const DEFAULT_MAX_SNAPSHOTS = 10;
+export const MIN_MAX_SNAPSHOTS = 2;
+export const MAX_MAX_SNAPSHOTS = 50;
 
 // Compact a full BPA result to what the diff layer actually consumes.
 // Reduces a typical result blob from ~3-5 MB to under 500 KB.
@@ -107,6 +120,9 @@ function condenseGroup(g) {
   };
 }
 
+// Read just the current + previous slots. Kept stable so existing handler
+// code that only needs the head-of-rotation does not have to deal with
+// history; full enumeration goes through listAllSnapshots.
 export async function readSnapshots(storage) {
   const s = storage ?? chrome.storage.local;
   const data = await s.get(STORAGE_KEY);
@@ -119,14 +135,27 @@ export async function readSnapshots(storage) {
 
 export async function writeSnapshot(snapshot, storage) {
   const s = storage ?? chrome.storage.local;
-  const { current } = await readSnapshots(s);
-  // Rotate: current -> previous, new -> current.
+  const raw = await readRawStore(s);
+  const maxSnapshots = clampMax(raw.maxSnapshots ?? DEFAULT_MAX_SNAPSHOTS);
+  const tagged = ensureId(snapshot);
+  // Rotate: previous -> history[0], current -> previous, new -> current.
+  const nextHistory = [];
+  if (raw.previous) nextHistory.push(ensureId(raw.previous));
+  for (const h of (Array.isArray(raw.history) ? raw.history : [])) {
+    nextHistory.push(ensureId(h));
+  }
+  // Keep at most maxSnapshots total (current + previous + history.length).
+  const overflow = Math.max(0, nextHistory.length - (maxSnapshots - 2));
+  const prunedHistory = overflow > 0 ? nextHistory.slice(0, nextHistory.length - overflow) : nextHistory;
   const next = {
-    previous: current,
-    current: snapshot,
+    schema: 2,
+    maxSnapshots,
+    current: tagged,
+    previous: raw.current ? ensureId(raw.current) : null,
+    history: prunedHistory,
   };
   await s.set({ [STORAGE_KEY]: next });
-  return next;
+  return { current: next.current, previous: next.previous };
 }
 
 export async function clearSnapshots(storage) {
@@ -139,8 +168,133 @@ export async function clearSnapshots(storage) {
 // (i.e. older) side of the diff against whatever was last taken locally.
 export async function setPreviousSnapshot(snapshot, storage) {
   const s = storage ?? chrome.storage.local;
-  const { current } = await readSnapshots(s);
-  await s.set({ [STORAGE_KEY]: { current, previous: snapshot } });
+  const raw = await readRawStore(s);
+  await s.set({
+    [STORAGE_KEY]: {
+      ...raw,
+      schema: 2,
+      maxSnapshots: clampMax(raw.maxSnapshots ?? DEFAULT_MAX_SNAPSHOTS),
+      current: raw.current || null,
+      previous: snapshot ? ensureId(snapshot) : null,
+      history: Array.isArray(raw.history) ? raw.history.map(ensureId) : [],
+    },
+  });
+}
+
+// =====================================================================
+// Phase 2.1: N-rotation primitives.
+// =====================================================================
+
+// Return every stored snapshot, most-recent first. Each entry is a
+// summary suitable for a picker (no full inventory); call
+// getSnapshotById for the full snapshot. The id is stable across reads.
+export async function listAllSnapshots(storage) {
+  const s = storage ?? chrome.storage.local;
+  const raw = await readRawStore(s);
+  const out = [];
+  if (raw.current) out.push(toSummary(raw.current, 'current'));
+  if (raw.previous) out.push(toSummary(raw.previous, 'previous'));
+  if (Array.isArray(raw.history)) {
+    for (let i = 0; i < raw.history.length; i++) {
+      out.push(toSummary(raw.history[i], `history-${i}`));
+    }
+  }
+  return out;
+}
+
+export async function getSnapshotById(id, storage) {
+  if (!id) return null;
+  const s = storage ?? chrome.storage.local;
+  const raw = await readRawStore(s);
+  if (raw.current && idOf(raw.current, 'current') === id) return ensureId(raw.current);
+  if (raw.previous && idOf(raw.previous, 'previous') === id) return ensureId(raw.previous);
+  if (Array.isArray(raw.history)) {
+    for (let i = 0; i < raw.history.length; i++) {
+      if (idOf(raw.history[i], `history-${i}`) === id) return ensureId(raw.history[i]);
+    }
+  }
+  return null;
+}
+
+// Wipe everything (current, previous, history, max). Settings "Clear all
+// snapshots" button calls this.
+export async function clearAllSnapshots(storage) {
+  const s = storage ?? chrome.storage.local;
+  await s.remove(STORAGE_KEY);
+}
+
+export async function getMaxSnapshots(storage) {
+  const s = storage ?? chrome.storage.local;
+  const raw = await readRawStore(s);
+  return clampMax(raw.maxSnapshots ?? DEFAULT_MAX_SNAPSHOTS);
+}
+
+export async function setMaxSnapshots(n, storage) {
+  const s = storage ?? chrome.storage.local;
+  const raw = await readRawStore(s);
+  const clamped = clampMax(n);
+  // Prune history to fit the new cap. current + previous always stick.
+  const history = Array.isArray(raw.history) ? raw.history.map(ensureId) : [];
+  const overflow = Math.max(0, history.length - (clamped - 2));
+  const pruned = overflow > 0 ? history.slice(0, history.length - overflow) : history;
+  await s.set({
+    [STORAGE_KEY]: {
+      ...raw,
+      schema: 2,
+      maxSnapshots: clamped,
+      current: raw.current || null,
+      previous: raw.previous || null,
+      history: pruned,
+    },
+  });
+  return clamped;
+}
+
+function clampMax(n) {
+  const v = Number.isFinite(n) ? Math.floor(n) : DEFAULT_MAX_SNAPSHOTS;
+  if (v < MIN_MAX_SNAPSHOTS) return MIN_MAX_SNAPSHOTS;
+  if (v > MAX_MAX_SNAPSHOTS) return MAX_MAX_SNAPSHOTS;
+  return v;
+}
+
+async function readRawStore(s) {
+  const data = await s.get(STORAGE_KEY);
+  const raw = data?.[STORAGE_KEY] || {};
+  return raw;
+}
+
+function idOf(snapshot, fallbackSlot) {
+  if (snapshot && typeof snapshot.id === 'string' && snapshot.id) return snapshot.id;
+  // Legacy snapshots predate the id field. Synthesize from slot + takenAt
+  // so the picker has a stable handle without rewriting storage on read.
+  return `snap-${fallbackSlot}-${snapshot?.takenAt || 'unknown'}`;
+}
+
+function ensureId(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') return snapshot;
+  if (typeof snapshot.id === 'string' && snapshot.id) return snapshot;
+  // Stable enough for snapshots taken at distinct seconds; collisions are
+  // tolerated because the listing always disambiguates by slot+index.
+  const rand = Math.random().toString(36).slice(2, 8);
+  return { ...snapshot, id: `snap-${snapshot.takenAt || 'unknown'}-${rand}` };
+}
+
+function toSummary(snapshot, fallbackSlot) {
+  const id = idOf(snapshot, fallbackSlot);
+  const inv = snapshot?.inventory || {};
+  return {
+    id,
+    takenAt: snapshot?.takenAt ?? null,
+    customer: snapshot?.customer ?? null,
+    durationMs: snapshot?.durationMs ?? null,
+    counts: {
+      servers: Array.isArray(inv.servers) ? inv.servers.length : 0,
+      users: Array.isArray(inv.users) ? inv.users.length : 0,
+      server_templates: Array.isArray(inv.server_templates) ? inv.server_templates.length : 0,
+      server_groups: Array.isArray(inv.server_groups) ? inv.server_groups.length : 0,
+    },
+    slot: fallbackSlot,
+  };
 }
 
 // Diff inventory.servers between two condensed snapshots. Returns rows
