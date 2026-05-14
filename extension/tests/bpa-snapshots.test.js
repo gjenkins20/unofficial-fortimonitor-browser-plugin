@@ -12,6 +12,10 @@ import {
   getSnapshotById,
   getMaxSnapshots,
   setMaxSnapshots,
+  diffUsers,
+  diffTemplates,
+  diffGroups,
+  diffAllSections,
   DEFAULT_MAX_SNAPSHOTS,
   MIN_MAX_SNAPSHOTS,
   MAX_MAX_SNAPSHOTS,
@@ -221,6 +225,126 @@ test('clearAllSnapshots: wipes the entire store', async () => {
 // =====================================================================
 // setPreviousSnapshot preserves the new shape's max + history
 // =====================================================================
+
+// =====================================================================
+// Per-section diff engines (Phase 2.2)
+// =====================================================================
+
+function snapWith(inv) {
+  return {
+    schema: 1,
+    takenAt: '2026-05-14T00:00:00.000Z',
+    inventory: {
+      servers: [],
+      users: [],
+      server_templates: [],
+      server_groups: [],
+      ...inv,
+    },
+  };
+}
+
+test('diffUsers: added/removed/modified classification', async () => {
+  const prev = snapWith({
+    users: [
+      { id: 1, username: 'alice', first_name: 'A', last_name: 'X', is_active: true, user_role: 'admin' },
+      { id: 2, username: 'bob',   first_name: 'B', last_name: 'Y', is_active: true, user_role: 'viewer' },
+    ],
+  });
+  const curr = snapWith({
+    users: [
+      { id: 1, username: 'alice', first_name: 'Alice', last_name: 'X', is_active: true, user_role: 'admin' },
+      { id: 3, username: 'carol', first_name: 'C', last_name: 'Z', is_active: false, user_role: 'admin' },
+    ],
+  });
+  const d = diffUsers(prev, curr);
+  assert.equal(d.added.length, 1);
+  assert.equal(d.added[0].id, 3);
+  assert.equal(d.removed.length, 1);
+  assert.equal(d.removed[0].id, 2);
+  assert.equal(d.modified.length, 1);
+  assert.equal(d.modified[0].id, 1);
+  const change = d.modified[0].fields.find((f) => f.name === 'first_name');
+  assert.equal(change.prev, 'A');
+  assert.equal(change.next, 'Alice');
+});
+
+test('diffUsers: is_active flip is reported as a modified field', async () => {
+  const prev = snapWith({ users: [{ id: 1, username: 'u', is_active: true }] });
+  const curr = snapWith({ users: [{ id: 1, username: 'u', is_active: false }] });
+  const d = diffUsers(prev, curr);
+  assert.equal(d.modified.length, 1);
+  const f = d.modified[0].fields.find((x) => x.name === 'is_active');
+  assert.equal(f.prev, true);
+  assert.equal(f.next, false);
+});
+
+test('diffTemplates: applied_servers count change shows as modified field', async () => {
+  const prev = snapWith({
+    server_templates: [
+      { id: 100, name: 'FG Stock', template_type: 'fabric_template', server_group: 5, applied_servers: 3 },
+    ],
+  });
+  const curr = snapWith({
+    server_templates: [
+      { id: 100, name: 'FG Stock', template_type: 'fabric_template', server_group: 5, applied_servers: 7 },
+    ],
+  });
+  const d = diffTemplates(prev, curr);
+  assert.equal(d.modified.length, 1);
+  const f = d.modified[0].fields.find((x) => x.name === 'applied_servers');
+  assert.equal(f.prev, 3);
+  assert.equal(f.next, 7);
+});
+
+test('diffTemplates: name rename shows as modified', async () => {
+  const prev = snapWith({
+    server_templates: [{ id: 1, name: 'Old', template_type: 'fabric_template' }],
+  });
+  const curr = snapWith({
+    server_templates: [{ id: 1, name: 'New', template_type: 'fabric_template' }],
+  });
+  const d = diffTemplates(prev, curr);
+  assert.equal(d.modified.length, 1);
+  assert.equal(d.modified[0].fields[0].name, 'name');
+});
+
+test('diffGroups: rename is the only modified field comparator', async () => {
+  const prev = snapWith({ server_groups: [{ id: 9, name: 'Prod' }] });
+  const curr = snapWith({ server_groups: [{ id: 9, name: 'Production' }] });
+  const d = diffGroups(prev, curr);
+  assert.equal(d.modified.length, 1);
+  assert.deepEqual(d.modified[0].fields.map((f) => f.name), ['name']);
+});
+
+test('diffAllSections: returns one shape with each section keyed by name', async () => {
+  const prev = snapWith({
+    servers: [{ id: 1, name: 'fw' }],
+    users: [{ id: 2, username: 'u' }],
+    server_templates: [{ id: 3, name: 't' }],
+    server_groups: [{ id: 4, name: 'g' }],
+  });
+  const curr = snapWith({
+    servers: [{ id: 1, name: 'fw' }],
+    users: [{ id: 2, username: 'u' }],
+    server_templates: [{ id: 3, name: 't2' }],
+    server_groups: [{ id: 4, name: 'g' }],
+  });
+  const d = diffAllSections(prev, curr);
+  assert.ok(d.servers && d.users && d.server_templates && d.server_groups);
+  assert.equal(d.server_templates.modified.length, 1);
+  assert.equal(d.servers.modified.length, 0);
+});
+
+test('diffAllSections: empty snapshots produce zero-counts everywhere', async () => {
+  const empty = snapWith({});
+  const d = diffAllSections(empty, empty);
+  for (const k of ['servers', 'users', 'server_templates', 'server_groups']) {
+    assert.equal(d[k].added.length, 0);
+    assert.equal(d[k].removed.length, 0);
+    assert.equal(d[k].modified.length, 0);
+  }
+});
 
 test('setPreviousSnapshot: leaves current + history intact', async () => {
   const local = createStorageMock();

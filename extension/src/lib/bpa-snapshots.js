@@ -297,26 +297,15 @@ function toSummary(snapshot, fallbackSlot) {
   };
 }
 
-// Diff inventory.servers between two condensed snapshots. Returns rows
-// keyed by server id with a change category and an optional list of
-// field-level prev/next pairs.
-//
-// Categories:
-//   - added: id present in current but not in previous
-//   - removed: id present in previous but not in current
-//   - modified: id present in both with at least one field changed
-//
-// Fields compared on each server: name, fqdn, status, device_sub_type,
-// agent_version, server_group, server_template (array equality by
-// sorted-stringified contents), tags (same).
-const SERVER_FIELDS = ['name', 'fqdn', 'status', 'device_sub_type', 'agent_version'];
-const SERVER_ARRAY_FIELDS = ['server_template', 'tags'];
-
-export function diffServers(prevSnap, currSnap) {
+// Generic id-keyed diff between two entity lists.
+// scalarFields: compared with string coercion (`String(prev) !== String(next)`).
+// numericFields: compared by reference equality (null-tolerant).
+// arrayFields: compared after slice().sort().join(',') stringification.
+function diffEntities(prevList, currList, { scalarFields = [], numericFields = [], arrayFields = [] }) {
   const prev = new Map();
   const curr = new Map();
-  for (const s of (prevSnap?.inventory?.servers || [])) if (s.id != null) prev.set(s.id, s);
-  for (const s of (currSnap?.inventory?.servers || [])) if (s.id != null) curr.set(s.id, s);
+  for (const e of (prevList || [])) if (e?.id != null) prev.set(e.id, e);
+  for (const e of (currList || [])) if (e?.id != null) curr.set(e.id, e);
 
   const added = [];
   const removed = [];
@@ -325,31 +314,100 @@ export function diffServers(prevSnap, currSnap) {
   for (const [id, c] of curr) {
     if (!prev.has(id)) {
       added.push({ id, change: 'added', current: c });
-    } else {
-      const p = prev.get(id);
-      const fieldChanges = [];
-      for (const f of SERVER_FIELDS) {
-        if (String(p[f] ?? '') !== String(c[f] ?? '')) {
-          fieldChanges.push({ name: f, prev: p[f], next: c[f] });
-        }
+      continue;
+    }
+    const p = prev.get(id);
+    const fieldChanges = [];
+    for (const f of scalarFields) {
+      if (String(p[f] ?? '') !== String(c[f] ?? '')) {
+        fieldChanges.push({ name: f, prev: p[f], next: c[f] });
       }
-      // Compare server_group separately - it's a number, not a string.
-      if ((p.server_group ?? null) !== (c.server_group ?? null)) {
-        fieldChanges.push({ name: 'server_group', prev: p.server_group, next: c.server_group });
+    }
+    for (const f of numericFields) {
+      if ((p[f] ?? null) !== (c[f] ?? null)) {
+        fieldChanges.push({ name: f, prev: p[f], next: c[f] });
       }
-      for (const f of SERVER_ARRAY_FIELDS) {
-        const pa = Array.isArray(p[f]) ? p[f].slice().sort().join(',') : '';
-        const ca = Array.isArray(c[f]) ? c[f].slice().sort().join(',') : '';
-        if (pa !== ca) fieldChanges.push({ name: f, prev: p[f] ?? [], next: c[f] ?? [] });
-      }
-      if (fieldChanges.length > 0) {
-        modified.push({ id, change: 'modified', previous: p, current: c, fields: fieldChanges });
-      }
+    }
+    for (const f of arrayFields) {
+      const pa = Array.isArray(p[f]) ? p[f].slice().sort().join(',') : '';
+      const ca = Array.isArray(c[f]) ? c[f].slice().sort().join(',') : '';
+      if (pa !== ca) fieldChanges.push({ name: f, prev: p[f] ?? [], next: c[f] ?? [] });
+    }
+    if (fieldChanges.length > 0) {
+      modified.push({ id, change: 'modified', previous: p, current: c, fields: fieldChanges });
     }
   }
   for (const [id, p] of prev) {
     if (!curr.has(id)) removed.push({ id, change: 'removed', previous: p });
   }
+  return { added, removed, modified };
+}
 
-  return { added, removed, modified, prevTakenAt: prevSnap?.takenAt ?? null, currTakenAt: currSnap?.takenAt ?? null };
+// Diff inventory.servers between two condensed snapshots. Returns rows
+// keyed by server id with a change category and an optional list of
+// field-level prev/next pairs.
+//
+// Categories:
+//   - added: id present in current but not in previous
+//   - removed: id present in previous but not in current
+//   - modified: id present in both with at least one field changed
+export function diffServers(prevSnap, currSnap) {
+  const d = diffEntities(
+    prevSnap?.inventory?.servers,
+    currSnap?.inventory?.servers,
+    {
+      scalarFields: ['name', 'fqdn', 'status', 'device_sub_type', 'agent_version'],
+      numericFields: ['server_group'],
+      arrayFields: ['server_template', 'tags'],
+    },
+  );
+  return { ...d, prevTakenAt: prevSnap?.takenAt ?? null, currTakenAt: currSnap?.takenAt ?? null };
+}
+
+export function diffUsers(prevSnap, currSnap) {
+  const d = diffEntities(
+    prevSnap?.inventory?.users,
+    currSnap?.inventory?.users,
+    {
+      scalarFields: ['username', 'first_name', 'last_name', 'user_role'],
+      numericFields: ['is_active'],
+    },
+  );
+  return { ...d, prevTakenAt: prevSnap?.takenAt ?? null, currTakenAt: currSnap?.takenAt ?? null };
+}
+
+export function diffTemplates(prevSnap, currSnap) {
+  const d = diffEntities(
+    prevSnap?.inventory?.server_templates,
+    currSnap?.inventory?.server_templates,
+    {
+      scalarFields: ['name', 'template_type'],
+      numericFields: ['server_group', 'applied_servers'],
+    },
+  );
+  return { ...d, prevTakenAt: prevSnap?.takenAt ?? null, currTakenAt: currSnap?.takenAt ?? null };
+}
+
+export function diffGroups(prevSnap, currSnap) {
+  const d = diffEntities(
+    prevSnap?.inventory?.server_groups,
+    currSnap?.inventory?.server_groups,
+    {
+      scalarFields: ['name'],
+    },
+  );
+  return { ...d, prevTakenAt: prevSnap?.takenAt ?? null, currTakenAt: currSnap?.takenAt ?? null };
+}
+
+// One-shot all-section diff. The picker handler uses this so the viewer
+// can render every tab from a single round-trip.
+export function diffAllSections(prevSnap, currSnap) {
+  return {
+    servers: diffServers(prevSnap, currSnap),
+    users: diffUsers(prevSnap, currSnap),
+    server_templates: diffTemplates(prevSnap, currSnap),
+    server_groups: diffGroups(prevSnap, currSnap),
+    prevTakenAt: prevSnap?.takenAt ?? null,
+    currTakenAt: currSnap?.takenAt ?? null,
+  };
 }
