@@ -18,8 +18,27 @@ place.
 
 ## Unreleased
 
-- FMN-156: Noise Analysis content folded into the existing
-  Tenant Observations **Incident Summary** tab as additional
+## v1.7.0 - 2026-05-14
+
+- FMN-218: **Tenant Observations** (formerly "Best-Practice Assessment").
+  Two changes shipped together. (1) De-prescribe: every analyzer's
+  per-row `recommendation:` field is now a neutral observation
+  (factual restatement of counts, ratios, gaps); the synthesized
+  "Recommendations" tab is removed (its content duplicated the analyzer
+  findings as imperatives); viewer column header "Recommendation" is now
+  "Observation"; viewer is 10 tabs (was 11). (2) Rename: tool name +
+  every directory + every file + every identifier + every storage key
+  carried over from "Best-Practice Assessment" / "BPA" is renamed to
+  "Tenant Observations" / `observations-*` / `tenant-observations-*`.
+  Apply Best-Practice Fabric Templates bulk action renamed to **Apply
+  Stock Fabric Templates**. Storage keys (`fm:bpaAuditEnabled`,
+  `fm:bpaSnapshots`) are migrated with read-fallback + first-write
+  cleanup, so operators who hid the tile pre-rename keep it hidden and
+  existing snapshots survive. Two `LEGACY_*` constants in
+  `settings.js` + `observations-snapshots.js` remain in place to drive
+  the migration; they can be retired once operators have rolled forward.
+
+
   sections (Top Noisy Instances + Top Noisy Metrics + Recommendations).
   Replaces the prior FMN-156 v1 attempt at a standalone 12th tab, which
   duplicated the existing Noisy Metrics section operator QA found.
