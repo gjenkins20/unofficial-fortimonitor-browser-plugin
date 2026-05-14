@@ -29,11 +29,10 @@
   const ENGINE_MODULE_URL = chrome.runtime.getURL('src/ui/intro-tour/tour-engine.js');
 
   // INTRO_TOUR_STEPS: a 14-step walk-through covering the FortiMonitor
-  // UI layout (sidebar, top bar, page-header / "Control Panel"), every
-  // top-level sidebar entry (Dashboards, Monitoring, Incidents,
-  // Maintenance, Reporting, Teams & Activity), the +Add button and the
-  // sidebar collapse icon, plus a toolkit handoff and a wrap-up before
-  // the quiz.
+  // UI layout (sidebar, Header, Control Panel), every top-level sidebar
+  // entry (Dashboards, Monitoring, Incidents, Maintenance, Reporting,
+  // Teams & Activity), the +Add button and the sidebar collapse icon,
+  // plus a toolkit handoff and a wrap-up before the quiz.
   //
   // Anchor types:
   //   - anchorBySelector: an explicit CSS selector resolved verbatim.
@@ -70,22 +69,23 @@
       caption_html: [
         '<p>The FortiMonitor UI has three regions. The <strong>left sidebar</strong> ',
         '(highlighted) is your primary navigation; each entry opens a ',
-        'workspace. The <strong>top bar</strong> holds search, your account, ',
-        'and tenant-level controls. The <strong>main content area</strong> on ',
-        'the right is whichever workspace you currently have open.</p>',
-        '<p>The next two steps spotlight the top bar and the page-header ',
-        '("Control Panel") before the sidebar walk-through.</p>'
+        'workspace. The <strong>Header</strong> runs across the top with ',
+        'global search, your account menu, and tenant-level controls. The ',
+        '<strong>Control Panel</strong> on the right is the workspace where ',
+        'each page lives.</p>',
+        '<p>The next two steps spotlight the Header and the Control Panel ',
+        'before the sidebar walk-through.</p>'
       ].join(''),
       when: { always: true },
       advance: 'next-button',
       placement: 'right'
     },
     {
-      id: 'top-most-bar',
+      id: 'header',
       anchorBySelector: '.fn1-header',
       anchor_fallback: 'body',
       caption_html: [
-        '<p>The <strong>top bar</strong> sits across the very top of every ',
+        '<p>The <strong>Header</strong> sits across the very top of every ',
         'FortiMonitor page. It holds the global search ("Search all fields") ',
         'for finding instances, metrics, and reports by name; your account ',
         'menu (top right) for switching tenants, signing out, and reaching ',
@@ -98,19 +98,19 @@
     },
     {
       id: 'control-panel',
-      anchorBySelector: 'section.pa-page-header',
+      anchorBySelector: 'div.pa-main',
       anchor_fallback: 'body',
       caption_html: [
-        '<p>The <strong>Control Panel</strong> is the bar at the top of the ',
-        'main content area. It shows where you currently are in FortiMonitor: ',
-        'the page title (for example, "Canned Reports" or "Instances") and any ',
-        'page-level controls or tabs that go with it. Its contents change as ',
-        'you navigate, so it doubles as a breadcrumb and a place to launch ',
-        'the most common actions for the page you are on.</p>'
+        '<p>The <strong>Control Panel</strong> is the entire main workspace ',
+        'to the right of the sidebar. It contains the page-header bar at the ',
+        'top (which shows your current location and any page-level tabs or ',
+        'actions) and the workspace itself for the page you are on (lists, ',
+        'configuration forms, dashboards, etc.). Its contents change completely ',
+        'as you navigate between sidebar entries.</p>'
       ].join(''),
       when: { always: true },
       advance: 'next-button',
-      placement: 'bottom'
+      placement: 'auto'
     },
     {
       id: 'nav-dashboards',
