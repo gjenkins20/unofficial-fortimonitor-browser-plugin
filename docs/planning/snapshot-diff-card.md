@@ -4,7 +4,7 @@ A toolkit-added tile on FortiMonitor's Canned Reports page (`/report/ListReports
 
 Snapshots are stored only on the local Chrome profile via `chrome.storage.local`. Nothing is uploaded to FortiMonitor's servers; the only network calls are read-only v2 API requests during the scan. Scans continue in the background if the operator leaves the page.
 
-The diff viewer lives at `chrome-extension://<id>/src/ui/bpa-diff/app.html`; the tile's Open button opens it in a new tab.
+The diff viewer lives at `chrome-extension://<id>/src/ui/tenant-observations-diff/app.html`; the tile's Open button opens it in a new tab.
 
 Requires a configured RW API key. Opt-in via popup -> Settings ("Show Snapshot & Diff tile on Canned Reports").
 

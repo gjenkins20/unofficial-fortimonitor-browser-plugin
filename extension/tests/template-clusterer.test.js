@@ -35,7 +35,7 @@ test('two identical FortiGates cluster together', () => {
   assert.equal(out.clusters.length, 1);
   assert.deepEqual(out.clusters[0].applies_to_server_ids, [1, 2]);
   assert.deepEqual(out.clusters[0].resource_signature, ['cpu', 'memory']);
-  assert.equal(out.clusters[0].proposed_template_name, 'FortiGate FGVMA6 Best Practice');
+  assert.equal(out.clusters[0].proposed_template_name, 'FortiGate FGVMA6 Stock');
   assert.equal(out.clusters[0].proposed_resources.length, 2);
   assert.equal(out.clusters[0].sample_device_id, 1);
 });

@@ -13,10 +13,14 @@ export const SHOW_FEATURE_BADGES_KEY = 'fm:showFeatureBadges';
 // merges to main; tile only renders when the operator toggles this on
 // in popup -> Settings.
 export const SDWAN_REPORT_ENABLED_KEY = 'fm:sdwanReportEnabled';
-// FMN-133: per-tool visibility flag for the BPA Audit tile. Same Beta
-// gating pattern as SD-WAN Report; the FMN-133 ticket explicitly calls
-// for "Same gating as FMN-129 / FMN-130. Tile hidden when off."
-export const BPA_AUDIT_ENABLED_KEY = 'fm:bpaAuditEnabled';
+// FMN-133: per-tool visibility flag for the Tenant Observations tile.
+// Same Beta gating pattern as SD-WAN Report; the FMN-133 ticket
+// explicitly calls for "Same gating as FMN-129 / FMN-130. Tile hidden
+// when off." (FMN-218: renamed from BPA_AUDIT_ENABLED_KEY /
+// fm:bpaAuditEnabled. Migration shim below copies legacy keys forward
+// so previously-toggled state survives the rename.)
+export const TENANT_OBSERVATIONS_ENABLED_KEY = 'fm:tenantObservationsEnabled';
+export const LEGACY_BPA_AUDIT_ENABLED_KEY = 'fm:bpaAuditEnabled';
 // FMN-139: per-tool visibility flag for the SSO Configuration tile.
 // Beta-gated until FMN-138 (Discovery) lands and the FortiMonitor SSO
 // save endpoint is wired up; until then the wizard supports dry-run only.
@@ -45,9 +49,9 @@ export const REPORT_NOTIFICATIONS_ENABLED_KEY = 'fm:reportNotificationsEnabled';
 // a newer version is published. On by default - operator-friendly, the
 // banner is gated on an actual newer version existing, not just the flag.
 export const UPDATE_CHECK_ENABLED_KEY = 'fm:updateCheckEnabled';
-// FMN-156: per-tool flag for the Best-Practice Assessment Noise Analysis
+// FMN-156: per-tool flag for the Tenant Observations Noise Analysis
 // tab. Off by default; toggling on surfaces the analyzer's instance and
-// metric noise rankings inside the BPA viewer.
+// metric noise rankings inside the viewer.
 export const NOISE_ANALYZER_ENABLED_KEY = 'fm:noiseAnalyzerEnabled';
 // FMN-169: master toggle for the per-feature info bubbles. On by default
 // on fresh installs so new operators see contextual explanations of each
@@ -257,31 +261,42 @@ export async function setSdwanReportEnabled(enabled, storage = defaultStorage())
 }
 
 /**
- * Read the BPA-Audit-enabled flag. Defaults to true (FMN-145) since the
- * Best-Practice Assessment is no longer Beta-gated; the toggle remains
- * available so operators can hide the tile on shared installs. Storage
- * errors fail open to the default (visible).
+ * Read the Tenant-Observations-enabled flag. Defaults to true (FMN-145)
+ * since the tool is no longer Beta-gated; the toggle remains available
+ * so operators can hide the tile on shared installs. Storage errors fail
+ * open to the default (visible).
+ *
+ * FMN-218 migration: if the new key is unset but the legacy
+ * `fm:bpaAuditEnabled` key exists, the legacy value seeds the read so
+ * an operator who had hidden the tile pre-rename keeps it hidden.
  *
  * @param {{ get: (key: string) => Promise<Record<string, any>> }} [storage]
  */
-export async function isBpaAuditEnabled(storage = defaultStorage()) {
+export async function isTenantObservationsEnabled(storage = defaultStorage()) {
   try {
-    const data = await storage.get(BPA_AUDIT_ENABLED_KEY);
-    const v = data?.[BPA_AUDIT_ENABLED_KEY];
-    return v === undefined ? true : Boolean(v);
+    const data = await storage.get([TENANT_OBSERVATIONS_ENABLED_KEY, LEGACY_BPA_AUDIT_ENABLED_KEY]);
+    const v = data?.[TENANT_OBSERVATIONS_ENABLED_KEY];
+    if (v !== undefined) return Boolean(v);
+    const legacy = data?.[LEGACY_BPA_AUDIT_ENABLED_KEY];
+    if (legacy !== undefined) return Boolean(legacy);
+    return true;
   } catch {
     return true;
   }
 }
 
 /**
- * Persist the BPA-Audit-enabled flag.
+ * Persist the Tenant-Observations-enabled flag. Also clears the legacy
+ * legacy storage key on first write so it doesn't linger in storage.
  *
  * @param {boolean} enabled
- * @param {{ set: (obj: Record<string, any>) => Promise<void> }} [storage]
+ * @param {{ set: (obj: Record<string, any>) => Promise<void>, remove?: (keys: string|string[]) => Promise<void> }} [storage]
  */
-export async function setBpaAuditEnabled(enabled, storage = defaultStorage()) {
-  await storage.set({ [BPA_AUDIT_ENABLED_KEY]: Boolean(enabled) });
+export async function setTenantObservationsEnabled(enabled, storage = defaultStorage()) {
+  await storage.set({ [TENANT_OBSERVATIONS_ENABLED_KEY]: Boolean(enabled) });
+  if (typeof storage.remove === 'function') {
+    try { await storage.remove(LEGACY_BPA_AUDIT_ENABLED_KEY); } catch { /* ignore */ }
+  }
 }
 
 /**
@@ -415,7 +430,7 @@ export async function setReportNotificationsEnabled(enabled, storage = defaultSt
 
 /**
  * Read the FMN-156 noise-analyzer-enabled flag. Off by default so the
- * Noise Analysis tab stays hidden in the BPA Audit viewer until the
+ * Noise Analysis tab stays hidden in the Tenant Observations viewer until the
  * operator opts in via Settings. Storage errors fail closed (return
  * false) so a transient blip never silently surfaces a tab the operator
  * hasn't asked for.

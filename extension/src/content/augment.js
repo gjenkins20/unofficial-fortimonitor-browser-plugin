@@ -2451,7 +2451,7 @@
   const REPORTS_PATH = '/report/ListReports';
   const SNAPSHOT_CARD_ID = 'fmn-snapshot-diff-card';
   const SNAPSHOT_CARD_STYLE_ID = 'fmn-snapshot-card-styles';
-  const SNAPSHOT_TOOL_URL = chrome.runtime.getURL('src/ui/bpa-diff/app.html');
+  const SNAPSHOT_TOOL_URL = chrome.runtime.getURL('src/ui/tenant-observations-diff/app.html');
   // FMN-154 per-tool visibility flag. Card stays out of the Canned
   // Reports page until the operator opts in via popup Settings.
   const SNAPSHOT_DIFF_KEY = 'fm:snapshotDiffEnabled';
@@ -2581,7 +2581,7 @@
     return `~${s}s estimated (first run)`;
   }
 
-  // FMN-154: rough total of TOP_LEVEL_LIST_ENDPOINTS in bpa-fetcher.js.
+  // FMN-154: rough total of TOP_LEVEL_LIST_ENDPOINTS in observations-fetcher.js.
   // Used to estimate snapshot progress for the bar; auto-adjusts upward
   // if more endpoints actually fire (so the bar never overshoots 100%
   // and never lies about being complete).
@@ -2650,17 +2650,17 @@
   }
 
   // Wire the progress listener once at content-script load. The SW emits
-  // bpa-snapshots:progress as { type: '__event__', event: '...', payload }.
+  // observations-snapshots:progress as { type: '__event__', event: '...', payload }.
   chrome.runtime.onMessage.addListener((msg) => {
     if (!msg || typeof msg !== 'object') return;
     if (msg.type !== '__event__') return;
-    if (msg.event === 'bpa-snapshots:progress') handleSnapshotProgressEvent(msg.payload);
+    if (msg.event === 'observations-snapshots:progress') handleSnapshotProgressEvent(msg.payload);
   });
 
   async function fetchSnapshotEstimate() {
     try {
       const resp = await new Promise((resolve) => {
-        chrome.runtime.sendMessage({ type: 'bpa-snapshots:estimate' }, (r) => resolve(r || null));
+        chrome.runtime.sendMessage({ type: 'observations-snapshots:estimate' }, (r) => resolve(r || null));
       });
       if (!resp || !resp.ok) return null;
       return resp.result;
@@ -2669,7 +2669,7 @@
 
   // FMN-164: shared running-state UI updater. Used both by the "Take
   // Snapshot" click path (where we know the start time locally) and by the
-  // card-mount path when bpa-snapshots:status reports runInFlight=true
+  // card-mount path when observations-snapshots:status reports runInFlight=true
   // (where we resume from the SW's persisted start time). The setInterval
   // handle is returned so the caller can clear it when the run completes.
   function startRunningTicker(card, startMs) {
@@ -2703,7 +2703,7 @@
     try {
       const [statusResp, estimate] = await Promise.all([
         new Promise((resolve) => {
-          chrome.runtime.sendMessage({ type: 'bpa-snapshots:status' }, (r) => resolve(r || null));
+          chrome.runtime.sendMessage({ type: 'observations-snapshots:status' }, (r) => resolve(r || null));
         }),
         fetchSnapshotEstimate(),
       ]);
@@ -2851,7 +2851,7 @@
     let ticker = startRunningTicker(card, start);
     try {
       const resp = await new Promise((resolve) => {
-        chrome.runtime.sendMessage({ type: 'bpa-snapshots:take', payload: { sections: ['all'] } }, (r) => resolve(r || null));
+        chrome.runtime.sendMessage({ type: 'observations-snapshots:take', payload: { sections: ['all'] } }, (r) => resolve(r || null));
       });
       if (!resp || !resp.ok) {
         throw new Error(resp?.error || 'Snapshot failed');

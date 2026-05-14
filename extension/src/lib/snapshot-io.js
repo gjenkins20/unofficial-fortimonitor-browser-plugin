@@ -2,7 +2,7 @@
 // FMN-161: snapshot export / import envelope + filename derivation.
 //
 // The envelope is intentionally separate from the snapshot's internal
-// `schema` field. The snapshot shape is owned by bpa-snapshots.js; this
+// `schema` field. The snapshot shape is owned by observations-snapshots.js; this
 // module just decides how that shape is packaged for transport between
 // extension installs. Bumping the file format is decoupled from bumping
 // the snapshot schema.
@@ -13,7 +13,7 @@
 //     formatVersion: 1,
 //     exportedAt: '<ISO timestamp>',
 //     extensionVersion: '<manifest version string or null>',
-//     snapshot: <condensed snapshot object from bpa-snapshots.js>
+//     snapshot: <condensed snapshot object from observations-snapshots.js>
 //   }
 
 export const FORMAT_NAME = 'fmn-toolkit-snapshot';

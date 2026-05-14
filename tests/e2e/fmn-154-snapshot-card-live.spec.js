@@ -2,7 +2,7 @@
 // FMN-154 live spec: Deployment Snapshot & Diff card mounts on FortiMonitor's
 // Canned Reports page (/report/ListReports) styled to match the native
 // .pa-card tiles, carries the FMN-86 attribution ribbon, and surfaces
-// the snapshot status. The take-snapshot end-to-end (which runs a BPA
+// the snapshot status. The take-snapshot end-to-end (which runs a Tenant Observations
 // against the v2 API) is not exercised here - it requires an API key
 // and several seconds of network; operator QA covers that.
 //
@@ -101,7 +101,7 @@ test.describe('FMN-154 phase 1: Snapshot & Diff card on Canned Reports', () => {
 
   test('Take Snapshot button is the primary action; Open-diff link only appears when a diff is possible', async ({ livePage }) => {
     const page = livePage;
-    // Wait for bpa-snapshots:status to resolve and the meta to render.
+    // Wait for observations-snapshots:status to resolve and the meta to render.
     await page.waitForFunction(
       () => {
         const meta = document.querySelector(
@@ -142,15 +142,15 @@ test.describe('FMN-154 phase 1: Snapshot & Diff card on Canned Reports', () => {
     }
   });
 
-  test('bpa-snapshots:status handler is registered and returns a coherent shape', async ({ livePage }) => {
+  test('observations-snapshots:status handler is registered and returns a coherent shape', async ({ livePage }) => {
     const page = livePage;
     const ctx = page.context();
     let sw = ctx.serviceWorkers().find((s) => s.url().includes('service-worker.js'));
     if (!sw) sw = await ctx.waitForEvent('serviceworker', { timeout: 8_000 }).catch(() => null);
     const keys = await sw.evaluate(() => globalThis.__fmDebugHandlerKeys || []);
-    expect(keys).toContain('bpa-snapshots:status');
-    expect(keys).toContain('bpa-snapshots:take');
-    expect(keys).toContain('bpa-snapshots:diff');
+    expect(keys).toContain('observations-snapshots:status');
+    expect(keys).toContain('observations-snapshots:take');
+    expect(keys).toContain('observations-snapshots:diff');
   });
 
   test('card disappears when the snapshot-diff flag is toggled off via storage', async ({ livePage }) => {
@@ -174,7 +174,7 @@ test.describe('FMN-154 phase 1: Snapshot & Diff card on Canned Reports', () => {
     await page.waitForSelector('[data-fmn-entry="fmn-snapshot-diff-card"]', { timeout: 10_000 });
   });
 
-  test('bpa-diff tool page opens and renders the empty state when no snapshot exists', async ({ livePage }) => {
+  test('tenant-observations-diff tool page opens and renders the empty state when no snapshot exists', async ({ livePage }) => {
     const page = livePage;
     const ctx = page.context();
     let sw = ctx.serviceWorkers().find((s) => s.url().includes('service-worker.js'));
@@ -183,7 +183,7 @@ test.describe('FMN-154 phase 1: Snapshot & Diff card on Canned Reports', () => {
     const extensionId = m[1];
 
     const toolPage = await ctx.newPage();
-    await toolPage.goto(`chrome-extension://${extensionId}/src/ui/bpa-diff/app.html`, {
+    await toolPage.goto(`chrome-extension://${extensionId}/src/ui/tenant-observations-diff/app.html`, {
       waitUntil: 'domcontentloaded',
     });
     await toolPage.waitForSelector('h1.title', { timeout: 10_000 });

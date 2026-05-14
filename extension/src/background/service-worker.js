@@ -18,8 +18,8 @@ import { createTemplateHandlers } from './template-handlers.js';
 import { createServerLookupHandlers } from './server-lookup-handlers.js';
 import { createServerSearchHandlers } from './server-search-handlers.js';
 import { createSdwanReportHandlers } from './sdwan-report-handlers.js';
-import { createBpaAuditHandlers } from './bpa-audit-handlers.js';
-import { createBpaSnapshotHandlers } from './bpa-snapshot-handlers.js';
+import { createTenantObservationsHandlers } from './tenant-observations-handlers.js';
+import { createObservationsSnapshotHandlers } from './observations-snapshot-handlers.js';
 import { createClaudeChatHandlers } from './claude-chat-handlers.js';
 import { createOmniSearchHandlers } from './omni-search-handlers.js';
 import { createBulkComposerHandlers } from './bulk-composer-handlers.js';
@@ -54,8 +54,8 @@ const handlers = {
   ...createServerLookupHandlers({ events: { emit } }),
   ...createServerSearchHandlers({ events: { emit } }),
   ...createSdwanReportHandlers({ events: { emit } }),
-  ...createBpaAuditHandlers({ events: { emit }, resolveOrigin }),
-  ...createBpaSnapshotHandlers({ events: { emit }, resolveOrigin }),
+  ...createTenantObservationsHandlers({ events: { emit }, resolveOrigin }),
+  ...createObservationsSnapshotHandlers({ events: { emit }, resolveOrigin }),
   ...createClaudeChatHandlers({ events: { emit } }),
   ...createOmniSearchHandlers({ events: { emit } }),
   ...createBulkComposerHandlers({ events: { emit } }),

@@ -1,0 +1,221 @@
+<!--
+  Unofficial FortiMonitor Toolkit - Deployment Snapshot & Diff (FMN-154)
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Snapshot &amp; Diff &middot; Unofficial FortiMonitor Toolkit</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Unofficial FortiMonitor Toolkit - Deployment Snapshot &amp; Diff">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { padding: 20px 28px 48px; }
+  h1.title { font-size: 22px; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .lede { color: #46535f; margin: 0 0 24px; font-size: 13px; max-width: 760px; }
+  .panel {
+    background: #fff; border: 1px solid #dde2ea; border-radius: 6px;
+    padding: 18px 22px; box-shadow: 0 1px 2px rgba(15,23,42,0.04);
+    margin-bottom: 16px;
+  }
+  .picker {
+    display: grid; grid-template-columns: 1fr 28px 1fr; gap: 12px;
+    align-items: center; margin-bottom: 18px;
+  }
+  .picker .pick {
+    background: #fbfcfd; border: 1px solid #dde2ea; border-radius: 5px;
+    padding: 10px 12px;
+  }
+  .picker .pick .label {
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: #7c8896; margin-bottom: 4px;
+  }
+  .picker .pick .val { font-size: 13px; font-weight: 600; color: #1d2733; }
+  .picker .pick .sub { font-size: 11.5px; color: #5b6776; margin-top: 2px; }
+  .picker .arrow { text-align: center; color: #7c8896; font-size: 18px; }
+  .picker .pick .slot-actions {
+    margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;
+  }
+  .picker .pick select.snapshot-select {
+    width: 100%; box-sizing: border-box;
+    background: #fff; border: 1px solid #c0cad7; border-radius: 4px;
+    padding: 6px 8px; font-size: 12.5px; color: #1d2733;
+    font-family: inherit;
+  }
+  .picker .pick select.snapshot-select:disabled {
+    background: #f1f4f8; color: #7c8896; cursor: not-allowed;
+  }
+  .slot-btn {
+    appearance: none; cursor: pointer;
+    background: #f7f9fc; color: #46535f; border: 1px solid #dde2ea;
+    border-radius: 4px; padding: 4px 10px; font-size: 11.5px; font-weight: 500;
+    transition: background 80ms ease, border-color 80ms ease, color 80ms ease;
+  }
+  .slot-btn:hover:not(:disabled) {
+    background: #edf2f8; border-color: #c0cad7; color: #1d2733;
+  }
+  .slot-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .io-panel {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+  }
+  .io-panel .label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+    color: #5b6776; font-weight: 600;
+  }
+  .io-panel .hint {
+    font-size: 11.5px; color: #7c8896; flex-basis: 100%; margin: 4px 0 0;
+  }
+  .io-panel .status {
+    font-size: 12px; font-weight: 500;
+  }
+  .io-panel .status.ok { color: #1f9d55; }
+  .io-panel .status.err { color: #dc2626; }
+  .io-panel button.primary {
+    appearance: none; cursor: pointer;
+    background: #0b6cf7; color: #fff; border: 1px solid #0b6cf7;
+    border-radius: 4px; padding: 6px 14px; font-size: 12px; font-weight: 600;
+    transition: background 80ms ease;
+  }
+  .io-panel button.primary:hover:not(:disabled) { background: #0950c7; }
+  .io-panel button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .io-panel input[type="file"] { display: none; }
+
+  dialog.confirm {
+    border: 1px solid #c0cad7; border-radius: 6px; padding: 0;
+    max-width: 440px; box-shadow: 0 8px 24px rgba(15,23,42,0.15);
+  }
+  dialog.confirm::backdrop { background: rgba(15,23,42,0.35); }
+  dialog.confirm .body { padding: 18px 22px 8px; }
+  dialog.confirm h3 { margin: 0 0 8px; font-size: 14px; }
+  dialog.confirm p { margin: 0 0 6px; font-size: 12.5px; color: #46535f; }
+  dialog.confirm .actions {
+    padding: 12px 22px 18px; display: flex; justify-content: flex-end; gap: 8px;
+  }
+  dialog.confirm button {
+    appearance: none; cursor: pointer; border-radius: 4px;
+    padding: 6px 14px; font-size: 12px; font-weight: 600;
+  }
+  dialog.confirm button.cancel {
+    background: #fff; color: #46535f; border: 1px solid #c0cad7;
+  }
+  dialog.confirm button.primary {
+    background: #0b6cf7; color: #fff; border: 1px solid #0b6cf7;
+  }
+
+  .counts { display: flex; gap: 14px; flex-wrap: wrap; }
+  .count-chip {
+    display: inline-flex; align-items: baseline; gap: 6px;
+    padding: 6px 12px; border-radius: 6px;
+    background: #eef1f5; color: #46535f;
+    font-size: 12.5px; font-weight: 500;
+  }
+  .count-chip strong { color: #1d2733; font-size: 16px; font-weight: 700; }
+  .count-chip.added { background: #e6f6ec; color: #1f9d55; }
+  .count-chip.added strong { color: #1f9d55; }
+  .count-chip.removed { background: #fde8e8; color: #dc2626; }
+  .count-chip.removed strong { color: #dc2626; }
+  .count-chip.modified { background: #fff4e0; color: #d97706; }
+  .count-chip.modified strong { color: #d97706; }
+
+  .tab-strip {
+    display: flex; gap: 2px; border-bottom: 1px solid #dde2ea;
+    margin-bottom: 14px; padding: 0;
+  }
+  .tab-strip button.tab {
+    appearance: none; cursor: pointer; background: transparent; color: #5b6776;
+    border: none; border-bottom: 2px solid transparent;
+    padding: 8px 14px; font-size: 13px; font-weight: 500;
+    transition: color 80ms ease, border-color 80ms ease;
+  }
+  .tab-strip button.tab:hover { color: #1d2733; }
+  .tab-strip button.tab.active {
+    color: #0b6cf7; border-bottom-color: #0b6cf7;
+  }
+  .tab-strip .tab .tab-count {
+    margin-left: 8px; font-size: 11px; color: #7c8896;
+    background: #f1f4f8; border-radius: 9px; padding: 1px 7px;
+  }
+  .tab-strip .tab.active .tab-count {
+    color: #0b6cf7; background: #e6f0ff;
+  }
+  .tab-strip .tab .tab-count.nonzero {
+    color: #1d2733; background: #fff4e0;
+  }
+  .tab-strip .tab.active .tab-count.nonzero {
+    color: #d97706; background: #fff4e0;
+  }
+
+  table.diff {
+    width: 100%; border-collapse: collapse; font-size: 12.5px;
+  }
+  table.diff th, table.diff td {
+    text-align: left; padding: 8px 10px;
+    border-bottom: 1px solid #e9edf2; vertical-align: top;
+  }
+  table.diff th {
+    background: #f7f9fc; color: #5b6776; font-weight: 600;
+    font-size: 10.5px; letter-spacing: 0.05em; text-transform: uppercase;
+  }
+  .change-badge {
+    display: inline-block; padding: 1px 7px; border-radius: 10px;
+    font-size: 10.5px; font-weight: 600; letter-spacing: 0.02em;
+  }
+  .change-badge.added { background: #e6f6ec; color: #1f9d55; }
+  .change-badge.removed { background: #fde8e8; color: #dc2626; }
+  .change-badge.modified { background: #fff4e0; color: #d97706; }
+
+  .field-list { margin: 0; padding-left: 16px; font-size: 11.5px; color: #46535f; }
+  .field-list li { margin: 2px 0; }
+  .field-list code {
+    background: #eef1f5; padding: 0 4px; border-radius: 3px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+  }
+  .field-list .arr { color: #7c8896; }
+  .field-list .prev { color: #dc2626; text-decoration: line-through; }
+  .field-list .next { color: #1f9d55; }
+
+  .empty-state {
+    text-align: center; color: #5b6776; font-size: 13px;
+    padding: 28px 12px;
+  }
+  .empty-state.error { color: #dc2626; }
+  footer.popup-footer {
+    margin-top: 28px; font-size: 11.5px; color: #7c8896;
+    display: flex; gap: 14px;
+  }
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <h1 class="title">Deployment Snapshot &amp; Diff</h1>
+  <p class="lede">
+    Pick any two stored tenant observations snapshots to see what changed. Up to ten
+    snapshots are retained by default; the cap is configurable in the
+    extension's Settings.
+  </p>
+
+  <div id="picker-row"></div>
+  <div id="io-row"></div>
+  <div id="content"></div>
+  <dialog id="confirm-import" class="confirm">
+    <div class="body">
+      <h3>Replace existing baseline?</h3>
+      <p id="confirm-import-body"></p>
+      <p>This will replace the previous-slot snapshot. The current snapshot is not affected.</p>
+    </div>
+    <div class="actions">
+      <button type="button" class="cancel" id="confirm-import-cancel">Cancel</button>
+      <button type="button" class="primary" id="confirm-import-ok">Replace</button>
+    </div>
+  </dialog>
+
+  <footer class="popup-footer">
+    <span id="version"></span>
+    <a href="https://www.linkedin.com/in/gregorijenkins" target="_blank" rel="noopener">Built by Gregori Jenkins</a>
+  </footer>
+</div>
+<script src="app.js" type="module"></script>
+</body>
+</html>

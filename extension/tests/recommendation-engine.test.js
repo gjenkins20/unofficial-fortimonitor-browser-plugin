@@ -137,7 +137,7 @@ test('builds a two-clause AND predicate for a FortiGate profile', () => {
     nounOptions: NOUN_OPTIONS
   });
   const p = out.recommendations[0].policy_proposal;
-  assert.equal(p.name, 'Apply Best-Practice FortiGate template');
+  assert.equal(p.name, 'Apply Stock FortiGate template');
   assert.equal(p.clauses.length, 2);
   // Family clause
   assert.equal(p.clauses[0].datatype, 'device_type');

@@ -22,7 +22,7 @@ const CLUSTER = {
   make: 'FortiGate',
   model: 'FGVMA6',
   applies_to_server_ids: [42024061, 42024062],
-  proposed_template_name: 'FortiGate FGVMA6 Best Practice',
+  proposed_template_name: 'FortiGate FGVMA6 Stock',
   proposed_resources: [
     { plugin_textkey: 'fortinet.fortigate', resource_textkey: 'cpu', name: 'CPU' },
     { plugin_textkey: 'fortinet.fortigate', resource_textkey: 'memory', name: 'Memory' }
@@ -102,12 +102,12 @@ test('describe surfaces planned template attach for matched target', () => {
     clusters: [CLUSTER]
   });
   assert.equal(out.willChange, true);
-  assert.match(out.next, /FortiGate FGVMA6 Best Practice/);
+  assert.match(out.next, /FortiGate FGVMA6 Stock/);
 });
 
 test('describe marks already-attached template as no-op', () => {
   const out = action.describe(
-    { id: 42024061, template_names: ['FortiGate FGVMA6 Best Practice'] },
+    { id: 42024061, template_names: ['FortiGate FGVMA6 Stock'] },
     { destination_group: 'grp-1', clusters: [CLUSTER] }
   );
   assert.equal(out.willChange, false);
@@ -161,7 +161,7 @@ function makeClients({ existingTemplates = [], createdTemplate = null, existingM
 
 test('commit creates template + populates + attaches on first target', async () => {
   const { panopta, fortimonitor, createCalls, metricCalls, attachCalls } = makeClients({
-    createdTemplate: { id: 44017900, name: 'FortiGate FGVMA6 Best Practice' }
+    createdTemplate: { id: 44017900, name: 'FortiGate FGVMA6 Stock' }
   });
   const sharedState = new Map();
   const out = await action.commit(
@@ -180,7 +180,7 @@ test('commit creates template + populates + attaches on first target', async () 
 
 test('commit on a second target for the same cluster reuses the cached ensure (no second create)', async () => {
   const { panopta, fortimonitor, createCalls, metricCalls, attachCalls } = makeClients({
-    createdTemplate: { id: 44017900, name: 'FortiGate FGVMA6 Best Practice' }
+    createdTemplate: { id: 44017900, name: 'FortiGate FGVMA6 Stock' }
   });
   const sharedState = new Map();
   await action.commit({ id: 42024061, template_names: [] }, { destination_group: 'grp-1', clusters: [CLUSTER] }, { client: panopta, fortimonitorClient: fortimonitor, sharedState });
@@ -193,7 +193,7 @@ test('commit on a second target for the same cluster reuses the cached ensure (n
 
 test('commit reuses existing template by name (no create, no populate)', async () => {
   const { panopta, fortimonitor, createCalls, metricCalls, attachCalls } = makeClients({
-    existingTemplates: [{ id: 555, name: 'FortiGate FGVMA6 Best Practice' }]
+    existingTemplates: [{ id: 555, name: 'FortiGate FGVMA6 Stock' }]
   });
   const sharedState = new Map();
   const out = await action.commit(
@@ -210,12 +210,12 @@ test('commit reuses existing template by name (no create, no populate)', async (
 
 test('commit returns template-already-attached when mapping exists', async () => {
   const { panopta, fortimonitor, attachCalls } = makeClients({
-    existingTemplates: [{ id: 555, name: 'FortiGate FGVMA6 Best Practice' }],
+    existingTemplates: [{ id: 555, name: 'FortiGate FGVMA6 Stock' }],
     existingMappings: [{ serverId: 42024061, templateId: 555, templateUrl: 'https://api2.panopta.com/v2/server_template/555' }]
   });
   const sharedState = new Map();
   const out = await action.commit(
-    { id: 42024061, template_names: ['FortiGate FGVMA6 Best Practice'] },
+    { id: 42024061, template_names: ['FortiGate FGVMA6 Stock'] },
     { destination_group: 'grp-1', clusters: [CLUSTER] },
     { client: panopta, fortimonitorClient: fortimonitor, sharedState }
   );
@@ -261,7 +261,7 @@ test('dry-run commit makes ZERO writes (no create, no populate, no attach)', asy
 
 test('dry-run reports would_create=false when template already exists', async () => {
   const { panopta, fortimonitor, createCalls } = makeClients({
-    existingTemplates: [{ id: 555, name: 'FortiGate FGVMA6 Best Practice' }]
+    existingTemplates: [{ id: 555, name: 'FortiGate FGVMA6 Stock' }]
   });
   const sharedState = new Map();
   const out = await action.commit(
@@ -281,7 +281,7 @@ test('dry-run reports would_create=false when template already exists', async ()
 test('clone-from-device: commit passes sourceServerId + skips per-metric populate', async () => {
   const cloneCluster = { ...CLUSTER, clone_from_device: true };
   const { panopta, fortimonitor, createCalls, metricCalls } = makeClients({
-    createdTemplate: { id: 44017900, name: 'FortiGate FGVMA6 Best Practice' }
+    createdTemplate: { id: 44017900, name: 'FortiGate FGVMA6 Stock' }
   });
   const sharedState = new Map();
   await action.commit(
@@ -297,7 +297,7 @@ test('clone-from-device: commit passes sourceServerId + skips per-metric populat
 test('clone-from-device: commit sets selectOptions="yes" (FMN-203 finding: empty without)', async () => {
   const cloneCluster = { ...CLUSTER, clone_from_device: true };
   const { panopta, fortimonitor, createCalls } = makeClients({
-    createdTemplate: { id: 44017900, name: 'FortiGate FGVMA6 Best Practice' }
+    createdTemplate: { id: 44017900, name: 'FortiGate FGVMA6 Stock' }
   });
   const sharedState = new Map();
   await action.commit(
@@ -310,7 +310,7 @@ test('clone-from-device: commit sets selectOptions="yes" (FMN-203 finding: empty
 
 test('non-clone: commit sets selectOptions="no"', async () => {
   const { panopta, fortimonitor, createCalls } = makeClients({
-    createdTemplate: { id: 44017900, name: 'FortiGate FGVMA6 Best Practice' }
+    createdTemplate: { id: 44017900, name: 'FortiGate FGVMA6 Stock' }
   });
   const sharedState = new Map();
   await action.commit(
@@ -332,7 +332,7 @@ test('non-clone: commit sets selectOptions="no"', async () => {
 test('commit with destination_group_create_name looks up existing group by name (no create)', async () => {
   const { panopta, fortimonitor, createCalls, groupCalls } = makeClients({
     existingGroups: [{ id: 555, name: 'FM Toolkit Templates' }],
-    createdTemplate: { id: 44017900, name: 'FortiGate FGVMA6 Best Practice' }
+    createdTemplate: { id: 44017900, name: 'FortiGate FGVMA6 Stock' }
   });
   const sharedState = new Map();
   await action.commit(
@@ -350,7 +350,7 @@ test('commit with destination_group_create_name creates the group when missing',
   const { panopta, fortimonitor, createCalls, groupCalls } = makeClients({
     existingGroups: [],
     createdGroup: { id: 7777, name: 'FM Toolkit Templates' },
-    createdTemplate: { id: 44017900, name: 'FortiGate FGVMA6 Best Practice' }
+    createdTemplate: { id: 44017900, name: 'FortiGate FGVMA6 Stock' }
   });
   const sharedState = new Map();
   await action.commit(
@@ -367,7 +367,7 @@ test('commit memoizes group resolution: two targets share one group lookup/creat
   const { panopta, fortimonitor, groupCalls } = makeClients({
     existingGroups: [],
     createdGroup: { id: 7777, name: 'FM Toolkit Templates' },
-    createdTemplate: { id: 44017900, name: 'FortiGate FGVMA6 Best Practice' }
+    createdTemplate: { id: 44017900, name: 'FortiGate FGVMA6 Stock' }
   });
   const sharedState = new Map();
   await action.commit({ id: 42024061, template_names: [] }, { destination_group_create_name: 'FM Toolkit Templates', clusters: [CLUSTER] }, { client: panopta, fortimonitorClient: fortimonitor, sharedState });

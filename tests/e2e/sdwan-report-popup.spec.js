@@ -84,7 +84,7 @@ test.describe('SD-WAN Report popup wiring (FMN-129)', () => {
     // Defensive: nothing in this row should advertise tools that aren't shipping.
     expect(text).not.toContain('Tag Applier');
     expect(text).not.toContain('Audit');
-    expect(text).not.toContain('BPA');
+    expect(text).not.toContain('Tenant Observations');
     await page.close();
   });
 

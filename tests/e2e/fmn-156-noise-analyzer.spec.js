@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const HARNESS_PATH = path.resolve(__dirname, '../../docs/harnesses/bpa-audit-viewer.html');
+const HARNESS_PATH = path.resolve(__dirname, '../../docs/harnesses/tenant-observations-viewer.html');
 const HARNESS_URL = `file://${HARNESS_PATH}`;
 
 test.describe('FMN-156 Noise sections inside Incident Summary tab', () => {

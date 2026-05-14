@@ -21,13 +21,13 @@ test('FMN-200 commit row surfaces template name + created+attached outcome', () 
       status: 200,
       noop: false,
       reason: 'attached',
-      template: { id: 555, name: 'FortiGate FGVM64-AWS Best Practice', created: true, reused: false, populated_count: 33 }
+      template: { id: 555, name: 'FortiGate FGVM64-AWS Stock', created: true, reused: false, populated_count: 33 }
     }
   };
   const csv = buildCsv({ rows: [row] });
   const dataLine = csv.split('\n')[1];
   assert.match(dataLine, /42024061/);
-  assert.match(dataLine, /FortiGate FGVM64-AWS Best Practice/);
+  assert.match(dataLine, /FortiGate FGVM64-AWS Stock/);
   assert.match(dataLine, /created\+attached/);
   assert.match(dataLine, /33 metrics populated/);
 });

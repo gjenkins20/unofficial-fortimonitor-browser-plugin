@@ -1,7 +1,7 @@
 // Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // FMN-154 Phase 2.5: Playwright spec for popup Settings rotation knob +
 // Clear all snapshots button. Uses the loaded extension fixture so the
-// real SW handles bpa-snapshots:get-config / set-max / clear-all.
+// real SW handles observations-snapshots:get-config / set-max / clear-all.
 //
 // Run: npx playwright test tests/e2e/fmn-154-phase2-settings.spec.js
 

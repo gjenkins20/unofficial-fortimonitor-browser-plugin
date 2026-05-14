@@ -93,7 +93,7 @@ Field notes:
 
 ### `GET /report/get_monitoring_config_data?server_id={template_id}`
 
-Read-side. Already documented for the BPA work (FMN-135). Confirmed here that templates and servers share an id namespace. For the freshly-created empty template:
+Read-side. Already documented for the Tenant Observations work (FMN-135). Confirmed here that templates and servers share an id namespace. For the freshly-created empty template:
 
 ```json
 {
@@ -172,7 +172,7 @@ None block FMN-200's first-ship surface (create + populate + attach via Monitori
 Combined with FMN-203's findings, the wire shape is complete for the create-and-populate path. FMN-200 can build the full flow:
 
 1. `POST /config/createServerTemplate` with `template_type: "fabric_template"` and either `server_id: null` (empty shell) or `server_id: {source_device_id}` (clone-from-device).
-2. For each Best-Practice metric: `POST /config/monitoring/editAgentMetric` with `check_method=fabric`, `action=add`, `isTemplate=true`, `template_from_scratch=true`, plus `plugin_textkey` + `resource_textkey` from the catalog.
+2. For each Stock-template metric: `POST /config/monitoring/editAgentMetric` with `check_method=fabric`, `action=add`, `isTemplate=true`, `template_from_scratch=true`, plus `plugin_textkey` + `resource_textkey` from the catalog.
 3. Idempotence: `GET /report/get_monitoring_config_data?server_id={template_id}` before each metric write; skip if the resource textkey is already present.
 
 ---

@@ -3,7 +3,7 @@
 //
 // Pure JS, no runtime dependencies. Sufficient for bundling a small
 // number of CSV files into one .zip download (FMN-133's combined
-// best-practice-assessment report). Files are stored uncompressed -
+// tenant-observations report). Files are stored uncompressed -
 // CSVs are small enough that compression isn't worth the LOC.
 //
 // PKZIP format reference:

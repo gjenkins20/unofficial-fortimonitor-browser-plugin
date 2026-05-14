@@ -64,7 +64,7 @@
     {
       "resources": [
         "src/popup/popup.html",
-        "src/ui/bpa-diff/app.html"
+        "src/ui/tenant-observations-diff/app.html"
       ],
       "matches": [
         "https://fortimonitor.forticloud.com/*",

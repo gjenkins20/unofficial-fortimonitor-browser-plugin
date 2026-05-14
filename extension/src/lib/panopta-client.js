@@ -281,7 +281,7 @@ export class PanoptaClient {
 
   /**
    * Public single-shot GET helper. Returns the parsed JSON body. Used by
-   * tools (e.g. BPA Audit) that need to fetch arbitrary endpoints not
+   * tools (e.g. Tenant Observations) that need to fetch arbitrary endpoints not
    * covered by a dedicated wrapper. Errors surface as PanoptaError - 401
    * is phase='auth', 404 throws status=404, 5xx throws status=5xx.
    */

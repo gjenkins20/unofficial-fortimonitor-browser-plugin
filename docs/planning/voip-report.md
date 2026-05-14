@@ -72,7 +72,7 @@ who go looking for a Network Quality report look exactly here. FMN-154
 already established the augmentation pattern (card injected into the
 `<pa-card>` grid with FM Toolkit ribbon). The discovery confirmed
 `/report/ListReports` is the canonical landing page. The card opens an
-extension-served result page (same model as FMN-154's BPA viewer).
+extension-served result page (same model as FMN-154's Tenant Observations viewer).
 
 Cons: the augmentation is sensitive to FortiMonitor's Reports-page DOM
 shifting (FMN-154 already has guards for this).
@@ -100,7 +100,7 @@ The card subtitle reads: *"ICMP-derived. FortiMonitor does not measure SIP / RTP
 
 | Source                                                          | Auth          | Notes                                                                       |
 |-----------------------------------------------------------------|---------------|-----------------------------------------------------------------------------|
-| `GET /v2/server?limit=200` (paged)                              | v2 API key    | Instance inventory. Same paging as BPA fetcher.                            |
+| `GET /v2/server?limit=200` (paged)                              | v2 API key    | Instance inventory. Same paging as tenant-observations fetcher.                            |
 | `GET /v2/server/{id}/agent_resource?limit=200` per server       | v2 API key    | Per-instance NQ metric inventory. Filter to `resource_textkey` ∈ {icmp.latency, icmp.jitter, icmp.packet_loss, icmp.mos}. |
 | `GET /v2/outage?limit=200` (paged) plus `?status=active` filter | v2 API key    | Recent + active NQ outages, joined on `description.startsWith('Latency/Jitter/Packet Loss/MOS from ')`. |
 | `GET /v2/outage_statistics?days=7`                              | v2 API key    | Per-server outage counts in window. Used for "top 10 noisiest NQ sites" ranking. |
@@ -155,7 +155,7 @@ not just the recent incidents.
 ### Caching / freshness
 
 The report is computed on demand. No background scan. Same model as the
-existing BPA viewer — operator clicks the card, sees a "fetching..."
+existing Tenant Observations viewer — operator clicks the card, sees a "fetching..."
 state, gets the rendered report within ~5-15 seconds for a tenant with
 64 servers. Concurrency cap = 3 (same as FMN-61's name resolution).
 

@@ -48,7 +48,7 @@ async function seedConfiguredState(extensionContext) {
       // each test starts from the always-on tile set; the popup-launcher
       // test re-enables them right before its capture.
       'fm:sdwanReportEnabled': false,
-      'fm:bpaAuditEnabled': false,
+      'fm:tenantObservationsEnabled': false,
       'fm:ssoConfigEnabled': false
     });
   });
@@ -64,7 +64,7 @@ test('popup launcher (configured state)', async ({ extensionContext, extensionId
   await sw.evaluate(async () => {
     await chrome.storage.local.set({
       'fm:sdwanReportEnabled': true,
-      'fm:bpaAuditEnabled': true,
+      'fm:tenantObservationsEnabled': true,
       'fm:ssoConfigEnabled': true
     });
   });
@@ -183,7 +183,7 @@ const TOOLS = [
   // unconditionally when navigated to directly (the per-tool storage
   // flag only gates popup-tile visibility), so these need no extra
   // seeding beyond seedConfiguredState.
-  { name: 'bpa-audit',             path: 'src/ui/bpa-audit/app.html',                  ready: '#app-root *' },
+  { name: 'tenant-observations',             path: 'src/ui/tenant-observations/app.html',                  ready: '#app-root *' },
   { name: 'sdwan-report',          path: 'src/ui/sdwan-report/app.html',               ready: '#app-root *' },
   { name: 'sso-config',            path: 'src/ui/sso-config/app.html',                 ready: '#app-root *' }
   // Ask AI and Find Servers are captured separately below:
@@ -394,7 +394,7 @@ test('hero flow: bulk composer (4 frames)', async ({ extensionContext, extension
   await heroSw.evaluate(async () => {
     await chrome.storage.local.set({
       'fm:sdwanReportEnabled': true,
-      'fm:bpaAuditEnabled': true,
+      'fm:tenantObservationsEnabled': true,
       'fm:ssoConfigEnabled': true
     });
   });
@@ -454,7 +454,7 @@ test.skip('hero flow: add fabric connection (4 frames)', async ({ extensionConte
   await heroSw.evaluate(async () => {
     await chrome.storage.local.set({
       'fm:sdwanReportEnabled': true,
-      'fm:bpaAuditEnabled': true,
+      'fm:tenantObservationsEnabled': true,
       'fm:ssoConfigEnabled': true
     });
   });

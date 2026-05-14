@@ -19,27 +19,27 @@ place.
 ## Unreleased
 
 - FMN-156: Noise Analysis content folded into the existing
-  Best-Practice Assessment **Incident Summary** tab as additional
+  Tenant Observations **Incident Summary** tab as additional
   sections (Top Noisy Instances + Top Noisy Metrics + Recommendations).
   Replaces the prior FMN-156 v1 attempt at a standalone 12th tab, which
   duplicated the existing Noisy Metrics section operator QA found.
-  Analyzer (`extension/src/lib/bpa-analyzers/noise.js`) is a pure
+  Analyzer (`extension/src/lib/observation-analyzers/noise.js`) is a pure
   function over the inventory's existing outage list - no new v2 API
   traffic. Outage count, total duration, MTTR, flap rate per 24h, and
   per-row recommendation (raise warning threshold to P95, widen dwell
   time, suppress for maintenance windows) shown for the noisiest
-  instances. Operator-visible by default once a BPA scan completes; no
+  instances. Operator-visible by default once a Tenant Observations scan completes; no
   separate flag.
 - FMN-154 (phase 1, behind flag): Deployment Snapshot &amp; Diff. New
   toolkit card on FortiMonitor's Canned Reports page
   (`/report/ListReports`), styled to match native `.pa-card` tiles and
-  tagged with the FMN-86 attribution ribbon. "Take Snapshot" runs a BPA
+  tagged with the FMN-86 attribution ribbon. "Take Snapshot" runs a Tenant Observations
   scan and persists a condensed result to `chrome.storage.local`
   (two-slot model: current + previous). "Open diff" launches a viewer
   that shows added / removed / modified servers between the two
   snapshots with field-level prev → next changes. The card includes a
   pre-click ETA (last run's duration as a gauge, or a 30s default for
-  the first scan), a real progress bar driven by the BPA fetcher's
+  the first scan), a real progress bar driven by the Tenant Observations fetcher's
   endpoint-done events during the run, and an inline "safe to leave the
   page" reassurance. **Off by default** behind the new
   `fm:snapshotDiffEnabled` flag (FMN-129 per-tool gating pattern);

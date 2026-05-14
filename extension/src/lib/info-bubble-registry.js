@@ -161,10 +161,10 @@ export const INFO_BUBBLE_REGISTRY = [
     learnMoreUrl: LEARN_MORE_BASE + 'bulk-composer.md',
   },
 
-  // FMN-156: Noise sections inside the BPA's Incident Summary tab.
-  // The BPA viewer is an extension-served page distinct from the
+  // FMN-156: Noise sections inside the Tenant Observations' Incident Summary tab.
+  // The Tenant Observations viewer is an extension-served page distinct from the
   // popup. The popup surface category is correct for "extension UI
-  // outside the FortiMonitor page" but the BPA viewer (viewer.js)
+  // outside the FortiMonitor page" but the Tenant Observations viewer (viewer.js)
   // needs its own mountInfoBubbles() call to wire bubbles into the
   // tab content. The selector below targets the Noise Summary
   // section heading by adjacent-table pattern (works without

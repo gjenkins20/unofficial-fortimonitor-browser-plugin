@@ -7,9 +7,10 @@ import {
   isSdwanReportEnabled,
   setSdwanReportEnabled,
   SDWAN_REPORT_ENABLED_KEY,
-  isBpaAuditEnabled,
-  setBpaAuditEnabled,
-  BPA_AUDIT_ENABLED_KEY,
+  isTenantObservationsEnabled,
+  setTenantObservationsEnabled,
+  TENANT_OBSERVATIONS_ENABLED_KEY,
+  LEGACY_BPA_AUDIT_ENABLED_KEY,
   isSsoConfigEnabled,
   setSsoConfigEnabled,
   SSO_CONFIG_ENABLED_KEY,
@@ -133,29 +134,53 @@ test('SDWAN_REPORT_ENABLED_KEY uses the sdwan-prefixed storage key', () => {
   assert.equal(SDWAN_REPORT_ENABLED_KEY, 'fm:sdwanReportEnabled');
 });
 
-// ---------- FMN-133 / FMN-145: BPA Audit visibility flag ----------
+// ---------- FMN-133 / FMN-145 / FMN-218: Tenant Observations visibility flag ----------
 
-test('isBpaAuditEnabled defaults to true on empty storage (FMN-145: visible by default)', async () => {
+test('isTenantObservationsEnabled defaults to true on empty storage (FMN-145: visible by default)', async () => {
   const storage = createStorageMock();
-  assert.equal(await isBpaAuditEnabled(storage), true);
+  assert.equal(await isTenantObservationsEnabled(storage), true);
 });
 
-test('setBpaAuditEnabled round-trips both true and false writes', async () => {
+test('setTenantObservationsEnabled round-trips both true and false writes', async () => {
   const storage = createStorageMock();
-  await setBpaAuditEnabled(true, storage);
-  assert.equal(await isBpaAuditEnabled(storage), true);
-  assert.equal(storage.__raw()[BPA_AUDIT_ENABLED_KEY], true);
-  await setBpaAuditEnabled(false, storage);
-  assert.equal(await isBpaAuditEnabled(storage), false);
+  await setTenantObservationsEnabled(true, storage);
+  assert.equal(await isTenantObservationsEnabled(storage), true);
+  assert.equal(storage.__raw()[TENANT_OBSERVATIONS_ENABLED_KEY], true);
+  await setTenantObservationsEnabled(false, storage);
+  assert.equal(await isTenantObservationsEnabled(storage), false);
 });
 
-test('isBpaAuditEnabled fails open (returns true) on storage error (FMN-145)', async () => {
+test('isTenantObservationsEnabled fails open (returns true) on storage error (FMN-145)', async () => {
   const brokenStorage = { async get() { throw new Error('storage unavailable'); } };
-  assert.equal(await isBpaAuditEnabled(brokenStorage), true);
+  assert.equal(await isTenantObservationsEnabled(brokenStorage), true);
 });
 
-test('BPA_AUDIT_ENABLED_KEY uses the bpa-prefixed storage key', () => {
-  assert.equal(BPA_AUDIT_ENABLED_KEY, 'fm:bpaAuditEnabled');
+test('TENANT_OBSERVATIONS_ENABLED_KEY uses the new fm:tenantObservationsEnabled storage key', () => {
+  assert.equal(TENANT_OBSERVATIONS_ENABLED_KEY, 'fm:tenantObservationsEnabled');
+});
+
+test('FMN-218 migration: legacy fm:bpaAuditEnabled seeds the read when the new key is unset', async () => {
+  // Operator had hidden the tile pre-rename. New key absent; legacy key present.
+  const storage = createStorageMock();
+  await storage.set({ [LEGACY_BPA_AUDIT_ENABLED_KEY]: false });
+  assert.equal(await isTenantObservationsEnabled(storage), false);
+});
+
+test('FMN-218 migration: new key wins over the legacy key when both are set', async () => {
+  const storage = createStorageMock();
+  await storage.set({
+    [TENANT_OBSERVATIONS_ENABLED_KEY]: true,
+    [LEGACY_BPA_AUDIT_ENABLED_KEY]: false
+  });
+  assert.equal(await isTenantObservationsEnabled(storage), true);
+});
+
+test('FMN-218 migration: writing the new flag clears the legacy key', async () => {
+  const storage = createStorageMock();
+  await storage.set({ [LEGACY_BPA_AUDIT_ENABLED_KEY]: false });
+  await setTenantObservationsEnabled(true, storage);
+  assert.equal(storage.__raw()[TENANT_OBSERVATIONS_ENABLED_KEY], true);
+  assert.equal(LEGACY_BPA_AUDIT_ENABLED_KEY in storage.__raw(), false);
 });
 
 // ---------- FMN-139: SSO Configuration visibility flag ----------

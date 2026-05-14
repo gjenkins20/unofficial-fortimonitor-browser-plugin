@@ -50,7 +50,7 @@ export function render({ container, store, navigate, call }) {
       nextBtn.disabled = !(typeof params.tag === 'string' && params.tag.trim().length > 0);
     } else if (store.actionId === 'apply-template') {
       nextBtn.disabled = !(typeof params.templateUrl === 'string' && params.templateUrl.trim().length > 0);
-    } else if (store.actionId === 'apply-best-practice-fabric') {
+    } else if (store.actionId === 'apply-stock-fabric-templates') {
       const recs = Array.isArray(params.recommendations) ? params.recommendations : [];
       const optedIn = recs.filter((r) => r && r.opted_in === true && r.chosen_template);
       nextBtn.disabled = optedIn.length === 0;
@@ -72,7 +72,7 @@ export function render({ container, store, navigate, call }) {
     renderTagForm({ body, store, refreshNextDisabled, call });
   } else if (store.actionId === 'apply-template') {
     renderTemplateForm({ body, store, refreshNextDisabled, call, stateLabel });
-  } else if (store.actionId === 'apply-best-practice-fabric') {
+  } else if (store.actionId === 'apply-stock-fabric-templates') {
     renderBestPracticeFabricForm({ body, store, refreshNextDisabled, call, stateLabel });
   } else if (store.actionId === 'profile-and-create-templates') {
     renderProfileAndCreateTemplatesForm({ body, store, refreshNextDisabled, call, stateLabel });
@@ -336,10 +336,10 @@ function renderTemplateForm({ body, store, refreshNextDisabled, call, stateLabel
 }
 
 // =====================================================================
-// FMN-196: Apply Best-Practice Fabric Templates
+// FMN-196: Apply Stock Fabric Templates
 // =====================================================================
 //
-// Configure step UI for the Fabric Best-Practice action. Fetches three
+// Configure step UI for the Stock Fabric Templates action. Fetches three
 // inputs from the SW in parallel:
 //   - fabricSystemData for each picked device (idp_data batch)
 //   - FortiMonitor's live nounOptions + existing rulesets (for clauses
@@ -351,7 +351,7 @@ function renderTemplateForm({ body, store, refreshNextDisabled, call, stateLabel
 // opts in/out of. Emits a commit-plan to store.params.
 
 function renderBestPracticeFabricForm({ body, store, refreshNextDisabled, call, stateLabel }) {
-  body.appendChild(h('h3', { class: 'subhead' }, 'Best-Practice Fabric Templates'));
+  body.appendChild(h('h3', { class: 'subhead' }, 'Stock Fabric Templates'));
 
   // Dry-run toggle. Default off; operator opts in for preview.
   const dryRunChk = h('input', {
@@ -1058,7 +1058,7 @@ function triggerDownload(filename, content, mime) {
 // PDF report: builds a self-contained HTML doc with the same data the
 // CSV carries, mounts it in a hidden off-screen iframe, and invokes
 // window.print() so the operator gets Chrome's "Save as PDF" target.
-// Same pattern bpa-pdf.js uses for the Best-Practice Assessment.
+// Same pattern observations-pdf.js uses for the Tenant Observations.
 function buildSuggestionsPrintableHtml({ clusters, unclassified, targets, threshold, destinationGroup, dryRun }) {
   const targetById = new Map((targets || []).map((t) => [t.id, t]));
   const generatedAt = new Date().toISOString();

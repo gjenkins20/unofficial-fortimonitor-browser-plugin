@@ -2,7 +2,7 @@
 // SD-WAN Report - Step 3 (Results) - FMN-129.
 //
 // Renders the matched-metric table (preview), plus a Download CSV /
-// Download JSON pair. The JSON shape mirrors the Python BPA script's
+// Download JSON pair. The JSON shape mirrors the Python tenant observations script's
 // output one-for-one so it can drop into existing pipelines.
 
 import { h, titleBar, downloadBlob } from '../../../lib/dom.js';
@@ -55,7 +55,7 @@ export function buildCsv(result, reportName) {
 }
 
 export function buildJson(result, reportName) {
-  // Shape mirrors the Python BPA script's output. Keep field names
+  // Shape mirrors the Python tenant observations script's output. Keep field names
   // unchanged when adding new fields - extend, don't rename - so any
   // downstream pipeline keyed on the existing shape stays compatible.
   return JSON.stringify({

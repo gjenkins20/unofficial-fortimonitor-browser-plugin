@@ -5,7 +5,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { analyzeNoise } from '../../extension/src/lib/bpa-analyzers/noise.js';
+import { analyzeNoise } from '../../extension/src/lib/observation-analyzers/noise.js';
 
 const NOW = new Date('2026-05-11T00:00:00Z');
 

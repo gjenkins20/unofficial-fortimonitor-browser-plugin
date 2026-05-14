@@ -19,8 +19,8 @@ import {
   setServerSearchEnabled,
   isSdwanReportEnabled,
   setSdwanReportEnabled,
-  isBpaAuditEnabled,
-  setBpaAuditEnabled,
+  isTenantObservationsEnabled,
+  setTenantObservationsEnabled,
   isSsoConfigEnabled,
   setSsoConfigEnabled,
   isSidebarLauncherEnabled,
@@ -306,9 +306,9 @@ async function loadSdwanReportIntoToggle() {
   toggle.checked = await isSdwanReportEnabled();
 }
 
-async function loadBpaAuditIntoToggle() {
-  const toggle = document.getElementById('bpa-audit-toggle');
-  toggle.checked = await isBpaAuditEnabled();
+async function loadTenantObservationsIntoToggle() {
+  const toggle = document.getElementById('tenant-observations-toggle');
+  toggle.checked = await isTenantObservationsEnabled();
 }
 
 async function loadSsoConfigIntoToggle() {
@@ -477,7 +477,7 @@ async function loadSnapshotRotationIntoInput() {
   if (!input) return;
   try {
     const response = await chrome.runtime.sendMessage({
-      type: 'bpa-snapshots:get-config',
+      type: 'observations-snapshots:get-config',
       payload: {},
     });
     if (response?.ok && response.result?.ok && Number.isFinite(response.result.maxSnapshots)) {
@@ -516,9 +516,9 @@ async function applyExperimentalVisibility() {
   for (const el of document.querySelectorAll('[data-experimental="sdwan-report"]')) {
     el.hidden = !sdwanReportOn;
   }
-  const bpaAuditOn = await isBpaAuditEnabled();
-  for (const el of document.querySelectorAll('[data-experimental="bpa-audit"]')) {
-    el.hidden = !bpaAuditOn;
+  const tenantObservationsOn = await isTenantObservationsEnabled();
+  for (const el of document.querySelectorAll('[data-experimental="tenant-observations"]')) {
+    el.hidden = !tenantObservationsOn;
   }
   const ssoConfigOn = await isSsoConfigEnabled();
   for (const el of document.querySelectorAll('[data-experimental="sso-config"]')) {
@@ -1330,7 +1330,7 @@ function init() {
     await loadProviderConfigIntoInputs('lmstudio');
     await loadServerSearchIntoToggle();
     await loadSdwanReportIntoToggle();
-    await loadBpaAuditIntoToggle();
+    await loadTenantObservationsIntoToggle();
     await loadSsoConfigIntoToggle();
     await loadSidebarLauncherIntoToggle();
     await loadShowFeatureBadgesIntoToggle();
@@ -1390,7 +1390,7 @@ function init() {
       setSnapshotInlineStatus('snapshot-rotation-status', 'Saving...', '');
       try {
         const response = await chrome.runtime.sendMessage({
-          type: 'bpa-snapshots:set-max',
+          type: 'observations-snapshots:set-max',
           payload: { maxSnapshots: raw },
         });
         if (response?.ok && response.result?.ok) {
@@ -1424,7 +1424,7 @@ function init() {
       setSnapshotInlineStatus('snapshot-clear-status', 'Clearing...', '');
       try {
         const response = await chrome.runtime.sendMessage({
-          type: 'bpa-snapshots:clear-all',
+          type: 'observations-snapshots:clear-all',
           payload: {},
         });
         if (response?.ok && response.result?.ok) {
@@ -1599,8 +1599,8 @@ function init() {
     await refreshGuards();
   });
 
-  document.getElementById('bpa-audit-toggle').addEventListener('change', async (e) => {
-    await setBpaAuditEnabled(e.target.checked);
+  document.getElementById('tenant-observations-toggle').addEventListener('change', async (e) => {
+    await setTenantObservationsEnabled(e.target.checked);
     await applyExperimentalVisibility();
     await refreshGuards();
   });

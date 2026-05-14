@@ -165,23 +165,23 @@ textarea.paste-area {
 }
 textarea.paste-area:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 
-/* --- BPA section-pill row (FMN-146) --------------------------------------- */
-.bpa-section-pills {
+/* --- Tenant Observations section-pill row (FMN-146) --------------------------------------- */
+.tenant-observations-section-pills {
   display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
   margin: 4px 0 0;
 }
-.bpa-pill {
+.tenant-observations-pill {
   font-family: inherit; font-size: 12px; font-weight: 500;
   padding: 5px 11px; border-radius: 999px;
   border: 1px solid var(--border-strong); background: white; color: var(--text);
   cursor: pointer;
 }
-.bpa-pill:hover { border-color: var(--accent); }
-.bpa-pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.bpa-pill.bpa-pill-active {
+.tenant-observations-pill:hover { border-color: var(--accent); }
+.tenant-observations-pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tenant-observations-pill.tenant-observations-pill-active {
   background: var(--accent); color: white; border-color: var(--accent);
 }
-.bpa-pill.bpa-pill-active:hover { background: #c44818; border-color: #c44818; }
+.tenant-observations-pill.tenant-observations-pill-active:hover { background: #c44818; border-color: #c44818; }
 
 .format-hint {
   margin-top: 16px;

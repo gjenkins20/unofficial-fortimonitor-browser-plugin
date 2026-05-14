@@ -12,9 +12,9 @@ import path from 'node:path';
 import fs from 'node:fs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const APP_HTML = path.resolve(__dirname, '../../extension/src/ui/bpa-diff/app.html');
-const APP_JS = path.resolve(__dirname, '../../extension/src/ui/bpa-diff/app.js');
-const ROUTED_URL = 'https://harness.test/bpa-diff-phase2/';
+const APP_HTML = path.resolve(__dirname, '../../extension/src/ui/tenant-observations-diff/app.html');
+const APP_JS = path.resolve(__dirname, '../../extension/src/ui/tenant-observations-diff/app.js');
+const ROUTED_URL = 'https://harness.test/observations-diff-phase2/';
 
 const test = base.extend({
   ctx: [async ({}, use) => {
@@ -39,8 +39,8 @@ function buildPageHtml({ snapshots, diffsById }) {
       let __diffCalls = [];
       const empty = { added: [], removed: [], modified: [] };
       const handlers = {
-        'bpa-snapshots:list': async () => ({ ok: true, items: __snapshots }),
-        'bpa-snapshots:diff': async (payload) => {
+        'observations-snapshots:list': async () => ({ ok: true, items: __snapshots }),
+        'observations-snapshots:diff': async (payload) => {
           __diffCalls.push(payload);
           const key = (payload && payload.baselineId && payload.currentId)
             ? payload.baselineId + '|' + payload.currentId
@@ -66,7 +66,7 @@ function buildPageHtml({ snapshots, diffsById }) {
         },
         // The phase-1 viewer also calls :status / :export on render;
         // stub them so they don't error out the page.
-        'bpa-snapshots:status': async () => ({
+        'observations-snapshots:status': async () => ({
           hasCurrent: __snapshots.length >= 1,
           hasPrevious: __snapshots.length >= 2,
           currentTakenAt: __snapshots[0]?.takenAt ?? null,
@@ -74,7 +74,7 @@ function buildPageHtml({ snapshots, diffsById }) {
           runInFlight: false,
           runStartedAt: null,
         }),
-        'bpa-snapshots:export': async () => ({ ok: false, reason: 'empty-slot', message: 'no' }),
+        'observations-snapshots:export': async () => ({ ok: false, reason: 'empty-slot', message: 'no' }),
       };
       window.chrome = {
         runtime: {

@@ -37,7 +37,7 @@ export const INTRO_TOUR_QUIZ = Object.freeze([
       { id: 'b', label: 'It runs alongside FortiMonitor and adds bulk operations + reports that the native UI does not ship.', correct: true },
       { id: 'c', label: 'It is an official Fortinet product bundled with FortiMonitor.' },
     ],
-    explanation: 'The toolkit is unofficial - it augments FortiMonitor by adding bulk port-scope changes, BPA audits, snapshots, omni-search, and other operations the native UI does not provide directly. It rides your existing FortiMonitor session.',
+    explanation: 'The toolkit is unofficial - it augments FortiMonitor by adding bulk port-scope changes, tenant observationss, snapshots, omni-search, and other operations the native UI does not provide directly. It rides your existing FortiMonitor session.',
   },
 ]);
 

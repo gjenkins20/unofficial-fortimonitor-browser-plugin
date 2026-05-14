@@ -151,7 +151,7 @@ Empty Fabric template 44017104 went from `categories.added: []` → 3 metrics ad
 ## Implications for FMN-193 sub-ticket #3
 
 - v2 `POST /server_template` is clone-only (`copy_from` required); session-auth `POST /config/createServerTemplate` is the create.
-- A "Best-Practice Fabric Template" can be built programmatically by:
+- A "Stock Fabric Template" can be built programmatically by:
   1. `POST /config/createServerTemplate` with any source device's `server_id` and `template_type: "fabric_template"`. The cheapest source for metric selection is `select_options: "no"` (produces an empty shell).
-  2. For each desired metric from the Best-Practice rulebook: `POST /config/monitoring/editAgentMetric` with the catalog's `plugin_textkey` + `resource_textkey` + `check_method=fabric` + `action=add` + `isTemplate=true` + `template_from_scratch=true`.
+  2. For each desired metric from the stock-template metric set: `POST /config/monitoring/editAgentMetric` with the catalog's `plugin_textkey` + `resource_textkey` + `check_method=fabric` + `action=add` + `isTemplate=true` + `template_from_scratch=true`.
   3. Idempotence: lookup `get_monitoring_config_data` on the destination template before each write, skip if the metric textkey already present.

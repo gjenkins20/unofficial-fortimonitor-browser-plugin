@@ -4,7 +4,7 @@
 // Pure-orchestration logic; clients (PanoptaClient + FortimonitorClient)
 // are injected so this module is testable in Node without Chrome APIs.
 // Both the SW handler (bulk-composer:ensure-template) and the action
-// descriptor (apply-best-practice-fabric-template) call this helper.
+// descriptor (apply-stock-fabric-templates-template) call this helper.
 //
 // Behavior:
 //   1. Look up existing template by exact name via panopta.listTemplates.

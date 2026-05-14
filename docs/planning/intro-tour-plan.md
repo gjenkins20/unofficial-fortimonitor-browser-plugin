@@ -1,6 +1,6 @@
 # Intro tour to FortiMonitor - design
 
-FMN-167 planning ticket (2026-05-11). Companion to FMN-168 (the OnSight deployment best-practice walk-through; same framework, different content).
+FMN-167 planning ticket (2026-05-11). Companion to FMN-168 (the OnSight deployment guided walk-through; same framework, different content).
 
 Operator request: a first-time-user guided tour of FortiMonitor itself, run from this extension. The tour spotlights pieces of FortiMonitor's UI in order with captions explaining what each element is and why it matters. Operator triggers it from the popup; the tour drives them through the FortiMonitor pages they already have open via content-script overlays.
 

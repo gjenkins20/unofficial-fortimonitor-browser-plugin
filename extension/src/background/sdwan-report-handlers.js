@@ -3,7 +3,7 @@
 //
 // Crawls the v2 API for SNMP / agent / network-service resources across
 // every monitored server, classifies each metric against the SD-WAN
-// regex lists ported from the BPA Python script, and returns a flat
+// regex lists ported from the Tenant Observations Python script, and returns a flat
 // records array. The CSV format is regenerated from the same array in
 // the UI step.
 //

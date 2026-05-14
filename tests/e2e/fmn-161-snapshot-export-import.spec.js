@@ -1,9 +1,9 @@
 // Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// FMN-161: Playwright spec for snapshot export + import in the bpa-diff
-// page. Headless Chromium, no extension fixture - we route the bpa-diff
+// FMN-161: Playwright spec for snapshot export + import in the tenant-observations-diff
+// page. Headless Chromium, no extension fixture - we route the tenant-observations-diff
 // app URL to a synthetic HTML page that inlines app.html's body and
 // app.js plus a chrome.* shim. The shim implements the SW message
-// surface (bpa-snapshots:status / :diff / :export / :import) using the
+// surface (observations-snapshots:status / :diff / :export / :import) using the
 // real handler module loaded via dynamic import, so the spec exercises
 // the production code path end to end.
 //
@@ -15,10 +15,10 @@ import path from 'node:path';
 import fs from 'node:fs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const APP_HTML = path.resolve(__dirname, '../../extension/src/ui/bpa-diff/app.html');
-const APP_JS = path.resolve(__dirname, '../../extension/src/ui/bpa-diff/app.js');
+const APP_HTML = path.resolve(__dirname, '../../extension/src/ui/tenant-observations-diff/app.html');
+const APP_JS = path.resolve(__dirname, '../../extension/src/ui/tenant-observations-diff/app.js');
 const SNAPSHOT_IO_JS = path.resolve(__dirname, '../../extension/src/lib/snapshot-io.js');
-const ROUTED_URL = 'https://harness.test/bpa-diff/';
+const ROUTED_URL = 'https://harness.test/tenant-observations-diff/';
 
 const test = base.extend({
   ctx: [async ({}, use) => {
@@ -70,7 +70,7 @@ function buildPageHtml({ initialState }) {
       const __initial = ${JSON.stringify(initialState)};
       let slots = JSON.parse(JSON.stringify(__initial.slots));
       const handlers = {
-        'bpa-snapshots:status': async () => ({
+        'observations-snapshots:status': async () => ({
           hasCurrent: Boolean(slots.current),
           hasPrevious: Boolean(slots.previous),
           currentTakenAt: slots.current?.takenAt ?? null,
@@ -78,7 +78,7 @@ function buildPageHtml({ initialState }) {
           runInFlight: false,
           runStartedAt: null,
         }),
-        'bpa-snapshots:diff': async () => {
+        'observations-snapshots:diff': async () => {
           if (!slots.current) return { ok: false, reason: 'no-snapshot', message: 'Take a snapshot first.' };
           if (!slots.previous) return { ok: false, reason: 'no-previous', message: 'Only one snapshot stored.', currentTakenAt: slots.current.takenAt };
           const empty = { added: [], removed: [], modified: [] };
@@ -98,7 +98,7 @@ function buildPageHtml({ initialState }) {
         },
         // Phase 2.3: snapshot picker enumeration. Synthesizes summaries
         // out of the test shim's two-slot model.
-        'bpa-snapshots:list': async () => {
+        'observations-snapshots:list': async () => {
           const items = [];
           const toSummary = (snap, slot) => ({
             id: 'snap-' + slot + '-' + snap.takenAt,
@@ -117,7 +117,7 @@ function buildPageHtml({ initialState }) {
           if (slots.previous) items.push(toSummary(slots.previous, 'previous'));
           return { ok: true, items };
         },
-        'bpa-snapshots:export': async (payload) => {
+        'observations-snapshots:export': async (payload) => {
           const slot = payload?.slot === 'previous' ? 'previous' : 'current';
           const snap = slots[slot];
           if (!snap) return { ok: false, reason: 'empty-slot', message: 'No ' + slot + ' snapshot to export.' };
@@ -129,7 +129,7 @@ function buildPageHtml({ initialState }) {
             slot,
           };
         },
-        'bpa-snapshots:import': async (payload) => {
+        'observations-snapshots:import': async (payload) => {
           try {
             const { snapshot } = unwrapSnapshot(payload?.envelope);
             const hadPrevious = Boolean(slots.previous);

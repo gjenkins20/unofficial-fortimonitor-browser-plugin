@@ -11,7 +11,7 @@
 //   bulk-composer:current-selection - read selected server ids stashed by
 //                                     a content-script selection-handoff
 //
-// FMN-196 additions (Best-Practice Fabric Templates action):
+// FMN-196 additions (Stock Fabric Templates action):
 //   bulk-composer:list-fabric-system-data    - batch /report/get_idp_data
 //   bulk-composer:list-monitoring-policy-vocab - GET /monitoring_policy/get_page_data
 //   bulk-composer:list-templates-with-groups - PanoptaClient.listTemplates() + group enrichment
@@ -221,7 +221,7 @@ export function createBulkComposerHandlers({ events = {}, getClient, getFortimon
      * Batch-fetch fabricSystemData for a list of server ids. Returns a
      * map keyed by server id. Servers without fabricSystemData (non-
      * Fortinet or unauthenticated) get null entries. Used by the
-     * Best-Practice Fabric action's Configure step to classify picked
+     * Stock Fabric Templates action's Configure step to classify picked
      * devices.
      *
      * Concurrency capped to keep the live tenant happy.
@@ -248,7 +248,7 @@ export function createBulkComposerHandlers({ events = {}, getClient, getFortimon
 
     /**
      * One-shot fetch of /monitoring_policy/get_page_data. Returns the
-     * fields the Best-Practice Fabric action's Configure step needs:
+     * fields the Stock Fabric Templates action's Configure step needs:
      * existing rulesets (for idempotence by-name lookup) and the live
      * nounOptions vocabulary (for the recommendation engine's
      * policy-clause builder).
@@ -350,7 +350,7 @@ export function createBulkComposerHandlers({ events = {}, getClient, getFortimon
     },
 
     /**
-     * Idempotent create-and-populate for a Best-Practice template.
+     * Idempotent create-and-populate for a Stock template.
      *
      * Input: { name, templateType, destinationGroup, sourceServerId?,
      *          resources: [{ plugin_textkey, resource_textkey, name,

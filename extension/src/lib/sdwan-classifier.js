@@ -1,8 +1,8 @@
 // Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // SD-WAN interface classifier (FMN-129).
 //
-// Ports the regex lists + extraction logic from the BPA Python script
-// (fortimonitor_bpa/fortimonitor-sdwan-report.py.txt, lines 61-97 and
+// Ports the regex lists + extraction logic from the Tenant Observations Python script
+// (fortimonitor_observations/fortimonitor-sdwan-report.py.txt, lines 61-97 and
 // 400-438) so the SD-WAN Report tool can decide whether a metric belongs
 // to an overlay, underlay, or generic SD-WAN interface, and which of
 // latency / jitter / loss it represents (when the metric is a FortiGate

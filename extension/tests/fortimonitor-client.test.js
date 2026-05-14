@@ -657,7 +657,7 @@ test('createServerTemplate posts JSON body with X-XSRF-TOKEN and required fields
   });
   const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'xsrf-value' });
   await client.createServerTemplate({
-    name: 'FortiGate FGVMA6 Best Practice',
+    name: 'FortiGate FGVMA6 Stock',
     templateType: 'fabric_template',
     destinationGroup: 'grp-617598'
   });
@@ -665,12 +665,12 @@ test('createServerTemplate posts JSON body with X-XSRF-TOKEN and required fields
   assert.equal(captured.headers['Content-Type'], 'application/json');
   assert.equal(captured.headers['X-XSRF-TOKEN'], 'xsrf-value');
   const body = JSON.parse(captured.body);
-  assert.equal(body.template_name, 'FortiGate FGVMA6 Best Practice');
+  assert.equal(body.template_name, 'FortiGate FGVMA6 Stock');
   assert.equal(body.template_type, 'fabric_template');
   assert.equal(body.element_ids, 'grp-617598');
   assert.equal(body.server_id, null);                  // shell mode
   assert.equal(body.select_options, 'no');             // shell default
-  assert.equal(body.instance_grp_name, 'FortiGate FGVMA6 Best Practice');
+  assert.equal(body.instance_grp_name, 'FortiGate FGVMA6 Stock');
   assert.equal(body.notification_schedule, 0);
 });
 

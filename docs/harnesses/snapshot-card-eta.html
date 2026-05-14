@@ -109,11 +109,11 @@
               catch (e) { console.error('cb threw', e); }
             window.chrome.runtime.lastError = null;
           };
-          if (msg?.type === 'bpa-snapshots:status') {
+          if (msg?.type === 'observations-snapshots:status') {
             setTimeout(() => respond(clone(cfg.statusResult)), 5);
-          } else if (msg?.type === 'bpa-snapshots:estimate') {
+          } else if (msg?.type === 'observations-snapshots:estimate') {
             setTimeout(() => respond(clone(cfg.estimateResult)), 5);
-          } else if (msg?.type === 'bpa-snapshots:take') {
+          } else if (msg?.type === 'observations-snapshots:take') {
             // No-op for this harness; in-flight is tested via the status
             // result, not by exercising a real take.
             setTimeout(() => respond({ ok: true }), 5);

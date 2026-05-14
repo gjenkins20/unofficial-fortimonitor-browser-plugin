@@ -1,5 +1,5 @@
 // Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// FMN-195: Best-Practice Fabric recommendation engine.
+// FMN-195: Stock Fabric Templates recommendation engine.
 //
 // Pure logic; no Chrome / fetch / DOM dependencies. Testable in Node.
 //
@@ -205,7 +205,7 @@ function buildPolicyProposal(p, nounOptions) {
   else warnings.push(`No attribute_types vocabulary for "${p.make}" model textkey; model clause omitted.`);
 
   return {
-    name: `Apply Best-Practice ${p.make} template`,
+    name: `Apply Stock ${p.make} template`,
     clauses,
     warnings
   };

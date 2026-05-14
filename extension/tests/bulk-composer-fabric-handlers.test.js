@@ -262,11 +262,11 @@ function makeEnsureMocks({ existingTemplates = [], createdTemplate = null } = {}
 
 test('ensure-template reuses an existing template by name (no create, no populate)', async () => {
   const { panopta, fmClient, createCalls, metricCalls } = makeEnsureMocks({
-    existingTemplates: [{ id: 12345, name: 'FortiGate FGVMA6 Best Practice' }]
+    existingTemplates: [{ id: 12345, name: 'FortiGate FGVMA6 Stock' }]
   });
   const handlers = makeHandlers({ panoptaClient: panopta, fortimonitorClient: fmClient });
   const out = await handlers['bulk-composer:ensure-template']({
-    name: 'FortiGate FGVMA6 Best Practice',
+    name: 'FortiGate FGVMA6 Stock',
     templateType: 'fabric_template',
     destinationGroup: 'grp-1',
     resources: [{ plugin_textkey: 'p', resource_textkey: 'r', name: 'R' }]

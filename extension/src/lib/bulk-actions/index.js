@@ -10,7 +10,7 @@
 import * as addTag from './add-tag.js';
 import * as removeTag from './remove-tag.js';
 import * as applyTemplate from './apply-template.js';
-import * as applyBestPracticeFabric from './apply-best-practice-fabric.js';
+import * as applyBestPracticeFabric from './apply-stock-fabric-templates.js';
 import * as profileAndCreateTemplates from './profile-and-create-templates.js';
 
 export const ACTIONS = [addTag, removeTag, applyTemplate, applyBestPracticeFabric, profileAndCreateTemplates];

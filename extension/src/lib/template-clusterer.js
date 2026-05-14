@@ -458,7 +458,7 @@ function newCluster(sig, sampleDevice, key, resourceStrategy) {
     port_signature: sig.portKeys === null ? null : [...sig.portKeys],
     threshold_signature_by_resource: Object.fromEntries(sig.resourcesByKey),
     member_signatures: [],
-    proposed_template_name: `${sig.make} ${sig.model} Best Practice`,
+    proposed_template_name: `${sig.make} ${sig.model} Stock`,
     proposed_resources: [],      // filled by finalizeCluster
     sample_device_id: sampleDevice.id,
     __sample_metric_by_resource: new Map(),

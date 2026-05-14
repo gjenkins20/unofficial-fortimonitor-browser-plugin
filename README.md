@@ -16,7 +16,7 @@ It also makes everyday single-device use of FortiMonitor a little less painful: 
 
 | Tool | Auth | Status | Action |
 |---|---|---|---|
-| **Bulk Composer** | FortiMonitor v2 API key | Shipped (v1.0) | The flagship loop. Load a list of instances (paste, omni-search, sender handoff, or CSV), pick one of five actions, preview the per-row plan, then commit. Actions: **Add Tag**, **Remove Tag**, **Apply Template**, **Apply Best-Practice Fabric Templates** (profile Fabric devices, create Monitoring Policies that auto-apply matching templates), **Profile + Create Templates** (Jaccard-cluster devices by config similarity, create one template per cluster). See the [Bulk Composer](#bulk-composer) subsection below. |
+| **Bulk Composer** | FortiMonitor v2 API key | Shipped (v1.0) | The flagship loop. Load a list of instances (paste, omni-search, sender handoff, or CSV), pick one of five actions, preview the per-row plan, then commit. Actions: **Add Tag**, **Remove Tag**, **Apply Template**, **Apply Stock Fabric Templates** (profile Fabric devices, create Monitoring Policies that auto-apply matching templates), **Profile + Create Templates** (Jaccard-cluster devices by config similarity, create one template per cluster). See the [Bulk Composer](#bulk-composer) subsection below. |
 | **Add Fabric Connection (API)** | FortiMonitor v2 API key | Shipped (v1.0) | Bulk-create OnSight CSF tunnel connections for FortiGate devices via `POST /v2/fabric_connection`. Resource pickers (OnSight, server group, optional appliance group) populate from the API. |
 | **Manage Server Attributes (Bulk)** | FortiMonitor v2 API key | Shipped (v0.5) | Bulk-set or remove attribute key/value pairs across many servers via `POST`/`DELETE /v2/server/{id}/server_attribute`. Paste a list of server names or IDs, pick an attribute type, preview per-row plan (add / replace / skip / error), then execute. |
 | **Manage Server Templates (Bulk)** | FortiMonitor v2 API key | Shipped (v1.0) | Bulk-attach or detach monitoring templates via `POST`/`DELETE /v2/server/{id}/template`. Detach offers two strategies: `dissociate` (keep metrics the template seeded) and `delete` (wipe metrics, **destructive, no undo**). Destructive detach and large batches require a typed-confirmation phrase. Receiver for the cross-tool *Send selection to* handoff. |
@@ -25,7 +25,7 @@ It also makes everyday single-device use of FortiMonitor a little less painful: 
 | **Add to Port Scope (Fabric)** | FortiMonitor session | Shipped (v0.2) | Inverse of Remove. Batch-add currently-unmonitored interfaces to port scope. Non-destructive. Will fold into Bulk Composer in a future phase. |
 | **Ask AI** | FortiMonitor v2 API key + AI provider credentials | Shipped (v1.0) | In-plugin chat with tool use against a curated set of read-only FortiMonitor v2 endpoints (servers, outages, agent resources, fabric connections, templates, server groups) plus a single gated write (`acknowledge_outage`). Provider is operator's choice in popup → ⚙ Settings: **Anthropic** (cloud, your API key, full 276-tool codegen catalog, prompt-caches tool definitions), **Ollama** (local, native `/api/chat`, no per-turn cost), or **LM Studio** (local, OpenAI-compat). Local providers must use a tool-capable model (Qwen 2.5+, Llama 3.1+, Mistral Nemo, Command R+, Qwen 3). See [`docs/mcp-chat-prototype.md`](docs/mcp-chat-prototype.md) for scope and [`docs/ask-ai-local-providers.md`](docs/ask-ai-local-providers.md) for local-provider setup. |
 | **Find Servers** | FortiMonitor v2 API key | Shipped (v1.0) · hidden by default | Pages the full `/v2/server` list and filters client-side by identifiers, attribute (built-in like Model / OS, or any customer-defined type), name, FQDN, tag, status, device type, active-outage state, or applied template. Pick the columns you want and export matches as CSV. Read-only. Sender for the cross-tool *Send selection to* handoff. Enable in popup → ⚙ Settings → Experimental tools → *Show Search Servers*. |
-| **Best-Practice Assessment** | FortiMonitor v2 API key | Beta · hidden by default | Audit a tenant for monitoring-config gaps: stock-vs-custom template drift, default-only instances, overlapping templates, user activity, etc. Outputs a downloadable CSV plus a multi-tab in-plugin viewer. Enable in popup → ⚙ Settings → Experimental tools. |
+| **Tenant Observations** | FortiMonitor v2 API key | Beta · hidden by default | Audit a tenant for monitoring-config gaps: stock-vs-custom template drift, default-only instances, overlapping templates, user activity, etc. Outputs a downloadable CSV plus a multi-tab in-plugin viewer. Enable in popup → ⚙ Settings → Experimental tools. |
 | **SD-WAN Report** | FortiMonitor v2 API key | Beta · hidden by default | Generate a per-tenant report of SD-WAN performance and alert configuration across Fabric-connected FortiGates. Enable in popup → ⚙ Settings → Experimental tools. |
 | **Generate SSO Configuration** | None (local-only) | Beta · hidden by default | Compose the SAML-SSO configuration for FortiMonitor's per-field admin form (no XML import is supported on the FortiMonitor side; this tool produces the field set you paste). Enable in popup → ⚙ Settings → Experimental tools. |
 
@@ -76,7 +76,7 @@ Click the extension's toolbar icon to open the launcher and pick a tool. Each to
 
 **Beta tools** (hidden by default; opt in via popup → ⚙ Settings → Experimental tools)
 
-<img src="docs/marketing/screenshots/tool-bpa-audit.png" alt="Best-Practice Assessment tool entry view" width="900">
+<img src="docs/marketing/screenshots/tool-tenant-observations.png" alt="Tenant Observations tool entry view" width="900">
 
 <img src="docs/marketing/screenshots/tool-sdwan-report.png" alt="SD-WAN Report tool entry view" width="900">
 
@@ -99,7 +99,7 @@ Shipped actions:
 - **Add Tag** - add a single tag to each selected instance. Existing tags are preserved.
 - **Remove Tag** - remove a single tag from each selected instance. Other tags are preserved.
 - **Apply Template** - attach a monitoring template. Already-attached instances are skipped.
-- **Apply Best-Practice Fabric Templates** - profile Fabric devices and create Monitoring Policies (rulesets) that auto-apply matching templates on future onboard.
+- **Apply Stock Fabric Templates** - profile Fabric devices and create Monitoring Policies (rulesets) that auto-apply matching templates on future onboard.
 - **Profile + Create Templates** - Jaccard-cluster Fabric devices by configuration similarity, propose one template per cluster, then create + attach.
 
 Port-scope actions and the dedicated Server Templates / Server Attributes tools have not been folded into Bulk Composer yet and remain standalone for now. The plan is to migrate them once Bulk Composer's action surface stabilises.
@@ -154,7 +154,7 @@ extension/
                       ui/server-lookup/app.html
                       ui/server-search/app.html
                       ui/ask-claude/app.html
-                      ui/bpa-audit/app.html
+                      ui/tenant-observations/app.html
                       ui/sdwan-report/app.html
                       ui/sso-config/app.html
                       ui/intro-tour/app.html

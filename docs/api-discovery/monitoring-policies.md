@@ -2,7 +2,7 @@
 
 Captured from a live FortiMonitor tenant on 2026-05-12 via the FMN-194 Playwright-paired discovery session. Source capture: `tools/discovery/fmn-194-capture-2026-05-13.json` (gitignored, holds session cookies). Driven against `https://fortimonitor.forticloud.com/`.
 
-This is the internal UI-only surface that backs the **Monitoring → Monitoring Policies** page. The v2 API has **no** monitoring-policy resource (the candidate-URL probe in the discovery script confirmed every guess returns the SPA shell rather than a JSON resource). The parent ticket (FMN-193, Best-Practice Fabric template + monitoring-policy automation) must therefore use the session-auth endpoints on the tenant origin.
+This is the internal UI-only surface that backs the **Monitoring → Monitoring Policies** page. The v2 API has **no** monitoring-policy resource (the candidate-URL probe in the discovery script confirmed every guess returns the SPA shell rather than a JSON resource). The parent ticket (FMN-193, Stock Fabric template + monitoring-policy automation) must therefore use the session-auth endpoints on the tenant origin.
 
 FortiMonitor's internal name for a Monitoring Policy is a **"ruleset"**. Every endpoint and JSON field uses the ruleset spelling; "policy" appears only in the apply-workflow endpoint.
 
@@ -237,14 +237,14 @@ Tenant flags (`applySubAccounts`, `allowOverride`, `isSubtenant`, `canOverride`)
 | FortiExtender | 1 | `fortiextender.name` |
 | Fabric Settings | 1 | `fabric.distinct_requests` |
 
-For the parent ticket's FortiGate-specific best-practice template attachment, the relevant attribute textkeys are the **FortiGate** group (especially `fortigate.model` and `fortigate.os_version`).
+For the parent ticket's FortiGate-specific stock template attachment, the relevant attribute textkeys are the **FortiGate** group (especially `fortigate.model` and `fortigate.os_version`).
 
 ### Action vocabulary: `actionValueOptions`
 
 | `action_type` | # values | Shape | Notes |
 |---|---|---|---|
 | `server_group` | 45 | `{ label, value: "sg-{id}" }` | Move matched instance into a server group. **Value prefix `sg-` is included** in the option but `action_value` strips the prefix to just the id (verify against UI behavior). |
-| `apply_template` | 42 | `{ label, value: "{template_id}" }` | Attach a monitoring template. **The action used by FMN-193's Best-Practice template auto-apply.** Value is the bare numeric template id as a string. |
+| `apply_template` | 42 | `{ label, value: "{template_id}" }` | Attach a monitoring template. **The action used by FMN-193's stock template auto-apply.** Value is the bare numeric template id as a string. |
 | `alert_timeline` | 2 | `{ label, value }` | Set alert timeline. `value: "-1"` means "inherit from group"; other values are alert timeline ids. |
 | `location` | 6 | nested `{ label, options: [{ label, value, description }] }` | Set location. Grouped by region (Africa, Asia, etc. + OnSight Appliances). `value` may be negative for OnSight appliances. |
 | `add_tags` | 0 on capture tenant | `{ label, value }` expected | Add tags. |
@@ -269,7 +269,7 @@ That is the **only** application path observed in the capture. There is no separ
   1. Detect new instances (e.g. poll `/util/pending_servers` - observed in this capture as part of the SPA's heartbeat - or watch `/v2/server` for new ids).
   2. For each new instance, evaluate the matching ruleset toolkit-side (we have the predicate vocabulary in `nounOptions`).
   3. POST `applyPolicy` with `element_ids=s-{newId}&commit=on` for the matching ruleset.
-- Alternative the deferred sub-ticket should investigate: whether the **server template** attached to `defaultServerGroup` ("INCOMING SERVERS") is FortiMonitor's de facto onboarding hook. If a Best-Practice template is attached to that group, new instances may inherit it automatically without any policy involvement. This is the cleanest path if it works.
+- Alternative the deferred sub-ticket should investigate: whether the **server template** attached to `defaultServerGroup` ("INCOMING SERVERS") is FortiMonitor's de facto onboarding hook. If a stock template is attached to that group, new instances may inherit it automatically without any policy involvement. This is the cleanest path if it works.
 - For periodic re-evaluation of existing instances against a ruleset (the other half of "auto-apply"), the toolkit can schedule `applyPolicy` calls itself - the endpoint is idempotent for `apply_template` (re-attaching an already-attached template is a no-op on FortiMonitor's side).
 
 ---
@@ -332,7 +332,7 @@ const createRes = await fetch('https://fortimonitor.forticloud.com/monitoring_po
   },
   body: new URLSearchParams({
     index: '0',
-    name: 'Best-Practice FortiGate 7.4 template',
+    name: 'Stock FortiGate 7.4 template',
     description: '',
   }),
 }).then((r) => r.json());
