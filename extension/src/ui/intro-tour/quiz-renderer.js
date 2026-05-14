@@ -49,9 +49,10 @@ export function renderQuiz({ doc, state, onAnswer, onFinish } = {}) {
       const lastAnswered = current.currentIndex;
       current = answerCurrent(current, optionId);
       onAnswer?.(lastAnswered, current.answers[lastAnswered]);
-      // Brief delay so the operator sees the feedback before advancing.
-      const win = doc.defaultView || globalThis;
-      win.setTimeout(() => paint(), 900);
+      // FMN-192: do NOT auto-advance. Operator must click Next so they
+      // have time to read the explanation before moving on. The Next
+      // button is rendered inline below the explanation.
+      paintNextButton(card, current, () => paint());
     });
   }
 
@@ -118,6 +119,22 @@ function paintQuestion(card, state, pickHandler) {
     options.appendChild(btn);
     buttons.push(btn);
   }
+}
+
+function paintNextButton(card, state, onNext) {
+  const doc = card.ownerDocument;
+  const actions = doc.createElement('div');
+  actions.className = 'fmn-tour-quiz-actions';
+  const nextBtn = doc.createElement('button');
+  nextBtn.type = 'button';
+  nextBtn.className = 'fmn-tour-next';
+  // Label reflects what the next click will surface: another question
+  // (current.finished still false) or the results screen.
+  nextBtn.textContent = state.finished ? 'See results' : 'Next';
+  nextBtn.setAttribute('data-fmn-quiz-next', '');
+  nextBtn.addEventListener('click', () => onNext());
+  actions.appendChild(nextBtn);
+  card.appendChild(actions);
 }
 
 function paintResults(card, state, onDone) {
