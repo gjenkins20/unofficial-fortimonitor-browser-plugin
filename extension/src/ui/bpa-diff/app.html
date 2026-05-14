@@ -118,6 +118,34 @@
   .count-chip.modified { background: #fff4e0; color: #d97706; }
   .count-chip.modified strong { color: #d97706; }
 
+  .tab-strip {
+    display: flex; gap: 2px; border-bottom: 1px solid #dde2ea;
+    margin-bottom: 14px; padding: 0;
+  }
+  .tab-strip button.tab {
+    appearance: none; cursor: pointer; background: transparent; color: #5b6776;
+    border: none; border-bottom: 2px solid transparent;
+    padding: 8px 14px; font-size: 13px; font-weight: 500;
+    transition: color 80ms ease, border-color 80ms ease;
+  }
+  .tab-strip button.tab:hover { color: #1d2733; }
+  .tab-strip button.tab.active {
+    color: #0b6cf7; border-bottom-color: #0b6cf7;
+  }
+  .tab-strip .tab .tab-count {
+    margin-left: 8px; font-size: 11px; color: #7c8896;
+    background: #f1f4f8; border-radius: 9px; padding: 1px 7px;
+  }
+  .tab-strip .tab.active .tab-count {
+    color: #0b6cf7; background: #e6f0ff;
+  }
+  .tab-strip .tab .tab-count.nonzero {
+    color: #1d2733; background: #fff4e0;
+  }
+  .tab-strip .tab.active .tab-count.nonzero {
+    color: #d97706; background: #fff4e0;
+  }
+
   table.diff {
     width: 100%; border-collapse: collapse; font-size: 12.5px;
   }

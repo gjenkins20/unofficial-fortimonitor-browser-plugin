@@ -81,13 +81,41 @@ function buildPageHtml({ initialState }) {
         'bpa-snapshots:diff': async () => {
           if (!slots.current) return { ok: false, reason: 'no-snapshot', message: 'Take a snapshot first.' };
           if (!slots.previous) return { ok: false, reason: 'no-previous', message: 'Only one snapshot stored.', currentTakenAt: slots.current.takenAt };
+          const empty = { added: [], removed: [], modified: [] };
           return {
             ok: true,
             prevTakenAt: slots.previous.takenAt,
             currTakenAt: slots.current.takenAt,
-            servers: { added: [], removed: [], modified: [] },
+            servers: empty,
             counts: { added: 0, removed: 0, modified: 0 },
+            sections: {
+              servers: empty,
+              users: empty,
+              server_templates: empty,
+              server_groups: empty,
+            },
           };
+        },
+        // Phase 2.3: snapshot picker enumeration. Synthesizes summaries
+        // out of the test shim's two-slot model.
+        'bpa-snapshots:list': async () => {
+          const items = [];
+          const toSummary = (snap, slot) => ({
+            id: 'snap-' + slot + '-' + snap.takenAt,
+            takenAt: snap.takenAt,
+            customer: snap.customer || null,
+            durationMs: snap.durationMs || null,
+            counts: {
+              servers: snap.inventory?.servers?.length || 0,
+              users: snap.inventory?.users?.length || 0,
+              server_templates: snap.inventory?.server_templates?.length || 0,
+              server_groups: snap.inventory?.server_groups?.length || 0,
+            },
+            slot,
+          });
+          if (slots.current) items.push(toSummary(slots.current, 'current'));
+          if (slots.previous) items.push(toSummary(slots.previous, 'previous'));
+          return { ok: true, items };
         },
         'bpa-snapshots:export': async (payload) => {
           const slot = payload?.slot === 'previous' ? 'previous' : 'current';

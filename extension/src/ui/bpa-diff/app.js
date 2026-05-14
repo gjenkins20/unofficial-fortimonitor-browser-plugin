@@ -68,12 +68,53 @@ async function downloadSlot(slot) {
 }
 
 // Module state. Selections are sticky across re-renders so an Import or a
-// "Take Snapshot Now" elsewhere doesn't wipe the operator's pick.
+// "Take Snapshot Now" elsewhere doesn't wipe the operator's pick. The
+// activeTab persists too so switching pairs doesn't kick the operator
+// back to the Instances tab.
 const state = {
   items: [],
   baselineId: null,
   currentId: null,
+  activeTab: 'servers',
 };
+
+// Tab definitions for the multi-tab diff viewer (Phase 2.4). Each entry
+// declares which diff section it renders and how to pull a row label /
+// entity-id from a section's added/removed/modified row shape.
+const TABS = [
+  {
+    key: 'servers',
+    label: 'Instances',
+    entityHeader: 'Server',
+    label_of: (row) => row.current?.name || row.previous?.name || '(unnamed)',
+    detail_of: (row) => row.current?.fqdn || row.previous?.fqdn || '',
+  },
+  {
+    key: 'server_templates',
+    label: 'Templates',
+    entityHeader: 'Template',
+    label_of: (row) => row.current?.name || row.previous?.name || '(unnamed)',
+    detail_of: (row) => row.current?.template_type || row.previous?.template_type || '',
+  },
+  {
+    key: 'users',
+    label: 'Users',
+    entityHeader: 'User',
+    label_of: (row) => {
+      const u = row.current || row.previous || {};
+      const fullName = [u.first_name, u.last_name].filter(Boolean).join(' ').trim();
+      return fullName || u.username || '(unknown)';
+    },
+    detail_of: (row) => row.current?.username || row.previous?.username || '',
+  },
+  {
+    key: 'server_groups',
+    label: 'Server Groups',
+    entityHeader: 'Group',
+    label_of: (row) => row.current?.name || row.previous?.name || '(unnamed)',
+    detail_of: () => '',
+  },
+];
 
 function summaryLabel(item) {
   const ts = formatTs(item.takenAt);
@@ -215,12 +256,12 @@ function renderFieldList(fields) {
   return ul;
 }
 
-function renderDiffTable(diff) {
+function renderDiffTable(diff, tab) {
   const tbl = el('table', { class: 'diff' });
   const thead = el('thead');
   thead.appendChild(el('tr', {},
     el('th', { text: 'Change' }),
-    el('th', { text: 'Server' }),
+    el('th', { text: tab.entityHeader }),
     el('th', { text: 'ID' }),
     el('th', { text: 'Details' }),
   ));
@@ -230,23 +271,23 @@ function renderDiffTable(diff) {
   for (const r of diff.added) {
     tbody.appendChild(el('tr', {},
       el('td', {}, el('span', { class: 'change-badge added', text: 'added' })),
-      el('td', { text: r.current.name || '(unnamed)' }),
+      el('td', { text: tab.label_of(r) }),
       el('td', { text: String(r.id) }),
-      el('td', { text: r.current.fqdn || '' }),
+      el('td', { text: tab.detail_of(r) }),
     ));
   }
   for (const r of diff.removed) {
     tbody.appendChild(el('tr', {},
       el('td', {}, el('span', { class: 'change-badge removed', text: 'removed' })),
-      el('td', { text: r.previous.name || '(unnamed)' }),
+      el('td', { text: tab.label_of(r) }),
       el('td', { text: String(r.id) }),
-      el('td', { text: r.previous.fqdn || '' }),
+      el('td', { text: tab.detail_of(r) }),
     ));
   }
   for (const r of diff.modified) {
     tbody.appendChild(el('tr', {},
       el('td', {}, el('span', { class: 'change-badge modified', text: 'modified' })),
-      el('td', { text: r.current.name || r.previous.name || '(unnamed)' }),
+      el('td', { text: tab.label_of(r) }),
       el('td', { text: String(r.id) }),
       el('td', {}, renderFieldList(r.fields)),
     ));
@@ -255,11 +296,29 @@ function renderDiffTable(diff) {
   if (diff.added.length === 0 && diff.removed.length === 0 && diff.modified.length === 0) {
     tbody.appendChild(el('tr', {},
       el('td', { colSpan: 4, style: 'text-align:center;color:#7c8896;font-style:italic;padding:18px;' },
-        'No server changes between the two snapshots.'),
+        `No ${tab.label.toLowerCase()} changes between the two snapshots.`),
     ));
   }
   tbl.appendChild(tbody);
   return el('div', { class: 'panel' }, tbl);
+}
+
+function sectionTotal(diff) {
+  return (diff?.added?.length ?? 0) + (diff?.removed?.length ?? 0) + (diff?.modified?.length ?? 0);
+}
+
+function renderTabStrip(sections, onSelect) {
+  const strip = el('div', { class: 'tab-strip' });
+  for (const tab of TABS) {
+    const total = sectionTotal(sections[tab.key]);
+    const btn = el('button', { type: 'button', class: 'tab' + (tab.key === state.activeTab ? ' active' : '') },
+      tab.label,
+      el('span', { class: 'tab-count' + (total > 0 ? ' nonzero' : ''), text: String(total) }),
+    );
+    btn.addEventListener('click', () => onSelect(tab.key));
+    strip.appendChild(btn);
+  }
+  return strip;
 }
 
 function renderEmpty(message, isError = false) {
@@ -433,8 +492,23 @@ async function renderDiff() {
       content.appendChild(renderEmpty(diff?.message || 'No diff available.'));
       return;
     }
-    content.appendChild(renderCounts(diff.counts));
-    content.appendChild(renderDiffTable(diff.servers));
+    const sections = diff.sections || { servers: diff.servers };
+    // Tab strip with per-section change counts.
+    content.appendChild(renderTabStrip(sections, (key) => {
+      state.activeTab = key;
+      void renderDiff();
+    }));
+    // Active section: counts chips + diff table.
+    const activeSection = sections[state.activeTab] || sections.servers;
+    const activeTab = TABS.find((t) => t.key === state.activeTab) || TABS[0];
+    if (activeSection) {
+      content.appendChild(renderCounts({
+        added: activeSection.added.length,
+        removed: activeSection.removed.length,
+        modified: activeSection.modified.length,
+      }));
+      content.appendChild(renderDiffTable(activeSection, activeTab));
+    }
   } catch (err) {
     content.appendChild(renderEmpty(`Failed to load diff: ${err?.message || err}`, true));
   }
