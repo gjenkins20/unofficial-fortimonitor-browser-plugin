@@ -963,19 +963,15 @@ function buildSuggestionsCsv({ clusters, unclassified, targets, threshold, desti
     'device_resource_count',
     'cluster_intersection_count',
     'cluster_union_count',
-    'unique_to_this_device_count',
-    'unique_to_this_device_keys',
-    'jaccard_to_representative',
+    'similarity_to_representative',
     'port_count',
     'rationale'
   ];
   const rows = [];
   for (const [idx, c] of (clusters || []).entries()) {
     const clusterId = idx + 1;
-    const interset = new Set(c.resource_intersection || []);
     for (const ms of (c.member_signatures || [])) {
       const memberKeys = ms.resource_keys || [];
-      const unique = memberKeys.filter((k) => !interset.has(k));
       const target = targetById.get(ms.server_id);
       const name = ms.device_name ?? target?.name ?? '';
       rows.push([
@@ -993,8 +989,6 @@ function buildSuggestionsCsv({ clusters, unclassified, targets, threshold, desti
         memberKeys.length,
         (c.resource_intersection || []).length,
         (c.resource_union || []).length,
-        unique.length,
-        unique.join('; '),
         typeof ms.jaccard_to_representative === 'number' ? ms.jaccard_to_representative.toFixed(3) : '',
         Array.isArray(ms.port_keys) ? ms.port_keys.length : '',
         ms.rationale || ''
@@ -1003,25 +997,23 @@ function buildSuggestionsCsv({ clusters, unclassified, targets, threshold, desti
   }
   for (const u of (unclassified || [])) {
     rows.push([
-      '',
-      '(unclassified)',
-      u.device?.fabricSystemData?.model_name ?? '',
-      u.device?.fabricSystemData?.model_number ?? '',
-      '',
-      'no',
-      '',
-      '',
-      threshold.toFixed(2),
-      u.device?.id ?? '',
-      u.device?.name ?? '',
-      '',
-      '',
-      '',
-      '',
-      '',
-      '',
-      '',
-      `Excluded: ${u.reason}`
+      '',                                                        // cluster_id
+      '(unclassified)',                                          // proposed_template
+      u.device?.fabricSystemData?.model_name ?? '',              // make
+      u.device?.fabricSystemData?.model_number ?? '',            // model
+      '',                                                        // cluster_size
+      'no',                                                      // opted_in
+      '',                                                        // clone_from_device
+      '',                                                        // resource_strategy
+      threshold.toFixed(2),                                      // similarity_threshold
+      u.device?.id ?? '',                                        // device_id
+      u.device?.name ?? '',                                      // device_name
+      '',                                                        // device_resource_count
+      '',                                                        // cluster_intersection_count
+      '',                                                        // cluster_union_count
+      '',                                                        // similarity_to_representative
+      '',                                                        // port_count
+      `Excluded: ${u.reason}`                                    // rationale
     ]);
   }
   // Prepend a comment block summarizing the run. Comment lines start
@@ -1115,19 +1107,14 @@ function buildSuggestionsPrintableHtml({ clusters, unclassified, targets, thresh
   let body = '';
   for (const [idx, c] of (clusters || []).entries()) {
     const clusterId = idx + 1;
-    const interset = new Set(c.resource_intersection || []);
     const memberRows = (c.member_signatures || []).map((ms) => {
       const memberKeys = ms.resource_keys || [];
-      const unique = memberKeys.filter((k) => !interset.has(k));
       const target = targetById.get(ms.server_id);
       const name = ms.device_name ?? target?.name ?? '';
       return `<tr>
         <td>${esc(ms.server_id)}</td>
         <td class="devices">${esc(name)}</td>
         <td>${memberKeys.length}</td>
-        <td>${unique.length}</td>
-        <td>${unique.length ? esc(unique.join(', ')) : '-'}</td>
-        <td>${typeof ms.jaccard_to_representative === 'number' ? ms.jaccard_to_representative.toFixed(3) : '-'}</td>
         <td>${Array.isArray(ms.port_keys) ? ms.port_keys.length : '-'}</td>
         <td class="rationale">${esc(ms.rationale || '')}</td>
       </tr>`;
@@ -1148,9 +1135,6 @@ function buildSuggestionsPrintableHtml({ clusters, unclassified, targets, thresh
       <th>Device ID</th>
       <th>Device name</th>
       <th>Resource count</th>
-      <th>Unique to this device</th>
-      <th>Unique resource keys</th>
-      <th>Jaccard to representative</th>
       <th>Port count</th>
       <th>Rationale</th>
     </tr></thead>

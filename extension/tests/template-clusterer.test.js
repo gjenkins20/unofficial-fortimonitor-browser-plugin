@@ -445,7 +445,7 @@ test('jaccard mode: subsequent members carry the computed score + threshold rati
   assert.match(c.member_signatures[0].rationale, /Seeded cluster/);
   const joinedJaccard = c.member_signatures[1].jaccard_to_representative;
   assert.ok(joinedJaccard >= 0.8 && joinedJaccard < 1.0, `expected 0.8 <= jaccard < 1.0, got ${joinedJaccard}`);
-  assert.match(c.member_signatures[1].rationale, /Joined cluster.*Jaccard.*threshold 0\.80/);
+  assert.match(c.member_signatures[1].rationale, /Joined cluster.*similarity.*threshold 0\.80/);
 });
 
 test('member snapshot carries device_name when device.name is set', () => {

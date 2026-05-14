@@ -302,11 +302,11 @@ function clusterJaccard(sigs, threshold, resourceStrategy) {
       isSeed = true;
       memberJaccard = 1.0;
       memberRationale = bucket.length === 1 && sig.resKeysSet.size === 0
-        ? `Seeded cluster (no current monitoring config; cannot Jaccard-merge with non-empty clusters at threshold ${threshold.toFixed(2)})`
-        : `Seeded cluster (no existing cluster met Jaccard threshold ${threshold.toFixed(2)} for same Make+Model)`;
+        ? `Seeded cluster (no current monitoring config; cannot similarity-merge with non-empty clusters at threshold ${threshold.toFixed(2)})`
+        : `Seeded cluster (no existing cluster met similarity threshold ${threshold.toFixed(2)} for same Make+Model)`;
     } else {
       memberJaccard = bestScore;
-      memberRationale = `Joined cluster: Jaccard ${bestScore.toFixed(2)} with representative resource set ≥ threshold ${threshold.toFixed(2)} (same Make+Model)`;
+      memberRationale = `Joined cluster: ${bestScore.toFixed(2)} similarity to representative resource set ≥ threshold ${threshold.toFixed(2)} (same Make+Model)`;
     }
     addMember(target, device, sig, { jaccard: memberJaccard, rationale: memberRationale });
     void isSeed;
