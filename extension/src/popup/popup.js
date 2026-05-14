@@ -354,6 +354,37 @@ async function loadSnapshotDiffIntoToggle() {
   toggle.checked = await isSnapshotDiffEnabled();
 }
 
+function setSnapshotInlineStatus(elId, text, kind = '') {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  el.textContent = text;
+  el.className = 'settings-inline-status' + (kind ? ' ' + kind : '');
+}
+
+async function applySnapshotDiffControlsVisibility() {
+  const on = await isSnapshotDiffEnabled();
+  for (const el of document.querySelectorAll('[data-snapshot-diff-controls]')) {
+    el.hidden = !on;
+  }
+}
+
+// Phase 2.5: pull the current rotation cap from the SW into the input.
+// Silently no-ops if the SW is unreachable (e.g., service worker idled),
+// since the input is hidden when the feature is off anyway.
+async function loadSnapshotRotationIntoInput() {
+  const input = document.getElementById('snapshot-rotation-input');
+  if (!input) return;
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: 'bpa-snapshots:get-config',
+      payload: {},
+    });
+    if (response?.ok && response.result?.ok && Number.isFinite(response.result.maxSnapshots)) {
+      input.value = String(response.result.maxSnapshots);
+    }
+  } catch { /* feature toggle is off or SW unavailable */ }
+}
+
 async function loadNoiseAnalyzerIntoToggle() {
   const toggle = document.getElementById('noise-analyzer-toggle');
   if (!toggle) return;
@@ -1191,6 +1222,8 @@ function init() {
     await loadIntroTourState();
     await loadOmniSearchIntoToggle();
     await loadSnapshotDiffIntoToggle();
+    await applySnapshotDiffControlsVisibility();
+    await loadSnapshotRotationIntoInput();
     await loadUpdateCheckIntoToggle();
     await loadNoiseAnalyzerIntoToggle();
     await loadWebguiColumnsIntoSettings();
@@ -1219,7 +1252,75 @@ function init() {
 
   document.getElementById('snapshot-diff-toggle').addEventListener('change', async (e) => {
     await setSnapshotDiffEnabled(e.target.checked);
+    // Phase 2.5: reveal/hide the rotation + clear-all controls when the
+    // parent feature flag flips. Refresh the rotation input value when
+    // revealing so it reflects current SW state.
+    await applySnapshotDiffControlsVisibility();
+    if (e.target.checked) await loadSnapshotRotationIntoInput();
   });
+
+  // Phase 2.5: rotation input wiring. Persists on change/blur; the SW
+  // clamps to [2, 50] so we don't redo client-side validation here.
+  const rotationInput = document.getElementById('snapshot-rotation-input');
+  if (rotationInput) {
+    rotationInput.addEventListener('change', async (e) => {
+      const raw = Number(e.target.value);
+      if (!Number.isFinite(raw)) {
+        setSnapshotInlineStatus('snapshot-rotation-status', 'Enter a number.', 'err');
+        return;
+      }
+      setSnapshotInlineStatus('snapshot-rotation-status', 'Saving...', '');
+      try {
+        const response = await chrome.runtime.sendMessage({
+          type: 'bpa-snapshots:set-max',
+          payload: { maxSnapshots: raw },
+        });
+        if (response?.ok && response.result?.ok) {
+          const applied = response.result.maxSnapshots;
+          if (applied !== raw) {
+            e.target.value = String(applied);
+            setSnapshotInlineStatus('snapshot-rotation-status', `Clamped to ${applied}.`, 'ok');
+          } else {
+            setSnapshotInlineStatus('snapshot-rotation-status', 'Saved.', 'ok');
+          }
+        } else {
+          const msg = response?.result?.message || response?.error || 'Save failed.';
+          setSnapshotInlineStatus('snapshot-rotation-status', msg, 'err');
+        }
+      } catch (err) {
+        setSnapshotInlineStatus('snapshot-rotation-status', `Save failed: ${err?.message || err}`, 'err');
+      }
+    });
+  }
+
+  // Phase 2.5: "Clear all snapshots" wiring. Uses a native confirm()
+  // rather than a custom modal because the popup chrome is tight and a
+  // modal would risk clipping inside the popup-mode viewport.
+  const clearBtn = document.getElementById('snapshot-clear-all');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', async () => {
+      if (!window.confirm('Wipe every stored snapshot on this Chrome profile? This cannot be undone.')) {
+        return;
+      }
+      clearBtn.disabled = true;
+      setSnapshotInlineStatus('snapshot-clear-status', 'Clearing...', '');
+      try {
+        const response = await chrome.runtime.sendMessage({
+          type: 'bpa-snapshots:clear-all',
+          payload: {},
+        });
+        if (response?.ok && response.result?.ok) {
+          setSnapshotInlineStatus('snapshot-clear-status', 'All snapshots cleared.', 'ok');
+        } else {
+          setSnapshotInlineStatus('snapshot-clear-status', response?.error || 'Clear failed.', 'err');
+        }
+      } catch (err) {
+        setSnapshotInlineStatus('snapshot-clear-status', `Clear failed: ${err?.message || err}`, 'err');
+      } finally {
+        clearBtn.disabled = false;
+      }
+    });
+  }
 
   // FMN-157: update-check toggle. Persists the flag; we don't try to
   // re-render the banner here since the operator is in Settings -

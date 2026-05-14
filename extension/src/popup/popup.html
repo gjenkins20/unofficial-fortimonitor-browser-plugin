@@ -571,6 +571,25 @@
         <input id="snapshot-diff-toggle" type="checkbox">
         <span>Show Snapshot &amp; Diff tile on Canned Reports</span>
       </label>
+
+      <div class="settings-subsection" data-snapshot-diff-controls hidden>
+        <label class="settings-sublabel" for="snapshot-rotation-input">Snapshots retained</label>
+        <p class="settings-help">
+          How many snapshots to keep on this Chrome profile. Older snapshots are pruned when a new one lands. Range 2-50; defaults to 10.
+        </p>
+        <div class="snapshot-rotation-row">
+          <input id="snapshot-rotation-input" type="number" min="2" max="50" step="1">
+          <span id="snapshot-rotation-status" class="settings-inline-status"></span>
+        </div>
+
+        <p class="settings-help" style="margin-top:14px;">
+          Wipe every stored snapshot. Cannot be undone; the next snapshot you take becomes the new baseline.
+        </p>
+        <div class="snapshot-clear-row">
+          <button id="snapshot-clear-all" type="button" class="btn">Clear all snapshots</button>
+          <span id="snapshot-clear-status" class="settings-inline-status"></span>
+        </div>
+      </div>
     </div>
 
 <div class="settings-section">
