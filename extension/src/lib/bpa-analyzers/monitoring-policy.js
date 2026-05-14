@@ -53,7 +53,7 @@ function detectNamingPatterns(servers) {
       pattern: `*${pattern}*`,
       match_count: count,
       examples: matching.slice(0, 3).join(', '),
-      suggestion: `Servers matching '*${pattern}*' could be auto-assigned to a group/template.`
+      observation: `${count} server names contain the token '${pattern}'.`
     });
   }
   return results;
@@ -76,7 +76,7 @@ function analyzeGroupTemplates(groupDetails, _templates) {
       member_count: memberCount,
       has_template: hasTemplate,
       template: templateLabel,
-      recommendation: hasTemplate ? '' : 'Assign a monitoring template for consistent monitoring.'
+      observation: hasTemplate ? '' : 'No monitoring template assigned to this group.'
     });
   }
   return results;
@@ -109,10 +109,10 @@ function suggestAutomationRules(servers, groupDetails) {
     const preview = ungroupedNames.slice(0, AFFECTED_PREVIEW_LIMIT).join(', ');
     const more = ungroupedNames.length > AFFECTED_PREVIEW_LIMIT ? '...' : '';
     rules.push({
-      rule: 'Auto-assign ungrouped servers',
+      rule: 'Ungrouped servers',
       description: `${ungroupedNames.length} server(s) are not in any group.`,
       affected: preview + more,
-      recommendation: 'Create a Monitoring Policy Workflow rule to auto-assign new servers to groups based on naming or tags.'
+      observation: `No automation rule currently assigns these ${ungroupedNames.length} server(s) to a group.`
     });
   }
 
@@ -125,10 +125,10 @@ function suggestAutomationRules(servers, groupDetails) {
   }
   if (noTemplateGroups.length > 0) {
     rules.push({
-      rule: 'Auto-apply templates to groups',
+      rule: 'Groups without a template',
       description: `${noTemplateGroups.length} group(s) have no monitoring template.`,
       affected: noTemplateGroups.slice(0, AFFECTED_PREVIEW_LIMIT).join(', '),
-      recommendation: 'Create workflow rules to auto-apply the correct template when servers join these groups.'
+      observation: `No automation rule currently applies a template to these ${noTemplateGroups.length} group(s).`
     });
   }
 
@@ -148,10 +148,10 @@ function suggestAutomationRules(servers, groupDetails) {
   for (const [domain, count] of topDomains) {
     if (count < FQDN_MIN_OCCURRENCES) continue;
     rules.push({
-      rule: `Auto-group by domain '${domain}'`,
+      rule: `Shared FQDN domain '${domain}'`,
       description: `${count} servers share the domain '${domain}'.`,
       affected: `${count} servers`,
-      recommendation: `Create a workflow rule: FQDN matches '*.${domain}' -> assign to appropriate group.`
+      observation: `${count} servers share '${domain}' but no automation rule groups by FQDN.`
     });
   }
 

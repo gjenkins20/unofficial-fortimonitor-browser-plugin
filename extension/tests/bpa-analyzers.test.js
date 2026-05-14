@@ -195,7 +195,9 @@ test('analyzeIncidents: noisy_metrics flags servers with frequent short-lived ou
   const flappy = r.noisy_metrics.find((n) => n.server === 'flappy');
   assert.ok(flappy, 'flappy should be flagged');
   assert.equal(flappy.short_lived, 2);
-  assert.match(flappy.recommendation, /flapping/);
+  // FMN-218: row carries a neutral observation; phrasing references the
+  // short-lived outage count rather than a directive to "tune thresholds".
+  assert.match(flappy.observation, /short-lived/);
   assert.equal(r.noisy_metrics.find((n) => n.server === 'stable'), undefined);
 });
 
@@ -444,12 +446,11 @@ test('analyzeInstances: valueless_metrics flags resources without thresholds', (
   const r = analyzeInstances(inv);
   const metrics = r.valueless_metrics.map((f) => f.metric).sort();
   assert.deepEqual(metrics, ['Disk', 'Memory']);
-  // Recommendation now points at the FortiMonitor InstanceDetails URL +
-  // Monitoring Config tab so the operator has a copy-pasteable workflow
-  // (FMN-135 follow-up #3, 2026-05-02).
+  // FMN-218: observation is a neutral restatement that the metric is
+  // collected without alerting. The earlier directive-flavored guidance
+  // ("open InstanceDetails... edit thresholds...") was removed.
   for (const f of r.valueless_metrics) {
-    assert.match(f.recommendation, /Monitoring Config/);
-    assert.match(f.recommendation, /InstanceDetails\?server_id=1/);
+    assert.match(f.observation, /no alerting threshold/);
   }
 });
 
@@ -603,13 +604,14 @@ test('analyzeTemplates: default templates are exempt from default_only / cleanup
   // Defaults appear in the dedicated section, sorted by name.
   const defaults = r.default_templates.map((t) => t.template);
   assert.deepEqual(defaults, ['Stock Linux', 'Stock Windows']);
-  // Recommendation steers toward custom templates.
+  // FMN-218: each stock default row carries a neutral observation about
+  // the template's metric/alert state. No directive toward custom builds.
   for (const d of r.default_templates) {
-    assert.match(d.recommendation, /custom template/i);
+    assert.match(d.observation, /stock template/i);
   }
 });
 
-test('analyzeTemplates: default templates with alerts get a different recommendation tone', () => {
+test('analyzeTemplates: default templates with alerts produce a partial-coverage observation', () => {
   const r = analyzeTemplates({
     server_templates: [
       { id: 1, name: 'Stock Tuned', server_group: 'https://api2.panopta.com/v2/server_group/100' }
@@ -622,9 +624,9 @@ test('analyzeTemplates: default templates with alerts get a different recommenda
     }
   });
   assert.equal(r.default_templates.length, 1);
-  // Should mention the partial coverage and recommend custom-template
-  // approach rather than continuing to edit the stock one.
-  assert.match(r.default_templates[0].recommendation, /3 of 4|custom template/i);
+  // FMN-218: observation cites the alert / metric count and stops short
+  // of advising the operator to build a custom template.
+  assert.match(r.default_templates[0].observation, /3 of 4/);
 });
 
 test('analyzeTemplates: overlapping_templates flags Jaccard >= 0.6 (FMN-135)', () => {
@@ -691,11 +693,12 @@ test('analyzeMonitoringPolicy: group_template_mapping flags groups without templ
   });
   const dev = r.group_template_mapping.find((g) => g.group === 'Dev');
   assert.equal(dev.has_template, false);
-  assert.match(dev.recommendation, /Assign a monitoring template/);
+  // FMN-218: neutral observation - no directive verbiage.
+  assert.match(dev.observation, /No monitoring template assigned/);
   assert.equal(dev.member_count, 1);
 });
 
-test('analyzeMonitoringPolicy: automation_rules suggests rules for ungrouped servers, untemplated groups, shared FQDN domains', () => {
+test('analyzeMonitoringPolicy: automation_rules surfaces gaps for ungrouped servers, untemplated groups, shared FQDN domains', () => {
   const r = analyzeMonitoringPolicy({
     servers: [
       { id: 1, name: 'a', fqdn: 'a.example.com' },
@@ -707,13 +710,16 @@ test('analyzeMonitoringPolicy: automation_rules suggests rules for ungrouped ser
       '1': {
         name: 'Prod',
         server_list: [{ id: 1 }, { id: 2 }, { id: 3 }]
-        // no server_template -> Rule 2 fires
+        // no server_template -> rule 2 fires
       }
     }
   });
+  // FMN-218: each row carries a neutral observation about the gap. Row
+  // labels (the `rule` field) now describe the pattern rather than the
+  // imperative ("Ungrouped servers" instead of "Auto-assign ungrouped").
   const rules = r.automation_rules.map((rr) => rr.rule);
-  assert.ok(rules.some((s) => /Auto-assign ungrouped/.test(s)));
-  assert.ok(rules.some((s) => /Auto-apply templates/.test(s)));
+  assert.ok(rules.some((s) => /Ungrouped servers/.test(s)));
+  assert.ok(rules.some((s) => /Groups without a template/.test(s)));
   assert.ok(rules.some((s) => /example\.com/.test(s)));
 });
 

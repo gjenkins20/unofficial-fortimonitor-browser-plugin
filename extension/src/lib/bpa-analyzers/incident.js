@@ -171,9 +171,9 @@ function noisyMetrics(outages) {
         server,
         total_incidents: outs.length,
         short_lived: shortLived,
-        recommendation: shortLived >= 2
-          ? 'Adjust thresholds or enable flapping detection'
-          : 'High incident volume - review monitoring config'
+        observation: shortLived >= 2
+          ? `${shortLived} of ${outs.length} resolved outages on this server were short-lived (under 30 min).`
+          : `${outs.length} resolved outages on this server, none short-lived.`
       });
     }
   }

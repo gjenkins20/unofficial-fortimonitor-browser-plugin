@@ -6,12 +6,12 @@ import { getTabs, getVisibleTabs, buildTabCsv, csvEscape, tabFilename, buildComb
 // Tab definitions sanity
 // =============================================================================
 
-test('getVisibleTabs(["all"]) returns all 11 tabs (FMN-149)', () => {
-  assert.equal(getVisibleTabs(['all']).length, 11);
+test('getVisibleTabs(["all"]) returns all 10 tabs (FMN-149, FMN-218)', () => {
+  assert.equal(getVisibleTabs(['all']).length, 10);
 });
 
-test('getVisibleTabs(undefined) returns all 11 tabs (FMN-149)', () => {
-  assert.equal(getVisibleTabs(undefined).length, 11);
+test('getVisibleTabs(undefined) returns all 10 tabs (FMN-149, FMN-218)', () => {
+  assert.equal(getVisibleTabs(undefined).length, 10);
 });
 
 test('getVisibleTabs(["user-activity"]) returns only User Activity + Raw Counts (FMN-149)', () => {
@@ -31,7 +31,7 @@ test('getVisibleTabs(["template-recommendations","monitoring-policy"]) returns b
 
 test('getVisibleTabs hides cross-cutting tabs in non-all mode (FMN-149)', () => {
   const ids = getVisibleTabs(['user-activity']).map((t) => t.id);
-  for (const crossCutting of ['executive-summary', 'feature-utilization', 'recommendations', 'recommended-labs']) {
+  for (const crossCutting of ['executive-summary', 'feature-utilization', 'recommended-labs']) {
     assert.equal(ids.includes(crossCutting), false, `${crossCutting} must be hidden in non-all mode`);
   }
 });
@@ -44,11 +44,13 @@ test('buildCombinedZipEntries: sections=["user-activity"] produces only the 1 ac
   assert.deepEqual(filenames, ['README.txt', 'raw-counts.csv', 'user-activity.csv']);
 });
 
-test('getTabs: returns the 11 tabs FMN-133 spec calls for, in order', () => {
-  // FMN-156 rework: noise analysis folded into Incident Summary; no
-  // standalone 12th tab.
+test('getTabs: returns the 10 tabs FMN-218 spec calls for, in order', () => {
+  // FMN-156 rework: noise analysis folded into Incident Summary.
+  // FMN-218 rework: 'recommendations' tab removed when the BPA shifted
+  // to observation-only output; the prior tab #10 (Recommended Labs,
+  // now relabelled Quick Labs) is tab #9.
   const tabs = getTabs();
-  assert.equal(tabs.length, 11);
+  assert.equal(tabs.length, 10);
   const ids = tabs.map((t) => t.id);
   assert.deepEqual(ids, [
     'executive-summary',
@@ -59,7 +61,6 @@ test('getTabs: returns the 11 tabs FMN-133 spec calls for, in order', () => {
     'instance-analysis',
     'template-recommendations',
     'monitoring-policy',
-    'recommendations',
     'recommended-labs',
     'raw-counts'
   ]);
@@ -155,7 +156,7 @@ test('Template Recommendations: template-name columns carry a cellRenderer for H
   }
 });
 
-test('buildTabCsv: template ID column flows into CSV output (FMN-147)', () => {
+test('buildTabCsv: template ID column flows into CSV output (FMN-147, FMN-218)', () => {
   const tab = getTabs().find((t) => t.id === 'template-recommendations');
   const ctx = {
     inventory: {},
@@ -163,14 +164,14 @@ test('buildTabCsv: template ID column flows into CSV output (FMN-147)', () => {
       templates: {
         available: true,
         default_only_templates: [
-          { id: '99', template: 'Custom-Linux', resource_count: 4, recommendation: 'Add thresholds.' }
+          { id: '99', template: 'Custom-Linux', resource_count: 4, observation: 'Custom template carries 4 metric definitions and no alerting thresholds.' }
         ],
         manual_threshold_candidates: [],
         cleanup_candidates: [],
         overlapping_templates: [
           { id_1: '1', id_2: '2', template_1: 'A', template_2: 'B',
             overlap_pct: '75%', shared_metrics: 3,
-            recommendation: 'Consider merging - 3/4 metrics overlap.' }
+            observation: '3 of 4 metric names overlap between these two templates.' }
         ],
         default_templates: []
       }
@@ -180,11 +181,11 @@ test('buildTabCsv: template ID column flows into CSV output (FMN-147)', () => {
   };
   const csv = buildTabCsv(tab, ctx);
   // Without-Thresholds section: ID column header + value present.
-  assert.match(csv, /"ID","Template","Metric Count","Recommendation"/);
-  assert.match(csv, /^"99","Custom-Linux","4","Add thresholds\."$/m);
+  assert.match(csv, /"ID","Template","Metric Count","Observation"/);
+  assert.match(csv, /^"99","Custom-Linux","4","Custom template carries 4 metric definitions and no alerting thresholds\."$/m);
   // Overlap section: both ID headers + values aligned with their templates.
-  assert.match(csv, /"ID 1","Template 1","ID 2","Template 2","Overlap %","Shared","Recommendation"/);
-  assert.match(csv, /^"1","A","2","B","75%","3","Consider merging - 3\/4 metrics overlap\."$/m);
+  assert.match(csv, /"ID 1","Template 1","ID 2","Template 2","Overlap %","Shared","Observation"/);
+  assert.match(csv, /^"1","A","2","B","75%","3","3 of 4 metric names overlap between these two templates\."$/m);
 });
 
 // =============================================================================
@@ -292,16 +293,14 @@ test('combinedZipFilename: blank customer falls back to generic prefix', () => {
   assert.match(combinedZipFilename(''), /^best-practice-assessment_best-practice-assessment_\d{8}\.zip$/);
 });
 
-test('buildCombinedZipEntries: emits one CSV per visible tab + a README (flag-off default = 12 entries)', () => {
+test('buildCombinedZipEntries: emits one CSV per visible tab + a README (FMN-218: 10 tabs + 1 README)', () => {
   const ctx = {
     inventory: { servers: [{ id: 1, status: 'active' }] },
     analysis: { incidents: { active_details: [], top_by_instance: [], top_by_type: [], noisy_metrics: [], trending: {} }, users: { details: [] } },
     customer: 'Acme'
   };
   const entries = buildCombinedZipEntries(ctx, { generatedAt: '2026-05-01T00:00:00Z', customer: 'Acme' });
-  // Default flags (noiseAnalyzerEnabled off): noise-analysis tab is filtered
-  // out of buildCombinedZipEntries' visible-tab set, so entries are
-  // 11 native tabs + 1 README = 12. The post-FMN-156 contract is now
+  // FMN-218: 10 native tabs + 1 README = 11. The post-FMN-218 contract is
   // "visible tabs + README", not "all tabs + README".
   const visible = getVisibleTabs(['all']);
   assert.equal(entries.length, visible.length + 1, 'expected (visible tabs) + 1 README');
@@ -324,13 +323,7 @@ test('buildCombinedZipEntries: README lists every visible tab with its label', (
   }
 });
 
-test('buildTabCsv: Recommendations tab serializes priority + text rows', () => {
-  const tab = getTabs().find((t) => t.id === 'recommendations');
-  const csv = buildTabCsv(tab, {
-    inventory: { contact_groups: [], compound_services: [] },
-    analysis: {},
-    customer: 'Acme'
-  });
-  assert.match(csv, /"Priority","Recommendation"/);
-  assert.match(csv, /^"CRITICAL","Create Contact Groups: No groups exist to route alerts to teams\."$/m);
-});
+// FMN-218: the prior "Recommendations" tab was removed when the BPA
+// shifted to observation-only output. Each analyzer's per-row findings
+// already carry an "Observation" column; there is no synthesized
+// recommendations tab above them.

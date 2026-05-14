@@ -18,9 +18,9 @@
 // "Default Monitoring Templates" on every tenant. The operator wants
 // these exempted from the default-only / cleanup / overlap analyses
 // because they're stock and not subject to the same scrutiny - those
-// findings should target customer-built templates only. Stock templates
-// still get listed in their own section with a soft recommendation to
-// either set thresholds or, preferably, build a custom template.
+// findings target customer-built templates only. Stock templates still
+// get listed in their own informational section that reports their
+// metric / alert counts without prescriptive copy.
 //
 // findManualThresholdPatterns is unchanged - it still reads
 // `inventory.server_resource_details` (deep mode only). That covers
@@ -63,7 +63,7 @@ export function analyzeTemplates(inventory = {}) {
     // mode populated server_resource_details.
     return {
       available: false,
-      note: 'No template monitoring configs available. The frontend fetcher must be enabled to surface template recommendations.',
+      note: 'No template monitoring configs available. The frontend fetcher must be enabled to populate template metric data.',
       manual_threshold_candidates: findManualThresholdPatterns(inventory)
     };
   }
@@ -114,9 +114,8 @@ function isDefaultTemplate(template, groupDetails) {
 
 /**
  * Inform-don't-scrutinize listing of FortiMonitor's stock default
- * templates. Tells the operator which defaults exist and whether they
- * carry alerts; recommendation steers them toward building custom
- * templates rather than editing the stock ones.
+ * templates. Surfaces which stock templates exist on the tenant and
+ * how many of their metrics carry alerting thresholds.
  */
 function buildDefaultTemplatesOverview(monitoringConfigs, nameById, defaultTids) {
   const results = [];
@@ -125,20 +124,20 @@ function buildDefaultTemplatesOverview(monitoringConfigs, nameById, defaultTids)
     if (!cfg) continue;
     const total = cfg.total_metrics ?? 0;
     const alerts = cfg.alerts_count ?? 0;
-    let recommendation;
+    let observation;
     if (total === 0) {
-      recommendation = 'Stock template has no metrics defined. No action required - this template provides metadata only.';
+      observation = 'Stock template carries no metric definitions (metadata only).';
     } else if (alerts === 0) {
-      recommendation = 'Stock template ships without thresholds. Best practice: build a custom template with thresholds tuned to your environment, rather than editing the stock default. If you do not have time to build a custom template, set thresholds on this one for proper alerting.';
+      observation = `Stock template carries ${total} metric definitions and no alerting thresholds.`;
     } else {
-      recommendation = `${alerts} of ${total} metrics carry thresholds. Best practice: keep stock templates as-is and create custom templates for tenant-specific tuning.`;
+      observation = `${alerts} of ${total} metrics on this stock template carry thresholds.`;
     }
     results.push({
       template: nameById.get(tid) || `Template #${tid}`,
       id: tid,
       metric_count: total,
       alerts_count: alerts,
-      recommendation
+      observation
     });
   }
   // Stable order: name asc.
@@ -179,7 +178,7 @@ function findDefaultOnlyTemplates(monitoringConfigs, nameById) {
         id: tid,
         resource_count: total,
         network_service_count: 0,
-        recommendation: 'Template has metrics but no alerting thresholds. Add thresholds so it produces actionable alerts when applied.'
+        observation: `Custom template carries ${total} metric definitions and no alerting thresholds.`
       });
     }
   }
@@ -208,7 +207,7 @@ function findCleanupCandidates(monitoringConfigs, nameById) {
       unchanged_metrics: unalerted,
       total_metrics: total,
       examples: examples.join(', '),
-      recommendation: 'Most metrics on this template have no thresholds. Either add thresholds or remove the unalerted metrics to reduce noise.'
+      observation: `${unalerted} of ${total} metrics on this template have no alerting threshold.`
     });
   }
   return results;
@@ -249,7 +248,7 @@ function findOverlapping(monitoringConfigs, nameById) {
           template_2: nameById.get(t2) || `Template #${t2}`,
           overlap_pct: `${Math.round((overlap / union) * 100)}%`,
           shared_metrics: overlap,
-          recommendation: `Consider merging - ${overlap}/${union} metrics overlap.`
+          observation: `${overlap} of ${union} metric names overlap between these two templates.`
         });
       }
     }
@@ -310,7 +309,7 @@ function findManualThresholdPatterns(inventory) {
       critical_threshold: p.crit,
       server_count: p.count,
       example_servers: p.servers.slice(0, 5).join(', '),
-      recommendation: `Create a template with ${p.type} thresholds (warn=${p.warn}, crit=${p.crit}) - used on ${p.count} servers.`
+      observation: `${p.count} servers share identical manual thresholds for ${p.type} (warn=${p.warn}, crit=${p.crit}).`
     });
   }
   return results;

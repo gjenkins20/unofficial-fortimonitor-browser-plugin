@@ -51,9 +51,9 @@ export function render({ container, store, navigate }) {
     reportBreadcrumbs('start'),
     h('h2', {}, 'FortiMonitor Best-Practice Assessment'),
     h('p', {},
-      'Assesses the instance against five best-practice analyzers ',
+      'Surveys the instance across five analyzer dimensions ',
       '(incidents, users, instances, templates, monitoring policy workflow) and ',
-      'presents the findings in an 11-tab in-browser viewer. Download a single ',
+      'presents the findings as observations in a 10-tab in-browser viewer. Download a single ',
       'combined report or per-tab CSVs to hand-curate before delivery.'
     ),
     h('p', { class: 'muted' },
@@ -101,7 +101,7 @@ export function render({ container, store, navigate }) {
   body.appendChild(h('p', { class: 'muted', style: 'font-size:0.85rem;margin:0 0 0.4rem;' },
     'Default is the full report. Click a single section to scope the run; ',
     'shift-click to combine sections. Cross-cutting sections (Executive Summary, ',
-    'Feature Utilization, Recommendations, Recommended Labs, Raw Counts) require ',
+    'Feature Utilization, Quick Labs, Raw Counts) require ',
     'a full run and are not standalone-deliverable.'
   ));
   let selectedSections = sanitizeSections(store.sections ?? defaultSelection());

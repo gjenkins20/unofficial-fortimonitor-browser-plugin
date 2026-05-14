@@ -6,8 +6,6 @@
 
 import { counter, rowName, extractTrailingId } from './_helpers.js';
 
-const FORTIMONITOR_INSTANCE_URL = 'https://fortimonitor.forticloud.com/report/InstanceDetails?server_id=';
-
 const COMMON_THRESHOLD_PCT = 0.7;        // resource type must appear in >=70% of peers
 const MISSING_FINDING_LIMIT = 50;
 const VALUELESS_TOP_SERVERS = 20;
@@ -125,7 +123,7 @@ function findMissingSettings(inventory, typeMap) {
           server_name: snameLabel,
           missing: mr,
           type: 'Resource',
-          recommendation: `Add '${mr}' monitoring to match peers in the same template group.`
+          observation: `'${mr}' is collected on at least 70% of peers in the same template group; this server does not collect it.`
         });
       }
       for (const mt of missingThresh) {
@@ -135,7 +133,7 @@ function findMissingSettings(inventory, typeMap) {
           server_name: snameLabel,
           missing: `${mt} (threshold)`,
           type: 'Threshold',
-          recommendation: `Configure thresholds for '${mt}' to match peers.`
+          observation: `Peers in the same template group have thresholds set for '${mt}'; this server does not.`
         });
       }
     }
@@ -185,10 +183,7 @@ function findValuelessMetrics(inventory, typeMap) {
           server_id: sidLabel,
           server_name: snameLabel,
           metric: typeName,
-          recommendation:
-            `No thresholds set. In FortiMonitor, open ${FORTIMONITOR_INSTANCE_URL}${sid} `
-            + `→ Monitoring Config tab → find "${typeName}" → Edit and set warning/critical `
-            + `thresholds, or Delete the metric if it is not valuable here.`
+          observation: `Metric collected on this server with no alerting threshold; produces no incidents.`
         });
       }
     }

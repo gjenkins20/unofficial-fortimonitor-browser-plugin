@@ -1,6 +1,6 @@
 // Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // BPA Audit - top-level UI controller (FMN-133).
-// 4-step flow: /start (configure) -> /collect (crawl) -> /analyze (run analyzers) -> /review (11-tab viewer + CSV).
+// 4-step flow: /start (configure) -> /collect (crawl) -> /analyze (run analyzers) -> /review (10-tab viewer + CSV).
 
 import * as start from './steps/start.js';
 import * as collect from './steps/collect.js';

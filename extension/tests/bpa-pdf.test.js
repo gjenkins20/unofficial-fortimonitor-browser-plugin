@@ -86,8 +86,7 @@ test('buildPrintableHtml: User Activity Last Login renders N/A when missing (FMN
 });
 
 test('buildPrintableHtml: empty section without alwaysIncludeHeader still renders its emptyText hint', () => {
-  // The Recommendations tab always has rows from buildRecommendations,
-  // but the Incidents tab's "Active Incidents" goes empty when
+  // The Incidents tab's "Active Incidents" goes empty when
   // analysis.incidents.active_details is []. Verify the empty-text hint
   // appears (so the PDF reader knows the section was checked).
   const html = buildPrintableHtml(fixtureCtx(), { customer: 'Acme' });

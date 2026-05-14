@@ -34,7 +34,7 @@ export function render({ container, store, navigate }) {
     h('h2', {}, 'Analysis ready'),
     h('p', { class: 'muted' },
       'The five analyzers (Incidents, Users, Instances, Templates, Monitoring Policy) ',
-      'completed in-process. Continue to the 11-tab viewer to review and export.'
+      'completed in-process. Continue to the 10-tab viewer to review and export.'
     )
   ));
 

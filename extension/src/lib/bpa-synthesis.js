@@ -5,16 +5,19 @@
 // from the BpaInventory and the BpaAnalysis. Ports of:
 //   - _write_executive_summary  -> buildExecutiveSummary
 //   - _write_feature_utilization -> buildFeatureUtilization
-//   - _build_recommendations    -> buildRecommendations
 //   - _build_labs               -> buildLabs
 //   - _write_raw_counts         -> buildRawCounts
 //
 // These live alongside the analyzers (bpa-analyzers/) but are file-level
 // utilities the viewer renders, not reusable analyzers in their own
 // right.
+//
+// FMN-218 (2026-05-14): the prioritized-recommendations builder
+// (`buildRecommendations`) was removed when the operator-visible
+// "Recommendations" tab came out. Per-row analyzer findings now ship as
+// neutral observations; there is no synthesized opinion layer.
 
 /**
- * @typedef {{ priority: 'CRITICAL'|'HIGH'|'MEDIUM', text: string }} Recommendation
  * @typedef {{ title: string, time: string, feature: string, steps: string }} Lab
  * @typedef {{ key: string, value: string|number }} KvRow
  * @typedef {{ feature: string, count: string, assessment: string }} FeatureRow
@@ -155,72 +158,7 @@ export function buildFeatureUtilization(inventory = {}) {
 }
 
 /**
- * Prioritized recommendations. Ports the Python _build_recommendations.
- *
- * @param {object} inventory
- * @param {object} analysis
- * @returns {Recommendation[]}
- */
-export function buildRecommendations(inventory = {}, analysis = {}) {
-  const recs = [];
-  const contactGroups = arr(inventory.contact_groups);
-  const compound = arr(inventory.compound_services);
-  const dem = arr(inventory.dem_applications);
-  const servers = arr(inventory.servers);
-  const fabric = arr(inventory.fabric_connections);
-  const snmp = arr(inventory.snmp_credentials);
-  const statusPages = arr(inventory.status_pages);
-  const rotating = arr(inventory.rotating_contacts);
-  const cloud = arr(inventory.cloud_credentials);
-  const outages = arr(inventory.outages);
-  const active = outages.filter((o) => o?.active === true);
-
-  // Critical
-  if (contactGroups.length === 0) recs.push({ priority: 'CRITICAL', text: 'Create Contact Groups: No groups exist to route alerts to teams.' });
-  const unacked = active.filter((o) => o?.acknowledged !== true).length;
-  if (unacked > 0) recs.push({ priority: 'CRITICAL', text: `Acknowledge ${unacked} active incident(s) to track response.` });
-
-  // High - infra coverage
-  const groupDetails = inventory.server_group_details ?? {};
-  let orphanGroups = 0;
-  for (const g of Object.values(groupDetails)) {
-    if (!g?.parent && !g?.notification_schedule && !arr(g?.tags).length) orphanGroups++;
-  }
-  if (orphanGroups > 0) recs.push({ priority: 'HIGH', text: `Review ${orphanGroups} server group(s) with no parent, schedule, or tags.` });
-  if (compound.length === 0) recs.push({ priority: 'HIGH', text: 'Build production compound services for SLA reporting.' });
-  if (servers.length === 0 && fabric.length > 0) recs.push({ priority: 'HIGH', text: 'Consider adding directly-monitored servers in addition to Fabric-discovered devices.' });
-  if (dem.length === 0) recs.push({ priority: 'HIGH', text: 'Deploy DEM applications to monitor SaaS end-user experience.' });
-
-  // High - template analysis
-  const tmpl = analysis?.templates ?? {};
-  if (arr(tmpl.default_only_templates).length > 0) recs.push({ priority: 'HIGH', text: 'Add thresholds to templates that have only default settings.' });
-  if (arr(tmpl.manual_threshold_candidates).length > 0) recs.push({ priority: 'HIGH', text: 'Create templates from commonly repeated manual thresholds.' });
-  if (arr(tmpl.cleanup_candidates).length > 0) recs.push({ priority: 'MEDIUM', text: 'Clean up templates with unchanged default metrics.' });
-
-  // High / Medium - instance analysis
-  const inst = analysis?.instances ?? {};
-  if (inst.available && arr(inst.missing_settings).length > 0) recs.push({ priority: 'HIGH', text: 'Review servers missing common settings applied to peers.' });
-  if (inst.available && arr(inst.valueless_metrics).length > 0) recs.push({ priority: 'MEDIUM', text: 'Remove metrics with no thresholds to improve agent performance.' });
-
-  // High - noisy
-  const noisy = arr(analysis?.incidents?.noisy_metrics);
-  if (noisy.length > 0) recs.push({ priority: 'HIGH', text: `Address ${noisy.length} noisy metric source(s) - adjust thresholds or enable flapping detection.` });
-
-  // Medium - feature gaps
-  if (snmp.length === 0) recs.push({ priority: 'MEDIUM', text: 'Deploy SNMP monitoring on network devices.' });
-  if (statusPages.length === 0) recs.push({ priority: 'MEDIUM', text: 'Configure a public status page for stakeholder communication.' });
-  if (rotating.length === 0) recs.push({ priority: 'MEDIUM', text: 'Set up on-call rotations to distribute alert responsibility.' });
-  if (cloud.length === 0) recs.push({ priority: 'MEDIUM', text: 'Enable cloud discovery for auto-monitoring of AWS/Azure/GCP resources.' });
-
-  // Medium - policy
-  const policy = analysis?.monitoring_policy ?? {};
-  if (arr(policy.automation_rules).length > 0) recs.push({ priority: 'MEDIUM', text: 'Implement Monitoring Policy Workflow rules for automated device onboarding.' });
-
-  return recs;
-}
-
-/**
- * Recommended lab / exercise list. Ports Python _build_labs.
+ * Quick-lab / exercise list. Ports Python _build_labs.
  *
  * @param {object} inventory
  * @returns {Lab[]}

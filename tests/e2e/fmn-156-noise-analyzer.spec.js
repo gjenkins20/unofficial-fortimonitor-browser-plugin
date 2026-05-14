@@ -11,7 +11,7 @@
 //
 // This spec asserts the new structure: noise sections live inside
 // the Incident Summary tab pane, render real fixture rows, and carry
-// non-empty recommendations.
+// non-empty observations (FMN-218: column renamed from Recommendation).
 
 import { test, expect } from './fixtures.js';
 import { fileURLToPath } from 'node:url';
@@ -70,7 +70,7 @@ test.describe('FMN-156 Noise sections inside Incident Summary tab', () => {
     await expect(rows.first()).toContainText('fgvm-prod-01');
   });
 
-  test('every Top Noisy Instances row has a non-empty Recommendation', async ({ extensionContext }) => {
+  test('every Top Noisy Instances row has a non-empty Observation', async ({ extensionContext }) => {
     const page = await extensionContext.newPage();
     await page.goto(HARNESS_URL);
     await page.locator('button[data-tab="incident-summary"]').click();
@@ -81,9 +81,9 @@ test.describe('FMN-156 Noise sections inside Incident Summary tab', () => {
     expect(rowCount).toBeGreaterThan(0);
 
     for (let i = 0; i < rowCount; i++) {
-      // Recommendation is the last column (ID, Server, Outages, Duration, MTTR, Flap, Rec).
-      const recCell = rows.nth(i).locator('td').last();
-      const text = (await recCell.textContent() || '').trim();
+      // Observation is the last column (ID, Server, Outages, Duration, MTTR, Flap, Obs).
+      const obsCell = rows.nth(i).locator('td').last();
+      const text = (await obsCell.textContent() || '').trim();
       expect(text.length).toBeGreaterThan(5);
       expect(text).not.toBe('-');
     }

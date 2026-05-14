@@ -1,5 +1,5 @@
 // Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// Best-Practice Assessment viewer - 11-tab review surface (FMN-133).
+// Best-Practice Assessment viewer - 10-tab review surface (FMN-133, FMN-218).
 //
 // Each tab declares a list of "sections" (a section is a labelled
 // table). The viewer renders each section as an HTML <table>; the
@@ -13,7 +13,6 @@ import { printReport, pdfFilename } from '../../lib/bpa-pdf.js';
 import {
   buildExecutiveSummary,
   buildFeatureUtilization,
-  buildRecommendations,
   buildLabs,
   buildRawCounts
 } from '../../lib/bpa-synthesis.js';
@@ -289,7 +288,7 @@ const TABS = [
           { key: 'server',  header: 'Server',         getter: (r) => r.server },
           { key: 'total',   header: 'Total Incidents', getter: (r) => r.total_incidents },
           { key: 'short',   header: 'Short-Lived',    getter: (r) => r.short_lived },
-          { key: 'rec',     header: 'Recommendation', getter: (r) => r.recommendation }
+          { key: 'obs',     header: 'Observation',    getter: (r) => r.observation }
         ],
         rows: ({ analysis }) => analysis?.incidents?.noisy_metrics ?? [],
         emptyText: 'No noisy metric sources detected.'
@@ -331,7 +330,7 @@ const TABS = [
           { key: 'duration',    header: 'Total Duration (min)', getter: (r) => r.total_duration_min },
           { key: 'mttr',        header: 'MTTR (min)',     getter: (r) => r.mttr_min },
           { key: 'flap',        header: 'Flap/24h',       getter: (r) => r.flap_rate_per_24h },
-          { key: 'rec',         header: 'Recommendation', getter: (r) => r.recommendation }
+          { key: 'obs',         header: 'Observation',    getter: (r) => r.observation }
         ],
         rows: ({ analysis }) => analysis?.noise?.top_noisy_instances ?? [],
         emptyText: 'No noisy instances detected in the last 30 days.'
@@ -347,10 +346,10 @@ const TABS = [
             getter: (r) => r.server_name,
             cellRenderer: (r, ctx) => instanceLinkCell(r.server_id, r.server_name, ctx) },
           { key: 'count',       header: 'Count (30d)',    getter: (r) => r.count_30d },
-          { key: 'rec',         header: 'Recommendation', getter: (r) => r.recommendation }
+          { key: 'obs',         header: 'Observation',    getter: (r) => r.observation }
         ],
         rows: ({ analysis }) => analysis?.noise?.top_noisy_metrics ?? [],
-        emptyText: 'No metric-level noise detected. Each outage description was either unique per server or below the surfacing threshold.'
+        emptyText: 'No metric-level noise detected. Outage descriptions were unique per server or fell below the surfacing threshold.'
       }
     ]
   },
@@ -443,7 +442,7 @@ const TABS = [
           { key: 'server_name', header: 'Server Name',    getter: (r) => r.server_name },
           { key: 'missing',     header: 'Missing',        getter: (r) => r.missing },
           { key: 'type',        header: 'Type',           getter: (r) => r.type },
-          { key: 'rec',         header: 'Recommendation', getter: (r) => r.recommendation }
+          { key: 'obs',         header: 'Observation',    getter: (r) => r.observation }
         ],
         rows: ({ analysis }) => {
           const inst = analysis?.instances;
@@ -458,7 +457,7 @@ const TABS = [
           { key: 'server_id',   header: 'Server ID',      getter: (r) => r.server_id },
           { key: 'server_name', header: 'Server Name',    getter: (r) => r.server_name },
           { key: 'metric',      header: 'Metric',         getter: (r) => r.metric },
-          { key: 'rec',         header: 'Recommendation', getter: (r) => r.recommendation }
+          { key: 'obs',         header: 'Observation',    getter: (r) => r.observation }
         ],
         rows: ({ analysis }) => {
           const inst = analysis?.instances;
@@ -469,16 +468,21 @@ const TABS = [
     ]
   },
 
-  // 7. Template Recommendations ---------------------------------------------
+  // 7. Template Analysis -----------------------------------------------------
   // FMN-135 follow-up (2026-05-01): the default-only / cleanup / overlap
   // analyses run on CUSTOM templates only. FortiMonitor's stock "Default
   // Monitoring Templates" group is exempted - those templates get their
-  // own informational section with a soft recommendation to build custom
-  // templates rather than editing the stock ones.
+  // own informational section.
+  //
+  // FMN-218 (2026-05-14): tab label moved from "Template Recommendations"
+  // to "Template Analysis" (matches sibling "Instance Analysis"). The tab
+  // id and section keys keep the legacy `template-recommendations` slug
+  // for code-internal stability - the rename of those identifiers is
+  // FMN-219's territory.
   {
     id: 'template-recommendations',
-    label: 'Template Recommendations',
-    filenamePart: 'template-recommendations',
+    label: 'Template Analysis',
+    filenamePart: 'template-analysis',
     sections: [
       {
         label: 'Custom Templates Without Thresholds',
@@ -490,10 +494,10 @@ const TABS = [
             cellRenderer: (r, ctx) => templateLinkCell(r.id, r.template, ctx)
           },
           { key: 'resource_count',    header: 'Metric Count',       getter: (r) => r.resource_count },
-          { key: 'rec',               header: 'Recommendation',     getter: (r) => r.recommendation }
+          { key: 'obs',               header: 'Observation',        getter: (r) => r.observation }
         ],
         rows: ({ analysis }) => analysis?.templates?.default_only_templates ?? [],
-        emptyText: 'No custom templates found without thresholds. Best practice: build custom templates with thresholds tuned to your environment - FortiMonitor stock templates provide metric coverage but no alerting on their own.'
+        emptyText: 'No custom templates found without thresholds.'
       },
       {
         label: 'Manual Threshold Candidates',
@@ -503,10 +507,10 @@ const TABS = [
           { key: 'crit',   header: 'Critical',   getter: (r) => r.critical_threshold },
           { key: 'count',  header: 'Server Count', getter: (r) => r.server_count },
           { key: 'examples', header: 'Examples', getter: (r) => r.example_servers },
-          { key: 'rec',    header: 'Recommendation', getter: (r) => r.recommendation }
+          { key: 'obs',    header: 'Observation', getter: (r) => r.observation }
         ],
         rows: ({ analysis }) => analysis?.templates?.manual_threshold_candidates ?? [],
-        emptyText: 'No manual threshold candidates - no metric patterns indicate the tenant would benefit from manual thresholds. (Requires deep mode; if you ran a quick assessment, re-run with "Run per-server deep analysis" enabled to surface candidates.)'
+        emptyText: 'No repeated manual threshold patterns detected. (Requires deep mode; if you ran a quick assessment, re-run with "Run per-server deep analysis" enabled to surface candidates.)'
       },
       {
         label: 'Custom Templates Cleanup Candidates',
@@ -520,10 +524,10 @@ const TABS = [
           { key: 'unchanged', header: 'Unalerted Metrics', getter: (r) => r.unchanged_metrics },
           { key: 'total',    header: 'Total Metrics',    getter: (r) => r.total_metrics },
           { key: 'examples', header: 'Examples',         getter: (r) => r.examples },
-          { key: 'rec',      header: 'Recommendation',   getter: (r) => r.recommendation }
+          { key: 'obs',      header: 'Observation',      getter: (r) => r.observation }
         ],
         rows: ({ analysis }) => analysis?.templates?.cleanup_candidates ?? [],
-        emptyText: 'No custom-template cleanup candidates - custom templates that carry alerts cover most of their metrics.'
+        emptyText: 'No custom-template cleanup candidates detected.'
       },
       {
         label: 'Custom Template Overlap',
@@ -542,10 +546,10 @@ const TABS = [
           },
           { key: 'overlap', header: 'Overlap %',   getter: (r) => r.overlap_pct },
           { key: 'shared',  header: 'Shared',      getter: (r) => r.shared_metrics },
-          { key: 'rec',     header: 'Recommendation', getter: (r) => r.recommendation }
+          { key: 'obs',     header: 'Observation', getter: (r) => r.observation }
         ],
         rows: ({ analysis }) => analysis?.templates?.overlapping_templates ?? [],
-        emptyText: 'No overlapping custom templates - templates cover distinct metric sets without significant duplication.'
+        emptyText: 'No overlapping custom templates detected.'
       },
       {
         label: 'Default Templates (FortiMonitor stock)',
@@ -558,7 +562,7 @@ const TABS = [
           },
           { key: 'metric_count', header: 'Metrics',  getter: (r) => r.metric_count },
           { key: 'alerts_count', header: 'Alerts Set', getter: (r) => r.alerts_count },
-          { key: 'rec',      header: 'Recommendation', getter: (r) => r.recommendation }
+          { key: 'obs',      header: 'Observation', getter: (r) => r.observation }
         ],
         rows: ({ analysis }) => analysis?.templates?.default_templates ?? [],
         emptyText: 'No FortiMonitor stock default templates detected. (The default group is identified by the name "Default Monitoring Templates"; if your tenant uses different naming, default templates appear under the custom sections above.)'
@@ -578,7 +582,7 @@ const TABS = [
           { key: 'pattern',  header: 'Pattern',  getter: (r) => r.pattern },
           { key: 'count',    header: 'Match Count', getter: (r) => r.match_count },
           { key: 'examples', header: 'Examples', getter: (r) => r.examples },
-          { key: 'sug',      header: 'Suggestion', getter: (r) => r.suggestion }
+          { key: 'obs',      header: 'Observation', getter: (r) => r.observation }
         ],
         rows: ({ analysis }) => analysis?.monitoring_policy?.naming_patterns ?? []
       },
@@ -589,44 +593,34 @@ const TABS = [
           { key: 'members',   header: 'Members',       getter: (r) => r.member_count },
           { key: 'has',       header: 'Has Template?', getter: (r) => r.has_template ? 'yes' : 'no' },
           { key: 'template',  header: 'Template',      getter: (r) => r.template },
-          { key: 'rec',       header: 'Recommendation', getter: (r) => r.recommendation }
+          { key: 'obs',       header: 'Observation',   getter: (r) => r.observation }
         ],
         rows: ({ analysis }) => analysis?.monitoring_policy?.group_template_mapping ?? []
       },
       {
-        label: 'Suggested Automation Rules',
+        label: 'Automation Coverage Gaps',
         columns: [
-          { key: 'rule',     header: 'Rule',         getter: (r) => r.rule },
+          { key: 'rule',     header: 'Pattern',      getter: (r) => r.rule },
           { key: 'desc',     header: 'Description',  getter: (r) => r.description },
           { key: 'affected', header: 'Affected',     getter: (r) => r.affected },
-          { key: 'rec',      header: 'Recommendation', getter: (r) => r.recommendation }
+          { key: 'obs',      header: 'Observation',  getter: (r) => r.observation }
         ],
         rows: ({ analysis }) => analysis?.monitoring_policy?.automation_rules ?? []
       }
     ]
   },
 
-  // 9. Recommendations -------------------------------------------------------
-  {
-    id: 'recommendations',
-    label: 'Recommendations',
-    filenamePart: 'recommendations',
-    sections: [{
-      label: 'Prioritized Recommendations',
-      columns: [
-        { key: 'priority', header: 'Priority', getter: (r) => r.priority },
-        { key: 'text',     header: 'Recommendation', getter: (r) => r.text }
-      ],
-      rows: ({ inventory, analysis }) => buildRecommendations(inventory, analysis),
-      emptyText: 'No recommendations - looks healthy on the dimensions this assessment checks.'
-    }]
-  },
-
-  // 10. Recommended Labs -----------------------------------------------------
+  // 9. Quick Labs -----------------------------------------------------------
+  // FMN-218 (2026-05-14): the synthesized "Recommendations" tab (formerly
+  // tab #9) was removed when the BPA shifted to observation-only output.
+  // Its prior contents duplicated the per-analyzer findings as imperatives.
+  // What was tab #10 (Recommended Labs) is now tab #9 (Quick Labs); the
+  // tab id stays `recommended-labs` for code-internal stability - the
+  // rename of that identifier is FMN-219's territory.
   {
     id: 'recommended-labs',
-    label: 'Recommended Labs',
-    filenamePart: 'recommended-labs',
+    label: 'Quick Labs',
+    filenamePart: 'quick-labs',
     sections: [{
       label: 'Quick labs (15-25 min) for underutilized features',
       columns: [
@@ -661,11 +655,15 @@ export function getTabs() {
 }
 
 // FMN-149: tab visibility per section selection. Cross-cutting tabs
-// (executive-summary, feature-utilization, recommendations,
-// recommended-labs) need the full inventory crawl and only render in
-// "all" mode. Analyzer-scoped tabs render only when their section is in
-// the selection. Raw Counts always renders - it surfaces what was
-// actually fetched and is cheap synthesis on top.
+// (executive-summary, feature-utilization, recommended-labs) need the
+// full inventory crawl and only render in "all" mode. Analyzer-scoped
+// tabs render only when their section is in the selection. Raw Counts
+// always renders - it surfaces what was actually fetched and is cheap
+// synthesis on top.
+//
+// FMN-218: the 'recommendations' tab was removed when the BPA shifted to
+// observation-only output. The 'recommended-labs' id is unchanged for
+// code-internal stability (operator-visible label is now "Quick Labs").
 const TAB_VISIBILITY = Object.freeze({
   'executive-summary':       { mode: 'all-only' },
   'feature-utilization':     { mode: 'all-only' },
@@ -675,7 +673,6 @@ const TAB_VISIBILITY = Object.freeze({
   'instance-analysis':       { mode: 'section', section: 'instance-analysis' },
   'template-recommendations': { mode: 'section', section: 'template-recommendations' },
   'monitoring-policy':       { mode: 'section', section: 'monitoring-policy' },
-  'recommendations':         { mode: 'all-only' },
   'recommended-labs':        { mode: 'all-only' },
   'raw-counts':              { mode: 'always' }
 });
@@ -810,7 +807,7 @@ export function renderViewer({ root, store }) {
     csvBtn,
     coverLabel,
     h('span', { class: 'muted', style: 'font-size:0.85rem;' },
-      'ZIP packs all 11 tabs as CSVs plus a README. PDF opens the print dialog - choose "Save as PDF" as destination. CSV exports the active tab.'
+      'ZIP packs all tabs as CSVs plus a README. PDF opens the print dialog - choose "Save as PDF" as destination. CSV exports the active tab.'
     ),
     filenameStatus
   ));

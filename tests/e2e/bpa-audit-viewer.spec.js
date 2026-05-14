@@ -17,14 +17,18 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const HARNESS_PATH = path.resolve(__dirname, '../../docs/harnesses/bpa-audit-viewer.html');
 const HARNESS_URL = `file://${HARNESS_PATH}`;
 
+// FMN-218: the 'recommendations' tab was removed when the BPA shifted to
+// observation-only output; what was tab #10 (Recommended Labs, now
+// relabelled Quick Labs) is tab #9. Section ids stay on their FMN-133
+// values for code-internal stability - their rename is FMN-219.
 const EXPECTED_TAB_IDS = [
   'executive-summary', 'feature-utilization', 'incident-summary', 'incidents',
   'user-activity', 'instance-analysis', 'template-recommendations',
-  'monitoring-policy', 'recommendations', 'recommended-labs', 'raw-counts'
+  'monitoring-policy', 'recommended-labs', 'raw-counts'
 ];
 
 test.describe('BPA Audit viewer harness (FMN-133)', () => {
-  test('renders all 11 tabs with no console errors', async ({ extensionContext }) => {
+  test('renders all 10 tabs with no console errors', async ({ extensionContext }) => {
     const page = await extensionContext.newPage();
     const consoleErrors = [];
     page.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push(msg.text()); });
@@ -69,14 +73,14 @@ test.describe('BPA Audit viewer harness (FMN-133)', () => {
     await page.close();
   });
 
-  test('Download CSV button on Recommendations tab triggers a CSV download', async ({ extensionContext }) => {
+  test('Download CSV button on Quick Labs tab triggers a CSV download', async ({ extensionContext }) => {
     const page = await extensionContext.newPage();
     await page.goto(HARNESS_URL);
-    await page.locator('button[data-tab="recommendations"]').click();
+    await page.locator('button[data-tab="recommended-labs"]').click();
     const downloadPromise = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Download CSV' }).click();
     const download = await downloadPromise;
-    expect(download.suggestedFilename()).toMatch(/^acme-corp-harness_recommendations_\d{8}\.csv$/);
+    expect(download.suggestedFilename()).toMatch(/^acme-corp-harness_quick-labs_\d{8}\.csv$/);
     await page.close();
   });
 
@@ -257,7 +261,7 @@ test.describe('BPA Audit viewer harness (FMN-133)', () => {
     await expect(page.locator('button[data-tab="raw-counts"]')).toBeVisible();
 
     // Hidden tabs (cross-cutting + non-requested analyzer-scoped).
-    for (const id of ['executive-summary', 'feature-utilization', 'incident-summary', 'incidents', 'instance-analysis', 'template-recommendations', 'monitoring-policy', 'recommendations', 'recommended-labs']) {
+    for (const id of ['executive-summary', 'feature-utilization', 'incident-summary', 'incidents', 'instance-analysis', 'template-recommendations', 'monitoring-policy', 'recommended-labs']) {
       await expect(page.locator(`button[data-tab="${id}"]`)).toHaveCount(0);
     }
     await page.close();
@@ -270,7 +274,7 @@ test.describe('BPA Audit viewer harness (FMN-133)', () => {
     for (const id of ['template-recommendations', 'monitoring-policy', 'raw-counts']) {
       await expect(page.locator(`button[data-tab="${id}"]`)).toBeVisible();
     }
-    for (const id of ['executive-summary', 'incidents', 'user-activity', 'instance-analysis', 'recommendations']) {
+    for (const id of ['executive-summary', 'incidents', 'user-activity', 'instance-analysis', 'recommended-labs']) {
       await expect(page.locator(`button[data-tab="${id}"]`)).toHaveCount(0);
     }
     await page.close();
@@ -279,12 +283,13 @@ test.describe('BPA Audit viewer harness (FMN-133)', () => {
   test('Filter input restricts visible rows in the active tab', async ({ extensionContext }) => {
     const page = await extensionContext.newPage();
     await page.goto(HARNESS_URL);
-    // Recommendations always has multiple rows for the harness fixture.
-    await page.locator('button[data-tab="recommendations"]').click();
+    // Incident Summary has multiple rows across Top by Instance + Noisy
+    // Metrics + Top Noisy Instances for the harness fixture.
+    await page.locator('button[data-tab="incident-summary"]').click();
     const beforeRows = await page.locator('[data-test="tab-pane"] tbody tr').count();
     expect(beforeRows).toBeGreaterThan(1);
 
-    await page.locator('[data-test="tab-pane"] input[type="search"]').fill('SNMP');
+    await page.locator('[data-test="tab-pane"] input[type="search"]').fill('fgvm-prod-01');
     const afterRows = await page.locator('[data-test="tab-pane"] tbody tr').count();
     expect(afterRows).toBeGreaterThan(0);
     expect(afterRows).toBeLessThan(beforeRows);

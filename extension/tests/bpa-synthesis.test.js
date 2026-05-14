@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import {
   buildExecutiveSummary,
   buildFeatureUtilization,
-  buildRecommendations,
   buildLabs,
   buildRawCounts
 } from '../src/lib/bpa-synthesis.js';
@@ -108,68 +107,9 @@ test('buildFeatureUtilization: 5+ templates removes the "only N templates" under
   assert.ok(tmplActive);
 });
 
-// =============================================================================
-// buildRecommendations
-// =============================================================================
-
-test('buildRecommendations: empty inventory yields multiple CRITICAL/HIGH/MEDIUM recs', () => {
-  const recs = buildRecommendations({}, {});
-  const priorities = new Set(recs.map((r) => r.priority));
-  assert.ok(priorities.has('CRITICAL'));
-  assert.ok(priorities.has('HIGH'));
-  assert.ok(priorities.has('MEDIUM'));
-  // Specific must-haves on a blank tenant:
-  assert.ok(recs.some((r) => /Contact Groups/i.test(r.text)));
-  assert.ok(recs.some((r) => /SNMP/i.test(r.text)));
-  assert.ok(recs.some((r) => /status page/i.test(r.text)));
-});
-
-test('buildRecommendations: unacknowledged active incidents drive a CRITICAL rec', () => {
-  const recs = buildRecommendations({
-    outages: [
-      { id: 1, active: true, acknowledged: false },
-      { id: 2, active: true, acknowledged: false },
-      { id: 3, active: true, acknowledged: true }
-    ]
-  }, {});
-  const ack = recs.find((r) => r.priority === 'CRITICAL' && /Acknowledge\s+2/.test(r.text));
-  assert.ok(ack, 'expected a CRITICAL recommendation citing 2 unacknowledged');
-});
-
-test('buildRecommendations: analyzer-driven recs (templates + instances + noisy) surface', () => {
-  const recs = buildRecommendations({}, {
-    templates: {
-      default_only_templates: [{}],
-      manual_threshold_candidates: [{}],
-      cleanup_candidates: [{}]
-    },
-    instances: {
-      available: true,
-      missing_settings: [{}, {}],
-      valueless_metrics: [{}]
-    },
-    incidents: { noisy_metrics: [{}, {}, {}] }
-  });
-  const texts = recs.map((r) => r.text);
-  assert.ok(texts.some((t) => /Add thresholds to templates/.test(t)));
-  assert.ok(texts.some((t) => /commonly repeated manual thresholds/.test(t)));
-  assert.ok(texts.some((t) => /Clean up templates with unchanged/.test(t)));
-  assert.ok(texts.some((t) => /missing common settings/.test(t)));
-  assert.ok(texts.some((t) => /Remove metrics with no thresholds/.test(t)));
-  assert.ok(texts.some((t) => /Address 3 noisy/.test(t)));
-});
-
-test('buildRecommendations: orphan groups (no parent + no schedule + no tags) drive a HIGH rec', () => {
-  const recs = buildRecommendations({
-    server_group_details: {
-      '1': {},                                              // orphan - flagged
-      '2': { parent: '/v2/server_group/100' },              // not orphan
-      '3': { tags: ['env'] }                                // not orphan
-    }
-  }, {});
-  const orphan = recs.find((r) => r.priority === 'HIGH' && /1 server group\(s\)/.test(r.text));
-  assert.ok(orphan, 'expected a HIGH rec citing 1 orphan group');
-});
+// FMN-218: buildRecommendations removed. The BPA no longer synthesizes a
+// prioritized recommendations list - per-analyzer findings ship as neutral
+// observations and there is no opinion layer above them.
 
 // =============================================================================
 // buildLabs

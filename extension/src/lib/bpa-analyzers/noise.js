@@ -20,10 +20,9 @@ const TOP_METRIC_LIMIT = 20;
 // 30 days by default; this filter is belt-and-suspenders for any fixture
 // or future expansion that returns older records.
 const WINDOW_DAYS = 30;
-// Flap threshold for the recommendation text. Anything above this gets
-// a "tune threshold" nudge; below gets the milder "review monitoring
-// config" wording. Matches the FMN-156 ticket's heuristic of "raise
-// warning threshold to P95 / widen dwell time" for true noise.
+// Flap threshold for the observation label. Anything above this is
+// labelled as flap-pattern; below gets a milder volume / mttr label.
+// Matches the FMN-156 ticket's heuristic boundary.
 const FLAP_THRESHOLD_PER_24H = 1.5;
 const HIGH_VOLUME_THRESHOLD = 5;
 
@@ -35,7 +34,7 @@ const HIGH_VOLUME_THRESHOLD = 5;
  * @property {number} total_duration_min   sum of resolved-outage durations
  * @property {number} mttr_min             mean time to recovery (resolved outages only)
  * @property {number} flap_rate_per_24h    outage_count_30d / 30 (rounded to 2dp)
- * @property {string} recommendation
+ * @property {string} observation
  */
 
 /**
@@ -44,7 +43,7 @@ const HIGH_VOLUME_THRESHOLD = 5;
  * @property {string} server_id
  * @property {string} server_name
  * @property {number} count_30d
- * @property {string} recommendation
+ * @property {string} observation
  */
 
 /**
@@ -128,7 +127,7 @@ export function analyzeNoise(inventory = {}, now = new Date()) {
       total_duration_min: totalDurationMin,
       mttr_min: mttrMin,
       flap_rate_per_24h: flapPer24h,
-      recommendation: instanceRecommendation(count, flapPer24h, mttrMin)
+      observation: instanceObservation(count, flapPer24h, mttrMin)
     });
   }
 
@@ -168,7 +167,7 @@ export function analyzeNoise(inventory = {}, now = new Date()) {
       server_id: row.server_id,
       server_name: row.server_name,
       count_30d: row.count,
-      recommendation: metricRecommendation(row.count)
+      observation: metricObservation(row.count)
     }))
     .sort((a, b) => b.count_30d - a.count_30d)
     .slice(0, TOP_METRIC_LIMIT);
@@ -231,27 +230,27 @@ function metricName(outage) {
   return '';
 }
 
-function instanceRecommendation(count, flapPer24h, mttrMin) {
+function instanceObservation(count, flapPer24h, mttrMin) {
   if (flapPer24h >= FLAP_THRESHOLD_PER_24H) {
-    return `High flap rate (${flapPer24h.toFixed(2)}/24h). Raise the warning threshold to the P95 of the last 30 days and widen the dwell time.`;
+    return `Flap rate ${flapPer24h.toFixed(2)}/24h (${count} outages in ${WINDOW_DAYS} days).`;
   }
   if (count >= HIGH_VOLUME_THRESHOLD) {
-    return `High outage volume (${count} in ${WINDOW_DAYS}d). Review the monitoring template - thresholds may be too tight for this instance's baseline.`;
+    return `${count} outages in ${WINDOW_DAYS} days on this instance.`;
   }
   if (mttrMin <= 5 && count >= 3) {
-    return 'Short-lived outages indicate flapping. Widen dwell time or suppress during known maintenance windows.';
+    return `${count} outages in ${WINDOW_DAYS} days, MTTR ${mttrMin} min (short-lived dominant).`;
   }
-  return 'Monitor trend over the next assessment. No threshold change recommended yet.';
+  return `${count} outages in ${WINDOW_DAYS} days.`;
 }
 
-function metricRecommendation(count) {
+function metricObservation(count) {
   if (count >= 10) {
-    return `Frequent alerts on this metric (${count} in ${WINDOW_DAYS}d). Tune the threshold (P95 of recent values) or move to a percent-of-baseline check.`;
+    return `${count} alerts fired on this metric in ${WINDOW_DAYS} days.`;
   }
   if (count >= 5) {
-    return `Recurring alerts (${count} in ${WINDOW_DAYS}d). Review threshold and dwell time on this metric.`;
+    return `${count} alerts fired on this metric in ${WINDOW_DAYS} days.`;
   }
-  return 'Watch for trend; threshold may be slightly tight.';
+  return `${count} alerts fired on this metric in ${WINDOW_DAYS} days.`;
 }
 
 function median(arr) {

@@ -1,9 +1,9 @@
 // Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // BPA Audit - Step 4 (Review) - FMN-133.
 //
-// Hosts the 11-tab viewer. The viewer module owns its own rendering;
-// this step only provides the title bar, breadcrumbs, and a "New audit"
-// action.
+// Hosts the 10-tab viewer (FMN-218). The viewer module owns its own
+// rendering; this step only provides the title bar, breadcrumbs, and a
+// "New audit" action.
 
 import { h, titleBar } from '../../../lib/dom.js';
 import { reportBreadcrumbs } from './start.js';
@@ -21,9 +21,7 @@ export function render({ container, store, navigate }) {
       ? `${store.customerName} - Best-Practice Assessment`
       : 'Best-Practice Assessment'),
     h('p', { class: 'muted' },
-      '11 tabs - one per section of the report. Each tab has a "Download CSV" button. ',
-      'User Activity has manual-entry columns; values you type there persist while this ',
-      'tab is open and are included in that section\'s CSV download.'
+      '10 tabs - one per section of the report. Each tab has a "Download CSV" button.'
     )
   ));
 
