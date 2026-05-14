@@ -3287,6 +3287,449 @@
 
   // The mount loop is idempotent via the READY_ATTR marker on each
   // anchor (or icon, for icon-mode entries). Subsequent calls cost
+  // ===================================================================
+  // FMN-191: in-page report-completion bell. Mounts next to the
+  // FortiMonitor topbar search input. Reads the SW-maintained badge
+  // counter + history ring buffer from chrome.storage.local; click
+  // opens a dropdown listing recent completions. Click on a history
+  // row navigates the tab to /report/ListReports.
+  // ===================================================================
+  const BELL_ID = 'fmn-report-bell';
+  const BELL_STYLE_ID = 'fmn-report-bell-styles';
+  const REPORT_NOTIF_FLAG_KEY = 'fm:reportNotificationsEnabled';
+  const REPORT_NOTIF_BADGE_KEY = 'fm:reportNotificationBadge';
+  const REPORT_NOTIF_HISTORY_KEY = 'fm:reportNotificationHistory';
+
+  let reportNotifFlagLoaded = false;
+  let reportNotifEnabled = false;
+  let reportNotifBadge = 0;
+  let reportNotifHistory = [];
+
+  async function loadReportBellState() {
+    try {
+      const data = await chrome.storage.local.get([
+        REPORT_NOTIF_FLAG_KEY,
+        REPORT_NOTIF_BADGE_KEY,
+        REPORT_NOTIF_HISTORY_KEY,
+      ]);
+      reportNotifEnabled = Boolean(data?.[REPORT_NOTIF_FLAG_KEY]);
+      reportNotifBadge = Number.isFinite(data?.[REPORT_NOTIF_BADGE_KEY]) ? data[REPORT_NOTIF_BADGE_KEY] : 0;
+      reportNotifHistory = Array.isArray(data?.[REPORT_NOTIF_HISTORY_KEY]) ? data[REPORT_NOTIF_HISTORY_KEY] : [];
+    } catch {
+      reportNotifEnabled = false;
+      reportNotifBadge = 0;
+      reportNotifHistory = [];
+    }
+    reportNotifFlagLoaded = true;
+  }
+
+  function subscribeReportBellState() {
+    if (!chrome.storage || !chrome.storage.onChanged) return;
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName && areaName !== 'local') return;
+      let touched = false;
+      if (changes[REPORT_NOTIF_FLAG_KEY]) {
+        reportNotifEnabled = Boolean(changes[REPORT_NOTIF_FLAG_KEY].newValue);
+        if (!reportNotifEnabled) {
+          const existing = document.querySelector(`[${ENTRY_ATTR}="${BELL_ID}"]`);
+          if (existing) existing.remove();
+        }
+        touched = true;
+      }
+      if (changes[REPORT_NOTIF_BADGE_KEY]) {
+        const n = changes[REPORT_NOTIF_BADGE_KEY].newValue;
+        reportNotifBadge = Number.isFinite(n) ? n : 0;
+        renderBellBadge();
+      }
+      if (changes[REPORT_NOTIF_HISTORY_KEY]) {
+        const v = changes[REPORT_NOTIF_HISTORY_KEY].newValue;
+        reportNotifHistory = Array.isArray(v) ? v : [];
+        renderBellDropdownList();
+      }
+      if (touched) ensureAll();
+    });
+  }
+
+  function ensureBellStyles() {
+    if (document.getElementById(BELL_STYLE_ID)) return;
+    const style = document.createElement('style');
+    style.id = BELL_STYLE_ID;
+    style.textContent = `
+      li.fmn-report-bell-li {
+        list-style: none;
+        padding: 0;
+        margin: 0 0 0 8px;
+        display: inline-flex;
+        align-items: center;
+        position: relative;
+      }
+      .fmn-report-bell-btn {
+        appearance: none; cursor: pointer;
+        background: transparent; border: 0;
+        padding: 6px;
+        border-radius: 4px;
+        display: inline-flex; align-items: center; justify-content: center;
+        position: relative;
+        color: #5b6776;
+      }
+      .fmn-report-bell-btn:hover {
+        background: rgba(0, 0, 0, 0.06);
+        color: #1d2733;
+      }
+      .fmn-report-bell-btn.fmn-report-bell-btn_active {
+        color: #ed4f0e;
+        background: rgba(237, 79, 14, 0.08);
+      }
+      .fmn-report-bell-icon { width: 18px; height: 18px; display: block; }
+      .fmn-report-bell-badge {
+        position: absolute;
+        top: 0;
+        right: 0;
+        min-width: 14px;
+        height: 14px;
+        line-height: 14px;
+        padding: 0 4px;
+        border-radius: 7px;
+        background: #ed4f0e;
+        color: #fff;
+        font-size: 9.5px;
+        font-weight: 700;
+        text-align: center;
+        box-sizing: border-box;
+        border: 1px solid #fff;
+      }
+      .fmn-report-bell-badge[hidden] { display: none; }
+      .fmn-report-bell-dropdown {
+        position: absolute;
+        top: calc(100% + 4px);
+        right: 0;
+        min-width: 340px;
+        max-width: 420px;
+        background: #fff;
+        border: 1px solid #c0cad7;
+        border-radius: 6px;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.15);
+        z-index: 1000;
+        font-size: 12.5px;
+        color: #1d2733;
+      }
+      .fmn-report-bell-dropdown[hidden] { display: none; }
+      .fmn-report-bell-dropdown-hd {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 8px 12px;
+        border-bottom: 1px solid #e9edf2;
+        background: #fbfcfd;
+        border-radius: 6px 6px 0 0;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #5b6776;
+      }
+      .fmn-report-bell-dropdown-clear {
+        appearance: none; cursor: pointer;
+        background: transparent; border: 0;
+        font-size: 11px;
+        color: #5b6776;
+        padding: 2px 6px;
+        border-radius: 3px;
+      }
+      .fmn-report-bell-dropdown-clear:hover {
+        background: rgba(0, 0, 0, 0.05);
+        color: #1d2733;
+      }
+      .fmn-report-bell-dropdown-list {
+        list-style: none;
+        margin: 0;
+        padding: 4px 0;
+        max-height: 320px;
+        overflow-y: auto;
+      }
+      .fmn-report-bell-dropdown-list li { margin: 0; }
+      .fmn-report-bell-dropdown-row {
+        display: flex; justify-content: space-between; align-items: center;
+        gap: 12px;
+        width: 100%;
+        box-sizing: border-box;
+        padding: 8px 12px;
+        text-align: left;
+        font-size: 12.5px;
+        color: #1d2733;
+      }
+      .fmn-report-bell-dropdown-row:hover { background: #f1f4f8; }
+      .fmn-report-bell-dropdown-row-main {
+        flex: 1 1 auto; min-width: 0;
+        appearance: none; cursor: pointer;
+        background: transparent; border: 0;
+        text-align: left;
+        font-size: 12.5px;
+        color: #1d2733;
+        font-family: inherit;
+        padding: 0;
+      }
+      .fmn-report-bell-dropdown-row-main:hover { color: #0b6cf7; }
+      .fmn-report-bell-dropdown-row-name {
+        display: block;
+        font-weight: 500;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      .fmn-report-bell-dropdown-row-time {
+        display: block;
+        color: #7c8896; font-size: 11px;
+        margin-top: 2px;
+      }
+      .fmn-report-bell-dropdown-row-download {
+        flex: 0 0 auto;
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 5px 10px;
+        border-radius: 14px;
+        background: #eef4ff; color: #0b6cf7;
+        border: 1px solid #cfdef9;
+        text-decoration: none;
+        font-size: 11.5px; font-weight: 500;
+        font-family: inherit;
+        cursor: pointer;
+        line-height: 1;
+      }
+      .fmn-report-bell-dropdown-row-download:hover {
+        background: #dceaff;
+      }
+      .fmn-report-bell-dropdown-row-download[hidden] { display: none; }
+      .fmn-report-bell-dropdown-row-download svg {
+        width: 14px; height: 14px;
+      }
+      .fmn-report-bell-dropdown-empty {
+        padding: 18px 12px;
+        text-align: center;
+        color: #7c8896;
+        font-style: italic;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function bellSvg() {
+    // Inline outline bell so we don't depend on icon-font availability.
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('class', 'fmn-report-bell-icon');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '1.8');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    const path1 = document.createElementNS(ns, 'path');
+    path1.setAttribute('d', 'M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 0 0-4-5.66V5a2 2 0 0 0-4 0v.34A6 6 0 0 0 6 11v3.2a2 2 0 0 1-.6 1.4L4 17h5');
+    const path2 = document.createElementNS(ns, 'path');
+    path2.setAttribute('d', 'M9 17a3 3 0 0 0 6 0');
+    svg.appendChild(path1);
+    svg.appendChild(path2);
+    return svg;
+  }
+
+  function formatBellRowTime(iso) {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return '';
+      const now = new Date();
+      const sameDay = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+      const h = String(d.getHours()).padStart(2, '0');
+      const m = String(d.getMinutes()).padStart(2, '0');
+      if (sameDay) return `${h}:${m}`;
+      const mo = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${mo}/${dd} ${h}:${m}`;
+    } catch { return ''; }
+  }
+
+  function renderBellBadge() {
+    const badge = document.querySelector(`[${ENTRY_ATTR}="${BELL_ID}"] .fmn-report-bell-badge`);
+    if (!badge) return;
+    if (reportNotifBadge > 0) {
+      badge.textContent = String(reportNotifBadge);
+      badge.hidden = false;
+    } else {
+      badge.hidden = true;
+    }
+  }
+
+  function bellDownloadSvg() {
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '1.8');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    const arrow = document.createElementNS(ns, 'path');
+    arrow.setAttribute('d', 'M12 4v12m0 0l-5-5m5 5l5-5');
+    const tray = document.createElementNS(ns, 'path');
+    tray.setAttribute('d', 'M4 20h16');
+    svg.appendChild(arrow);
+    svg.appendChild(tray);
+    return svg;
+  }
+
+  function renderBellDropdownList() {
+    const wrap = document.querySelector(`[${ENTRY_ATTR}="${BELL_ID}"] .fmn-report-bell-dropdown`);
+    if (!wrap) return;
+    const list = wrap.querySelector('.fmn-report-bell-dropdown-list');
+    const empty = wrap.querySelector('.fmn-report-bell-dropdown-empty');
+    if (!list || !empty) return;
+    list.innerHTML = '';
+    if (reportNotifHistory.length === 0) {
+      list.hidden = true;
+      empty.hidden = false;
+      return;
+    }
+    list.hidden = false;
+    empty.hidden = true;
+    for (const item of reportNotifHistory) {
+      const li = document.createElement('li');
+      const row = document.createElement('div');
+      row.className = 'fmn-report-bell-dropdown-row';
+
+      const main = document.createElement('button');
+      main.type = 'button';
+      main.className = 'fmn-report-bell-dropdown-row-main';
+      const nameEl = document.createElement('span');
+      nameEl.className = 'fmn-report-bell-dropdown-row-name';
+      // New shape: per-report entries carry reportName / reportTypeName.
+      // Legacy shape: just a delta count.
+      nameEl.textContent = item.reportName || item.reportTypeName ||
+        (item.delta === 1 ? '1 report finished' : `${item.delta || '?'} reports finished`);
+      const timeEl = document.createElement('span');
+      timeEl.className = 'fmn-report-bell-dropdown-row-time';
+      timeEl.textContent = formatBellRowTime(item.takenAt);
+      main.appendChild(nameEl);
+      main.appendChild(timeEl);
+      main.addEventListener('click', () => {
+        // Operator wanted: navigate to the Report History sub-tab.
+        location.href = 'https://fortimonitor.forticloud.com/report/ListReports#report-history';
+      });
+      row.appendChild(main);
+
+      // Inline "Download" pill when the entry has a link. Icon + label
+      // so the affordance is unambiguous in the topbar dropdown context.
+      if (item.downloadLink) {
+        const dl = document.createElement('a');
+        dl.className = 'fmn-report-bell-dropdown-row-download';
+        dl.href = item.downloadLink.startsWith('http')
+          ? item.downloadLink
+          : 'https://fortimonitor.forticloud.com' + item.downloadLink;
+        dl.title = 'Download report';
+        dl.target = '_blank';
+        dl.rel = 'noopener';
+        dl.addEventListener('click', (e) => e.stopPropagation());
+        dl.appendChild(bellDownloadSvg());
+        dl.appendChild(document.createTextNode('Download'));
+        row.appendChild(dl);
+      }
+      li.appendChild(row);
+      list.appendChild(li);
+    }
+  }
+
+  function buildBellLi() {
+    const li = document.createElement('li');
+    li.className = 'fmn-report-bell-li';
+    li.setAttribute(ENTRY_ATTR, BELL_ID);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'fmn-report-bell-btn';
+    btn.setAttribute('aria-label', 'Recent FortiMonitor reports');
+    btn.appendChild(bellSvg());
+    const badge = document.createElement('span');
+    badge.className = 'fmn-report-bell-badge';
+    badge.hidden = reportNotifBadge <= 0;
+    badge.textContent = String(reportNotifBadge);
+    btn.appendChild(badge);
+    li.appendChild(btn);
+
+    const dropdown = document.createElement('div');
+    dropdown.className = 'fmn-report-bell-dropdown';
+    dropdown.hidden = true;
+    const hd = document.createElement('div');
+    hd.className = 'fmn-report-bell-dropdown-hd';
+    const hdLabel = document.createElement('span');
+    hdLabel.textContent = 'Recent reports';
+    const clearBtn = document.createElement('button');
+    clearBtn.type = 'button';
+    clearBtn.className = 'fmn-report-bell-dropdown-clear';
+    clearBtn.textContent = 'Clear';
+    clearBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      try {
+        chrome.runtime.sendMessage({ type: 'report-notifications:clear-history', payload: {} });
+      } catch {}
+    });
+    hd.appendChild(hdLabel);
+    hd.appendChild(clearBtn);
+    dropdown.appendChild(hd);
+    const list = document.createElement('ul');
+    list.className = 'fmn-report-bell-dropdown-list';
+    dropdown.appendChild(list);
+    const empty = document.createElement('div');
+    empty.className = 'fmn-report-bell-dropdown-empty';
+    empty.textContent = 'No reports finished yet.';
+    dropdown.appendChild(empty);
+    li.appendChild(dropdown);
+
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isOpen = !dropdown.hidden;
+      if (isOpen) {
+        dropdown.hidden = true;
+        btn.classList.remove('fmn-report-bell-btn_active');
+        return;
+      }
+      dropdown.hidden = false;
+      btn.classList.add('fmn-report-bell-btn_active');
+      renderBellDropdownList();
+      // Clear the badge counter on open (history remains).
+      try {
+        chrome.runtime.sendMessage({ type: 'report-notifications:clear-badge', payload: {} });
+      } catch {}
+    });
+    // Dismiss on outside-click.
+    document.addEventListener('click', (ev) => {
+      if (!li.contains(ev.target)) {
+        dropdown.hidden = true;
+        btn.classList.remove('fmn-report-bell-btn_active');
+      }
+    });
+
+    return li;
+  }
+
+  register({
+    id: BELL_ID,
+    mount() {
+      if (!reportNotifFlagLoaded) return;
+      const existing = document.querySelector(`[${ENTRY_ATTR}="${BELL_ID}"]`);
+      if (!reportNotifEnabled) {
+        if (existing) existing.remove();
+        return;
+      }
+      if (existing) return;
+      // Anchor: the <li> containing the topbar search input. Prefer the
+      // toolkit's omni-search container when active; otherwise FortiMonitor's
+      // native "Search Instances" input.
+      const searchInput = document.querySelector('#fmn-omni-search-input, input[placeholder*="Search Instances"]');
+      if (!searchInput) return;
+      const searchLi = searchInput.closest('li');
+      if (!searchLi || !searchLi.parentElement) return;
+      ensureBellStyles();
+      const bellLi = buildBellLi();
+      searchLi.parentElement.insertBefore(bellLi, searchLi.nextSibling);
+      renderBellBadge();
+      renderBellDropdownList();
+    },
+  });
+
   // a single attribute read per matched element. No new DOM is
   // appended on a no-op pass, so the MutationObserver feedback loop
   // FMN-72 shipped once cannot fire here.
@@ -3329,6 +3772,7 @@
     subscribeSidebarLauncherFlag();
     subscribeOmniSearchFlag();
     subscribeSnapshotDiffFlag();
+    subscribeReportBellState();
     subscribeInfoBubbleFlags();
 
     // Load persisted column order and the sidebar-launcher flag before the
@@ -3343,6 +3787,7 @@
       loadShowFeatureBadgesFlag(),
       loadOmniSearchFlag(),
       loadSnapshotDiffFlag(),
+      loadReportBellState(),
       loadInfoBubbleFlags(),
     ]).finally(() => {
       ensureAll();

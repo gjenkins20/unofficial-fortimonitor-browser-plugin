@@ -31,6 +31,8 @@ import {
   setOmniSearchEnabled,
   isSnapshotDiffEnabled,
   setSnapshotDiffEnabled,
+  isReportNotificationsEnabled,
+  setReportNotificationsEnabled,
   isUpdateCheckEnabled,
   setUpdateCheckEnabled,
   isNoiseAnalyzerEnabled,
@@ -352,6 +354,105 @@ async function loadSnapshotDiffIntoToggle() {
   const toggle = document.getElementById('snapshot-diff-toggle');
   if (!toggle) return;
   toggle.checked = await isSnapshotDiffEnabled();
+}
+
+async function loadReportNotificationsIntoToggle() {
+  const toggle = document.getElementById('report-notifications-toggle');
+  if (!toggle) return;
+  toggle.checked = await isReportNotificationsEnabled();
+}
+
+async function applyReportNotificationsControlsVisibility() {
+  const on = await isReportNotificationsEnabled();
+  for (const el of document.querySelectorAll('[data-report-notifications-controls]')) {
+    el.hidden = !on;
+  }
+}
+
+function formatReportTime(iso) {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    const today = new Date();
+    const sameDay =
+      d.getFullYear() === today.getFullYear() &&
+      d.getMonth() === today.getMonth() &&
+      d.getDate() === today.getDate();
+    const h = String(d.getHours()).padStart(2, '0');
+    const m = String(d.getMinutes()).padStart(2, '0');
+    if (sameDay) return `${h}:${m}`;
+    const mo = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${mo}/${dd} ${h}:${m}`;
+  } catch { return ''; }
+}
+
+async function renderReportNotificationsCard() {
+  const card = document.getElementById('report-notifications-card');
+  if (!card) return;
+  const enabled = await isReportNotificationsEnabled();
+  if (!enabled) { card.hidden = true; return; }
+  let items = [];
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: 'report-notifications:history',
+      payload: {},
+    });
+    if (response?.ok && response.result?.ok) items = response.result.items || [];
+  } catch { /* SW unreachable; render empty */ }
+  if (items.length === 0) { card.hidden = true; return; }
+  const list = document.getElementById('report-notifications-history-list');
+  if (!list) { card.hidden = true; return; }
+  list.innerHTML = '';
+  const HISTORY_URL = 'https://fortimonitor.forticloud.com/report/ListReports#report-history';
+  for (const item of items) {
+    const li = document.createElement('li');
+    const left = document.createElement('button');
+    left.type = 'button';
+    left.className = 'row-action';
+    left.textContent = item.reportName || item.reportTypeName ||
+      (item.delta === 1 ? '1 report finished' : `${item.delta || '?'} reports finished`);
+    left.addEventListener('click', async () => {
+      try {
+        const tabs = await chrome.tabs.query({ url: 'https://fortimonitor.forticloud.com/*' });
+        if (tabs.length > 0) {
+          await chrome.tabs.update(tabs[0].id, { active: true, url: HISTORY_URL });
+          if (tabs[0].windowId != null) await chrome.windows.update(tabs[0].windowId, { focused: true });
+        } else {
+          await chrome.tabs.create({ url: HISTORY_URL });
+        }
+        window.close();
+      } catch { /* silent */ }
+    });
+    const right = document.createElement('span');
+    right.className = 'row-time';
+    right.textContent = formatReportTime(item.takenAt);
+    li.appendChild(left);
+    li.appendChild(right);
+    // Inline download link when the entry carries one (parsed from the
+    // FortiMonitor history endpoint by the SW pollOnce path).
+    if (item.downloadLink) {
+      const dl = document.createElement('a');
+      dl.className = 'row-download';
+      dl.href = item.downloadLink.startsWith('http')
+        ? item.downloadLink
+        : 'https://fortimonitor.forticloud.com' + item.downloadLink;
+      dl.target = '_blank';
+      dl.rel = 'noopener';
+      dl.title = 'Download report';
+      dl.textContent = 'Download';
+      li.appendChild(dl);
+    }
+    list.appendChild(li);
+  }
+  card.hidden = false;
+}
+
+async function clearReportNotificationsBadgeOnOpen() {
+  try {
+    await chrome.runtime.sendMessage({ type: 'report-notifications:clear-badge', payload: {} });
+  } catch { /* silent */ }
 }
 
 function setSnapshotInlineStatus(elId, text, kind = '') {
@@ -1156,6 +1257,21 @@ function init() {
   // fresh popup load still shows the tile for opted-in operators.
   loadIntroTourState().catch(() => { /* failure means tile stays hidden */ });
 
+  // FMN-191: render the recent-completions card + clear the toolbar
+  // badge (the popup being open is the read-receipt). History stays.
+  renderReportNotificationsCard().catch(() => { /* card stays hidden */ });
+  clearReportNotificationsBadgeOnOpen();
+
+  const reportNotifClearBtn = document.getElementById('report-notifications-clear-history');
+  if (reportNotifClearBtn) {
+    reportNotifClearBtn.addEventListener('click', async () => {
+      try {
+        await chrome.runtime.sendMessage({ type: 'report-notifications:clear-history', payload: {} });
+      } catch { /* silent */ }
+      await renderReportNotificationsCard();
+    });
+  }
+
   // FMN-157: render any prior update-check result immediately, then
   // ask the SW to refresh in the background (subject to the hour
   // rate limit inside checkForUpdate). The next popup open picks up
@@ -1224,6 +1340,8 @@ function init() {
     await loadSnapshotDiffIntoToggle();
     await applySnapshotDiffControlsVisibility();
     await loadSnapshotRotationIntoInput();
+    await loadReportNotificationsIntoToggle();
+    await applyReportNotificationsControlsVisibility();
     await loadUpdateCheckIntoToggle();
     await loadNoiseAnalyzerIntoToggle();
     await loadWebguiColumnsIntoSettings();
@@ -1318,6 +1436,48 @@ function init() {
         setSnapshotInlineStatus('snapshot-clear-status', `Clear failed: ${err?.message || err}`, 'err');
       } finally {
         clearBtn.disabled = false;
+      }
+    });
+  }
+
+  // FMN-191: report-notifications toggle. Persists the flag; the SW
+  // listens to chrome.storage.onChanged and re-arms/clears its polling
+  // alarm accordingly.
+  const reportNotifToggle = document.getElementById('report-notifications-toggle');
+  if (reportNotifToggle) {
+    reportNotifToggle.addEventListener('change', async (e) => {
+      await setReportNotificationsEnabled(e.target.checked);
+      await applyReportNotificationsControlsVisibility();
+      if (e.target.checked) {
+        // FMN-191: calibrate the detector baseline synchronously at
+        // toggle-flip so reports generated in the first ~60s after enabling
+        // don't get absorbed into the baseline by a deferred first poll.
+        try {
+          await chrome.runtime.sendMessage({ type: 'report-notifications:poll-now', payload: {} });
+        } catch { /* swallow; SW may be momentarily idle */ }
+      }
+    });
+  }
+
+  const reportNotifTestBtn = document.getElementById('report-notifications-test');
+  if (reportNotifTestBtn) {
+    reportNotifTestBtn.addEventListener('click', async () => {
+      reportNotifTestBtn.disabled = true;
+      setSnapshotInlineStatus('report-notifications-test-status', 'Sending...', '');
+      try {
+        const response = await chrome.runtime.sendMessage({
+          type: 'report-notifications:test',
+          payload: {},
+        });
+        if (response?.ok && response.result?.ok) {
+          setSnapshotInlineStatus('report-notifications-test-status', 'Sent. Check your desktop.', 'ok');
+        } else {
+          setSnapshotInlineStatus('report-notifications-test-status', response?.error || 'Test failed.', 'err');
+        }
+      } catch (err) {
+        setSnapshotInlineStatus('report-notifications-test-status', `Test failed: ${err?.message || err}`, 'err');
+      } finally {
+        reportNotifTestBtn.disabled = false;
       }
     });
   }

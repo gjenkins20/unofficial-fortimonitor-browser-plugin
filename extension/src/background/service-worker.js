@@ -23,6 +23,10 @@ import { createBpaSnapshotHandlers } from './bpa-snapshot-handlers.js';
 import { createClaudeChatHandlers } from './claude-chat-handlers.js';
 import { createOmniSearchHandlers } from './omni-search-handlers.js';
 import { createBulkComposerHandlers } from './bulk-composer-handlers.js';
+import {
+  createReportNotificationHandlers,
+  attachReportNotificationAlarms,
+} from './report-notification-handlers.js';
 import { attachIntroTourStartHandler } from './intro-tour-dispatch.js';
 import { resolveFortimonitorOrigin } from '../lib/origin-resolver.js';
 import { applyAllProviderRules, WATCHED_STORAGE_KEYS } from '../lib/origin-rewrite.js';
@@ -54,8 +58,13 @@ const handlers = {
   ...createBpaSnapshotHandlers({ events: { emit }, resolveOrigin }),
   ...createClaudeChatHandlers({ events: { emit } }),
   ...createOmniSearchHandlers({ events: { emit } }),
-  ...createBulkComposerHandlers({ events: { emit } })
+  ...createBulkComposerHandlers({ events: { emit } }),
+  ...createReportNotificationHandlers({})
 };
+
+// FMN-191: wire the report-completion polling alarm + notification click
+// handler. Idempotent; safe to call on every SW wakeup.
+attachReportNotificationAlarms();
 
 // FMN-152 dev aid: expose handler keys on globalThis so a Playwright
 // sw.evaluate() probe can verify each handler module wired in.

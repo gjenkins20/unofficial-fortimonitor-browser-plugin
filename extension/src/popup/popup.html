@@ -54,6 +54,20 @@
       <input id="search" type="text" placeholder="Search tools…">
     </div>
 
+    <!--
+      FMN-191: recent FortiMonitor report completions. Surfaces a passive
+      log so an operator returning to the popup can see what finished
+      while they were away. Hidden when the toggle is off OR no history
+      exists yet. populate-card is wired in popup.js.
+    -->
+    <div id="report-notifications-card" class="report-notifications-card" hidden>
+      <div class="report-notifications-card-hd">
+        <span class="report-notifications-card-title">Recent FortiMonitor reports</span>
+        <button id="report-notifications-clear-history" type="button" class="report-notifications-clear">Clear</button>
+      </div>
+      <ul id="report-notifications-history-list" class="report-notifications-list"></ul>
+    </div>
+
     <!-- FMN-208: training section + tool list share one scroll container so -->
     <!-- the training tile scrolls together with the alphabetized tools. -->
     <!-- DOM order keeps Training at the top (FMN-167 intent); structurally -->
@@ -588,6 +602,26 @@
         <div class="snapshot-clear-row">
           <button id="snapshot-clear-all" type="button" class="btn">Clear all snapshots</button>
           <span id="snapshot-clear-status" class="settings-inline-status"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <label class="settings-label" for="report-notifications-toggle">Report completion bell (Beta)</label>
+      <p class="settings-help">
+        Off by default. When on, the toolkit polls FortiMonitor every minute for finished Canned Reports and adds a bell icon next to the search bar at the top of any FortiMonitor page. The bell shows a count when new reports complete; click it to see what finished and jump to the Reports page. A "Recent reports" panel also appears here in the popup, and the toolbar icon shows a small badge when reports are waiting. Polling is local; nothing is sent to FortiMonitor's servers.
+      </p>
+      <label class="toggle-row">
+        <input id="report-notifications-toggle" type="checkbox">
+        <span>Show the in-page bell when canned reports finish</span>
+      </label>
+      <div class="settings-subsection" data-report-notifications-controls hidden>
+        <p class="settings-help" style="margin-top:6px;">
+          Simulate a completion right now to see the bell light up + the Recent reports panel populate. Doesn't trigger an actual FortiMonitor report.
+        </p>
+        <div class="snapshot-clear-row">
+          <button id="report-notifications-test" type="button" class="btn">Simulate a completion</button>
+          <span id="report-notifications-test-status" class="settings-inline-status"></span>
         </div>
       </div>
     </div>

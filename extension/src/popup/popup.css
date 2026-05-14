@@ -381,6 +381,87 @@ html, body {
 }
 .settings-inline-status.ok { color: var(--ok); }
 .settings-inline-status.err { color: var(--err, #dc2626); }
+
+.report-notifications-card {
+  margin: 8px 0 6px;
+  padding: 8px 10px;
+  background: #fff4e8;
+  border: 1px solid #f7c48a;
+  border-radius: 6px;
+}
+.report-notifications-card[hidden] { display: none; }
+.report-notifications-card-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.report-notifications-card-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.report-notifications-clear {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+.report-notifications-clear:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--text);
+}
+.report-notifications-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 11.5px;
+}
+.report-notifications-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  border-top: 1px dashed rgba(0, 0, 0, 0.07);
+}
+.report-notifications-list li:first-child {
+  border-top: 0;
+}
+.report-notifications-list .row-action {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: 11.5px;
+  color: var(--accent);
+  padding: 0;
+  text-decoration: none;
+}
+.report-notifications-list .row-action:hover { text-decoration: underline; }
+.report-notifications-list .row-time {
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.report-notifications-list .row-download {
+  font-size: 11px;
+  color: var(--accent);
+  text-decoration: none;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.report-notifications-list .row-download:hover {
+  background: rgba(11, 108, 247, 0.08);
+  text-decoration: underline;
+}
 .settings-sublabel {
   display: block;
   font-size: 11px;

@@ -31,6 +31,13 @@ export const OMNI_SEARCH_ENABLED_KEY = 'fm:omniSearchEnabled';
 // on FortiMonitor's Canned Reports page. Off by default until the
 // operator has compared a few reports and validated the diff output.
 export const SNAPSHOT_DIFF_ENABLED_KEY = 'fm:snapshotDiffEnabled';
+// FMN-191: per-tool flag for the "FortiMonitor report finished" desktop
+// notification. Off by default until the operator validates that OS-level
+// permissions are granted (Chrome -> Notifications). When on, the service
+// worker polls /report/get_canned_history_report_requests_data every
+// 60s and fires chrome.notifications.create when the recordsTotal count
+// increments.
+export const REPORT_NOTIFICATIONS_ENABLED_KEY = 'fm:reportNotificationsEnabled';
 // FMN-157: in-extension update check against the GitHub repo. The
 // background fetches https://raw.githubusercontent.com/.../manifest.json
 // at most once per hour, semver-compares to chrome.runtime.getManifest().
@@ -380,6 +387,30 @@ export async function isSnapshotDiffEnabled(storage = defaultStorage()) {
  */
 export async function setSnapshotDiffEnabled(enabled, storage = defaultStorage()) {
   await storage.set({ [SNAPSHOT_DIFF_ENABLED_KEY]: Boolean(enabled) });
+}
+
+/**
+ * Read the FMN-191 report-notifications-enabled flag. Off by default.
+ *
+ * @param {{ get: (key: string) => Promise<Record<string, any>> }} [storage]
+ */
+export async function isReportNotificationsEnabled(storage = defaultStorage()) {
+  try {
+    const data = await storage.get(REPORT_NOTIFICATIONS_ENABLED_KEY);
+    return Boolean(data?.[REPORT_NOTIFICATIONS_ENABLED_KEY]);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Persist the FMN-191 report-notifications-enabled flag.
+ *
+ * @param {boolean} enabled
+ * @param {{ set: (obj: Record<string, any>) => Promise<void> }} [storage]
+ */
+export async function setReportNotificationsEnabled(enabled, storage = defaultStorage()) {
+  await storage.set({ [REPORT_NOTIFICATIONS_ENABLED_KEY]: Boolean(enabled) });
 }
 
 /**
