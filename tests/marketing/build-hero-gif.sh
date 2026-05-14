@@ -34,8 +34,8 @@ OFF3=$(echo "$OFF2 + $H2" | bc)
 ffmpeg -y \
   -loop 1 -t "$L0" -i "$SRC/01-popup.png" \
   -loop 1 -t "$L1" -i "$SRC/02-load.png" \
-  -loop 1 -t "$L2" -i "$SRC/03-review.png" \
-  -loop 1 -t "$L3" -i "$SRC/04-results.png" \
+  -loop 1 -t "$L2" -i "$SRC/03-action.png" \
+  -loop 1 -t "$L3" -i "$SRC/04-configure.png" \
   -filter_complex "\
     [0:v][1:v]xfade=transition=fade:duration=${FADE}:offset=${OFF1}[v01]; \
     [v01][2:v]xfade=transition=fade:duration=${FADE}:offset=${OFF2}[v012]; \

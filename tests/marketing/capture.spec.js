@@ -379,7 +379,68 @@ async function stubFabricCreate(context) {
   });
 }
 
-test('hero flow: add fabric connection (4 frames)', async ({ extensionContext, extensionId }) => {
+// FMN-214: Bulk Composer is the README headliner since FMN-213, so the
+// hero GIF showcases the BC workflow (Pick instances -> Pick action ->
+// Configure) instead of Add Fabric Connection. The FC hero flow below
+// is preserved as historical reference but skipped so it doesn't race
+// the BC test for the same frame paths.
+test('hero flow: bulk composer (4 frames)', async ({ extensionContext, extensionId }) => {
+  await seedConfiguredState(extensionContext);
+  await stubV2Api(extensionContext);
+
+  // Enable Beta tiles so the popup phase reflects the full 11-tile toolkit.
+  const heroSw = extensionContext.serviceWorkers()[0]
+    ?? await extensionContext.waitForEvent('serviceworker', { timeout: 10_000 });
+  await heroSw.evaluate(async () => {
+    await chrome.storage.local.set({
+      'fm:sdwanReportEnabled': true,
+      'fm:bpaAuditEnabled': true,
+      'fm:ssoConfigEnabled': true
+    });
+  });
+
+  // ---- Frame 1: Popup launcher ----
+  const popupPage = await extensionContext.newPage();
+  await popupPage.setViewportSize(TOOL_VIEWPORT);
+  await popupPage.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
+  await expect(popupPage.locator('.tool-card:not([data-tool="intro-tour"])').first()).toBeVisible();
+  await expect(popupPage.locator('#session-strip.ok')).toBeVisible();
+  await popupPage.waitForTimeout(300);
+  await popupPage.screenshot({ path: frame('01-popup.png'), fullPage: true });
+  await popupPage.close();
+
+  const page = await extensionContext.newPage();
+  await page.setViewportSize(TOOL_VIEWPORT);
+  await page.goto(`chrome-extension://${extensionId}/src/ui/bulk-composer/app.html`);
+
+  // ---- Frame 2: Pick instances (paste filled) ----
+  await expect(page.locator('textarea.paste-area').first()).toBeVisible({ timeout: 10_000 });
+  await page.locator('textarea.paste-area').first().fill(
+    '42024060\n42024061\n42024075'
+  );
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: frame('02-load.png'), fullPage: true });
+
+  // ---- Frame 3: Pick action (Add Tag selected) ----
+  // BC's Pick-instances Continue button is labelled "Continue to action picker ->".
+  await page.locator('button.btn-primary').filter({ hasText: /Continue/ }).click();
+  await expect(page.locator('[data-test="action-cards"]')).toBeVisible({ timeout: 10_000 });
+  await page.locator('[data-action-id="add-tag"]').click();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: frame('03-action.png'), fullPage: true });
+
+  // ---- Frame 4: Configure (tag input filled) ----
+  // Action step's next button reads "Configure ->".
+  await page.locator('[data-test="action-next"]').click();
+  await expect(page.locator('[data-test="configure-next"]')).toBeVisible({ timeout: 10_000 });
+  // The Add Tag form's text input is the first text input in the body.
+  const tagInput = page.locator('.body-section input[type="text"]').first();
+  await tagInput.fill('production');
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: frame('04-configure.png'), fullPage: true });
+});
+
+test.skip('hero flow: add fabric connection (4 frames)', async ({ extensionContext, extensionId }) => {
   await seedConfiguredState(extensionContext);
   await stubV2Api(extensionContext);
   await stubFabricCreate(extensionContext);
@@ -473,10 +534,10 @@ const FRAME_H = 880;
 const CAP_H = 80;
 
 const HERO_PHASES = [
-  { name: '01-popup',   caption: 'Open the toolkit' },
-  { name: '02-load',    caption: 'Paste your FortiGate devices' },
-  { name: '03-review',  caption: 'Review the planned changes' },
-  { name: '04-results', caption: 'All 3 succeeded' }
+  { name: '01-popup',     caption: 'Open the toolkit' },
+  { name: '02-load',      caption: 'Paste the instances you want to act on' },
+  { name: '03-action',    caption: 'Pick a bulk action' },
+  { name: '04-configure', caption: 'Configure, preview, and commit' }
 ];
 
 baseTest('hero captions: bake caption band into source frames', async () => {
