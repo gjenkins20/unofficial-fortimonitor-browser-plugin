@@ -16,6 +16,8 @@ import {
   diffTemplates,
   diffGroups,
   diffAllSections,
+  findActor,
+  condenseForSnapshot,
   DEFAULT_MAX_SNAPSHOTS,
   MIN_MAX_SNAPSHOTS,
   MAX_MAX_SNAPSHOTS,
@@ -358,4 +360,73 @@ test('setPreviousSnapshot: leaves current + history intact', async () => {
   // history (containing T1) should remain.
   const all = await listAllSnapshots(local);
   assert.ok(all.find((s) => s.takenAt === 'T1'), 'T1 should still be in history');
+});
+
+// =====================================================================
+// FMN-223: Account History attribution
+// =====================================================================
+
+const HISTORY_FIXTURE = [
+  { date: '2026-05-14', time: '22:30:00 PDT', user: 'Greg Jenkins -TCSM', server_id: null, instance_name: '', action: 'API POST with token unofficial-plugin-key: Created User someone@example.invalid [366000]', entity_type: 'user', entity_id: 366000 },
+  { date: '2026-05-14', time: '22:30:01 PDT', user: 'Greg Jenkins -TCSM', server_id: null, instance_name: '', action: 'API POST with token unofficial-plugin-key: Created Server Group test [985000]', entity_type: 'server_group', entity_id: 985000 },
+  { date: '2026-05-14', time: '22:30:02 PDT', user: 'System', server_id: 42024061, instance_name: 'FGVM01TM24006845', action: 'Applied template Developers. Changed values: Added metrics...', entity_type: null, entity_id: null },
+];
+
+test('findActor: matches a server diff row by server_id', () => {
+  assert.equal(findActor(HISTORY_FIXTURE, 'servers', 42024061), 'System');
+});
+
+test('findActor: matches a user diff row by entity_id', () => {
+  assert.equal(findActor(HISTORY_FIXTURE, 'users', 366000), 'Greg Jenkins -TCSM');
+});
+
+test('findActor: matches a server_group diff row by entity_id', () => {
+  assert.equal(findActor(HISTORY_FIXTURE, 'server_groups', 985000), 'Greg Jenkins -TCSM');
+});
+
+test('findActor: returns null when no history entry references the id (FMN-223: API PUT on tags is not logged)', () => {
+  assert.equal(findActor(HISTORY_FIXTURE, 'servers', 42024060), null);
+});
+
+test('findActor: returns null when history is empty or null (backfill from pre-FMN-223 snapshots)', () => {
+  assert.equal(findActor([], 'users', 366000), null);
+  assert.equal(findActor(null, 'users', 366000), null);
+});
+
+test('condenseForSnapshot: persists account_history from the result blob', () => {
+  const result = {
+    customer: { id: 1, name: 'Acme', subdomain: 'acme' },
+    account_history: HISTORY_FIXTURE,
+    finished_at: '2026-05-14T22:30:00.000Z',
+    inventory: { servers: [], users: [], server_templates: [], server_groups: [] },
+  };
+  const snap = condenseForSnapshot(result);
+  assert.equal(snap.account_history.length, 3);
+  assert.equal(snap.account_history[0].entity_type, 'user');
+});
+
+test('condenseForSnapshot: backfills account_history to [] when result has none (pre-FMN-223 result blobs)', () => {
+  const result = {
+    customer: null,
+    finished_at: '2026-05-14T22:30:00.000Z',
+    inventory: { servers: [], users: [], server_templates: [], server_groups: [] },
+  };
+  const snap = condenseForSnapshot(result);
+  assert.deepEqual(snap.account_history, []);
+});
+
+test('diffAllSections: attaches actor to modified server rows via history (FMN-223)', () => {
+  const prev = { ...snap('T1'), inventory: { servers: [{ id: 1, name: 'a', tags: ['old'] }], users: [], server_templates: [], server_groups: [] }, account_history: [] };
+  const curr = { ...snap('T2'), inventory: { servers: [{ id: 1, name: 'a', tags: ['new'] }], users: [], server_templates: [], server_groups: [] }, account_history: [{ user: 'Sasha', server_id: 1, entity_type: null, entity_id: null, action: 'Updated server a Added tags: new' }] };
+  const d = diffAllSections(prev, curr);
+  assert.equal(d.servers.modified.length, 1);
+  assert.equal(d.servers.modified[0].actor, 'Sasha');
+});
+
+test('diffAllSections: actor stays null when no history matches', () => {
+  const prev = { ...snap('T1'), inventory: { servers: [{ id: 1, name: 'a', tags: ['old'] }], users: [], server_templates: [], server_groups: [] }, account_history: [] };
+  const curr = { ...snap('T2'), inventory: { servers: [{ id: 1, name: 'a', tags: ['new'] }], users: [], server_templates: [], server_groups: [] }, account_history: [] };
+  const d = diffAllSections(prev, curr);
+  assert.equal(d.servers.modified.length, 1);
+  assert.equal(d.servers.modified[0].actor, null);
 });

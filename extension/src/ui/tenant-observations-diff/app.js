@@ -256,6 +256,13 @@ function renderFieldList(fields) {
   return ul;
 }
 
+// FMN-223: actor cell. Renders the matched Account-History user when
+// available, otherwise a muted "?" so the column is never empty.
+function actorCell(row) {
+  const txt = (row && typeof row.actor === 'string' && row.actor.length > 0) ? row.actor : '?';
+  return el('td', { class: txt === '?' ? 'actor unknown' : 'actor', text: txt });
+}
+
 function renderDiffTable(diff, tab) {
   const tbl = el('table', { class: 'diff' });
   const thead = el('thead');
@@ -263,6 +270,7 @@ function renderDiffTable(diff, tab) {
     el('th', { text: 'Change' }),
     el('th', { text: tab.entityHeader }),
     el('th', { text: 'ID' }),
+    el('th', { text: 'Changed by' }),
     el('th', { text: 'Details' }),
   ));
   tbl.appendChild(thead);
@@ -273,6 +281,7 @@ function renderDiffTable(diff, tab) {
       el('td', {}, el('span', { class: 'change-badge added', text: 'added' })),
       el('td', { text: tab.label_of(r) }),
       el('td', { text: String(r.id) }),
+      actorCell(r),
       el('td', { text: tab.detail_of(r) }),
     ));
   }
@@ -281,6 +290,7 @@ function renderDiffTable(diff, tab) {
       el('td', {}, el('span', { class: 'change-badge removed', text: 'removed' })),
       el('td', { text: tab.label_of(r) }),
       el('td', { text: String(r.id) }),
+      actorCell(r),
       el('td', { text: tab.detail_of(r) }),
     ));
   }
@@ -289,13 +299,14 @@ function renderDiffTable(diff, tab) {
       el('td', {}, el('span', { class: 'change-badge modified', text: 'modified' })),
       el('td', { text: tab.label_of(r) }),
       el('td', { text: String(r.id) }),
+      actorCell(r),
       el('td', {}, renderFieldList(r.fields)),
     ));
   }
 
   if (diff.added.length === 0 && diff.removed.length === 0 && diff.modified.length === 0) {
     tbody.appendChild(el('tr', {},
-      el('td', { colSpan: 4, style: 'text-align:center;color:#7c8896;font-style:italic;padding:18px;' },
+      el('td', { colSpan: 5, style: 'text-align:center;color:#7c8896;font-style:italic;padding:18px;' },
         `No ${tab.label.toLowerCase()} changes between the two snapshots.`),
     ));
   }

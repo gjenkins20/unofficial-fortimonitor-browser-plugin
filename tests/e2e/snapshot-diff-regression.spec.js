@@ -294,5 +294,22 @@ test.describe('FMN-222 diff regression', () => {
     expect(env.snapshot.customer, 'envelope.snapshot.customer must not be null').toBeTruthy();
     const tenantId = env.snapshot.customer?.subdomain || env.snapshot.customer?.name;
     expect(typeof tenantId === 'string' && tenantId.length > 0, 'customer must have subdomain or name').toBeTruthy();
+
+    // ---- FMN-223 watchpoint: rows whose actions ARE logged by
+    // FortiMonitor's Account History carry an actor.
+    //
+    // Important constraint discovered via live probe (tools/qa/
+    // fmn-223-probe-tag-put-history.mjs): API PUT operations on server
+    // attributes (the path used by tag flip) are NOT recorded in
+    // Account History at all, even 30s after the write. So tagRow.actor
+    // is expected to be null. Asserting against the paths that ARE
+    // logged: POST /user (Created User), POST /server_group (Created
+    // Server Group), and POST /server/{id}/template (Applied template,
+    // which logs against the SERVER id with user="System").
+    expect(Array.isArray(env.snapshot.account_history), 'snapshot.account_history must be an array').toBe(true);
+    expect(env.snapshot.account_history.length, 'account_history must contain at least one entry post-mutation').toBeGreaterThan(0);
+    expect(addedUser.actor, 'created-user row must have an actor populated (POST /user is logged)').toBeTruthy();
+    expect(addedGroup.actor, 'created-group row must have an actor populated (POST /server_group is logged)').toBeTruthy();
+    expect(attachRow.actor, 'template-attach row (server side) must have an actor (Applied template is logged)').toBeTruthy();
   });
 });

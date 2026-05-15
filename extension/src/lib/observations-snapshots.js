@@ -60,6 +60,9 @@ export function condenseForSnapshot(result) {
     deep: Boolean(result.deep),
     maxServers: result.max_servers ?? 0,
     customer: pickCustomer(result.customer),
+    // FMN-223: persist the Account History slice for diff-time attribution.
+    // Empty array on snapshots taken before FMN-223 shipped (backfill).
+    account_history: Array.isArray(result.account_history) ? result.account_history : [],
     inventory: {
       servers: (inv.servers || []).map(condenseServer),
       users: (inv.users || []).map(condenseUser),
@@ -67,6 +70,34 @@ export function condenseForSnapshot(result) {
       server_groups: (inv.server_groups || []).map(condenseGroup),
     },
   };
+}
+
+// FMN-223: best-effort correlation of a diff row to the most-recent
+// Account History entry that touched the same entity. Returns the user
+// (actor) string or null if no match. Matches by:
+//   - servers: by server_id pulled from the InstanceDetails href column
+//   - users / server_templates / server_groups: by [<id>] in the action text
+//
+// `history` is the union of the current and previous snapshots' slices,
+// sorted newest-first by index (caller passes them in that order). First
+// match wins.
+export function findActor(history, section, entityId) {
+  if (!Array.isArray(history) || entityId == null) return null;
+  const sectionToEntityType = {
+    servers: 'server',
+    users: 'user',
+    server_templates: 'server_template',
+    server_groups: 'server_group',
+  };
+  const targetType = sectionToEntityType[section];
+  for (const h of history) {
+    if (section === 'servers') {
+      if (h.server_id === entityId && h.user) return h.user;
+      continue;
+    }
+    if (h.entity_type === targetType && h.entity_id === entityId && h.user) return h.user;
+  }
+  return null;
 }
 
 function pickCustomer(c) {
@@ -425,11 +456,26 @@ export function diffGroups(prevSnap, currSnap) {
 // One-shot all-section diff. The picker handler uses this so the viewer
 // can render every tab from a single round-trip.
 export function diffAllSections(prevSnap, currSnap) {
-  return {
+  const sections = {
     servers: diffServers(prevSnap, currSnap),
     users: diffUsers(prevSnap, currSnap),
     server_templates: diffTemplates(prevSnap, currSnap),
     server_groups: diffGroups(prevSnap, currSnap),
+  };
+  // FMN-223: attach actor to every diff row by correlating against the
+  // union of both snapshots' Account History slices. Current snapshot's
+  // history is newer; check it first so the most-recent actor wins.
+  const history = [
+    ...(Array.isArray(currSnap?.account_history) ? currSnap.account_history : []),
+    ...(Array.isArray(prevSnap?.account_history) ? prevSnap.account_history : []),
+  ];
+  for (const [name, section] of Object.entries(sections)) {
+    for (const r of section.added) r.actor = findActor(history, name, r.id);
+    for (const r of section.removed) r.actor = findActor(history, name, r.id);
+    for (const r of section.modified) r.actor = findActor(history, name, r.id);
+  }
+  return {
+    ...sections,
     prevTakenAt: prevSnap?.takenAt ?? null,
     currTakenAt: currSnap?.takenAt ?? null,
   };

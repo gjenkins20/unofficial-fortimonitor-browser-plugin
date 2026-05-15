@@ -365,11 +365,96 @@ export function createProductionObservationsFrontendFetcher(overrides = {}) {
   });
 }
 
-// FMN-221: pull tenant identity (customer name, brand) off the inline
-// `window.sentry_user` / `window.sentry_tags` block that every authenticated
-// FortiMonitor SPA page emits. The v2 /customer endpoint returns 401 with a
-// regular user API key, so this session-auth scrape is the only path to a
-// tenant identifier without elevated permissions.
+export const ACCOUNT_HISTORY_PATH = '/report/get_history_data';
+
+// FMN-223: pull the Account History slice that the FortiMonitor Logs page
+// renders. v2 /account_history returns 500 consistently (per FMN-135 note);
+// this DataTables-style session-auth endpoint is the only path. The
+// response is a flat 5-element array per row:
+//   [date, time, user, instance_html, action]
+// We parse the instance HTML for server_id when present, and the action
+// text for the bracketed entity id (Server Group / User / Server Template).
+//
+// Returns an array of { date, time, user, server_id, instance_name,
+// action, entity_type, entity_id }, ordered newest-first as the endpoint
+// returns them. Stops after `maxRows` to keep storage bounded; the diff
+// correlator matches by entity id so a generous cap is fine.
+export async function fetchAccountHistory({ fetch, origin, signal, maxRows = 200 } = {}) {
+  const baseFetch = fetch ?? globalThis.fetch.bind(globalThis);
+  const host = (typeof origin === 'string' && origin.length > 0) ? origin : FORTIMONITOR_ORIGIN;
+  const PAGE = 100;
+  const out = [];
+  let offset = 0;
+  while (out.length < maxRows) {
+    const params = new URLSearchParams({
+      to_html: 'true',
+      draw: '1',
+      start: String(offset),
+      length: String(Math.min(PAGE, maxRows - out.length)),
+      'search[value]': '',
+      'search[regex]': 'false',
+    });
+    let res;
+    try {
+      res = await baseFetch(`${host}${ACCOUNT_HISTORY_PATH}?${params}`, {
+        credentials: 'include',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        signal,
+      });
+    } catch {
+      break;
+    }
+    if (!res.ok) break;
+    const ct = res.headers.get('content-type') || '';
+    if (!ct.includes('application/json')) break;
+    let body;
+    try { body = await res.json(); } catch { break; }
+    const rows = Array.isArray(body?.data) ? body.data : [];
+    if (rows.length === 0) break;
+    for (const r of rows) {
+      out.push(parseAccountHistoryRow(r));
+      if (out.length >= maxRows) break;
+    }
+    if (rows.length < PAGE) break;
+    offset += rows.length;
+  }
+  return out;
+}
+
+function parseAccountHistoryRow(r) {
+  const date = typeof r[0] === 'string' ? r[0] : '';
+  const time = typeof r[1] === 'string' ? r[1] : '';
+  const user = typeof r[2] === 'string' ? r[2] : '';
+  const instanceHtml = typeof r[3] === 'string' ? r[3] : '';
+  const action = typeof r[4] === 'string' ? r[4] : '';
+
+  // server_id from <a href="../report/InstanceDetails?server_id=42024061">name</a>
+  const serverIdMatch = instanceHtml.match(/server_id=(\d+)/);
+  const serverId = serverIdMatch ? Number(serverIdMatch[1]) : null;
+  const nameMatch = instanceHtml.match(/>([^<]+)<\/a>/);
+  const instanceName = nameMatch ? nameMatch[1] : '';
+
+  // entity_type + entity_id from action text. Common formats:
+  //   "API POST ...: Created User <name> [<id>]"
+  //   "API DELETE ...: Deleted Server Group <name> [<id>]"
+  //   "Removed template association to <name>, preserved metrics."
+  let entityType = null;
+  let entityId = null;
+  const bracketMatch = action.match(/\b(User|Server Group|Server Template|Template)\b[^[]*\[(\d+)\]/);
+  if (bracketMatch) {
+    entityType = bracketMatch[1].toLowerCase().replace(/\s+/g, '_');
+    if (entityType === 'template') entityType = 'server_template';
+    entityId = Number(bracketMatch[2]);
+  }
+
+  return { date, time, user, server_id: serverId, instance_name: instanceName, action, entity_type: entityType, entity_id: entityId };
+}
+
+// FMN-221: pull tenant identity (customer name) off the inline
+// `window.sentry_user` block that every authenticated FortiMonitor SPA
+// page emits. The v2 /customer endpoint returns 401 with a regular user
+// API key, so this session-auth scrape is the only path to a tenant
+// identifier without elevated permissions.
 //
 // Returns { id, name, subdomain } shaped for pickCustomer in
 // observations-snapshots.js. id stays null because the sentry block carries

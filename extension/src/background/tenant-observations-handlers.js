@@ -24,7 +24,7 @@ import { PanoptaError } from '../lib/panopta-client.js';
 import { ObservationsFetcher, createObservationsFetch } from '../lib/observations-fetcher.js';
 import { PanoptaClient } from '../lib/panopta-client.js';
 import { runAllAnalyzers } from '../lib/observation-analyzers/index.js';
-import { ObservationsFrontendFetcher, fetchCustomerIdentity } from '../lib/observations-frontend-fetcher.js';
+import { ObservationsFrontendFetcher, fetchCustomerIdentity, fetchAccountHistory } from '../lib/observations-frontend-fetcher.js';
 import { sanitize as sanitizeSections } from '../ui/tenant-observations/section-selection.js';
 import { needsFrontendUsers, needsFrontendTemplates } from '../lib/observations-section-deps.js';
 
@@ -126,6 +126,21 @@ export async function runTenantObservations({
     signal,
   });
 
+  // FMN-223: fetch a slice of Account History so the diff viewer can
+  // attribute each modified entity to a user/token. Cheap, single
+  // request page; we cap at 200 rows. Best-effort: failures yield an
+  // empty array and downstream renders "?" for changed_by.
+  let accountHistory = [];
+  try {
+    accountHistory = await fetchAccountHistory({
+      fetch: frontendFetch ?? globalThis.fetch.bind(globalThis),
+      origin: resolvedOrigin,
+      signal,
+    });
+  } catch {
+    accountHistory = [];
+  }
+
   // FMN-149: gate each frontend walk on whether its consuming section
   // was requested. In "all" mode both walks run (today's behavior). In
   // analyzer-scoped mode, User Activity drives the user walk and
@@ -204,6 +219,7 @@ export async function runTenantObservations({
     // template-edit pages. Null when no resolver is wired.
     tenant_origin: resolvedOrigin ?? null,
     customer,
+    account_history: accountHistory,
     inventory,
     analysis
   };
