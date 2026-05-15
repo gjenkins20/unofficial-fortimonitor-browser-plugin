@@ -364,3 +364,37 @@ export function createProductionObservationsFrontendFetcher(overrides = {}) {
     onProgress: overrides.onProgress
   });
 }
+
+// FMN-221: pull tenant identity (customer name, brand) off the inline
+// `window.sentry_user` / `window.sentry_tags` block that every authenticated
+// FortiMonitor SPA page emits. The v2 /customer endpoint returns 401 with a
+// regular user API key, so this session-auth scrape is the only path to a
+// tenant identifier without elevated permissions.
+//
+// Returns { id, name, subdomain } shaped for pickCustomer in
+// observations-snapshots.js. id stays null because the sentry block carries
+// the user id, not a customer id; subdomain stays empty because the host is
+// shared across tenants (fortimonitor.forticloud.com). filenameFor falls
+// back to sanitizing `name` when subdomain is empty.
+export async function fetchCustomerIdentity({ fetch, origin, signal } = {}) {
+  const baseFetch = fetch ?? globalThis.fetch.bind(globalThis);
+  const host = (typeof origin === 'string' && origin.length > 0) ? origin : FORTIMONITOR_ORIGIN;
+  const url = host + '/report/ListReports';
+  let res;
+  try {
+    res = await baseFetch(url, { credentials: 'include', signal });
+  } catch {
+    return null;
+  }
+  if (!res.ok) return null;
+  const ct = res.headers.get('content-type') || '';
+  if (!ct.includes('text/html')) return null;
+  const html = await res.text();
+  const userMatch = html.match(/window\.sentry_user\s*=\s*(\{[^;]+\})/);
+  if (!userMatch) return null;
+  let parsed;
+  try { parsed = JSON.parse(userMatch[1]); } catch { return null; }
+  const name = typeof parsed.customer === 'string' ? parsed.customer.trim() : '';
+  if (!name) return null;
+  return { id: null, name, subdomain: '' };
+}

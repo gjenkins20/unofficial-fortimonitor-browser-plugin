@@ -24,7 +24,7 @@ import { PanoptaError } from '../lib/panopta-client.js';
 import { ObservationsFetcher, createObservationsFetch } from '../lib/observations-fetcher.js';
 import { PanoptaClient } from '../lib/panopta-client.js';
 import { runAllAnalyzers } from '../lib/observation-analyzers/index.js';
-import { ObservationsFrontendFetcher } from '../lib/observations-frontend-fetcher.js';
+import { ObservationsFrontendFetcher, fetchCustomerIdentity } from '../lib/observations-frontend-fetcher.js';
 import { sanitize as sanitizeSections } from '../ui/tenant-observations/section-selection.js';
 import { needsFrontendUsers, needsFrontendTemplates } from '../lib/observations-section-deps.js';
 
@@ -116,6 +116,16 @@ export async function runTenantObservations({
     resolvedOrigin = frontendOrigin;
   }
 
+  // FMN-221: fetch tenant identity unconditionally. Snapshots take the
+  // observations result through condenseForSnapshot, which expects
+  // result.customer. Without this, snapshot.customer is null and the
+  // export filename falls back to "unknown".
+  const customer = await fetchCustomerIdentity({
+    fetch: frontendFetch ?? globalThis.fetch.bind(globalThis),
+    origin: resolvedOrigin,
+    signal,
+  });
+
   // FMN-149: gate each frontend walk on whether its consuming section
   // was requested. In "all" mode both walks run (today's behavior). In
   // analyzer-scoped mode, User Activity drives the user walk and
@@ -193,6 +203,7 @@ export async function runTenantObservations({
     // FMN-147: viewer uses this to build links to the FortiMonitor
     // template-edit pages. Null when no resolver is wired.
     tenant_origin: resolvedOrigin ?? null,
+    customer,
     inventory,
     analysis
   };

@@ -231,16 +231,26 @@ test('runTenantObservations: ["template-recommendations"] runs only template ana
   assert.ok(frontendUrls.some((u) => /get_monitoring_config_data/.test(u)));
 });
 
-test('runTenantObservations: ["incidents"] does not call frontend fetcher at all (FMN-149)', async () => {
+test('runTenantObservations: ["incidents"] does not call user-activity or template-config walks (FMN-149)', async () => {
   const fetch = buildBaselineFetch();
-  let frontendCalled = false;
-  const frontendFetch = createFetchMock(async () => {
-    frontendCalled = true;
-    return jsonRes({ success: true });
+  const frontendUrls = [];
+  const frontendFetch = createFetchMock(async (url) => {
+    frontendUrls.push(url);
+    // FMN-221: customer identity is fetched unconditionally from
+    // /report/ListReports. Return an empty HTML page so the helper
+    // bails to null (no sentry_user in the body). The original FMN-149
+    // contract was about skipping the SLOW per-user and per-template
+    // walks, not about every session-auth fetch.
+    return {
+      ok: true, status: 200,
+      headers: new Map([['content-type', 'text/html; charset=utf-8']]),
+      async text() { return ''; },
+    };
   });
   const client = new PanoptaClient({ apiKey: 'k', fetch });
   const r = await runTenantObservations({ client, includeFrontend: true, frontendFetch, sections: ['incidents'] });
-  assert.equal(frontendCalled, false, 'frontend fetcher must not run when neither user-activity nor templates is selected');
+  assert.equal(frontendUrls.some((u) => /get_edit_user_data/.test(u)), false, 'no per-user activity walk');
+  assert.equal(frontendUrls.some((u) => /get_monitoring_config_data/.test(u)), false, 'no per-template config walk');
   // FMN-156 rework: noise is ancillary to incidents, so selecting
   // incidents also produces the noise analyzer's result key.
   assert.deepEqual(Object.keys(r.analysis).sort(), ['incidents', 'noise']);

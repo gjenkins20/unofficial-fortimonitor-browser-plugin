@@ -99,7 +99,13 @@ export function parseEnvelopeJson(text) {
 // is enough to keep multiple exports from the same tenant distinct
 // without exposing the seconds-precision takenAt to a filesystem.
 export function filenameFor(snapshot, { now } = {}) {
-  const sub = sanitizeSubdomain(snapshot?.customer?.subdomain) || 'unknown';
+  // FMN-221: subdomain is empty on tenants where session-auth scraping
+  // gives us a customer name but no host-derived subdomain. Fall back to
+  // the customer name slug so the filename still identifies the tenant
+  // instead of always landing on "unknown".
+  const sub = sanitizeSubdomain(snapshot?.customer?.subdomain)
+    || sanitizeSubdomain(snapshot?.customer?.name)
+    || 'unknown';
   const stampSource = snapshot?.takenAt || (now instanceof Date ? now.toISOString() : new Date().toISOString());
   const stamp = formatStamp(stampSource);
   return `fmn-snapshot-${sub}-${stamp}.json`;
