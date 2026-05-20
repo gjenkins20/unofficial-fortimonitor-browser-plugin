@@ -52,11 +52,13 @@ test.describe('FMN-155: Bulk Action Composer popup wiring', () => {
     await expect(page.locator('.title-bar h1 .badge.beta')).toHaveCount(0);
 
     // FMN-163: drop-zone + paste textarea + format-hint replace the
-    // search-led layout. No omni-search input, no chip list.
+    // search-led layout. No omni-search input, no chip list. Scope the
+    // search-absence check to the paste pane because FMN-224 added a
+    // groups-pane search input (sibling pane, hidden by default).
     await expect(page.locator('.drop-zone')).toBeVisible();
     await expect(page.locator('textarea.paste-area')).toBeVisible();
     await expect(page.locator('.format-hint')).toBeVisible();
-    await expect(page.locator('input[type="search"]')).toHaveCount(0);
+    await expect(page.locator('.pick-pane[data-pane="paste"] input[type="search"]')).toHaveCount(0);
     await expect(page.locator('[data-test="bulk-chips-count"]')).toHaveCount(0);
 
     // Empty parse-result placeholder appears.

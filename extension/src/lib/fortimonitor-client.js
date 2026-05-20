@@ -427,6 +427,59 @@ export class FortimonitorClient {
     }
   }
 
+  /**
+   * Fetch the FortiMonitor monitoring tree (groups + servers + templates).
+   * One round-trip, ~26KB for a tenant with ~60 groups + ~100 servers
+   * (FMN-199 capture 2026-05-13). Powers FMN-224's server-group input
+   * mode for Bulk Composer: walks the nested tree to enumerate every
+   * group and its (recursive) device members without requiring a v2
+   * API key.
+   *
+   * Request: POST with no body. Mimics FortiMonitor's own UI: includes
+   * X-XSRF-TOKEN when the cookie is available (the captured browser
+   * request sent it; the session may or may not validate it but
+   * matching the browser is the safest path).
+   *
+   * @returns {Promise<{ nodes: Array<object>, userHash?: string }>}
+   * @see extension/src/lib/monitoring-tree.js for the parser
+   * @see docs/api-discovery/monitoring-tree.md for the contract
+   */
+  async getMonitoringTree() {
+    const origin = await this.origin();
+    const url = `${origin}/util/monitoring_tree?include_templates=1`;
+    const headers = {
+      'Accept': 'application/json, text/plain, */*'
+    };
+    try {
+      const xsrf = await this.getCookie(XSRF_COOKIE_NAME, origin);
+      if (xsrf) headers['X-XSRF-TOKEN'] = xsrf;
+    } catch { /* no cookie helper available - fall through without header */ }
+    const res = await this.fetch(url, {
+      method: 'POST',
+      credentials: 'include',
+      headers
+    });
+    const responseUrl = redactSensitive(res.url ?? url);
+    const contentType = res.headers?.get?.('content-type') ?? '';
+    if (!res.ok) {
+      throw new FortimonitorError(`getMonitoringTree failed: HTTP ${res.status}`, {
+        status: res.status,
+        phase: 'read',
+        responseUrl,
+        contentType
+      });
+    }
+    if (contentType && !contentType.toLowerCase().includes('json')) {
+      let bodyPreview = null;
+      try { const text = await res.text(); bodyPreview = redactSensitive(text.slice(0, 200)); } catch { /* */ }
+      throw new FortimonitorError(
+        'FortiMonitor returned a non-JSON response (likely a login page); session not recognized.',
+        { status: res.status, phase: 'auth', responseUrl, contentType, bodyPreview }
+      );
+    }
+    return await res.json();
+  }
+
   // ---------------------------------------------------------------
   // Monitoring Policies (FMN-194 capture, FMN-196 consumer)
   //

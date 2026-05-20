@@ -165,6 +165,164 @@ textarea.paste-area {
 }
 textarea.paste-area:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 
+/* --- pick step: tab strip + server-group picker (FMN-224) --------- */
+
+.pick-tab-strip {
+  display: flex;
+  gap: 6px;
+  border-bottom: 1px solid var(--border-strong);
+  margin-bottom: 16px;
+}
+.pick-tab-btn {
+  padding: 8px 14px;
+  border: 1px solid var(--border-strong);
+  border-bottom: none;
+  background: var(--muted-soft);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 6px 6px 0 0;
+  margin-bottom: -1px;
+}
+.pick-tab-btn:hover { color: var(--text); }
+.pick-tab-btn.active {
+  background: white;
+  color: var(--accent);
+  border-color: var(--border-strong);
+  border-bottom: 1px solid white;
+  font-weight: 600;
+}
+.pick-tab-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.pick-pane {
+  /* hidden by default; pick.js toggles display via inline style */
+}
+
+.pick-groups-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.pick-groups-search {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  font-family: inherit;
+}
+.pick-groups-search:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+.pick-groups-refresh {
+  flex-shrink: 0;
+}
+
+.pick-groups-sort {
+  display: inline-flex;
+  flex-shrink: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.pick-groups-sort-btn {
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  background: white;
+  color: var(--text-muted);
+  border: none;
+  border-left: 1px solid var(--border-strong);
+  cursor: pointer;
+}
+.pick-groups-sort-btn:first-child {
+  border-left: none;
+}
+.pick-groups-sort-btn:hover {
+  color: var(--text);
+}
+.pick-groups-sort-btn.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+.pick-groups-sort-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.pick-groups-status {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.pick-groups-status-error {
+  color: var(--danger);
+}
+
+.pick-groups-list {
+  background: white;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.pick-groups-empty {
+  padding: 14px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.pick-group-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.pick-group-row:last-child { border-bottom: none; }
+.pick-group-row:hover { background: var(--muted-soft); }
+.pick-group-row input[type="checkbox"] {
+  flex-shrink: 0;
+  margin: 0;
+}
+.pick-group-row-label {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  min-width: 0;
+}
+.pick-group-name {
+  flex: 1;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pick-group-count {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pick-groups-summary {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 /* --- Tenant Observations section-pill row (FMN-146) --------------------------------------- */
 .tenant-observations-section-pills {
   display: flex; flex-wrap: wrap; gap: 6px; align-items: center;

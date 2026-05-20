@@ -28,6 +28,7 @@ import { createProductionClient as createProductionFortimonitorClient } from '..
 import { mapConcurrent } from '../lib/concurrency.js';
 import { getAction } from '../lib/bulk-actions/index.js';
 import { ensureTemplate } from '../lib/template-ensurer.js';
+import { parseMonitoringTree } from '../lib/monitoring-tree.js';
 
 const DRAFT_STORAGE_KEY = 'fm:bulkDrafts';
 const SELECTION_STORAGE_KEY = 'fm:bulkComposerSelection';
@@ -394,6 +395,30 @@ export function createBulkComposerHandlers({ events = {}, getClient, getFortimon
         return { groups };
       } catch {
         return { groups: [] };
+      }
+    },
+
+    /**
+     * FMN-224: list the tenant's server groups + their (recursive) device
+     * members for the Bulk Composer load-devices picker. Pulls
+     * /util/monitoring_tree?include_templates=1 (session-auth, no API key)
+     * and walks the nested tree.
+     *
+     * Returns: { groups: [{ id, name, parentId, depth, directMemberIds,
+     *                      allMemberIds, skippedOnsightCount,
+     *                      skippedCompoundCount, skippedTemplateCount }] }
+     *
+     * On auth / fetch failure returns { groups: [], error } so the picker
+     * can render an empty-with-reason state instead of throwing on the
+     * caller.
+     */
+    'bulk-composer:list-server-groups-tree': async () => {
+      const fmClient = await fmFactory();
+      try {
+        const tree = await fmClient.getMonitoringTree();
+        return parseMonitoringTree(tree);
+      } catch (err) {
+        return { groups: [], error: err?.message ?? String(err) };
       }
     },
 

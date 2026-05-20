@@ -1,18 +1,25 @@
 // Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// FMN-163: pick step rebuilt as a 1:1 visual port of the Add to Port Scope
-// (Fabric) "Load devices from CSV" step. Drop-zone + paste textarea + green
-// format-hint card + parse-result preview table + single Continue button.
+// FMN-163 original: pick step rebuilt as a 1:1 visual port of the Add to
+// Port Scope (Fabric) "Load devices from CSV" step. Drop-zone + paste
+// textarea + green format-hint card + parse-result preview table + single
+// Continue button.
 //
-// Operator-confirmed 2026-05-13: the screenshot of Add to Port Scope's load
-// step IS the whole step. No omni-search input. No loader buttons. No chips.
+// FMN-224 (2026-05-20): added a second input mode - "Server groups". A
+// tab strip at the top of the body switches between the paste/CSV pane
+// (original behavior) and a searchable multi-select picker fed by the
+// monitoring_tree endpoint. Both tabs write into the same store.targets
+// shape so downstream steps don't care which input the operator chose.
 //
-// Name resolution: parseServerList accepts numeric server IDs only and warns
-// on anything else. To match the operator's natural workflow (which starts
-// from FortiMonitor's UI showing device names, not IDs), this step silently
-// routes the non-numeric warning tokens through the omni-search SW handler.
-// Resolved names land in the parse-result table alongside numeric IDs;
-// genuinely unknown tokens stay as warnings. The UI is unchanged either way -
-// only the parser gets smarter.
+// Operator-confirmed 2026-05-13 (FMN-163): the screenshot of Add to Port
+// Scope's load step IS the whole step. No omni-search input. No loader
+// buttons. No chips.
+//
+// Name resolution (paste tab): parseServerList accepts numeric server IDs
+// only and warns on anything else. To match the operator's natural
+// workflow (which starts from FortiMonitor's UI showing device names, not
+// IDs), this step silently routes the non-numeric warning tokens through
+// the omni-search SW handler. Resolved names land in the parse-result
+// table alongside numeric IDs; genuinely unknown tokens stay as warnings.
 //
 // Downstream contract preserved: store.targets is an array of
 //   { id: number, name: string | null }
@@ -22,6 +29,7 @@ import { h, titleBar } from '../../../lib/dom.js';
 import { parseServerList } from '../../parse-csv.js';
 import { call } from '../../../lib/messaging.js';
 import { bulkBreadcrumbs } from './breadcrumbs.js';
+import { unionMembers } from '../../../lib/monitoring-tree.js';
 
 const TOOL_NAME = 'Bulk Action Composer';
 
@@ -35,12 +43,30 @@ export function render({ container, store, navigate }) {
 
   frame.appendChild(h('div', { class: 'step-header' },
     bulkBreadcrumbs('pick'),
-    h('h2', {}, 'Load instances by ID or name'),
-    h('p', {}, 'Provide the list of FortiMonitor server IDs or device names you want to operate on. Names are resolved against the FM TK Search cache. The Composer then takes you to the action picker.')
+    h('h2', {}, 'Load instances by ID, name, or server group'),
+    h('p', {}, 'Provide the list of FortiMonitor server IDs or device names you want to operate on, or pick one or more server groups to load their members. Names are resolved against the FM TK Search cache.')
   ));
 
   const body = h('div', { class: 'body-section' });
   frame.appendChild(body);
+
+  // ----- Tab strip --------------------------------------------------
+  const tabStrip = h('div', { class: 'pick-tab-strip', role: 'tablist' });
+  const pasteTabBtn = h('button', {
+    class: 'pick-tab-btn', role: 'tab', type: 'button',
+    'data-tab': 'paste', 'data-test': 'pick-tab-paste'
+  }, 'Paste or CSV');
+  const groupsTabBtn = h('button', {
+    class: 'pick-tab-btn', role: 'tab', type: 'button',
+    'data-tab': 'groups', 'data-test': 'pick-tab-groups'
+  }, 'Server groups');
+  tabStrip.appendChild(pasteTabBtn);
+  tabStrip.appendChild(groupsTabBtn);
+  body.appendChild(tabStrip);
+
+  // ----- Paste pane (original behavior) -----------------------------
+  const pastePane = h('div', { class: 'pick-pane', 'data-pane': 'paste' });
+  body.appendChild(pastePane);
 
   const fileInput = h('input', { type: 'file', accept: '.csv,.txt', hidden: true });
   const dropZone = h('label', { class: 'drop-zone' },
@@ -52,31 +78,71 @@ export function render({ container, store, navigate }) {
     h('div', { class: 'dz-secondary' }, 'Accepts .csv or plain text · one server ID or device name per line'),
     fileInput
   );
-  body.appendChild(dropZone);
+  pastePane.appendChild(dropZone);
 
-  body.appendChild(h('div', { class: 'divider' }, 'or paste below'));
+  pastePane.appendChild(h('div', { class: 'divider' }, 'or paste below'));
 
   const paste = h('textarea', {
     class: 'paste-area',
     placeholder: '42024060\nFGT-Branch-001\n42024075\n...'
   });
-  // If the operator already picked instances on a prior pass, rebuild the
-  // paste value from the existing targets so the step is idempotent on revisit.
-  if (Array.isArray(store.targets) && store.targets.length) {
-    paste.value = store.targets.map((t) => t.name ? `${t.id},${t.name}` : String(t.id)).join('\n');
-  }
-  body.appendChild(paste);
+  pastePane.appendChild(paste);
 
-  body.appendChild(h('div', { class: 'format-hint', html:
+  pastePane.appendChild(h('div', { class: 'format-hint', html:
     '<strong>Format:</strong> plain list of server IDs or device names (one per line) <em>or</em> a CSV with a <code>server_id</code> column. Device names are resolved against the cached FM TK Search corpus.' +
-    '<pre># plain list (IDs or names mixed)\n42024060\nFGT-Branch-001\n42024075\n\n# or CSV\nserver_id,device_name\n42024060,FGT-Branch-001\n42024061,FGT-Branch-002</pre>'
+    '<pre># plain list (IDs or names mixed)\n42024060\nFGT-Branch-001\n42024075\n\n# or CSV\nserver_id,device_name\n42024060,FGT-Branch-001\n42024075,FGT-Branch-002</pre>'
   }));
 
+  // ----- Groups pane (FMN-224) -------------------------------------
+  const groupsPane = h('div', { class: 'pick-pane', 'data-pane': 'groups' });
+  body.appendChild(groupsPane);
+
+  const groupsToolbar = h('div', { class: 'pick-groups-toolbar' });
+  const searchInput = h('input', {
+    type: 'search',
+    class: 'pick-groups-search',
+    placeholder: 'Filter groups by name…',
+    'data-test': 'pick-groups-search'
+  });
+  const sortTreeBtn = h('button', {
+    class: 'pick-groups-sort-btn', type: 'button',
+    'data-test': 'pick-groups-sort-tree',
+    title: 'Match the order of groups in your FortiMonitor tenant'
+  }, 'FortiMonitor order');
+  const sortAlphaBtn = h('button', {
+    class: 'pick-groups-sort-btn', type: 'button',
+    'data-test': 'pick-groups-sort-alpha',
+    title: 'Sort groups alphabetically'
+  }, 'A → Z');
+  const sortGroup = h('div', { class: 'pick-groups-sort', role: 'group', 'aria-label': 'Group sort order' },
+    sortTreeBtn, sortAlphaBtn
+  );
+  const refreshBtn = h('button', {
+    class: 'btn btn-secondary pick-groups-refresh', type: 'button',
+    'data-test': 'pick-groups-refresh'
+  }, 'Refresh tree');
+  groupsToolbar.appendChild(searchInput);
+  groupsToolbar.appendChild(sortGroup);
+  groupsToolbar.appendChild(refreshBtn);
+  groupsPane.appendChild(groupsToolbar);
+
+  const groupsStatus = h('div', { class: 'pick-groups-status' }, 'Loading server groups…');
+  groupsPane.appendChild(groupsStatus);
+
+  const groupsList = h('div', {
+    class: 'pick-groups-list',
+    'data-test': 'pick-groups-list'
+  });
+  groupsPane.appendChild(groupsList);
+
+  const groupsSummary = h('div', { class: 'pick-groups-summary' }, 'No groups selected.');
+  groupsPane.appendChild(groupsSummary);
+
+  // ----- Shared parse-result panel ---------------------------------
   const parseResult = h('div', { class: 'parse-result empty' });
   body.appendChild(parseResult);
 
-  // Action bar - matches Port Scope's footer copy exactly so the chrome
-  // reads as a sibling step.
+  // ----- Action bar ------------------------------------------------
   const clearBtn = h('button', { class: 'btn btn-secondary', type: 'button' }, 'Clear');
   const nextBtn = h('button', {
     class: 'btn btn-primary',
@@ -91,25 +157,46 @@ export function render({ container, store, navigate }) {
 
   container.appendChild(frame);
 
+  // ================================================================
+  // State
+  // ================================================================
+
   // Generation counter so a stale async resolution callback can't clobber
   // the result of a later updateParseResult() call (paste-fast scenarios).
   let resolveGen = 0;
 
-  function renderEmpty() {
+  // Groups-pane state. Cached so re-renders don't refetch and tab
+  // switches keep the operator's selection.
+  let groupsCache = null;        // { groups, nameById } from parseMonitoringTree
+  let pickedGroupIds = new Set(  // selected group ids (numeric)
+    Array.isArray(store.pickedGroupIds) ? store.pickedGroupIds.map(Number) : []
+  );
+  let searchFilter = '';
+  let sortMode = store.pickGroupSort === 'alpha' ? 'alpha' : 'tree';
+
+  // Active mode persists across step navigation. 'paste' is the default
+  // for back-compat (FMN-163 sessions had no concept of modes).
+  let activeMode = store.pickMode === 'groups' ? 'groups' : 'paste';
+
+  // ----- Paste-pane rebuild on revisit -----------------------------
+  if (activeMode === 'paste' && Array.isArray(store.targets) && store.targets.length) {
+    paste.value = store.targets.map((t) => t.name ? `${t.id},${t.name}` : String(t.id)).join('\n');
+  }
+
+  // ================================================================
+  // Shared parse-result renderers (drive whatever the active mode writes)
+  // ================================================================
+
+  function renderEmpty(headline = 'No server IDs detected', sub = 'Paste a list above or drop a CSV file.') {
     parseResult.className = 'parse-result empty';
     parseResult.replaceChildren(
-      h('div', { class: 'headline' }, 'No server IDs detected'),
-      h('div', { class: 'sub' }, 'Paste a list above or drop a CSV file.')
+      h('div', { class: 'headline' }, headline),
+      h('div', { class: 'sub' }, sub)
     );
     store.targets = [];
     nextBtn.disabled = true;
   }
 
-  // Validating state - lookups are in-flight. We deliberately hide the
-  // parser's "not a numeric server ID" warnings here because they read as
-  // hard failures when in fact the lookup hasn't yet had a chance to
-  // resolve them. Operators get a calm "Validating N entries..." message
-  // until the lookups finish.
   function renderValidating({ resolvingCount, partialServerIds = [], partialNameById = {} }) {
     parseResult.className = 'parse-result';
     const kids = [
@@ -131,22 +218,30 @@ export function render({ container, store, navigate }) {
     nextBtn.disabled = true;
   }
 
-  // Final populated render after all lookups finish.
   function renderParsed({ serverIds, nameById, totalLines, warnings }) {
     parseResult.className = 'parse-result';
     const namedCount = Object.keys(nameById).length;
+    const hasUnnamedRows = namedCount < serverIds.length;
 
-    const subParts = [`${totalLines} line${totalLines === 1 ? '' : 's'} read`];
-    subParts.push(`${namedCount} named / resolved`);
-    if (namedCount < serverIds.length) subParts.push('(unnamed rows resolve by ID downstream)');
+    // Sub-line only carries useful information for the paste tab and only
+    // when there's something concrete to report. Groups tab passes
+    // totalLines=null and always has full name coverage from the tree, so
+    // the sub-line would just repeat the headline count.
+    const subParts = [];
+    if (totalLines !== undefined && totalLines !== null) {
+      subParts.push(`${totalLines} line${totalLines === 1 ? '' : 's'} read`);
+    }
+    if (hasUnnamedRows) {
+      subParts.push('unnamed rows will resolve by ID downstream');
+    }
 
     const kids = [
       h('div', { class: 'headline' },
-        `${serverIds.length} instance${serverIds.length === 1 ? '' : 's'} ready to operate on`),
-      h('div', { class: 'sub' }, subParts.join(' · ')),
-      renderSampleTable(serverIds, nameById)
+        `${serverIds.length} instance${serverIds.length === 1 ? '' : 's'} ready to operate on`)
     ];
-    if (warnings.length) {
+    if (subParts.length) kids.push(h('div', { class: 'sub' }, subParts.join(' · ')));
+    kids.push(renderSampleTable(serverIds, nameById));
+    if (warnings && warnings.length) {
       kids.push(h('div', { class: 'warn-list' },
         h('strong', {}, `${warnings.length} warning${warnings.length === 1 ? '' : 's'}: `),
         h('ul', {}, ...warnings.map((w) => h('li', {}, w)))
@@ -161,15 +256,15 @@ export function render({ container, store, navigate }) {
     nextBtn.disabled = serverIds.length === 0;
   }
 
-  async function updateParseResult() {
+  // ================================================================
+  // Paste-pane logic (original FMN-163 behavior)
+  // ================================================================
+
+  async function updateParseResultFromPaste() {
     const myGen = ++resolveGen;
     const parsed = parseServerList(paste.value);
 
-    // Partition the parser's warnings: non-numeric-token warnings are
-    // candidates for name lookup (and stay hidden until the lookup either
-    // confirms or refutes them). Other warnings (duplicates, blank lines)
-    // are surfaced immediately - they're real input problems regardless.
-    const nameCandidates = [];   // [{ token, originalWarning }]
+    const nameCandidates = [];
     const nonNameWarnings = [];
     for (const w of parsed.warnings) {
       const m = w.match(NON_NUMERIC_WARNING_RE);
@@ -177,23 +272,18 @@ export function render({ container, store, navigate }) {
       else nonNameWarnings.push(w);
     }
 
-    // Pure-empty input: render the placeholder and stop.
     if (parsed.serverIds.length === 0 && nameCandidates.length === 0) {
       renderEmpty();
       return;
     }
 
     if (nameCandidates.length > 0) {
-      // Show the calm "Validating..." state with whatever numeric IDs we
-      // already accepted; deliberately suppress the alarmist non-numeric
-      // warnings until the lookups confirm or refute.
       renderValidating({
         resolvingCount: nameCandidates.length,
         partialServerIds: parsed.serverIds,
         partialNameById: parsed.nameById
       });
     } else {
-      // All numeric, nothing to resolve. Render the final state immediately.
       renderParsed({
         serverIds: parsed.serverIds,
         nameById: parsed.nameById,
@@ -203,9 +293,6 @@ export function render({ container, store, navigate }) {
       return;
     }
 
-    // Run lookups in parallel. Strict exact case-insensitive name match
-    // only - no fuzzy fallback (a wrong match here would attach the
-    // operator's action to the wrong device).
     const lookups = await Promise.all(nameCandidates.map(async ({ token, originalWarning }) => {
       try {
         const result = await call('omni-search:query', { query: token, max: 10 });
@@ -217,12 +304,8 @@ export function render({ container, store, navigate }) {
       }
     }));
 
-    // Drop stale callbacks if a newer paste landed while we were awaiting.
     if (myGen !== resolveGen) return;
 
-    // Merge resolved -> serverIds + nameById; for unresolved tokens
-    // rewrite the parser warning to friendlier copy that acknowledges
-    // the lookup happened.
     const serverIds = [...parsed.serverIds];
     const nameById = { ...parsed.nameById };
     const seen = new Set(serverIds);
@@ -235,9 +318,6 @@ export function render({ container, store, navigate }) {
           seen.add(idStr);
           serverIds.push(idStr);
         }
-        // Backfill the name onto the row even if the numeric ID was already
-        // present from an earlier line - the operator pasted both refs and
-        // we should show the name in either case.
         if (pick.name && !nameById[idStr]) nameById[idStr] = pick.name;
       } else {
         const lineMatch = originalWarning.match(/^(Line \d+):/);
@@ -254,14 +334,17 @@ export function render({ container, store, navigate }) {
     });
   }
 
-  paste.addEventListener('input', () => { void updateParseResult(); });
+  paste.addEventListener('input', () => {
+    if (activeMode !== 'paste') return;
+    void updateParseResultFromPaste();
+  });
 
   fileInput.addEventListener('change', async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const text = await file.text();
     paste.value = text;
-    void updateParseResult();
+    void updateParseResultFromPaste();
   });
 
   dropZone.addEventListener('dragover', (e) => {
@@ -276,13 +359,193 @@ export function render({ container, store, navigate }) {
     if (!file) return;
     const text = await file.text();
     paste.value = text;
-    void updateParseResult();
+    void updateParseResultFromPaste();
   });
 
+  // ================================================================
+  // Groups-pane logic (FMN-224)
+  // ================================================================
+
+  async function loadGroupsTree({ force = false } = {}) {
+    if (groupsCache && !force) {
+      renderGroupsList();
+      return;
+    }
+    groupsStatus.textContent = 'Loading server groups…';
+    groupsStatus.className = 'pick-groups-status';
+    groupsList.replaceChildren();
+    try {
+      const result = await call('bulk-composer:list-server-groups-tree');
+      if (!result || !Array.isArray(result.groups)) {
+        throw new Error(result?.error || 'Empty response');
+      }
+      if (result.error) {
+        // Handler returned a soft failure: empty groups + error string.
+        groupsCache = { groups: [], nameById: {} };
+        groupsStatus.textContent = result.error.includes('login') || result.error.includes('auth')
+          ? 'Could not load server groups - your FortiMonitor session may have expired. Open FortiMonitor in another tab, sign in, then click Refresh tree.'
+          : `Could not load server groups: ${result.error}`;
+        groupsStatus.className = 'pick-groups-status pick-groups-status-error';
+        renderGroupsList();
+        return;
+      }
+      groupsCache = {
+        groups: result.groups,
+        nameById: result.nameById || {}
+      };
+      groupsStatus.textContent = `${result.groups.length} group${result.groups.length === 1 ? '' : 's'} loaded.`;
+      groupsStatus.className = 'pick-groups-status';
+      renderGroupsList();
+      // Carry forward any picks the operator made before tab switch /
+      // revisit; the parse-result panel reflects them.
+      if (activeMode === 'groups' && pickedGroupIds.size > 0) {
+        updateFromGroupsPicks();
+      }
+    } catch (err) {
+      groupsCache = { groups: [], nameById: {} };
+      groupsStatus.textContent = `Could not load server groups: ${err?.message ?? String(err)}`;
+      groupsStatus.className = 'pick-groups-status pick-groups-status-error';
+      renderGroupsList();
+    }
+  }
+
+  function renderGroupsList() {
+    groupsList.replaceChildren();
+    syncSortButtons();
+    if (!groupsCache || groupsCache.groups.length === 0) return;
+    const filter = searchFilter.trim().toLowerCase();
+    let matches = filter
+      ? groupsCache.groups.filter((g) => g.name.toLowerCase().includes(filter))
+      : groupsCache.groups.slice();
+    if (sortMode === 'alpha') {
+      matches.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+    }
+    if (matches.length === 0) {
+      groupsList.appendChild(h('div', { class: 'pick-groups-empty' }, 'No groups match your filter.'));
+      return;
+    }
+    for (const g of matches) {
+      groupsList.appendChild(renderGroupRow(g));
+    }
+  }
+
+  function syncSortButtons() {
+    sortTreeBtn.classList.toggle('active', sortMode === 'tree');
+    sortAlphaBtn.classList.toggle('active', sortMode === 'alpha');
+    sortTreeBtn.setAttribute('aria-pressed', sortMode === 'tree' ? 'true' : 'false');
+    sortAlphaBtn.setAttribute('aria-pressed', sortMode === 'alpha' ? 'true' : 'false');
+  }
+
+  function renderGroupRow(g) {
+    const id = `pick-group-${g.id}`;
+    const cb = h('input', {
+      type: 'checkbox', id,
+      'data-group-id': String(g.id),
+      'data-test': `pick-group-checkbox-${g.id}`
+    });
+    cb.checked = pickedGroupIds.has(g.id);
+    cb.addEventListener('change', () => {
+      if (cb.checked) pickedGroupIds.add(g.id);
+      else pickedGroupIds.delete(g.id);
+      updateFromGroupsPicks();
+    });
+    const count = g.allMemberIds.length;
+    const countText = count === 0
+      ? '0 devices'
+      : `${count} device${count === 1 ? '' : 's'}`;
+    const label = h('label', { for: id, class: 'pick-group-row-label' },
+      h('span', { class: 'pick-group-name' }, g.name || `(unnamed group ${g.id})`),
+      h('span', { class: 'pick-group-count' }, countText)
+    );
+    return h('div', { class: 'pick-group-row' }, cb, label);
+  }
+
+  function updateFromGroupsPicks() {
+    if (!groupsCache) return;
+    store.pickedGroupIds = [...pickedGroupIds];
+    const picked = [...pickedGroupIds];
+    if (picked.length === 0) {
+      groupsSummary.textContent = 'No groups selected.';
+      renderEmpty('No groups selected', 'Tick one or more groups above to load their members.');
+      return;
+    }
+    const { serverIds } = unionMembers(groupsCache.groups, picked);
+    groupsSummary.textContent = picked.length === 1
+      ? `1 group selected, ${serverIds.length} unique device${serverIds.length === 1 ? '' : 's'}`
+      : `${picked.length} groups selected, ${serverIds.length} unique device${serverIds.length === 1 ? '' : 's'}`;
+    if (serverIds.length === 0) {
+      renderEmpty('Selected groups contain no devices', 'The picked group(s) have no real server members (templates, OnSight appliances, and compound services don\'t count). Pick a different group or use Paste / CSV.');
+      return;
+    }
+    renderParsed({
+      serverIds,
+      nameById: groupsCache.nameById,
+      totalLines: null,
+      warnings: []
+    });
+  }
+
+  searchInput.addEventListener('input', () => {
+    searchFilter = searchInput.value;
+    renderGroupsList();
+  });
+
+  sortTreeBtn.addEventListener('click', () => {
+    if (sortMode === 'tree') return;
+    sortMode = 'tree';
+    store.pickGroupSort = 'tree';
+    renderGroupsList();
+  });
+  sortAlphaBtn.addEventListener('click', () => {
+    if (sortMode === 'alpha') return;
+    sortMode = 'alpha';
+    store.pickGroupSort = 'alpha';
+    renderGroupsList();
+  });
+
+  refreshBtn.addEventListener('click', () => {
+    void loadGroupsTree({ force: true });
+  });
+
+  // ================================================================
+  // Tab activation
+  // ================================================================
+
+  function activate(mode) {
+    activeMode = mode;
+    store.pickMode = mode;
+    pastePane.style.display = mode === 'paste' ? '' : 'none';
+    groupsPane.style.display = mode === 'groups' ? '' : 'none';
+    for (const btn of [pasteTabBtn, groupsTabBtn]) {
+      const isActive = btn.dataset.tab === mode;
+      btn.classList.toggle('active', isActive);
+      btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    }
+    if (mode === 'paste') {
+      void updateParseResultFromPaste();
+    } else {
+      void loadGroupsTree();
+    }
+  }
+
+  pasteTabBtn.addEventListener('click', () => activate('paste'));
+  groupsTabBtn.addEventListener('click', () => activate('groups'));
+
+  // ================================================================
+  // Action bar
+  // ================================================================
+
   clearBtn.addEventListener('click', () => {
-    paste.value = '';
-    store.targets = [];
-    void updateParseResult();
+    if (activeMode === 'paste') {
+      paste.value = '';
+      void updateParseResultFromPaste();
+    } else {
+      pickedGroupIds.clear();
+      store.pickedGroupIds = [];
+      // Uncheck visible boxes.
+      for (const cb of groupsList.querySelectorAll('input[type="checkbox"]')) cb.checked = false;
+      updateFromGroupsPicks();
+    }
   });
 
   nextBtn.addEventListener('click', () => {
@@ -292,7 +555,7 @@ export function render({ container, store, navigate }) {
 
   // Always render the parse-result once on mount so the empty state shows
   // its "No server IDs detected" headline immediately (matches Port Scope).
-  void updateParseResult();
+  activate(activeMode);
 }
 
 // Two-column Name | Server ID preview, same shape as Port Scope's. Up to 25

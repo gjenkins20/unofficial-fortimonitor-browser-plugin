@@ -349,6 +349,37 @@ test('ensure-template throws on missing required args', async () => {
   await assert.rejects(handlers['bulk-composer:ensure-template']({ name: 'x', templateType: 'fabric_template' }), /destinationGroup/);
 });
 
+// ---------- bulk-composer:list-server-groups-tree (FMN-224) ----------
+
+test('list-server-groups-tree returns parseMonitoringTree result on success', async () => {
+  const tree = {
+    nodes: [{
+      id: 'grp-0', 'node-type': 'group', text: 'All',
+      children: [{
+        id: 'grp-100', 'node-type': 'group', text: 'Branch',
+        children: [{ id: 's-42024060', 'node-type': 'server', text: 'fw-01' }]
+      }]
+    }]
+  };
+  const fmClient = { async getMonitoringTree() { return tree; } };
+  const handlers = makeHandlers({ fortimonitorClient: fmClient });
+  const out = await handlers['bulk-composer:list-server-groups-tree']();
+  assert.equal(out.groups.length, 2);
+  const root = out.groups.find((g) => g.id === 0);
+  const branch = out.groups.find((g) => g.id === 100);
+  assert.deepEqual(root.allMemberIds, [42024060]);
+  assert.deepEqual(branch.directMemberIds, [42024060]);
+  assert.equal(branch.parentId, 0);
+});
+
+test('list-server-groups-tree returns { groups: [], error } on auth failure', async () => {
+  const fmClient = { async getMonitoringTree() { throw new Error('FortimonitorError: not logged in'); } };
+  const handlers = makeHandlers({ fortimonitorClient: fmClient });
+  const out = await handlers['bulk-composer:list-server-groups-tree']();
+  assert.deepEqual(out.groups, []);
+  assert.match(out.error, /not logged in/);
+});
+
 // ---------- commit ctx extensions ----------
 
 test('commit passes fortimonitorClient + sharedState into action.commit ctx', async () => {

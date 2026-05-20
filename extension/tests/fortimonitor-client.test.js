@@ -812,3 +812,46 @@ test('getCreateServerTemplateData returns the JSON envelope', async () => {
   assert.equal(out.template_type_options[0].value, 'fabric_template');
   assert.equal(fetchMock.calls[0].url, `${FM_ORIGIN}/config/get_create_server_template_data`);
 });
+
+// =====================================================================
+// FMN-224: getMonitoringTree
+// =====================================================================
+
+test('getMonitoringTree POSTs to /util/monitoring_tree?include_templates=1 and returns the parsed body', async () => {
+  const body = { nodes: [{ id: 'grp-0', 'node-type': 'group', text: 'All Instances', children: [] }], userHash: 'h' };
+  const fetchMock = createFetchMock(async () => jsonResponse(body));
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'xsrf' });
+  const tree = await client.getMonitoringTree();
+  assert.deepEqual(tree, body);
+  assert.equal(fetchMock.calls.length, 1);
+  assert.equal(fetchMock.calls[0].url, `${FM_ORIGIN}/util/monitoring_tree?include_templates=1`);
+  assert.equal(fetchMock.calls[0].init.method, 'POST');
+  assert.equal(fetchMock.calls[0].init.credentials, 'include');
+  // X-XSRF-TOKEN attached when cookie present (matches captured browser request).
+  assert.equal(fetchMock.calls[0].init.headers['X-XSRF-TOKEN'], 'xsrf');
+});
+
+test('getMonitoringTree omits X-XSRF-TOKEN when cookie helper returns null', async () => {
+  const fetchMock = createFetchMock(async () => jsonResponse({ nodes: [] }));
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => null });
+  await client.getMonitoringTree();
+  assert.ok(!('X-XSRF-TOKEN' in fetchMock.calls[0].init.headers));
+});
+
+test('getMonitoringTree throws FortimonitorError with phase=auth on HTML / login redirect', async () => {
+  const fetchMock = createFetchMock(async () => htmlResponse());
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => null });
+  await assert.rejects(
+    () => client.getMonitoringTree(),
+    (err) => err instanceof FortimonitorError && err.phase === 'auth'
+  );
+});
+
+test('getMonitoringTree throws FortimonitorError with phase=read on non-2xx', async () => {
+  const fetchMock = createFetchMock(async () => errorResponse(500, 'boom'));
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'tok' });
+  await assert.rejects(
+    () => client.getMonitoringTree(),
+    (err) => err instanceof FortimonitorError && err.phase === 'read' && err.status === 500
+  );
+});
