@@ -74,6 +74,15 @@ export function render({ container, store, navigate, call }) {
         try { new RegExp(re); regexValid = true; } catch { regexValid = false; }
       }
       nextBtn.disabled = !(re && tpl && regexValid);
+    } else if (store.actionId === 'auto-set-attribute-by-name') {
+      const re = typeof params.regex === 'string' && params.regex.trim();
+      const tpl = typeof params.valueTemplate === 'string' && params.valueTemplate.trim();
+      const key = typeof params.attributeTypeUrl === 'string' && params.attributeTypeUrl.trim();
+      let regexValid = false;
+      if (re) {
+        try { new RegExp(re); regexValid = true; } catch { regexValid = false; }
+      }
+      nextBtn.disabled = !(re && tpl && key && regexValid);
     } else {
       nextBtn.disabled = true;
     }
@@ -91,6 +100,8 @@ export function render({ container, store, navigate, call }) {
     renderPortScopeForm({ body, store, refreshNextDisabled, call });
   } else if (store.actionId === 'auto-tag-by-name') {
     renderAutoTagByNameForm({ body, store, refreshNextDisabled, call });
+  } else if (store.actionId === 'auto-set-attribute-by-name') {
+    renderAutoSetAttributeByNameForm({ body, store, refreshNextDisabled, call });
   } else {
     body.appendChild(h('p', {}, 'Unknown action; pick again on the previous step.'));
   }
@@ -1678,5 +1689,252 @@ async function fetchTagsForAutoTag({ store, call }) {
     // Enrichment failed; describe() falls back to its "(not found)"
     // placeholder branch for unenriched rows. commit() will GET-PUT
     // anyway.
+  }
+}
+
+// =====================================================================
+// FMN-226: Auto-set attribute by name pattern.
+//
+// Mirrors renderAutoTagByNameForm but adds a type picker. Customer-
+// defined types only - built-in attributes ("Model", "Operating System")
+// live inline on /v2/server records but never appear in the
+// /v2/server_attribute_type catalog, so this action can't address them
+// here. Surfaces a clear error when no customer-defined types exist.
+// =====================================================================
+
+function renderAutoSetAttributeByNameForm({ body, store, refreshNextDisabled, call }) {
+  body.appendChild(h('h3', { class: 'subhead' }, 'Auto-set attribute rule'));
+
+  store.params = {
+    ...store.params,
+    regex: typeof store.params?.regex === 'string' ? store.params.regex : '',
+    valueTemplate: typeof store.params?.valueTemplate === 'string' ? store.params.valueTemplate : '',
+    attributeTypeUrl: typeof store.params?.attributeTypeUrl === 'string' ? store.params.attributeTypeUrl : '',
+    attributeTypeName: typeof store.params?.attributeTypeName === 'string' ? store.params.attributeTypeName : ''
+  };
+
+  const typeLabel = h('label', {
+    style: 'display:block;font-size:0.85rem;margin:0.3rem 0 0.2rem;font-weight:600;'
+  }, 'Attribute (customer-defined types only)');
+  body.appendChild(typeLabel);
+  const typeSelect = h('select', {
+    'data-test': 'auto-attr-type-select',
+    style: 'padding:0.45rem 0.6rem;font-family:inherit;width:100%;'
+  });
+  typeSelect.appendChild(h('option', { value: '' }, '(loading types...)'));
+  typeSelect.disabled = true;
+  body.appendChild(typeSelect);
+
+  const typeError = h('p', {
+    'data-test': 'auto-attr-type-error',
+    class: 'muted',
+    style: 'font-size:0.8rem;margin:0.2rem 0 0;color:#a02216;display:none;'
+  }, '');
+  body.appendChild(typeError);
+
+  const regexLabel = h('label', {
+    style: 'display:block;font-size:0.85rem;margin:0.7rem 0 0.2rem;font-weight:600;'
+  }, 'Regex (with capture groups)');
+  body.appendChild(regexLabel);
+  const regexInput = h('input', {
+    type: 'text',
+    class: 'paste-area',
+    'data-test': 'auto-attr-regex-input',
+    placeholder: 'e.g. ^FGT-(\\d{3})-',
+    style: 'min-height:0;height:auto;padding:0.5rem 0.7rem;font-family:"SF Mono",Menlo,monospace;'
+  });
+  regexInput.value = store.params.regex;
+  body.appendChild(regexInput);
+
+  const regexError = h('p', {
+    class: 'muted',
+    'data-test': 'auto-attr-regex-error',
+    style: 'font-size:0.8rem;margin:0.2rem 0 0;color:#a02216;display:none;'
+  }, '');
+  body.appendChild(regexError);
+
+  const tplLabel = h('label', {
+    style: 'display:block;font-size:0.85rem;margin:0.7rem 0 0.2rem;font-weight:600;'
+  }, 'Value template ($1, $2, ... for capture groups; $& for full match)');
+  body.appendChild(tplLabel);
+  const tplInput = h('input', {
+    type: 'text',
+    class: 'paste-area',
+    'data-test': 'auto-attr-value-input',
+    placeholder: 'e.g. $1',
+    style: 'min-height:0;height:auto;padding:0.5rem 0.7rem;font-family:"SF Mono",Menlo,monospace;'
+  });
+  tplInput.value = store.params.valueTemplate;
+  body.appendChild(tplInput);
+
+  body.appendChild(h('p', { class: 'muted', style: 'font-size:0.85rem;margin-top:0.4rem;color:var(--text-muted);' },
+    'Matches against each instance name. Non-matches skipped. Existing values for the same key are reported as conflicts and skipped (v1 will not overwrite).'
+  ));
+
+  const previewWrap = h('div', {
+    'data-test': 'auto-attr-preview',
+    style: 'margin-top:0.8rem;border:1px solid var(--border);border-radius:4px;background:#fafbfc;padding:0.5rem 0.7rem;font-size:0.85rem;'
+  });
+  body.appendChild(previewWrap);
+
+  function renderPreview() {
+    while (previewWrap.firstChild) previewWrap.removeChild(previewWrap.firstChild);
+    const pattern = String(store.params.regex || '').trim();
+    const template = String(store.params.valueTemplate || '').trim();
+    const keyLabel = store.params.attributeTypeName || '(attribute)';
+    if (!pattern || !template) {
+      previewWrap.appendChild(h('p', { class: 'muted', style: 'margin:0;color:var(--text-muted);' },
+        'Enter regex, value template, and pick an attribute to see preview matches.'));
+      return;
+    }
+    let re;
+    try { re = new RegExp(pattern); } catch (err) {
+      previewWrap.appendChild(h('p', { class: 'muted', style: 'margin:0;color:#a02216;' }, `Invalid regex: ${err.message}`));
+      return;
+    }
+    const targets = Array.isArray(store.targets) ? store.targets : [];
+    const matched = [];
+    let missCount = 0;
+    for (const t of targets) {
+      const name = typeof t?.name === 'string' ? t.name : '';
+      const m = re.exec(name);
+      if (m) {
+        const value = template.replace(/\$(\$|&|\d+)/g, (_, k) => {
+          if (k === '$') return '$';
+          if (k === '&') return m[0] ?? '';
+          const idx = Number(k);
+          return Number.isFinite(idx) ? (m[idx] ?? '') : '';
+        });
+        matched.push({ id: t.id, name, match: m[0], matchIndex: m.index, value });
+      } else {
+        missCount++;
+      }
+    }
+    previewWrap.appendChild(h('div', {
+      'data-test': 'auto-attr-preview-summary',
+      style: 'font-weight:600;margin-bottom:0.4rem;'
+    }, `${matched.length} match${matched.length === 1 ? '' : 'es'} · ${missCount} no-match${missCount === 1 ? '' : 'es'}`));
+    if (matched.length === 0) return;
+    const list = h('div', { style: 'display:grid;grid-template-columns:1fr 1fr;row-gap:0.3rem;column-gap:0.6rem;' });
+    list.appendChild(h('div', { style: 'font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;' }, 'Instance'));
+    list.appendChild(h('div', { style: 'font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;' }, `${keyLabel} =`));
+    for (const row of matched.slice(0, 10)) {
+      const nameCell = h('div', { 'data-test': 'auto-attr-preview-row', style: 'font-family:"SF Mono",Menlo,monospace;font-size:0.82rem;' });
+      const before = row.name.slice(0, row.matchIndex);
+      const matchStr = row.match;
+      const after = row.name.slice(row.matchIndex + matchStr.length);
+      nameCell.appendChild(document.createTextNode(before));
+      nameCell.appendChild(h('span', { style: 'background:#fffbcc;padding:0 1px;' }, matchStr));
+      nameCell.appendChild(document.createTextNode(after));
+      list.appendChild(nameCell);
+      list.appendChild(h('div', {
+        'data-test': 'auto-attr-preview-value',
+        style: 'font-family:"SF Mono",Menlo,monospace;font-size:0.82rem;'
+      }, row.value || '(empty)'));
+    }
+    previewWrap.appendChild(list);
+    if (matched.length > 10) {
+      previewWrap.appendChild(h('p', {
+        class: 'muted',
+        style: 'font-size:0.78rem;margin:0.3rem 0 0;color:var(--text-muted);'
+      }, `(showing 10 of ${matched.length})`));
+    }
+  }
+
+  function checkRegex() {
+    const pattern = String(store.params.regex || '').trim();
+    if (!pattern) { regexError.style.display = 'none'; regexError.textContent = ''; return; }
+    try {
+      new RegExp(pattern);
+      regexError.style.display = 'none';
+      regexError.textContent = '';
+    } catch (err) {
+      regexError.style.display = '';
+      regexError.textContent = `Invalid regex: ${err.message}`;
+    }
+  }
+
+  regexInput.addEventListener('input', () => {
+    store.params = { ...store.params, regex: regexInput.value };
+    checkRegex();
+    renderPreview();
+    refreshNextDisabled();
+  });
+  tplInput.addEventListener('input', () => {
+    store.params = { ...store.params, valueTemplate: tplInput.value };
+    renderPreview();
+    refreshNextDisabled();
+  });
+  typeSelect.addEventListener('change', () => {
+    const idx = typeSelect.selectedIndex;
+    const opt = typeSelect.options[idx];
+    store.params = {
+      ...store.params,
+      attributeTypeUrl: opt?.value ?? '',
+      attributeTypeName: opt?.dataset?.name ?? ''
+    };
+    renderPreview();
+    refreshNextDisabled();
+  });
+
+  void loadAttributeTypes({ typeSelect, typeError, store, renderPreview, refreshNextDisabled, call });
+  void fetchAttributesForAutoSet({ store, call });
+
+  checkRegex();
+  renderPreview();
+  refreshNextDisabled();
+}
+
+async function loadAttributeTypes({ typeSelect, typeError, store, renderPreview, refreshNextDisabled, call }) {
+  try {
+    const res = await call('bulk-composer:list-attribute-types', {});
+    const types = (res && Array.isArray(res.types)) ? res.types : [];
+    typeSelect.innerHTML = '';
+    if (types.length === 0) {
+      typeSelect.appendChild(h('option', { value: '' }, '(no customer-defined attribute types found)'));
+      typeSelect.disabled = true;
+      typeError.style.display = '';
+      typeError.textContent = 'This tenant has no customer-defined attribute types. Create one in FortiMonitor first, or use Auto-tag instead.';
+      return;
+    }
+    typeSelect.appendChild(h('option', { value: '' }, 'Select an attribute...'));
+    for (const t of types) {
+      const opt = h('option', {
+        value: t.resourceUrl,
+        'data-name': t.name
+      }, `${t.name}${t.textkey ? ` (${t.textkey})` : ''}`);
+      typeSelect.appendChild(opt);
+    }
+    typeSelect.disabled = false;
+    // Restore prior selection if any.
+    if (store.params.attributeTypeUrl) {
+      typeSelect.value = store.params.attributeTypeUrl;
+    }
+    renderPreview();
+    refreshNextDisabled();
+  } catch (err) {
+    typeSelect.innerHTML = '';
+    typeSelect.appendChild(h('option', { value: '' }, '(failed to load)'));
+    typeSelect.disabled = true;
+    typeError.style.display = '';
+    typeError.textContent = `Failed to load attribute types: ${err?.message ?? err}`;
+  }
+}
+
+async function fetchAttributesForAutoSet({ store, call }) {
+  const targets = Array.isArray(store.targets) ? store.targets : [];
+  const ids = targets.map((t) => t?.id).filter((id) => Number.isFinite(id));
+  if (ids.length === 0) return;
+  try {
+    const res = await call('bulk-composer:list-server-attributes-batch', { serverIds: ids });
+    const map = (res && res.byServerId) || {};
+    for (const t of targets) {
+      if (!t || t.id == null) continue;
+      const attrs = map[t.id];
+      if (Array.isArray(attrs)) t.attributes = attrs.slice();
+      else if (Object.prototype.hasOwnProperty.call(map, t.id)) t.attributes = null;
+    }
+  } catch {
+    // describe() will fall through to its placeholder branch on unenriched targets.
   }
 }

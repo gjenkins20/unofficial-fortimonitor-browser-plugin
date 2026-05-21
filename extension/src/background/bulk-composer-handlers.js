@@ -24,6 +24,10 @@
 //   bulk-composer:list-device-ports-batch    - full per-device port list for the
 //                                              add/remove-port-scope bulk actions
 //
+// FMN-226:
+//   bulk-composer:list-server-attributes-batch - per-device attributes pre-flight
+//   bulk-composer:list-attribute-types         - customer-defined attribute catalog
+//
 // The composer's preview step is a pure-client computation (each action's
 // describe()) so we don't expose a "preview" message - the UI computes it
 // directly from the cached omni-search entries.
@@ -381,6 +385,59 @@ export function createBulkComposerHandlers({ events = {}, getClient, getFortimon
         if (r.status === 'fulfilled') byServerId[r.value.id] = r.value.ports;
       }
       return { byServerId };
+    },
+
+    /**
+     * FMN-226: batch-fetch the existing server_attribute rows for a
+     * list of server ids. Returns a map keyed by id; per-server
+     * failures map to null. Used by the auto-set-attribute-by-name
+     * action's Configure step to populate target.attributes so the
+     * Preview describe() catches already-present writes.
+     */
+    'bulk-composer:list-server-attributes-batch': async (payload = {}) => {
+      const ids = Array.isArray(payload?.serverIds) ? payload.serverIds.slice(0, MAX_TARGETS) : [];
+      if (ids.length === 0) return { byServerId: {} };
+      const client = await factory();
+      const concurrency = Math.max(1, Math.min(10, payload?.concurrency || DEFAULT_CONCURRENCY));
+      const settled = await mapConcurrent(ids, async (id) => {
+        try {
+          const attrs = await client.listServerAttributes(id);
+          return {
+            id,
+            attrs: attrs.map((a) => ({
+              id: a.id,
+              name: a.name,
+              textkey: a.textkey,
+              value: a.value,
+              typeUrl: a.typeUrl,
+              resourceUrl: a.resourceUrl
+            }))
+          };
+        } catch {
+          return { id, attrs: null };
+        }
+      }, { concurrency });
+      const byServerId = {};
+      for (const r of settled) {
+        if (r.status === 'fulfilled') byServerId[r.value.id] = r.value.attrs;
+      }
+      return { byServerId };
+    },
+
+    /**
+     * FMN-226: list customer-defined attribute types for the auto-set-
+     * attribute-by-name action's type picker. Thin wrapper around
+     * PanoptaClient.listAttributeTypes; identical to the existing
+     * search:list-attribute-types but namespaced under bulk-composer:
+     * so it's clear at the call site which surface owns the call.
+     */
+    'bulk-composer:list-attribute-types': async () => {
+      const client = await factory();
+      try {
+        return { types: await client.listAttributeTypes() };
+      } catch (err) {
+        return { types: [], error: err?.message ?? String(err) };
+      }
     },
 
     /**

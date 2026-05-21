@@ -196,6 +196,65 @@ test('list-template-names-batch ignores non-array serverIds', async () => {
   assert.deepEqual(out.byServerId, {});
 });
 
+// ---------- bulk-composer:list-server-attributes-batch (FMN-226) ----------
+
+test('list-server-attributes-batch returns attributes per server id', async () => {
+  const panopta = {
+    async listServerAttributes(id) {
+      if (id === 10) return [
+        { id: 1, name: 'sitecode', textkey: 'sitecode', value: '684', typeUrl: 'https://api2/v2/server_attribute_type/501/', resourceUrl: 'https://api2/v2/server/10/server_attribute/1/' }
+      ];
+      if (id === 11) return [];
+      throw new Error('unexpected');
+    }
+  };
+  const handlers = makeHandlers({ panoptaClient: panopta });
+  const out = await handlers['bulk-composer:list-server-attributes-batch']({ serverIds: [10, 11] });
+  assert.equal(out.byServerId[10].length, 1);
+  assert.equal(out.byServerId[10][0].value, '684');
+  assert.deepEqual(out.byServerId[11], []);
+});
+
+test('list-server-attributes-batch maps per-server failures to null', async () => {
+  const panopta = {
+    async listServerAttributes(id) {
+      if (id === 99) throw new Error('boom');
+      return [];
+    }
+  };
+  const handlers = makeHandlers({ panoptaClient: panopta });
+  const out = await handlers['bulk-composer:list-server-attributes-batch']({ serverIds: [1, 99] });
+  assert.deepEqual(out.byServerId[1], []);
+  assert.equal(out.byServerId[99], null);
+});
+
+// ---------- bulk-composer:list-attribute-types (FMN-226) ----------
+
+test('list-attribute-types returns the catalog from PanoptaClient', async () => {
+  const panopta = {
+    async listAttributeTypes() {
+      return [
+        { id: 501, name: 'sitecode', textkey: 'sitecode', resourceUrl: 'https://api2/v2/server_attribute_type/501/' },
+        { id: 502, name: 'region', textkey: 'region', resourceUrl: 'https://api2/v2/server_attribute_type/502/' }
+      ];
+    }
+  };
+  const handlers = makeHandlers({ panoptaClient: panopta });
+  const out = await handlers['bulk-composer:list-attribute-types']();
+  assert.equal(out.types.length, 2);
+  assert.equal(out.types[0].name, 'sitecode');
+});
+
+test('list-attribute-types tolerates client failure (returns empty + error)', async () => {
+  const panopta = {
+    async listAttributeTypes() { throw new Error('catalog down'); }
+  };
+  const handlers = makeHandlers({ panoptaClient: panopta });
+  const out = await handlers['bulk-composer:list-attribute-types']();
+  assert.deepEqual(out.types, []);
+  assert.match(out.error, /catalog down/);
+});
+
 // ---------- bulk-composer:list-device-ports-batch (FMN-162) ----------
 
 test('list-device-ports-batch returns ports + totals per server id', async () => {
