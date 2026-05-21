@@ -86,6 +86,10 @@ export function render({ container, store, navigate, call }) {
     } else if (store.actionId === 'set-parent-group') {
       const url = typeof params.groupUrl === 'string' && params.groupUrl.trim();
       nextBtn.disabled = !url;
+    } else if (store.actionId === 'set-agent-resource-status') {
+      const f = typeof params.filter === 'string' && params.filter.trim();
+      const s = params.status === 'active' || params.status === 'suspended';
+      nextBtn.disabled = !(f && s);
     } else {
       nextBtn.disabled = true;
     }
@@ -107,6 +111,8 @@ export function render({ container, store, navigate, call }) {
     renderAutoSetAttributeByNameForm({ body, store, refreshNextDisabled, call });
   } else if (store.actionId === 'set-parent-group') {
     renderSetParentGroupForm({ body, store, refreshNextDisabled, call });
+  } else if (store.actionId === 'set-agent-resource-status') {
+    renderSetAgentResourceStatusForm({ body, store, refreshNextDisabled, call });
   } else {
     body.appendChild(h('p', {}, 'Unknown action; pick again on the previous step.'));
   }
@@ -2068,4 +2074,114 @@ async function fetchCurrentParents({ store, call }) {
   } catch {
     // describe() falls through to its placeholder branch on unenriched rows.
   }
+}
+
+// =====================================================================
+// FMN-171: Set Agent Resource Status form.
+//
+// Free-text substring filter + radio (active/suspended). Pre-flights
+// each target's matched-set so the Preview describe() shows per-row
+// counts before commit. The filter is case-insensitive against
+// name | plugin_textkey | resource_textkey.
+// =====================================================================
+
+function renderSetAgentResourceStatusForm({ body, store, refreshNextDisabled, call }) {
+  body.appendChild(h('h3', { class: 'subhead' }, 'Match agent_resources'));
+
+  store.params = {
+    ...store.params,
+    filter: typeof store.params?.filter === 'string' ? store.params.filter : '',
+    status: store.params?.status === 'suspended' ? 'suspended' : 'active'
+  };
+
+  const filterInput = h('input', {
+    type: 'text',
+    class: 'paste-area',
+    'data-test': 'set-agent-resource-filter-input',
+    placeholder: 'e.g. fortigate.bandwidth, port3, mem.available',
+    style: 'min-height:0;height:auto;padding:0.5rem 0.7rem;font-family:"SF Mono",Menlo,monospace;'
+  });
+  filterInput.value = store.params.filter;
+  body.appendChild(filterInput);
+  body.appendChild(h('p', { class: 'muted', style: 'font-size:0.85rem;margin-top:0.4rem;color:var(--text-muted);' },
+    'Substring matched (case-insensitive) against each resource\'s name, plugin_textkey, and resource_textkey. An empty filter is rejected to prevent accidental fleet-wide suspends.'
+  ));
+
+  body.appendChild(h('h4', {
+    style: 'font-size:0.9rem;margin:0.8rem 0 0.3rem;font-weight:600;'
+  }, 'Target status'));
+  const radioRow = h('div', { style: 'display:flex;gap:1.2rem;align-items:center;' });
+  const activeRadio = h('input', { type: 'radio', name: 'fmn-ar-status', value: 'active', 'data-test': 'set-agent-resource-status-active', id: 'fmn-ar-status-active' });
+  const suspendedRadio = h('input', { type: 'radio', name: 'fmn-ar-status', value: 'suspended', 'data-test': 'set-agent-resource-status-suspended', id: 'fmn-ar-status-suspended' });
+  activeRadio.checked = store.params.status === 'active';
+  suspendedRadio.checked = store.params.status === 'suspended';
+  radioRow.appendChild(h('label', { for: 'fmn-ar-status-active', style: 'display:flex;gap:0.3rem;align-items:center;font-size:0.9rem;' }, activeRadio, h('span', {}, 'active (resume)')));
+  radioRow.appendChild(h('label', { for: 'fmn-ar-status-suspended', style: 'display:flex;gap:0.3rem;align-items:center;font-size:0.9rem;' }, suspendedRadio, h('span', {}, 'suspended (halt metrics)')));
+  body.appendChild(radioRow);
+  body.appendChild(h('p', { class: 'muted', style: 'font-size:0.8rem;margin-top:0.3rem;color:var(--text-muted);' },
+    'suspended halts metric collection without deleting the resource (FMN-34 finding: status is independent of port scope).'
+  ));
+
+  const matchSummary = h('div', {
+    'data-test': 'set-agent-resource-summary',
+    style: 'margin-top:0.8rem;font-size:0.85rem;color:var(--text-muted);'
+  }, '');
+  body.appendChild(matchSummary);
+
+  function emit() {
+    store.params = { ...store.params, filter: filterInput.value, status: suspendedRadio.checked ? 'suspended' : 'active' };
+    refreshNextDisabled();
+    void refreshMatched();
+  }
+
+  let pending = null;
+  async function refreshMatched() {
+    const filter = filterInput.value.trim();
+    if (!filter) {
+      matchSummary.textContent = '';
+      return;
+    }
+    matchSummary.textContent = 'Counting matches...';
+    const seq = (pending = {});
+    const targets = Array.isArray(store.targets) ? store.targets : [];
+    const ids = targets.map((t) => t?.id).filter((id) => Number.isFinite(id));
+    if (ids.length === 0) {
+      matchSummary.textContent = '';
+      return;
+    }
+    try {
+      const res = await call('bulk-composer:list-agent-resources-batch', { serverIds: ids, filter: { contains: filter } });
+      if (pending !== seq) return;
+      const map = (res && res.byServerId) || {};
+      let totalMatched = 0;
+      let targetsWithMatches = 0;
+      let totalFailures = 0;
+      for (const t of targets) {
+        if (!t || t.id == null) continue;
+        if (!Object.prototype.hasOwnProperty.call(map, t.id)) continue;
+        const data = map[t.id];
+        t.agentResources = data;
+        if (data === null) totalFailures++;
+        else if (Array.isArray(data.matched) && data.matched.length > 0) {
+          totalMatched += data.matched.length;
+          targetsWithMatches++;
+        }
+      }
+      matchSummary.textContent =
+        `${totalMatched} agent_resource${totalMatched === 1 ? '' : 's'} matched across `
+        + `${targetsWithMatches} of ${targets.length} instance${targets.length === 1 ? '' : 's'}`
+        + (totalFailures > 0 ? ` (${totalFailures} fetch failure${totalFailures === 1 ? '' : 's'})` : '')
+        + '.';
+    } catch {
+      if (pending !== seq) return;
+      matchSummary.textContent = 'Failed to count matches; commit will retry per target.';
+    }
+  }
+
+  filterInput.addEventListener('input', emit);
+  activeRadio.addEventListener('change', emit);
+  suspendedRadio.addEventListener('change', emit);
+
+  if (store.params.filter) void refreshMatched();
+  refreshNextDisabled();
 }

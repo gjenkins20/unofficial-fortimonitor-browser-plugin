@@ -196,6 +196,60 @@ test('list-template-names-batch ignores non-array serverIds', async () => {
   assert.deepEqual(out.byServerId, {});
 });
 
+// ---------- bulk-composer:list-agent-resources-batch (FMN-171) ----------
+
+test('list-agent-resources-batch returns the case-insensitive filtered list per server', async () => {
+  const panopta = {
+    async listAgentResourcesForServer(id) {
+      if (id !== 10) throw new Error('unexpected');
+      return {
+        agent_resource_list: [
+          { url: 'https://api2/v2/server/10/agent_resource/1/', name: 'port1.bandwidth', status: 'active', plugin_textkey: 'fortigate.bandwidth' },
+          { url: 'https://api2/v2/server/10/agent_resource/2/', name: 'port2.bandwidth', status: 'suspended', plugin_textkey: 'fortigate.bandwidth' },
+          { url: 'https://api2/v2/server/10/agent_resource/3/', name: 'mem.available', status: 'active', plugin_textkey: 'fortigate.system' }
+        ]
+      };
+    }
+  };
+  const handlers = makeHandlers({ panoptaClient: panopta });
+  const out = await handlers['bulk-composer:list-agent-resources-batch']({
+    serverIds: [10],
+    filter: { contains: 'BANDWIDTH' }
+  });
+  assert.equal(out.byServerId[10].matched.length, 2);
+  assert.equal(out.byServerId[10].total, 3);
+  assert.equal(out.byServerId[10].matched[0].id, 1);
+});
+
+test('list-agent-resources-batch empty filter returns every resource', async () => {
+  const panopta = {
+    async listAgentResourcesForServer() {
+      return {
+        agent_resource_list: [
+          { url: 'https://api2/v2/server/10/agent_resource/1/', name: 'a' },
+          { url: 'https://api2/v2/server/10/agent_resource/2/', name: 'b' }
+        ]
+      };
+    }
+  };
+  const handlers = makeHandlers({ panoptaClient: panopta });
+  const out = await handlers['bulk-composer:list-agent-resources-batch']({ serverIds: [10], filter: { contains: '' } });
+  assert.equal(out.byServerId[10].matched.length, 2);
+});
+
+test('list-agent-resources-batch maps per-server failures to null', async () => {
+  const panopta = {
+    async listAgentResourcesForServer(id) {
+      if (id === 99) throw new Error('boom');
+      return { agent_resource_list: [] };
+    }
+  };
+  const handlers = makeHandlers({ panoptaClient: panopta });
+  const out = await handlers['bulk-composer:list-agent-resources-batch']({ serverIds: [1, 99], filter: { contains: 'x' } });
+  assert.ok(out.byServerId[1]);
+  assert.equal(out.byServerId[99], null);
+});
+
 // ---------- bulk-composer:list-server-parents-batch (FMN-170) ----------
 
 test('list-server-parents-batch returns parent group per server (name resolved via catalog)', async () => {

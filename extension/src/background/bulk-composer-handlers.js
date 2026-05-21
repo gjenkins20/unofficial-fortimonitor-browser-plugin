@@ -31,6 +31,10 @@
 // FMN-170:
 //   bulk-composer:list-server-parents-batch    - per-device current parent group pre-flight
 //
+// FMN-171:
+//   bulk-composer:list-agent-resources-batch   - per-device filtered agent_resource list
+//                                                for the set-agent-resource-status action
+//
 // The composer's preview step is a pure-client computation (each action's
 // describe()) so we don't expose a "preview" message - the UI computes it
 // directly from the cached omni-search entries.
@@ -386,6 +390,60 @@ export function createBulkComposerHandlers({ events = {}, getClient, getFortimon
       const byServerId = {};
       for (const r of settled) {
         if (r.status === 'fulfilled') byServerId[r.value.id] = r.value.ports;
+      }
+      return { byServerId };
+    },
+
+    /**
+     * FMN-171: per-target list of agent_resources matching an
+     * optional case-insensitive name / textkey filter. Returns
+     * { byServerId: { [id]: { matched: [{ id, name, plugin_textkey, resource_textkey, status }], total } | null } }.
+     * Per-server failures map to null.
+     *
+     * Filter shape:
+     *   { contains: string }  case-insensitive substring against
+     *                         name | name_override | plugin_textkey |
+     *                         resource_textkey. Empty string returns
+     *                         every agent_resource (caller's job to
+     *                         confirm "really suspend all of them").
+     */
+    'bulk-composer:list-agent-resources-batch': async (payload = {}) => {
+      const ids = Array.isArray(payload?.serverIds) ? payload.serverIds.slice(0, MAX_TARGETS) : [];
+      if (ids.length === 0) return { byServerId: {} };
+      const client = await factory();
+      const concurrency = Math.max(1, Math.min(10, payload?.concurrency || DEFAULT_CONCURRENCY));
+      const filter = String(payload?.filter?.contains ?? '').toLowerCase().trim();
+      const settled = await mapConcurrent(ids, async (id) => {
+        try {
+          const body = await client.listAgentResourcesForServer(id, { limit: 200 });
+          const list = Array.isArray(body?.agent_resource_list) ? body.agent_resource_list : [];
+          const projected = list.map((r) => {
+            const url = typeof r?.url === 'string' ? r.url : '';
+            const m = url.match(/\/agent_resource\/(\d+)\/?$/);
+            const arId = m ? Number(m[1]) : null;
+            return {
+              id: arId,
+              url,
+              name: r?.name ?? r?.name_override ?? '',
+              plugin_textkey: r?.plugin_textkey ?? null,
+              resource_textkey: r?.resource_textkey ?? null,
+              status: r?.status ?? null
+            };
+          });
+          const matched = filter === ''
+            ? projected
+            : projected.filter((p) => {
+                const hay = `${p.name}|${p.plugin_textkey ?? ''}|${p.resource_textkey ?? ''}`.toLowerCase();
+                return hay.includes(filter);
+              });
+          return { id, data: { matched, total: list.length } };
+        } catch {
+          return { id, data: null };
+        }
+      }, { concurrency });
+      const byServerId = {};
+      for (const r of settled) {
+        if (r.status === 'fulfilled') byServerId[r.value.id] = r.value.data;
       }
       return { byServerId };
     },

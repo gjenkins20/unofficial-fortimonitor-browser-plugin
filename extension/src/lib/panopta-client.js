@@ -924,6 +924,37 @@ export class PanoptaClient {
   // sanitizeServerBodyForPut() reconciles these before PUT.
 
   /**
+   * FMN-171: change the status of a specific agent_resource on a
+   * server (suspend = stop metric collection without deleting the
+   * resource; active = resume).
+   *
+   * Per FMN-34: status=suspended halts metrics but does NOT change
+   * port scope - the two systems are independent. Callers that want
+   * port-scope changes should use Port Scope Add/Remove (FMN-162).
+   *
+   * @param {string|number} serverId
+   * @param {string|number} agentResourceId
+   * @param {'active'|'suspended'} status
+   * @returns {Promise<{status:number, before:string|null, after:string, noop:boolean}>}
+   */
+  async setAgentResourceStatus(serverId, agentResourceId, status) {
+    if (!serverId) throw new TypeError('setAgentResourceStatus: serverId is required');
+    if (!agentResourceId) throw new TypeError('setAgentResourceStatus: agentResourceId is required');
+    if (status !== 'active' && status !== 'suspended') {
+      throw new TypeError(`setAgentResourceStatus: status must be 'active' or 'suspended' (got ${String(status)})`);
+    }
+    const path = `/server/${encodeURIComponent(serverId)}/agent_resource/${encodeURIComponent(agentResourceId)}`;
+    const { body } = await this._request('GET', path);
+    const before = body?.status ?? null;
+    if (before === status) {
+      return { status: 200, before, after: status, noop: true };
+    }
+    const next = { ...body, status };
+    const { res } = await this._request('PUT', path, { body: next });
+    return { status: res.status, before, after: status, noop: false };
+  }
+
+  /**
    * FMN-170: move a server to a new parent group. GET-modify-PUT
    * pattern (same as addServerTag) with sanitizeServerBodyForPut to
    * avoid the FMN-206 PUT-stricter-than-GET-serializes gotcha.
