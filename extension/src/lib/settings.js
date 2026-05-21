@@ -49,6 +49,13 @@ export const REPORT_NOTIFICATIONS_ENABLED_KEY = 'fm:reportNotificationsEnabled';
 // a newer version is published. On by default - operator-friendly, the
 // banner is gated on an actual newer version existing, not just the flag.
 export const UPDATE_CHECK_ENABLED_KEY = 'fm:updateCheckEnabled';
+// FMN-170/171/172 QA follow-up (2026-05-21): the three "single-write"
+// bulk actions (Set Parent Group / Set Agent Resource Status /
+// Schedule Maintenance Window) duplicate FortiMonitor's own UI for
+// one-off operations and don't add bulk-specific value in operator
+// usage. Hidden from the action picker by default; the operator can
+// flip this on to expose them.
+export const SHOW_FORTIMONITOR_NATIVE_BULK_ACTIONS_KEY = 'fm:showFortimonitorNativeBulkActions';
 // FMN-156: per-tool flag for the Tenant Observations Noise Analysis
 // tab. Off by default; toggling on surfaces the analyzer's instance and
 // metric noise rankings inside the viewer.

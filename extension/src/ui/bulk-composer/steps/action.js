@@ -8,8 +8,19 @@
 import { h, titleBar } from '../../../lib/dom.js';
 import { bulkBreadcrumbs } from './breadcrumbs.js';
 import { listActions } from '../../../lib/bulk-actions/index.js';
+import { SHOW_FORTIMONITOR_NATIVE_BULK_ACTIONS_KEY } from '../../../lib/settings.js';
 
 const TOOL_NAME = 'Bulk Action Composer';
+
+// FMN-170/171/172 QA follow-up: these three actions duplicate
+// FortiMonitor's own one-off UI and don't add bulk-specific value.
+// Hidden from the action picker by default; the operator can flip the
+// SHOW_FORTIMONITOR_NATIVE_BULK_ACTIONS_KEY Settings flag to expose them.
+const NATIVE_FORTIMONITOR_ACTION_IDS = new Set([
+  'set-parent-group',
+  'set-agent-resource-status',
+  'schedule-maintenance-window'
+]);
 
 export function render({ container, store, navigate }) {
   const frame = h('div', { class: 'mockup-frame' });
@@ -32,10 +43,20 @@ export function render({ container, store, navigate }) {
   body.appendChild(cards);
 
   let chosenId = store.actionId;
+  // Default: hide the three native-duplicate actions. Flag hydrates
+  // asynchronously; renderCards re-runs after the read resolves.
+  let showNativeActions = false;
+  chrome.storage?.local?.get?.(SHOW_FORTIMONITOR_NATIVE_BULK_ACTIONS_KEY)
+    .then((data) => {
+      showNativeActions = data?.[SHOW_FORTIMONITOR_NATIVE_BULK_ACTIONS_KEY] === true;
+      renderCards();
+    })
+    .catch(() => { /* default already false */ });
 
   function renderCards() {
     cards.innerHTML = '';
     for (const action of listActions()) {
+      if (!showNativeActions && NATIVE_FORTIMONITOR_ACTION_IDS.has(action.id)) continue;
       const isChosen = action.id === chosenId;
       const card = h('button', {
         class: 'action-card',
