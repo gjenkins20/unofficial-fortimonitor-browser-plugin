@@ -110,6 +110,92 @@ test('list-tags-batch ignores non-array serverIds', async () => {
   assert.deepEqual(out.byServerId, {});
 });
 
+// ---------- bulk-composer:list-template-names-batch (FMN-210) ----------
+
+test('list-template-names-batch returns mapped names per server id', async () => {
+  const panopta = {
+    async listTemplates() {
+      return [
+        { id: 100, name: 'Edge FortiGate', resourceUrl: 'https://api2/v2/server_template/100/' },
+        { id: 101, name: 'Core Switch', resourceUrl: 'https://api2/v2/server_template/101/' }
+      ];
+    },
+    async listServerTemplateMappings(id) {
+      if (id === 10) return [
+        { templateUrl: 'https://api2/v2/server_template/100/', templateId: 100, continuous: true }
+      ];
+      if (id === 11) return [
+        { templateUrl: 'https://api2/v2/server_template/100/', templateId: 100, continuous: true },
+        { templateUrl: 'https://api2/v2/server_template/101/', templateId: 101, continuous: true }
+      ];
+      return [];
+    }
+  };
+  const handlers = makeHandlers({ panoptaClient: panopta });
+  const out = await handlers['bulk-composer:list-template-names-batch']({ serverIds: [10, 11, 12] });
+  assert.deepEqual(out.byServerId[10], ['Edge FortiGate']);
+  assert.deepEqual(out.byServerId[11], ['Edge FortiGate', 'Core Switch']);
+  assert.deepEqual(out.byServerId[12], [], 'no mappings -> empty array, not null');
+});
+
+test('list-template-names-batch falls back to #id when template name is not in the catalog', async () => {
+  const panopta = {
+    async listTemplates() {
+      return [{ id: 100, name: 'Edge FortiGate', resourceUrl: 'https://api2/v2/server_template/100/' }];
+    },
+    async listServerTemplateMappings() {
+      return [
+        { templateUrl: 'https://api2/v2/server_template/100/', templateId: 100, continuous: true },
+        { templateUrl: 'https://api2/v2/server_template/999/', templateId: 999, continuous: true }
+      ];
+    }
+  };
+  const handlers = makeHandlers({ panoptaClient: panopta });
+  const out = await handlers['bulk-composer:list-template-names-batch']({ serverIds: [10] });
+  assert.deepEqual(out.byServerId[10], ['Edge FortiGate', '#999']);
+});
+
+test('list-template-names-batch maps per-server fetch failures to null', async () => {
+  const panopta = {
+    async listTemplates() { return []; },
+    async listServerTemplateMappings(id) {
+      if (id === 20) throw new Error('boom');
+      return [];
+    }
+  };
+  const handlers = makeHandlers({ panoptaClient: panopta });
+  const out = await handlers['bulk-composer:list-template-names-batch']({ serverIds: [19, 20, 21] });
+  assert.deepEqual(out.byServerId[19], []);
+  assert.equal(out.byServerId[20], null, 'failed fetch -> null sentinel');
+  assert.deepEqual(out.byServerId[21], []);
+});
+
+test('list-template-names-batch tolerates listTemplates failure (falls back to #id names)', async () => {
+  const panopta = {
+    async listTemplates() { throw new Error('catalog down'); },
+    async listServerTemplateMappings() {
+      return [
+        { templateUrl: 'https://api2/v2/server_template/42/', templateId: 42, continuous: true }
+      ];
+    }
+  };
+  const handlers = makeHandlers({ panoptaClient: panopta });
+  const out = await handlers['bulk-composer:list-template-names-batch']({ serverIds: [1] });
+  assert.deepEqual(out.byServerId[1], ['#42']);
+});
+
+test('list-template-names-batch returns empty map for empty input', async () => {
+  const handlers = makeHandlers({ panoptaClient: {} });
+  const out = await handlers['bulk-composer:list-template-names-batch']({ serverIds: [] });
+  assert.deepEqual(out.byServerId, {});
+});
+
+test('list-template-names-batch ignores non-array serverIds', async () => {
+  const handlers = makeHandlers({ panoptaClient: {} });
+  const out = await handlers['bulk-composer:list-template-names-batch']({});
+  assert.deepEqual(out.byServerId, {});
+});
+
 // ---------- bulk-composer:list-monitoring-policy-vocab ----------
 
 test('list-monitoring-policy-vocab returns rulesets and nounOptions from the live envelope', async () => {

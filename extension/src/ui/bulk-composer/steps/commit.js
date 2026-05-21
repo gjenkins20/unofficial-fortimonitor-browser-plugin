@@ -95,11 +95,14 @@ export function render({ container, store, navigate, events, call }) {
     );
     tbody.appendChild(tr);
     tbody.appendChild(detailTr);
+    // tr children: 0 = #, 1 = Instance, 2 = Prev, 3 = Next, 4 = Status
     rowByTargetId.set(t.id, {
       tr,
       detailTr,
       statusEl: statusCell.firstChild,
-      detailEl: detailSpan
+      detailEl: detailSpan,
+      prevEl: tr.children[2],
+      nextEl: tr.children[3]
     });
   }
 
@@ -109,6 +112,7 @@ export function render({ container, store, navigate, events, call }) {
     style: 'margin-top:0.7rem;font-size:0.9rem;'
   }, `${willChangeCount} row${willChangeCount === 1 ? '' : 's'} will change · ${store.targets.length - willChangeCount} will skip · ${store.targets.length} total.`);
   body.appendChild(summary);
+
 
   // Per-row run state (filled by events / on completion)
   const runSummary = h('div', {
@@ -135,6 +139,13 @@ export function render({ container, store, navigate, events, call }) {
   );
   frame.appendChild(actionBar);
   container.appendChild(frame);
+
+  // FMN-210: pre-flight attached-template names for any targets we
+  // haven't enriched yet (cached on store.targets[i].template_names so
+  // re-entering Preview doesn't refetch). describe() switches from the
+  // "(templates unknown)" placeholder branch to the real diff branch
+  // once this lands. Fire-and-forget; rows patch in place when done.
+  void preflightTemplateNames({ store, call, action, rowByTargetId, summary, applyBtn });
 
   backBtn.addEventListener('click', () => navigate('/configure'));
 
@@ -244,6 +255,95 @@ export function render({ container, store, navigate, events, call }) {
   });
 
   return () => unsubscribe();
+}
+
+// FMN-210: enrich store.targets with current template names via the
+// list-template-names-batch SW handler, then re-run describe() on each
+// affected row and patch its Prev / Next / Status / detail cells in
+// place. Updates the summary count too. Skips targets that already
+// carry a template_names array (cached across re-entries of Preview).
+async function preflightTemplateNames({ store, call, action, rowByTargetId, summary, applyBtn }) {
+  if (!action || typeof action.describe !== 'function') return;
+  const targets = Array.isArray(store?.targets) ? store.targets : [];
+  const ids = [];
+  for (const t of targets) {
+    if (!t || t.id == null) continue;
+    if (Array.isArray(t.template_names)) continue;
+    if (!Number.isFinite(t.id)) continue;
+    ids.push(t.id);
+  }
+  if (ids.length === 0) return;
+  let byServerId = {};
+  try {
+    const res = await call('bulk-composer:list-template-names-batch', { serverIds: ids });
+    byServerId = (res && res.byServerId) || {};
+  } catch {
+    // Fetch failed; leave targets without template_names and let
+    // describe() keep the placeholder branch. The row still commits
+    // correctly (commit() pre-flights its own mapping check); the
+    // operator just doesn't see the real Prev value.
+    return;
+  }
+  let willChangeDelta = 0;
+  for (const t of targets) {
+    if (!t || t.id == null) continue;
+    if (Array.isArray(t.template_names)) continue;
+    if (!Object.prototype.hasOwnProperty.call(byServerId, t.id)) continue;
+    const names = byServerId[t.id];
+    if (Array.isArray(names)) t.template_names = names.slice();
+    else t.template_names = null;
+    const row = rowByTargetId.get(t.id);
+    if (!row) continue;
+    // Skip patching rows that already entered the committing state -
+    // the per-row event listener owns the status pill once a run starts.
+    const statusText = row.statusEl?.textContent ?? '';
+    if (statusText !== 'will change' && statusText !== 'skip') continue;
+    const desc = action.describe(t, store.params);
+    const wasWillChange = statusText === 'will change';
+    const nowWillChange = !!desc.willChange;
+    if (wasWillChange !== nowWillChange) {
+      willChangeDelta += (nowWillChange ? 1 : -1);
+    }
+    if (row.prevEl) {
+      row.prevEl.textContent = String(desc.prev ?? '-');
+      row.prevEl.title = desc.prev || '';
+    }
+    if (row.nextEl) {
+      row.nextEl.textContent = String(desc.next ?? '-');
+      row.nextEl.title = desc.next || '';
+    }
+    if (row.statusEl) {
+      row.statusEl.textContent = desc.error ? 'invalid' : (nowWillChange ? 'will change' : 'skip');
+      row.statusEl.style.background = nowWillChange ? '#eef2f7' : '#f1f1f1';
+      row.statusEl.style.color = nowWillChange ? 'var(--text)' : 'var(--text-muted)';
+    }
+    const noteText = desc.note || desc.error || '';
+    if (row.detailEl) {
+      row.detailEl.textContent = noteText;
+    }
+    if (row.detailTr) {
+      row.detailTr.style.display = noteText ? '' : 'none';
+    }
+  }
+  if (willChangeDelta !== 0) {
+    // Re-derive the summary from the patched rows so we don't drift if
+    // the listener has already updated other rows.
+    let newWillChange = 0;
+    for (const t of targets) {
+      const desc = action.describe(t, store.params);
+      if (desc.willChange) newWillChange++;
+    }
+    if (summary) {
+      summary.textContent =
+        `${newWillChange} row${newWillChange === 1 ? '' : 's'} will change · `
+        + `${targets.length - newWillChange} will skip · ${targets.length} total.`;
+    }
+    if (applyBtn && applyBtn.dataset.mode !== 'new-job' && !applyBtn.disabled) {
+      applyBtn.textContent = newWillChange === 0
+        ? `Apply (all ${targets.length} will skip)`
+        : `Apply to ${newWillChange} instance${newWillChange === 1 ? '' : 's'}`;
+    }
+  }
 }
 
 function thStyle() {

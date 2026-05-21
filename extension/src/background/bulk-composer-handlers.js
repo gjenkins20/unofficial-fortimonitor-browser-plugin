@@ -16,6 +16,10 @@
 //   bulk-composer:list-monitoring-policy-vocab - GET /monitoring_policy/get_page_data
 //   bulk-composer:list-templates-with-groups - PanoptaClient.listTemplates() + group enrichment
 //
+// FMN-210:
+//   bulk-composer:list-template-names-batch  - batch listServerTemplateMappings + name lookup
+//                                              for the Preview step pre-flight
+//
 // The composer's preview step is a pure-client computation (each action's
 // describe()) so we don't expose a "preview" message - the UI computes it
 // directly from the cached omni-search entries.
@@ -212,6 +216,50 @@ export function createBulkComposerHandlers({ events = {}, getClient, getFortimon
       const byServerId = {};
       for (const r of settled) {
         if (r.status === 'fulfilled') byServerId[r.value.id] = r.value.tags;
+      }
+      return { byServerId };
+    },
+
+    /**
+     * Batch-fetch the names of templates currently attached to each
+     * server id. One listTemplates() call for the url -> name lookup,
+     * plus one listServerTemplateMappings() per id with bounded
+     * concurrency. Returns { byServerId: { [id]: ['Name1', ...] | null } };
+     * null means the per-server fetch failed (caller treats as "unknown").
+     *
+     * The Preview step (commit.js) fires this on entry to populate
+     * target.template_names so describe() takes the diff branch instead
+     * of the "(templates unknown)" placeholder branch.
+     */
+    'bulk-composer:list-template-names-batch': async (payload = {}) => {
+      const ids = Array.isArray(payload?.serverIds) ? payload.serverIds.slice(0, MAX_TARGETS) : [];
+      if (ids.length === 0) return { byServerId: {} };
+      const client = await factory();
+      const concurrency = Math.max(1, Math.min(10, payload?.concurrency || DEFAULT_CONCURRENCY));
+      let urlToName = new Map();
+      try {
+        const templates = await client.listTemplates();
+        urlToName = new Map(templates.map((t) => [t.resourceUrl, t.name]));
+      } catch {
+        // listTemplates failed; fall through to id-based fallback names so
+        // the operator still sees something readable rather than blanks.
+      }
+      const settled = await mapConcurrent(ids, async (id) => {
+        try {
+          const mappings = await client.listServerTemplateMappings(id);
+          const names = mappings.map((m) => {
+            const name = urlToName.get(m.templateUrl);
+            if (name) return name;
+            return m.templateId != null ? `#${m.templateId}` : '(unnamed template)';
+          });
+          return { id, names };
+        } catch {
+          return { id, names: null };
+        }
+      }, { concurrency });
+      const byServerId = {};
+      for (const r of settled) {
+        if (r.status === 'fulfilled') byServerId[r.value.id] = r.value.names;
       }
       return { byServerId };
     },
