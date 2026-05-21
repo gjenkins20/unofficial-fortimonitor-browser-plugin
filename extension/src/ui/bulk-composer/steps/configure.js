@@ -66,6 +66,14 @@ export function render({ container, store, navigate, call }) {
     } else if (store.actionId === 'add-port-scope' || store.actionId === 'remove-port-scope') {
       const names = Array.isArray(params.portNames) ? params.portNames : [];
       nextBtn.disabled = names.filter((n) => typeof n === 'string' && n.trim()).length === 0;
+    } else if (store.actionId === 'auto-tag-by-name') {
+      const re = typeof params.regex === 'string' && params.regex.trim();
+      const tpl = typeof params.tagTemplate === 'string' && params.tagTemplate.trim();
+      let regexValid = false;
+      if (re) {
+        try { new RegExp(re); regexValid = true; } catch { regexValid = false; }
+      }
+      nextBtn.disabled = !(re && tpl && regexValid);
     } else {
       nextBtn.disabled = true;
     }
@@ -81,6 +89,8 @@ export function render({ container, store, navigate, call }) {
     renderProfileAndCreateTemplatesForm({ body, store, refreshNextDisabled, call, stateLabel });
   } else if (store.actionId === 'add-port-scope' || store.actionId === 'remove-port-scope') {
     renderPortScopeForm({ body, store, refreshNextDisabled, call });
+  } else if (store.actionId === 'auto-tag-by-name') {
+    renderAutoTagByNameForm({ body, store, refreshNextDisabled, call });
   } else {
     body.appendChild(h('p', {}, 'Unknown action; pick again on the previous step.'));
   }
@@ -1480,4 +1490,193 @@ async function fetchAndRenderPortChips({ chipMount, store, input, call, refreshN
   }
   chipMount.appendChild(chipRow);
   onChipsReady?.(chipFor);
+}
+
+// =====================================================================
+// FMN-225: Auto-tag by name pattern (regex + capture-group template).
+//
+// Two inputs (regex + tag template) and a preview pane that runs the
+// match against every picked instance name. The preview shows up to
+// 10 rows with the matched substring highlighted and the resulting
+// tag, plus a count of matches / non-matches.
+//
+// Also fires bulk-composer:list-tags-batch to populate target.tags so
+// describe()'s already-tagged check is accurate at Preview time.
+// =====================================================================
+
+function renderAutoTagByNameForm({ body, store, refreshNextDisabled, call }) {
+  body.appendChild(h('h3', { class: 'subhead' }, 'Auto-tag rule'));
+
+  store.params = {
+    ...store.params,
+    regex: typeof store.params?.regex === 'string' ? store.params.regex : '',
+    tagTemplate: typeof store.params?.tagTemplate === 'string' ? store.params.tagTemplate : ''
+  };
+
+  const regexLabel = h('label', {
+    style: 'display:block;font-size:0.85rem;margin:0.3rem 0 0.2rem;font-weight:600;'
+  }, 'Regex (with capture groups)');
+  body.appendChild(regexLabel);
+  const regexInput = h('input', {
+    type: 'text',
+    class: 'paste-area',
+    'data-test': 'auto-tag-regex-input',
+    placeholder: 'e.g. ^FGT-(\\d{3})-',
+    style: 'min-height:0;height:auto;padding:0.5rem 0.7rem;font-family:"SF Mono",Menlo,monospace;'
+  });
+  regexInput.value = store.params.regex;
+  body.appendChild(regexInput);
+
+  const regexError = h('p', {
+    class: 'muted',
+    'data-test': 'auto-tag-regex-error',
+    style: 'font-size:0.8rem;margin:0.2rem 0 0;color:#a02216;display:none;'
+  }, '');
+  body.appendChild(regexError);
+
+  const tplLabel = h('label', {
+    style: 'display:block;font-size:0.85rem;margin:0.7rem 0 0.2rem;font-weight:600;'
+  }, 'Tag template ($1, $2, ... for capture groups; $& for full match)');
+  body.appendChild(tplLabel);
+  const tplInput = h('input', {
+    type: 'text',
+    class: 'paste-area',
+    'data-test': 'auto-tag-template-input',
+    placeholder: 'e.g. sitecode=$1',
+    style: 'min-height:0;height:auto;padding:0.5rem 0.7rem;font-family:"SF Mono",Menlo,monospace;'
+  });
+  tplInput.value = store.params.tagTemplate;
+  body.appendChild(tplInput);
+
+  body.appendChild(h('p', { class: 'muted', style: 'font-size:0.85rem;margin-top:0.4rem;color:var(--text-muted);' },
+    'Matches against each instance name. Non-matching rows are skipped. Already-tagged rows are skipped.'
+  ));
+
+  const previewWrap = h('div', {
+    'data-test': 'auto-tag-preview',
+    style: 'margin-top:0.8rem;border:1px solid var(--border);border-radius:4px;background:#fafbfc;padding:0.5rem 0.7rem;font-size:0.85rem;'
+  });
+  body.appendChild(previewWrap);
+
+  function renderPreview() {
+    while (previewWrap.firstChild) previewWrap.removeChild(previewWrap.firstChild);
+    const pattern = String(store.params.regex || '').trim();
+    const template = String(store.params.tagTemplate || '').trim();
+    if (!pattern || !template) {
+      previewWrap.appendChild(h('p', { class: 'muted', style: 'margin:0;color:var(--text-muted);' },
+        'Enter a regex and a tag template to see preview matches.'));
+      return;
+    }
+    let re;
+    try { re = new RegExp(pattern); } catch (err) {
+      previewWrap.appendChild(h('p', { class: 'muted', style: 'margin:0;color:#a02216;' }, `Invalid regex: ${err.message}`));
+      return;
+    }
+    const targets = Array.isArray(store.targets) ? store.targets : [];
+    const matched = [];
+    let missCount = 0;
+    for (const t of targets) {
+      const name = typeof t?.name === 'string' ? t.name : '';
+      const m = re.exec(name);
+      if (m) {
+        const resultTag = template.replace(/\$(\$|&|\d+)/g, (_, key) => {
+          if (key === '$') return '$';
+          if (key === '&') return m[0] ?? '';
+          const idx = Number(key);
+          return Number.isFinite(idx) ? (m[idx] ?? '') : '';
+        });
+        matched.push({ id: t.id, name, match: m[0], matchIndex: m.index, resultTag });
+      } else {
+        missCount++;
+      }
+    }
+    previewWrap.appendChild(h('div', {
+      'data-test': 'auto-tag-preview-summary',
+      style: 'font-weight:600;margin-bottom:0.4rem;'
+    }, `${matched.length} match${matched.length === 1 ? '' : 'es'} · ${missCount} no-match${missCount === 1 ? '' : 'es'}`));
+    if (matched.length === 0) return;
+    const list = h('div', { style: 'display:grid;grid-template-columns:1fr 0.8fr;row-gap:0.3rem;column-gap:0.6rem;' });
+    list.appendChild(h('div', { style: 'font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;' }, 'Instance'));
+    list.appendChild(h('div', { style: 'font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;' }, 'Resulting tag'));
+    for (const row of matched.slice(0, 10)) {
+      const nameCell = h('div', { 'data-test': 'auto-tag-preview-row', style: 'font-family:"SF Mono",Menlo,monospace;font-size:0.82rem;' });
+      const before = row.name.slice(0, row.matchIndex);
+      const matchStr = row.match;
+      const after = row.name.slice(row.matchIndex + matchStr.length);
+      nameCell.appendChild(document.createTextNode(before));
+      const hl = h('span', { style: 'background:#fffbcc;padding:0 1px;' }, matchStr);
+      nameCell.appendChild(hl);
+      nameCell.appendChild(document.createTextNode(after));
+      list.appendChild(nameCell);
+      list.appendChild(h('div', {
+        'data-test': 'auto-tag-preview-tag',
+        style: 'font-family:"SF Mono",Menlo,monospace;font-size:0.82rem;color:var(--text);'
+      }, row.resultTag || '(empty)'));
+    }
+    previewWrap.appendChild(list);
+    if (matched.length > 10) {
+      previewWrap.appendChild(h('p', {
+        class: 'muted',
+        style: 'font-size:0.78rem;margin:0.3rem 0 0;color:var(--text-muted);'
+      }, `(showing 10 of ${matched.length})`));
+    }
+  }
+
+  function checkRegex() {
+    const pattern = String(store.params.regex || '').trim();
+    if (!pattern) {
+      regexError.style.display = 'none';
+      regexError.textContent = '';
+      return;
+    }
+    try {
+      new RegExp(pattern);
+      regexError.style.display = 'none';
+      regexError.textContent = '';
+    } catch (err) {
+      regexError.style.display = '';
+      regexError.textContent = `Invalid regex: ${err.message}`;
+    }
+  }
+
+  regexInput.addEventListener('input', () => {
+    store.params = { ...store.params, regex: regexInput.value };
+    checkRegex();
+    renderPreview();
+    refreshNextDisabled();
+  });
+  tplInput.addEventListener('input', () => {
+    store.params = { ...store.params, tagTemplate: tplInput.value };
+    renderPreview();
+    refreshNextDisabled();
+  });
+
+  // Trigger live tag enrichment so describe() in Preview computes
+  // willChange / skip accurately. We don't render chips - target.tags
+  // is just attached to store.targets[i] for the Preview step.
+  void fetchTagsForAutoTag({ store, call });
+
+  checkRegex();
+  renderPreview();
+  refreshNextDisabled();
+}
+
+async function fetchTagsForAutoTag({ store, call }) {
+  const targets = Array.isArray(store.targets) ? store.targets : [];
+  const ids = targets.map((t) => t?.id).filter((id) => Number.isFinite(id));
+  if (ids.length === 0) return;
+  try {
+    const res = await call('bulk-composer:list-tags-batch', { serverIds: ids });
+    const map = (res && res.byServerId) || {};
+    for (const t of targets) {
+      if (!t || t.id == null) continue;
+      const tags = map[t.id];
+      if (Array.isArray(tags)) t.tags = tags.slice();
+      else if (Object.prototype.hasOwnProperty.call(map, t.id)) t.tags = null;
+    }
+  } catch {
+    // Enrichment failed; describe() falls back to its "(not found)"
+    // placeholder branch for unenriched rows. commit() will GET-PUT
+    // anyway.
+  }
 }

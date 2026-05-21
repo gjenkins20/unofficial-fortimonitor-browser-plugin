@@ -14,8 +14,9 @@ import * as applyBestPracticeFabric from './apply-stock-fabric-templates.js';
 import * as profileAndCreateTemplates from './profile-and-create-templates.js';
 import * as addPortScope from './add-port-scope.js';
 import * as removePortScope from './remove-port-scope.js';
+import * as autoTagByName from './auto-tag-by-name.js';
 
-export const ACTIONS = [addTag, removeTag, applyTemplate, applyBestPracticeFabric, profileAndCreateTemplates, addPortScope, removePortScope];
+export const ACTIONS = [addTag, removeTag, applyTemplate, applyBestPracticeFabric, profileAndCreateTemplates, addPortScope, removePortScope, autoTagByName];
 
 const BY_ID = new Map(ACTIONS.map((a) => [a.id, a]));
 
