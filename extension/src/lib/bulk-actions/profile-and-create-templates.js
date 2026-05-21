@@ -167,6 +167,7 @@ export async function commit(target, params, ctx = {}) {
     mpwResult = await ensureMpwForCluster(cluster, {
       ensureResult,
       fmClient: fortimonitorClient,
+      panoptaClient: client,
       sharedState,
       dryRun
     });
@@ -339,7 +340,7 @@ function ensureForCluster(cluster, { panopta, fmClient, sharedState, destination
 // the profile-and-create-templates surface. One MPW per cluster, keyed
 // by name so re-runs are idempotent. The MPW is generated AFTER the
 // cluster's template is ensured so it can reference the new template id.
-async function ensureMpwForCluster(cluster, { ensureResult, fmClient, sharedState, dryRun }) {
+async function ensureMpwForCluster(cluster, { ensureResult, fmClient, panoptaClient, sharedState, dryRun }) {
   if (!cluster || !ensureResult) return null;
   const proposalName = buildMpwName(cluster, ensureResult);
   const stateKey = dryRun ? `mpw:dry:${cluster.key}` : `mpw:${cluster.key}`;
@@ -347,7 +348,7 @@ async function ensureMpwForCluster(cluster, { ensureResult, fmClient, sharedStat
   if (cached) return cached;
   const promise = dryRun
     ? simulateMpwCreate(cluster, ensureResult, proposalName, fmClient, sharedState)
-    : createOrFindMpw(cluster, ensureResult, proposalName, fmClient, sharedState);
+    : createOrFindMpw(cluster, ensureResult, proposalName, fmClient, sharedState, panoptaClient);
   sharedState.set(stateKey, promise);
   return promise;
 }
@@ -359,7 +360,7 @@ function buildMpwName(cluster, ensureResult) {
   return `Toolkit: auto-attach ${templateName} to ${make} ${model}`;
 }
 
-async function createOrFindMpw(cluster, ensureResult, proposalName, fmClient, sharedState) {
+async function createOrFindMpw(cluster, ensureResult, proposalName, fmClient, sharedState, panoptaClient) {
   const rulesets = await getCachedRulesets(fmClient, sharedState);
   const existing = rulesets.find((r) => r && r.name === proposalName);
   if (existing) {
@@ -367,7 +368,13 @@ async function createOrFindMpw(cluster, ensureResult, proposalName, fmClient, sh
   }
   // Need nounOptions for clause construction. Memoize alongside rulesets.
   const nounOptions = await getCachedNounOptions(fmClient, sharedState);
-  const clauses = buildClausesFromCluster(cluster, nounOptions);
+  // FMN-228 QA fix (2026-05-21): fetch the sample device's actual
+  // server_attribute values so the attribute clause's match_value
+  // matches what the device carries (e.g. fortigate.model="FGVMA6"),
+  // not the cluster.model field (which is fabricSystemData.model_number
+  // like "VM64-AWS" - a different namespace).
+  const sampleAttrs = await getSampleDeviceAttributes(cluster, panoptaClient, sharedState);
+  const clauses = buildClausesFromCluster(cluster, nounOptions, sampleAttrs);
   const warnings = [];
   if (clauses.length === 0) {
     warnings.push('No vocabulary entries for this cluster\'s make/model; MPW created without predicate (will match everything by default).');
@@ -429,14 +436,21 @@ function getCachedNounOptions(fmClient, sharedState) {
   return promise;
 }
 
-// Build the policy clauses from a cluster's (make, model) using the
-// same shape pickFamilyClause / pickModelClause produce in the
-// recommendation engine (kept inline to avoid coupling
-// profile-and-create-templates to the BPA-focused engine module).
-function buildClausesFromCluster(cluster, nounOptions) {
+// Build the policy clauses from a cluster's (make, model) plus the
+// sample device's live server_attribute values.
+//
+// FMN-228 QA finding (2026-05-21):
+//   * device_type clauses require match_type "pick_multiple"
+//     (rendered as "Is" in the UI). "pick_one" renders blank.
+//   * attribute clauses' match_value must equal the live attribute
+//     value on the device (e.g. fortigate.model="FGVMA6"), NOT the
+//     cluster's `model` field (which is fabricSystemData.model_number
+//     like "VM64-AWS" - a different identifier namespace). If the
+//     sample device doesn't carry the attribute, the model clause is
+//     omitted; the rule still matches by device_type.
+function buildClausesFromCluster(cluster, nounOptions, sampleAttrs = {}) {
   const out = [];
   const make = String(cluster?.make ?? '').trim();
-  const model = String(cluster?.model ?? '').trim();
   if (!make) return out;
 
   const familyList = Array.isArray(nounOptions?.device_types) ? nounOptions.device_types : [];
@@ -446,28 +460,61 @@ function buildClausesFromCluster(cluster, nounOptions) {
     && (opt.label.toLowerCase() === lowerMake || opt.label.toLowerCase().includes(lowerMake))
   );
   if (familyHit) {
-    out.push({ datatype: 'device_type', match_type: 'pick_one', match_key: null, match_value: familyHit.value });
+    // FMN-228 QA finding (2026-05-21): pick_multiple match_value is a
+    // JSON array of option values, not a string. Captured live from an
+    // operator-built save: "match_value": ["[sub_type]fortinet.fortigate"].
+    out.push({ datatype: 'device_type', match_type: 'pick_multiple', match_key: null, match_value: [familyHit.value] });
   }
 
-  if (model) {
-    const groups = Array.isArray(nounOptions?.attribute_types) ? nounOptions.attribute_types : [];
-    let group = groups.find((g) => g && typeof g.label === 'string' && g.label.toLowerCase() === lowerMake);
-    if (!group) {
-      group = groups.find((g) => g && typeof g.label === 'string' && g.label.toLowerCase().includes(lowerMake));
-    }
-    if (group && Array.isArray(group.options)) {
-      for (const opt of group.options) {
-        if (!opt || typeof opt.value !== 'string') continue;
-        const i = opt.value.indexOf(',');
-        const textkey = i < 0 ? opt.value : opt.value.slice(i + 1);
-        if (textkey.endsWith('.model')) {
-          out.push({ datatype: 'attribute', match_type: 'pick_one', match_key: textkey, match_value: model });
-          break;
+  // Attribute clause: pin to the device's actual .model attribute value
+  // (looked up from sampleAttrs) rather than cluster.model. The textkey
+  // is discovered from the nounOptions vocabulary (e.g. fortigate.model
+  // for FortiGate, fortiap.model for FortiAP).
+  const groups = Array.isArray(nounOptions?.attribute_types) ? nounOptions.attribute_types : [];
+  let group = groups.find((g) => g && typeof g.label === 'string' && g.label.toLowerCase() === lowerMake);
+  if (!group) {
+    group = groups.find((g) => g && typeof g.label === 'string' && g.label.toLowerCase().includes(lowerMake));
+  }
+  if (group && Array.isArray(group.options)) {
+    for (const opt of group.options) {
+      if (!opt || typeof opt.value !== 'string') continue;
+      const i = opt.value.indexOf(',');
+      const textkey = i < 0 ? opt.value : opt.value.slice(i + 1);
+      if (textkey.endsWith('.model')) {
+        const liveValue = sampleAttrs[textkey];
+        if (liveValue !== undefined && liveValue !== null && String(liveValue).trim() !== '') {
+          out.push({ datatype: 'attribute', match_type: 'pick_one', match_key: textkey, match_value: String(liveValue) });
         }
+        break;
       }
     }
   }
   return out;
+}
+
+// FMN-228 QA fix: fetch the cluster's representative device's
+// server_attribute list once per run and memoize. Returns
+// { textkey: value } so buildClausesFromCluster can resolve the
+// attribute-clause match_value.
+async function getSampleDeviceAttributes(cluster, panoptaClient, sharedState) {
+  if (!cluster || !cluster.sample_device_id) return {};
+  if (!panoptaClient || typeof panoptaClient.listServerAttributes !== 'function') return {};
+  const key = `mpw:sampleAttrs:${cluster.sample_device_id}`;
+  const cached = sharedState.get(key);
+  if (cached) return cached;
+  const promise = panoptaClient.listServerAttributes(cluster.sample_device_id)
+    .then((rows) => {
+      const map = {};
+      for (const r of (Array.isArray(rows) ? rows : [])) {
+        if (r && typeof r.textkey === 'string' && r.value !== undefined && r.value !== null) {
+          map[r.textkey] = r.value;
+        }
+      }
+      return map;
+    })
+    .catch(() => ({}));
+  sharedState.set(key, promise);
+  return promise;
 }
 
 // Exported for tests

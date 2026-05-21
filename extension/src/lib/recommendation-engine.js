@@ -212,6 +212,15 @@ function buildPolicyProposal(p, nounOptions) {
 }
 
 function pickFamilyClause(make, nounOptions) {
+  // FMN-228 QA finding (2026-05-21):
+  //   * device_type clauses in FortiMonitor's UI expose only match_type
+  //     'pick_multiple' ("Is") and '!pick_multiple' ("Is Not"). pick_one
+  //     renders blank in the operator dropdown.
+  //   * pick_multiple match_value is a JSON ARRAY of option values, not
+  //     a string. Sending a string leaves the value-slot empty in the
+  //     rendered UI. Confirmed by capturing the editRuleset POST after
+  //     an operator-built save:
+  //       "match_value": ["[sub_type]fortinet.fortigate"]
   const list = Array.isArray(nounOptions?.device_types) ? nounOptions.device_types : [];
   const lower = make.toLowerCase();
   for (const opt of list) {
@@ -219,16 +228,25 @@ function pickFamilyClause(make, nounOptions) {
     if (opt.label.toLowerCase() === lower || opt.label.toLowerCase().includes(lower)) {
       return {
         datatype: 'device_type',
-        match_type: 'pick_one',
+        match_type: 'pick_multiple',
         match_key: null,
-        match_value: opt.value
+        match_value: [opt.value]
       };
     }
   }
   return null;
 }
 
-function pickModelClause(make, model, nounOptions) {
+function pickModelClause(make, model, nounOptions, sampleAttrs = {}) {
+  // FMN-228 QA finding (2026-05-21): the attribute clause's
+  // match_value must equal the live attribute value on the device
+  // (e.g. fortigate.model="FGVMA6"), NOT the model field from
+  // fabricSystemData (model_number like "VM64-AWS" - a different
+  // namespace). When sampleAttrs[textkey] is missing, the clause is
+  // omitted; the rule still matches by device_type alone. `model`
+  // stays in the signature for backward-compat with callers that
+  // haven't yet wired the sample-attr fetch.
+  void model;
   const groups = Array.isArray(nounOptions?.attribute_types) ? nounOptions.attribute_types : [];
   const lowerMake = make.toLowerCase();
   let group = groups.find((g) => g && typeof g.label === 'string' && g.label.toLowerCase() === lowerMake);
@@ -241,11 +259,15 @@ function pickModelClause(make, model, nounOptions) {
     if (!opt || typeof opt.value !== 'string') continue;
     const textkey = stripAttributeValuePrefix(opt.value);
     if (textkey.endsWith('.model')) {
+      const liveValue = sampleAttrs[textkey];
+      if (liveValue === undefined || liveValue === null || String(liveValue).trim() === '') {
+        return null;
+      }
       return {
         datatype: 'attribute',
         match_type: 'pick_one',
         match_key: textkey,
-        match_value: model
+        match_value: String(liveValue)
       };
     }
   }

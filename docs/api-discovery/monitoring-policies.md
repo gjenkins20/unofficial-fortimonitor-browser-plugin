@@ -162,9 +162,9 @@ Field notes:
 | Field | Type | Notes |
 |---|---|---|
 | `datatype` | `"name"` \| `"attribute"` \| `"device_type"` \| `"tag"` \| etc. | What the clause matches against. Vocabulary mirrors `nounOptions` keys (see below). Two confirmed values: `"name"` (matches instance name) and `"attribute"` (matches an attribute on the instance). |
-| `match_type` | `"regex"` \| `"pick_one"` \| ... | For `datatype="name"`, `regex` was observed. For `datatype="attribute"`, `pick_one` was observed (operator picked from the `fetchAttributeOptions` dropdown). Other match types likely exist; not exhaustively captured. |
-| `match_key` | string \| null | The attribute textkey (e.g. `fortigate.model`). `null` when `datatype="name"`. |
-| `match_value` | string | The value to match against. For `pick_one`, a value from `fetchAttributeOptions`. For `regex`, the regex source (`.*` was observed). |
+| `match_type` | one of `"regex"` / `"pick_one"` / `"!pick_one"` / `"pick_multiple"` / `"!pick_multiple"` / `"equals"` / `"!equals"` / `"contains"` / `"!contains"` / `"contains_regex"` / `"is_set"` / `"!is_set"` | **Per-datatype.** The set of valid `match_type` values differs by `datatype`. Captured from the hidden `<select>` in the rendered clause editor (probed via Playwright, FMN-228 QA 2026-05-21): `datatype="device_type"` exposes ONLY `pick_multiple` and `!pick_multiple`. `datatype="attribute"` exposes all twelve. `datatype="name"` was observed with `regex`. Sending an out-of-set match_type produces a JSON-valid ruleset but the rendered "operator" slot is blank in the UI. |
+| `match_key` | string \| null | The attribute textkey (e.g. `fortigate.model`). `null` when `datatype="name"` or `datatype="device_type"`. |
+| `match_value` | string OR string[] | **Polymorphic by `match_type`.** For `pick_one` / `equals` / `contains` / `regex` / `is_set` etc., a single string. For `pick_multiple` and `!pick_multiple`, a **JSON array** of option values (e.g. `["[sub_type]fortinet.fortigate"]`). Sending a string for `pick_multiple` produces a JSON-valid ruleset but the value-slot renders blank — the multi-select widget reads from an array. Captured from an editRuleset POST after an operator-built save (FMN-228 QA 2026-05-21). |
 | `error` | boolean | Always `false` in captures. UI uses it to mark invalid clauses. |
 
 ### Action

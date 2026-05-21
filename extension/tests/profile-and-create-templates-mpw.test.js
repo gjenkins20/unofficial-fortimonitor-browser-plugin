@@ -45,14 +45,27 @@ test('buildMpwName uses the Toolkit prefix + template + make + model', () => {
   assert.equal(name, 'Toolkit: auto-attach FortiGate FGVM64 Edge to FortiGate FGVM64-AWS');
 });
 
-test('buildClausesFromCluster emits device_type + attribute clauses when vocab matches', () => {
-  const clauses = buildClausesFromCluster(CLUSTER, NOUN_OPTIONS);
+test('buildClausesFromCluster emits device_type + attribute clauses with live attribute value', () => {
+  // FMN-228 QA: attribute clause's match_value comes from the device's
+  // live server_attribute, not cluster.model. Supply sampleAttrs.
+  const sampleAttrs = { 'fortigate.model': 'FGVMA6' };
+  const clauses = buildClausesFromCluster(CLUSTER, NOUN_OPTIONS, sampleAttrs);
   assert.equal(clauses.length, 2);
   assert.equal(clauses[0].datatype, 'device_type');
-  assert.equal(clauses[0].match_value, '[sub_type]fortinet.fortigate');
+  assert.equal(clauses[0].match_type, 'pick_multiple');
+  // pick_multiple match_value is a JSON array (captured live from a
+  // real save POST: "match_value": ["[sub_type]fortinet.fortigate"])
+  assert.deepEqual(clauses[0].match_value, ['[sub_type]fortinet.fortigate']);
   assert.equal(clauses[1].datatype, 'attribute');
+  assert.equal(clauses[1].match_type, 'pick_one');
   assert.equal(clauses[1].match_key, 'fortigate.model');
-  assert.equal(clauses[1].match_value, 'FGVM64-AWS');
+  assert.equal(clauses[1].match_value, 'FGVMA6');
+});
+
+test('buildClausesFromCluster omits attribute clause when sampleAttrs lacks the textkey', () => {
+  const clauses = buildClausesFromCluster(CLUSTER, NOUN_OPTIONS, {}); // no fortigate.model
+  assert.equal(clauses.length, 1);
+  assert.equal(clauses[0].datatype, 'device_type');
 });
 
 test('buildClausesFromCluster returns empty array when make is missing', () => {

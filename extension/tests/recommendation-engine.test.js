@@ -129,7 +129,15 @@ test('partitions a single templates list by server_group_name', () => {
 // Policy proposal construction (from live nounOptions)
 // =====================================================================
 
-test('builds a two-clause AND predicate for a FortiGate profile', () => {
+test('builds a device_type-only predicate (model clause omitted without live sample_attrs)', () => {
+  // FMN-228 QA finding (2026-05-21): pickModelClause now requires
+  // sampleAttrs to emit the attribute clause; without them the model
+  // clause is omitted (otherwise the toolkit produced an attribute
+  // clause whose match_value never matched any device's
+  // fortigate.model attribute). buildRecommendations doesn't fetch
+  // sample attrs today - the apply-stock-fabric-templates commit
+  // path is expected to patch the clauses with live values before
+  // POSTing. For now, the proposal carries the family clause only.
   const profile = makeProfile([{ id: 1 }], { 1: { model_name: 'FortiGate', model_number: 'FGVMA6' } });
   const out = buildRecommendations(profile, {
     existingTemplates: [{ id: 100, name: 'FortiGate' }],
@@ -138,15 +146,11 @@ test('builds a two-clause AND predicate for a FortiGate profile', () => {
   });
   const p = out.recommendations[0].policy_proposal;
   assert.equal(p.name, 'Apply Stock FortiGate template');
-  assert.equal(p.clauses.length, 2);
-  // Family clause
+  assert.equal(p.clauses.length, 1);
   assert.equal(p.clauses[0].datatype, 'device_type');
-  assert.equal(p.clauses[0].match_value, '[sub_type]fortinet.fortigate');
-  // Model clause
-  assert.equal(p.clauses[1].datatype, 'attribute');
-  assert.equal(p.clauses[1].match_key, 'fortigate.model');
-  assert.equal(p.clauses[1].match_value, 'FGVMA6');
-  assert.deepEqual(p.warnings, []);
+  assert.equal(p.clauses[0].match_type, 'pick_multiple');
+  // pick_multiple match_value is a JSON array (captured live).
+  assert.deepEqual(p.clauses[0].match_value, ['[sub_type]fortinet.fortigate']);
 });
 
 test('warns when device_types vocabulary lacks the family', () => {
@@ -163,10 +167,11 @@ test('warns when device_types vocabulary lacks the family', () => {
     nounOptions: limited
   });
   const p = out.recommendations[0].policy_proposal;
-  // Family clause omitted but model clause present.
-  assert.equal(p.clauses.length, 1);
-  assert.equal(p.clauses[0].match_key, 'fortiswitch.model');
-  assert.equal(p.warnings.length, 1);
+  // Family clause omitted (no FortiSwitch in device_types vocab) AND
+  // model clause omitted (no sampleAttrs supplied) -> empty clauses,
+  // warnings carries the device_types miss.
+  assert.equal(p.clauses.length, 0);
+  assert.equal(p.warnings.length, 2);
   assert.match(p.warnings[0], /device_types/);
 });
 
@@ -256,5 +261,7 @@ test('caller mutations of the recommendation do not affect re-runs', () => {
 
   const out2 = buildRecommendations(profile, inputs);
   assert.deepEqual(out2.recommendations[0].applies_to_server_ids, [1]);
-  assert.equal(out2.recommendations[0].policy_proposal.clauses.length, 2);
+  // FMN-228 QA: model clause now omitted without live sampleAttrs;
+  // proposal carries only the family clause.
+  assert.equal(out2.recommendations[0].policy_proposal.clauses.length, 1);
 });
