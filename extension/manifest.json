@@ -84,6 +84,15 @@
         "https://fortimonitor.forticloud.com/*",
         "https://*.fortimonitor.com/*"
       ]
+    },
+    {
+      "resources": [
+        "src/lib/info-bubble-registry.js"
+      ],
+      "matches": [
+        "https://fortimonitor.forticloud.com/*",
+        "https://*.fortimonitor.com/*"
+      ]
     }
   ]
 }

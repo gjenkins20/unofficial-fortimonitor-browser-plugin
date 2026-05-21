@@ -2945,12 +2945,12 @@
     mount: mountSnapshotCard,
   });
 
-  // FMN-169: per-feature info bubbles on hover. Mirror of the content-
-  // surface entries in src/lib/info-bubble-registry.js (the ES module
-  // version popup.js consumes). Augment.js cannot `import` because it
-  // is a classic IIFE content script; inlining keeps both surfaces in
-  // sync without a build pipeline. Order/featureIds MUST match the
-  // module's INFO_BUBBLE_REGISTRY for the unit-test cross-check below.
+  // FMN-169: per-feature info bubbles on hover. The single source of
+  // truth lives at extension/src/lib/info-bubble-registry.js as an ES
+  // module. FMN-189: augment.js (a classic IIFE content script) loads
+  // that module at runtime via chrome.runtime.getURL + dynamic import()
+  // - the same pattern intro-tour-bridge.js uses for tour-engine.js.
+  // The module is listed under web_accessible_resources in manifest.json.
   const INFO_BUBBLE_FLAG_KEY = 'fm:showInfoBubbles';
   const INFO_BUBBLE_DISMISS_KEY = 'fm:dismissedInfoBubbles';
   const INFO_BUBBLE_READY_ATTR = 'data-fmn-info-bubble-ready';
@@ -2959,55 +2959,12 @@
   const INFO_BUBBLE_FEATURE_ATTR = 'data-fmn-info-bubble-feature';
   const INFO_BUBBLE_STYLE_ID = 'fmn-info-bubble-styles';
   const INFO_BUBBLE_HOVER_DELAY_MS = 500;
-  const INFO_BUBBLE_LEARN_MORE_BASE = 'https://github.com/gjenkins20/unofficial-fortimonitor-browser-plugin/blob/main/docs/planning/';
+  const INFO_BUBBLE_REGISTRY_MODULE_URL = chrome.runtime.getURL('src/lib/info-bubble-registry.js');
 
-  const INFO_BUBBLE_REGISTRY_CONTENT = [
-    {
-      featureId: 'omni-search',
-      anchorSelector: '#fmn-omni-search-container .fmn-omni-chip',
-      anchorMode: 'icon',
-      mountTarget: 'after',
-      title: 'FM TK Search',
-      body: 'Searches every server field at once: name, FQDN, IP addresses, description, tags, attributes (Operating System, Model, custom), device type, agent version, server group, and applied template. Replaces FortiMonitor\'s narrow Search Instances input.',
-      learnMoreUrl: INFO_BUBBLE_LEARN_MORE_BASE + 'omni-search.md',
-    },
-    {
-      featureId: 'search-by-id',
-      anchorSelector: '#fmn-omni-search-container .fmn-omni-id-hint',
-      anchorMode: 'self',
-      title: 'Search by Server ID',
-      body: 'Paste a numeric server id (e.g. 42024060) or the s-<id> token from FortiMonitor URLs into the search box to jump straight to that instance. No need to remember the name.',
-      learnMoreUrl: INFO_BUBBLE_LEARN_MORE_BASE + 'search-by-id.md',
-    },
-    {
-      featureId: 'ip-dns-columns',
-      anchorSelector: 'th.fmn-instance-merged [data-fmn-col="ip"], th.fmn-instance-merged [data-fmn-col="dns"]',
-      anchorMode: 'self',
-      title: 'IP / DNS Columns',
-      body: 'Adds IP Address and DNS Name sub-columns to the Instances list. Values come from each server\'s primary fqdn(s); names like server.example.com and bare hostnames are classified locally rather than trusting FortiMonitor\'s ipTypes hint.',
-      learnMoreUrl: INFO_BUBBLE_LEARN_MORE_BASE + 'ip-dns-columns.md',
-    },
-    {
-      featureId: 'native-column-reorder',
-      anchorSelector: '#fmn-columns-button',
-      anchorMode: 'icon',
-      mountTarget: 'after',
-      title: 'Columns Menu',
-      body: 'Reorders and hides FortiMonitor\'s native columns (Parent Group, Alert Timeline, Tags, Agent Version, Device Heartbeat) without losing pagination or sort. Drag sub-headers directly or use the popover.',
-      learnMoreUrl: INFO_BUBBLE_LEARN_MORE_BASE + 'native-column-reorder.md',
-    },
-    {
-      // FMN-86 ribbon is pointer-events:none; anchor on the card's
-      // h3 title and insert an icon there instead.
-      featureId: 'snapshot-diff-card',
-      anchorSelector: '[data-fmn-entry="fmn-snapshot-diff-card"] h3',
-      anchorMode: 'icon',
-      mountTarget: 'append',
-      title: 'Snapshot & Diff',
-      body: 'Takes a point-in-time snapshot of your deployment (servers, users, templates, server groups) and compares any two snapshots to show what changed. Snapshots live only on this Chrome profile; nothing is uploaded.',
-      learnMoreUrl: INFO_BUBBLE_LEARN_MORE_BASE + 'snapshot-diff-card.md',
-    },
-  ];
+  // Filled from the dynamic import below. Until then, mount() is gated
+  // on infoBubblesLoaded (set true after BOTH the storage flags AND
+  // this registry import resolve), so no consumer reads an empty array.
+  let INFO_BUBBLE_REGISTRY_CONTENT = [];
 
   // Live state for the bubble subsystem. The flag default is true so a
   // fresh install shows bubbles immediately on first paint - matches the
@@ -3023,16 +2980,32 @@
   };
 
   async function loadInfoBubbleFlags() {
-    try {
-      const data = await chrome.storage.local.get([INFO_BUBBLE_FLAG_KEY, INFO_BUBBLE_DISMISS_KEY]);
-      const flag = data && data[INFO_BUBBLE_FLAG_KEY];
-      infoBubblesEnabled = flag === undefined ? true : Boolean(flag);
-      const dismissed = data && data[INFO_BUBBLE_DISMISS_KEY];
-      infoBubblesDismissed = new Set(Array.isArray(dismissed) ? dismissed : []);
-    } catch {
-      infoBubblesEnabled = true;
-      infoBubblesDismissed = new Set();
-    }
+    // FMN-189: load storage flags and dynamically import the registry
+    // module in parallel. infoBubblesLoaded flips true only after BOTH
+    // resolve, so the mount() gate keeps holding while either is in
+    // flight. Registry-import failure leaves INFO_BUBBLE_REGISTRY_CONTENT
+    // as the empty array, which makes mount() a silent no-op rather
+    // than throwing.
+    const storagePromise = chrome.storage.local.get([INFO_BUBBLE_FLAG_KEY, INFO_BUBBLE_DISMISS_KEY])
+      .then((data) => {
+        const flag = data && data[INFO_BUBBLE_FLAG_KEY];
+        infoBubblesEnabled = flag === undefined ? true : Boolean(flag);
+        const dismissed = data && data[INFO_BUBBLE_DISMISS_KEY];
+        infoBubblesDismissed = new Set(Array.isArray(dismissed) ? dismissed : []);
+      })
+      .catch(() => {
+        infoBubblesEnabled = true;
+        infoBubblesDismissed = new Set();
+      });
+    const registryPromise = import(INFO_BUBBLE_REGISTRY_MODULE_URL)
+      .then((mod) => {
+        const all = Array.isArray(mod.INFO_BUBBLE_REGISTRY) ? mod.INFO_BUBBLE_REGISTRY : [];
+        INFO_BUBBLE_REGISTRY_CONTENT = all.filter((e) => e && e.surface === 'content');
+      })
+      .catch(() => {
+        INFO_BUBBLE_REGISTRY_CONTENT = [];
+      });
+    await Promise.all([storagePromise, registryPromise]);
     infoBubblesLoaded = true;
   }
 
