@@ -326,6 +326,28 @@ test('sanitizeServerBodyForPut returns input unchanged for non-object input', ()
   assert.strictEqual(sanitizeServerBodyForPut(undefined), undefined);
 });
 
+// FMN-225 QA follow-up (2026-05-21): EC2-managed instances return
+// device_type="cloud_server" on GET, but PUT rejects anything other
+// than "server" / "network_device" with HTTP 400.
+
+test('sanitizeServerBodyForPut drops device_type when it is not server/network_device (PUT 400 guard)', () => {
+  const out = sanitizeServerBodyForPut({
+    name: 'ec2-host', device_type: 'cloud_server', tags: ['x']
+  });
+  assert.equal(Object.prototype.hasOwnProperty.call(out, 'device_type'), false);
+  assert.deepEqual(out.tags, ['x']);
+});
+
+test('sanitizeServerBodyForPut keeps device_type=server / network_device', () => {
+  assert.strictEqual(sanitizeServerBodyForPut({ device_type: 'server' }).device_type, 'server');
+  assert.strictEqual(sanitizeServerBodyForPut({ device_type: 'network_device' }).device_type, 'network_device');
+});
+
+test('sanitizeServerBodyForPut leaves bodies without device_type alone', () => {
+  const out = sanitizeServerBodyForPut({ name: 'srv', tags: ['a'] });
+  assert.equal(Object.prototype.hasOwnProperty.call(out, 'device_type'), false);
+});
+
 // ----- extractApiErrorMessage (FMN-206) ------------------------
 
 test('extractApiErrorMessage prefers parsed.message', () => {

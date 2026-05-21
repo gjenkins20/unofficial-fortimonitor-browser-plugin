@@ -106,6 +106,27 @@ test.describe('FMN-225: Auto-tag by name pattern', () => {
     await page.close();
   });
 
+  test('preview renders matches as soon as the regex is valid, before the tag template lands', async ({ extensionContext, extensionId }) => {
+    const page = await extensionContext.newPage();
+    await openConfigure(page, extensionId);
+
+    // Regex only, no template
+    await page.locator('[data-test="auto-tag-regex-input"]').fill('^FGT-(\\d{3})-');
+    await expect(page.locator('[data-test="auto-tag-preview-summary"]'))
+      .toHaveText('3 matches · 1 no-match');
+
+    // Resulting-tag column shows placeholder copy + italic style
+    const tags = await page.locator('[data-test="auto-tag-preview-tag"]').allTextContents();
+    expect(tags).toEqual(['(set tag template)', '(set tag template)', '(set tag template)']);
+
+    // Add the template -> resulting tags populate
+    await page.locator('[data-test="auto-tag-template-input"]').fill('sitecode=$1');
+    const filled = await page.locator('[data-test="auto-tag-preview-tag"]').allTextContents();
+    expect(filled).toEqual(['sitecode=684', 'sitecode=684', 'sitecode=712']);
+
+    await page.close();
+  });
+
   test('tag enrichment fires for store.targets so Preview describe() is accurate', async ({ extensionContext, extensionId }) => {
     const page = await extensionContext.newPage();
     await openConfigure(page, extensionId);

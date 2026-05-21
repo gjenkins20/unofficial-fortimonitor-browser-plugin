@@ -1611,12 +1611,17 @@ function renderAutoTagByNameForm({ body, store, refreshNextDisabled, call }) {
   body.appendChild(previewWrap);
 
   function renderPreview() {
+    // FMN-225 follow-up (operator feedback 2026-05-21): render matches
+    // as soon as the regex is valid, even before the tag template is
+    // filled. The match column is regex-only; the tag column shows a
+    // placeholder until the template lands. Previously this waited for
+    // both inputs and the operator wondered if the tool was alive.
     while (previewWrap.firstChild) previewWrap.removeChild(previewWrap.firstChild);
     const pattern = String(store.params.regex || '').trim();
     const template = String(store.params.tagTemplate || '').trim();
-    if (!pattern || !template) {
+    if (!pattern) {
       previewWrap.appendChild(h('p', { class: 'muted', style: 'margin:0;color:var(--text-muted);' },
-        'Enter a regex and a tag template to see preview matches.'));
+        'Enter a regex to see preview matches. Resulting tags appear once the tag template is filled.'));
       return;
     }
     let re;
@@ -1631,12 +1636,14 @@ function renderAutoTagByNameForm({ body, store, refreshNextDisabled, call }) {
       const name = typeof t?.name === 'string' ? t.name : '';
       const m = re.exec(name);
       if (m) {
-        const resultTag = template.replace(/\$(\$|&|\d+)/g, (_, key) => {
-          if (key === '$') return '$';
-          if (key === '&') return m[0] ?? '';
-          const idx = Number(key);
-          return Number.isFinite(idx) ? (m[idx] ?? '') : '';
-        });
+        const resultTag = template
+          ? template.replace(/\$(\$|&|\d+)/g, (_, key) => {
+              if (key === '$') return '$';
+              if (key === '&') return m[0] ?? '';
+              const idx = Number(key);
+              return Number.isFinite(idx) ? (m[idx] ?? '') : '';
+            })
+          : null;
         matched.push({ id: t.id, name, match: m[0], matchIndex: m.index, resultTag });
       } else {
         missCount++;
@@ -1660,10 +1667,13 @@ function renderAutoTagByNameForm({ body, store, refreshNextDisabled, call }) {
       nameCell.appendChild(hl);
       nameCell.appendChild(document.createTextNode(after));
       list.appendChild(nameCell);
+      const tagCellLabel = row.resultTag === null
+        ? '(set tag template)'
+        : (row.resultTag || '(empty)');
       list.appendChild(h('div', {
         'data-test': 'auto-tag-preview-tag',
-        style: 'font-family:"SF Mono",Menlo,monospace;font-size:0.82rem;color:var(--text);'
-      }, row.resultTag || '(empty)'));
+        style: `font-family:"SF Mono",Menlo,monospace;font-size:0.82rem;color:${row.resultTag === null ? 'var(--text-muted)' : 'var(--text)'};font-style:${row.resultTag === null ? 'italic' : 'normal'};`
+      }, tagCellLabel));
     }
     previewWrap.appendChild(list);
     if (matched.length > 10) {

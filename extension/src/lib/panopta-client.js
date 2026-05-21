@@ -180,6 +180,21 @@ export function sanitizeServerBodyForPut(server) {
     out.snmp_heartbeat_notification_schedule = null;
   }
 
+  // FMN-225 QA (2026-05-21): the auto-tag-by-name action failed on an
+  // EC2-managed instance with:
+  //   "device_type: This field is invalid; only these values are
+  //    allowed: server, network_device (HTTP 400)"
+  // GET /v2/server/{id} returns cloud-managed instances with
+  // `device_type: "cloud_server"` (or similar EC2 / Azure variants) but
+  // PUT only accepts `"server"` or `"network_device"`. Drop the field
+  // entirely on PUT - the server defaults to a safe value and the
+  // operator's actual edit (tags / server_group / etc.) is unaffected.
+  if (Object.prototype.hasOwnProperty.call(out, 'device_type')) {
+    if (out.device_type !== 'server' && out.device_type !== 'network_device') {
+      delete out.device_type;
+    }
+  }
+
   return out;
 }
 
