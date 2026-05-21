@@ -115,18 +115,20 @@ export const INFO_BUBBLE_REGISTRY = [
     learnMoreUrl: LEARN_MORE_BASE + 'native-column-reorder.md',
   },
 
-  // FMN-154: Snapshot & Diff card on /report/ListReports. The FMN-86
-  // attribution ribbon on the card is pointer-events:none (so it
-  // cannot catch hover events). Anchor on the card's <h3> title
-  // instead and insert an icon there - the title is always in the
-  // viewport when the ribbon is, and is a natural place for an
-  // info icon.
+  // FMN-154: Snapshot & Diff card on /report/ListReports.
+  // FMN-188: anchor on the FMN-86 "FM Toolkit" ribbon itself, not the
+  // card's <h3>. The ribbon is the place every other ribbon-bearing
+  // toolkit surface advertises its origin; consistency wins. The
+  // ribbon's pointer-events: none default is lifted to 'auto' in the
+  // snapshot-card stylesheet so hover reaches the bubble handler;
+  // anchorMode 'self' means the ribbon itself is the hover target and
+  // no extra icon is injected (the visible "FM Toolkit" strip is the
+  // affordance).
   {
     featureId: 'snapshot-diff-card',
     surface: 'content',
-    anchorSelector: '[data-fmn-entry="fmn-snapshot-diff-card"] h3',
-    anchorMode: 'icon',
-    mountTarget: 'append',
+    anchorSelector: '[data-fmn-entry="fmn-snapshot-diff-card"] .fmn-pa-card-ribbon',
+    anchorMode: 'self',
     title: 'Snapshot & Diff',
     body: 'Takes a point-in-time snapshot of your deployment (servers, users, templates, server groups) and compares any two snapshots to show what changed. Snapshots live only on this Chrome profile; nothing is uploaded.',
     learnMoreUrl: LEARN_MORE_BASE + 'snapshot-diff-card.md',

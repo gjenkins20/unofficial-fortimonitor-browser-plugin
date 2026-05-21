@@ -2493,7 +2493,14 @@
       .fmn-pa-card-ribbon {
         position: absolute; top: 0; right: 0;
         width: 60px; height: 60px;
-        pointer-events: none; overflow: hidden; z-index: 5;
+        /* FMN-188: pointer-events:auto so the FMN-169 info bubble can
+           anchor here (the ribbon is the consistent place toolkit-added
+           cards advertise their origin). cursor:help cues that the area
+           is interactive. The 60x60 corner is invisible outside the
+           rotated "FM Toolkit" strip; no native UI lives in that
+           triangle, so intercepting clicks there is harmless. */
+        pointer-events: auto; cursor: help;
+        overflow: hidden; z-index: 5;
       }
       .fmn-pa-card-ribbon::before {
         content: "FM Toolkit";
