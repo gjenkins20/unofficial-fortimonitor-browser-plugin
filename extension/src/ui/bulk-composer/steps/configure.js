@@ -90,6 +90,12 @@ export function render({ container, store, navigate, call }) {
       const f = typeof params.filter === 'string' && params.filter.trim();
       const s = params.status === 'active' || params.status === 'suspended';
       nextBtn.disabled = !(f && s);
+    } else if (store.actionId === 'schedule-maintenance-window') {
+      const name = typeof params.name === 'string' && params.name.trim();
+      const startMs = params.startTime ? Date.parse(params.startTime) : NaN;
+      const endMs = params.endTime ? Date.parse(params.endTime) : NaN;
+      const orderOk = Number.isFinite(startMs) && Number.isFinite(endMs) && endMs > startMs;
+      nextBtn.disabled = !(name && orderOk);
     } else {
       nextBtn.disabled = true;
     }
@@ -113,6 +119,8 @@ export function render({ container, store, navigate, call }) {
     renderSetParentGroupForm({ body, store, refreshNextDisabled, call });
   } else if (store.actionId === 'set-agent-resource-status') {
     renderSetAgentResourceStatusForm({ body, store, refreshNextDisabled, call });
+  } else if (store.actionId === 'schedule-maintenance-window') {
+    renderScheduleMaintenanceWindowForm({ body, store, refreshNextDisabled });
   } else {
     body.appendChild(h('p', {}, 'Unknown action; pick again on the previous step.'));
   }
@@ -2183,5 +2191,133 @@ function renderSetAgentResourceStatusForm({ body, store, refreshNextDisabled, ca
   suspendedRadio.addEventListener('change', emit);
 
   if (store.params.filter) void refreshMatched();
+  refreshNextDisabled();
+}
+
+// =====================================================================
+// FMN-172: Schedule Maintenance Window form.
+//
+// Name + start/end (datetime-local inputs, browser local timezone) +
+// optional description + pause_all_checks toggle. The commit fires ONE
+// MW per run covering all opted-in targets, via the shared-state
+// memoization pattern in the descriptor.
+// =====================================================================
+
+function renderScheduleMaintenanceWindowForm({ body, store, refreshNextDisabled }) {
+  body.appendChild(h('h3', { class: 'subhead' }, 'Maintenance window'));
+
+  // Default to a 1h window starting an hour from now (local time);
+  // operator usually wants to adjust, not start from blank.
+  const nowMs = Date.now();
+  const defaultStart = new Date(nowMs + 60 * 60 * 1000);
+  const defaultEnd = new Date(nowMs + 2 * 60 * 60 * 1000);
+  const fmtLocal = (d) => {
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  store.params = {
+    ...store.params,
+    name: typeof store.params?.name === 'string' ? store.params.name : '',
+    startTime: typeof store.params?.startTime === 'string' ? store.params.startTime : defaultStart.toISOString(),
+    endTime: typeof store.params?.endTime === 'string' ? store.params.endTime : defaultEnd.toISOString(),
+    description: typeof store.params?.description === 'string' ? store.params.description : '',
+    pauseAllChecks: store.params?.pauseAllChecks === false ? false : true
+  };
+
+  // Name
+  body.appendChild(h('label', { style: 'display:block;font-size:0.85rem;margin:0.4rem 0 0.2rem;font-weight:600;' }, 'Window name'));
+  const nameInput = h('input', {
+    type: 'text', class: 'paste-area', 'data-test': 'schedule-mw-name',
+    placeholder: 'e.g. Quarterly patch window',
+    style: 'min-height:0;height:auto;padding:0.5rem 0.7rem;font-family:inherit;'
+  });
+  nameInput.value = store.params.name;
+  body.appendChild(nameInput);
+
+  // Start
+  body.appendChild(h('label', { style: 'display:block;font-size:0.85rem;margin:0.7rem 0 0.2rem;font-weight:600;' }, 'Start (local time)'));
+  const startInput = h('input', {
+    type: 'datetime-local', 'data-test': 'schedule-mw-start',
+    style: 'padding:0.4rem 0.5rem;font-family:inherit;'
+  });
+  startInput.value = fmtLocal(new Date(store.params.startTime));
+  body.appendChild(startInput);
+
+  // End
+  body.appendChild(h('label', { style: 'display:block;font-size:0.85rem;margin:0.7rem 0 0.2rem;font-weight:600;' }, 'End (local time)'));
+  const endInput = h('input', {
+    type: 'datetime-local', 'data-test': 'schedule-mw-end',
+    style: 'padding:0.4rem 0.5rem;font-family:inherit;'
+  });
+  endInput.value = fmtLocal(new Date(store.params.endTime));
+  body.appendChild(endInput);
+
+  // Description
+  body.appendChild(h('label', { style: 'display:block;font-size:0.85rem;margin:0.7rem 0 0.2rem;font-weight:600;' }, 'Description (optional)'));
+  const descInput = h('textarea', {
+    'data-test': 'schedule-mw-description',
+    style: 'min-height:60px;padding:0.5rem 0.7rem;font-family:inherit;width:100%;box-sizing:border-box;',
+    placeholder: 'Reason for the maintenance window, paste from change-ticket, etc.'
+  });
+  descInput.value = store.params.description;
+  body.appendChild(descInput);
+
+  // Pause all checks
+  const pauseChk = h('input', {
+    type: 'checkbox', 'data-test': 'schedule-mw-pause-all-checks',
+    checked: store.params.pauseAllChecks
+  });
+  body.appendChild(h('label', {
+    style: 'display:flex;gap:0.4rem;align-items:center;margin:0.7rem 0 0.4rem;font-size:0.9rem;'
+  }, pauseChk, h('span', {}, 'Pause all checks during the window (default) - uncheck to keep collecting metrics, suppress alerts only')));
+
+  body.appendChild(h('p', { class: 'muted', style: 'font-size:0.85rem;margin-top:0.4rem;color:var(--text-muted);' },
+    'One maintenance window will be created in FortiMonitor covering every selected instance in this run. To schedule windows at different times for different subsets, run this action multiple times.'
+  ));
+
+  const errorLine = h('p', {
+    'data-test': 'schedule-mw-error',
+    class: 'muted',
+    style: 'font-size:0.8rem;margin:0.4rem 0 0;color:#a02216;display:none;'
+  }, '');
+  body.appendChild(errorLine);
+
+  function emit() {
+    const parseLocal = (v) => {
+      // datetime-local emits "YYYY-MM-DDTHH:mm" with no timezone; the
+      // browser interprets it as local time.
+      if (!v) return null;
+      const d = new Date(v);
+      if (Number.isNaN(d.getTime())) return null;
+      return d.toISOString();
+    };
+    const startIso = parseLocal(startInput.value);
+    const endIso = parseLocal(endInput.value);
+    store.params = {
+      ...store.params,
+      name: nameInput.value,
+      startTime: startIso ?? '',
+      endTime: endIso ?? '',
+      description: descInput.value,
+      pauseAllChecks: pauseChk.checked
+    };
+    // Live order check
+    if (startIso && endIso && new Date(endIso).getTime() <= new Date(startIso).getTime()) {
+      errorLine.style.display = '';
+      errorLine.textContent = 'End time must be after start time.';
+    } else {
+      errorLine.style.display = 'none';
+      errorLine.textContent = '';
+    }
+    refreshNextDisabled();
+  }
+
+  nameInput.addEventListener('input', emit);
+  startInput.addEventListener('change', emit);
+  endInput.addEventListener('change', emit);
+  descInput.addEventListener('input', emit);
+  pauseChk.addEventListener('change', emit);
+
   refreshNextDisabled();
 }

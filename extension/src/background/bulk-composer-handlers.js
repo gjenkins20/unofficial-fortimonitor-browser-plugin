@@ -106,10 +106,16 @@ export function createBulkComposerHandlers({ events = {}, getClient, getFortimon
         // calls. Older actions ignore the extra ctx fields.
         const fortimonitorClient = await fmFactory();
         const sharedState = new Map();
+        // FMN-172: precompute the all-targets URL list so actions that
+        // build a single shared write (one MW for the full run, not one
+        // per target) can refer to it from the first-arrival commit.
+        const allTargetUrls = targets
+          .map((t) => (t?.id != null ? `/v2/server/${encodeURIComponent(t.id)}/` : null))
+          .filter(Boolean);
         const settled = await mapConcurrent(targets, async (target, i) => {
           emit('bulk-composer:row-start', { index: i, id: target?.id, name: target?.name });
           try {
-            const result = await action.commit(target, params, { client, fortimonitorClient, sharedState });
+            const result = await action.commit(target, params, { client, fortimonitorClient, sharedState, allTargetUrls });
             emit('bulk-composer:row-done', {
               index: i, id: target?.id, name: target?.name,
               status: 'succeeded',

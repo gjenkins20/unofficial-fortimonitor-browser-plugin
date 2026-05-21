@@ -924,6 +924,48 @@ export class PanoptaClient {
   // sanitizeServerBodyForPut() reconciles these before PUT.
 
   /**
+   * FMN-172: schedule a maintenance window covering a set of servers.
+   * One POST creates one row in /v2/maintenance_schedule with all
+   * targets listed; subsequent toolkit invocations create their own.
+   *
+   * @param {object} args
+   * @param {string} args.name
+   * @param {string} args.startTime   ISO 8601 (e.g. "2026-06-01T22:00:00Z")
+   * @param {string} args.endTime     ISO 8601
+   * @param {string[]} args.targetUrls  server URLs
+   * @param {string} [args.description]
+   * @param {boolean} [args.pauseAllChecks=true]
+   * @returns {Promise<{status:number, url:string|null, id:number|null}>}
+   */
+  async scheduleMaintenanceWindow({ name, startTime, endTime, targetUrls, description, pauseAllChecks = true } = {}) {
+    if (!name || typeof name !== 'string') throw new TypeError('scheduleMaintenanceWindow: name is required');
+    if (!startTime || !endTime) throw new TypeError('scheduleMaintenanceWindow: startTime and endTime are required');
+    if (!Array.isArray(targetUrls) || targetUrls.length === 0) {
+      throw new TypeError('scheduleMaintenanceWindow: targetUrls must be a non-empty array');
+    }
+    const payload = {
+      name,
+      original_start_time: startTime,
+      original_end_time: endTime,
+      targets: targetUrls,
+      pause_all_checks: !!pauseAllChecks,
+      tag_match: 'all'
+    };
+    if (typeof description === 'string' && description.trim()) {
+      payload.description = description.trim();
+    }
+    const { res, body } = await this._request('POST', '/maintenance_schedule', { body: payload });
+    const location = res.headers?.get?.('location') ?? null;
+    const id = (() => {
+      const url = location || body?.url || null;
+      if (!url || typeof url !== 'string') return null;
+      const m = url.match(/\/maintenance_schedule\/(\d+)\/?$/);
+      return m ? Number(m[1]) : null;
+    })();
+    return { status: res.status, url: location || body?.url || null, id };
+  }
+
+  /**
    * FMN-171: change the status of a specific agent_resource on a
    * server (suspend = stop metric collection without deleting the
    * resource; active = resume).
