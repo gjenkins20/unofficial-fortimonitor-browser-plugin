@@ -10,6 +10,11 @@
 import { h, downloadBlob } from '../../lib/dom.js';
 import { downloadZip } from '../../lib/zip.js';
 import { printReport, pdfFilename } from '../../lib/observations-pdf.js';
+// FMN-190: the info-bubble registry has a dormant 'noise-analysis'
+// popup-surface entry (FMN-169). Wiring it requires the viewer to
+// mount the registry once per tab activation so bubbles attach to the
+// fresh DOM each time the pane re-renders.
+import { mountInfoBubbles } from '../../lib/info-bubble.js';
 import {
   buildExecutiveSummary,
   buildFeatureUtilization,
@@ -845,6 +850,13 @@ export function renderViewer({ root, store }) {
     }
     pane.innerHTML = '';
     pane.appendChild(renderTab(tab, ctx, store));
+    // FMN-190: re-mount the info-bubble registry against the freshly-
+    // rendered pane so popup-surface entries (currently only the
+    // FMN-156 Noise Analysis section heading) attach to their
+    // anchors. Fire-and-forget; the bubble loader handles the case
+    // where its storage flags haven't hydrated yet (no-op until
+    // they do).
+    mountInfoBubbles(pane, { surface: 'popup' }).catch(() => { /* swallow */ });
   }
 
   root.appendChild(strip);
