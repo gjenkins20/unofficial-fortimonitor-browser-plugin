@@ -28,6 +28,9 @@
 //   bulk-composer:list-server-attributes-batch - per-device attributes pre-flight
 //   bulk-composer:list-attribute-types         - customer-defined attribute catalog
 //
+// FMN-170:
+//   bulk-composer:list-server-parents-batch    - per-device current parent group pre-flight
+//
 // The composer's preview step is a pure-client computation (each action's
 // describe()) so we don't expose a "preview" message - the UI computes it
 // directly from the cached omni-search entries.
@@ -383,6 +386,48 @@ export function createBulkComposerHandlers({ events = {}, getClient, getFortimon
       const byServerId = {};
       for (const r of settled) {
         if (r.status === 'fulfilled') byServerId[r.value.id] = r.value.ports;
+      }
+      return { byServerId };
+    },
+
+    /**
+     * FMN-170: batch-fetch the current parent server_group per server
+     * id. Returns { byServerId: { [id]: { id, name, url } | null } }.
+     * Per-server failures map to null. Used by the set-parent-group
+     * action's Configure step to pre-populate target.parentGroup so the
+     * Preview describe() shows prev correctly.
+     */
+    'bulk-composer:list-server-parents-batch': async (payload = {}) => {
+      const ids = Array.isArray(payload?.serverIds) ? payload.serverIds.slice(0, MAX_TARGETS) : [];
+      if (ids.length === 0) return { byServerId: {} };
+      const client = await factory();
+      const concurrency = Math.max(1, Math.min(10, payload?.concurrency || DEFAULT_CONCURRENCY));
+      // Cache the server_group catalog once so url -> name resolution is cheap.
+      let urlToGroup = new Map();
+      try {
+        const groups = await client.listServerGroups();
+        urlToGroup = new Map(groups.map((g) => [g.resourceUrl, g]));
+      } catch {
+        // Fall through; per-target results will carry url with name=null.
+      }
+      const settled = await mapConcurrent(ids, async (id) => {
+        try {
+          const server = await client.getServer(id);
+          const url = server?.server_group ?? null;
+          if (!url) return { id, parent: null };
+          const g = urlToGroup.get(url);
+          const groupId = g?.id ?? (() => {
+            const m = String(url).match(/\/server_group\/(\d+)\/?$/);
+            return m ? Number(m[1]) : null;
+          })();
+          return { id, parent: { id: groupId, name: g?.name ?? null, url } };
+        } catch {
+          return { id, parent: null };
+        }
+      }, { concurrency });
+      const byServerId = {};
+      for (const r of settled) {
+        if (r.status === 'fulfilled') byServerId[r.value.id] = r.value.parent;
       }
       return { byServerId };
     },

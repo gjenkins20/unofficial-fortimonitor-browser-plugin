@@ -923,6 +923,31 @@ export class PanoptaClient {
   //     yields "Can't enable SNMP heartbeat on a non-SNMP instance".
   // sanitizeServerBodyForPut() reconciles these before PUT.
 
+  /**
+   * FMN-170: move a server to a new parent group. GET-modify-PUT
+   * pattern (same as addServerTag) with sanitizeServerBodyForPut to
+   * avoid the FMN-206 PUT-stricter-than-GET-serializes gotcha.
+   *
+   * @param {string|number} serverId
+   * @param {string} serverGroupUrl - full v2 URL for an existing server_group
+   * @returns {Promise<{status:number, from:string|null, to:string, noop:boolean}>}
+   */
+  async setServerParentGroup(serverId, serverGroupUrl) {
+    if (!serverId) throw new TypeError('setServerParentGroup: serverId is required');
+    if (!serverGroupUrl || typeof serverGroupUrl !== 'string') {
+      throw new TypeError('setServerParentGroup: serverGroupUrl is required');
+    }
+    const { body: server } = await this._request('GET', `/server/${encodeURIComponent(serverId)}`);
+    const before = server?.server_group ?? null;
+    if (before === serverGroupUrl) {
+      return { status: 200, from: before, to: serverGroupUrl, noop: true };
+    }
+    const { res } = await this._request('PUT', `/server/${encodeURIComponent(serverId)}`, {
+      body: sanitizeServerBodyForPut({ ...server, server_group: serverGroupUrl })
+    });
+    return { status: res.status, from: before, to: serverGroupUrl, noop: false };
+  }
+
   async addServerTag(serverId, tags) {
     if (!serverId) throw new TypeError('addServerTag: serverId is required');
     const tagList = Array.isArray(tags)

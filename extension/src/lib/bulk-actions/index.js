@@ -16,8 +16,9 @@ import * as addPortScope from './add-port-scope.js';
 import * as removePortScope from './remove-port-scope.js';
 import * as autoTagByName from './auto-tag-by-name.js';
 import * as autoSetAttributeByName from './auto-set-attribute-by-name.js';
+import * as setParentGroup from './set-parent-group.js';
 
-export const ACTIONS = [addTag, removeTag, applyTemplate, applyBestPracticeFabric, profileAndCreateTemplates, addPortScope, removePortScope, autoTagByName, autoSetAttributeByName];
+export const ACTIONS = [addTag, removeTag, applyTemplate, applyBestPracticeFabric, profileAndCreateTemplates, addPortScope, removePortScope, autoTagByName, autoSetAttributeByName, setParentGroup];
 
 const BY_ID = new Map(ACTIONS.map((a) => [a.id, a]));
 

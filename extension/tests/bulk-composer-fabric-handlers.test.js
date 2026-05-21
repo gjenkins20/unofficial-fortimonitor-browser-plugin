@@ -196,6 +196,45 @@ test('list-template-names-batch ignores non-array serverIds', async () => {
   assert.deepEqual(out.byServerId, {});
 });
 
+// ---------- bulk-composer:list-server-parents-batch (FMN-170) ----------
+
+test('list-server-parents-batch returns parent group per server (name resolved via catalog)', async () => {
+  const panopta = {
+    async listServerGroups() {
+      return [
+        { id: 100, name: 'Production', resourceUrl: 'https://api2/v2/server_group/100/' }
+      ];
+    },
+    async getServer(id) {
+      if (id === 10) return { id: 10, server_group: 'https://api2/v2/server_group/100/' };
+      if (id === 11) return { id: 11, server_group: null };
+      if (id === 12) return { id: 12, server_group: 'https://api2/v2/server_group/999/' };
+      throw new Error('unexpected');
+    }
+  };
+  const handlers = makeHandlers({ panoptaClient: panopta });
+  const out = await handlers['bulk-composer:list-server-parents-batch']({ serverIds: [10, 11, 12] });
+  assert.equal(out.byServerId[10].name, 'Production');
+  assert.equal(out.byServerId[10].id, 100);
+  assert.equal(out.byServerId[11], null, 'no server_group -> null sentinel');
+  assert.equal(out.byServerId[12].id, 999);
+  assert.equal(out.byServerId[12].name, null, 'unknown group: id falls back from URL but name stays null');
+});
+
+test('list-server-parents-batch maps per-server failures to null', async () => {
+  const panopta = {
+    async listServerGroups() { return []; },
+    async getServer(id) {
+      if (id === 99) throw new Error('boom');
+      return { id, server_group: null };
+    }
+  };
+  const handlers = makeHandlers({ panoptaClient: panopta });
+  const out = await handlers['bulk-composer:list-server-parents-batch']({ serverIds: [1, 99] });
+  assert.equal(out.byServerId[1], null);
+  assert.equal(out.byServerId[99], null);
+});
+
 // ---------- bulk-composer:list-server-attributes-batch (FMN-226) ----------
 
 test('list-server-attributes-batch returns attributes per server id', async () => {

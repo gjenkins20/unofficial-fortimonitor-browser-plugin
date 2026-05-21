@@ -83,6 +83,9 @@ export function render({ container, store, navigate, call }) {
         try { new RegExp(re); regexValid = true; } catch { regexValid = false; }
       }
       nextBtn.disabled = !(re && tpl && key && regexValid);
+    } else if (store.actionId === 'set-parent-group') {
+      const url = typeof params.groupUrl === 'string' && params.groupUrl.trim();
+      nextBtn.disabled = !url;
     } else {
       nextBtn.disabled = true;
     }
@@ -102,6 +105,8 @@ export function render({ container, store, navigate, call }) {
     renderAutoTagByNameForm({ body, store, refreshNextDisabled, call });
   } else if (store.actionId === 'auto-set-attribute-by-name') {
     renderAutoSetAttributeByNameForm({ body, store, refreshNextDisabled, call });
+  } else if (store.actionId === 'set-parent-group') {
+    renderSetParentGroupForm({ body, store, refreshNextDisabled, call });
   } else {
     body.appendChild(h('p', {}, 'Unknown action; pick again on the previous step.'));
   }
@@ -1958,5 +1963,109 @@ async function fetchAttributesForAutoSet({ store, call }) {
     }
   } catch {
     // describe() will fall through to its placeholder branch on unenriched targets.
+  }
+}
+
+// =====================================================================
+// FMN-170: Set Parent Group action form.
+//
+// Dropdown of available server groups (fetched via the existing
+// bulk-composer:list-server-groups handler) plus a pre-flight that
+// populates target.parentGroup so the Preview describe() shows the
+// current parent per row.
+// =====================================================================
+
+function renderSetParentGroupForm({ body, store, refreshNextDisabled, call }) {
+  body.appendChild(h('h3', { class: 'subhead' }, 'Destination server group'));
+
+  store.params = {
+    ...store.params,
+    groupUrl: typeof store.params?.groupUrl === 'string' ? store.params.groupUrl : '',
+    groupName: typeof store.params?.groupName === 'string' ? store.params.groupName : ''
+  };
+
+  const select = h('select', {
+    'data-test': 'set-parent-group-select',
+    style: 'padding:0.45rem 0.6rem;font-family:inherit;width:100%;'
+  });
+  select.appendChild(h('option', { value: '' }, '(loading groups...)'));
+  select.disabled = true;
+  body.appendChild(select);
+
+  const errorLine = h('p', {
+    'data-test': 'set-parent-group-error',
+    class: 'muted',
+    style: 'font-size:0.8rem;margin:0.2rem 0 0;color:#a02216;display:none;'
+  }, '');
+  body.appendChild(errorLine);
+
+  body.appendChild(h('p', { class: 'muted', style: 'font-size:0.85rem;margin-top:0.4rem;color:var(--text-muted);' },
+    'Each selected instance is moved into the chosen parent group. Instances already in that group are skipped.'
+  ));
+
+  select.addEventListener('change', () => {
+    const opt = select.options[select.selectedIndex];
+    store.params = {
+      ...store.params,
+      groupUrl: opt?.value ?? '',
+      groupName: opt?.dataset?.name ?? ''
+    };
+    refreshNextDisabled();
+  });
+
+  void loadServerGroups({ select, errorLine, store, refreshNextDisabled, call });
+  void fetchCurrentParents({ store, call });
+
+  refreshNextDisabled();
+}
+
+async function loadServerGroups({ select, errorLine, store, refreshNextDisabled, call }) {
+  try {
+    const res = await call('bulk-composer:list-server-groups', {});
+    const groups = (res && Array.isArray(res.groups)) ? res.groups : [];
+    select.innerHTML = '';
+    if (groups.length === 0) {
+      select.appendChild(h('option', { value: '' }, '(no server groups found)'));
+      select.disabled = true;
+      errorLine.style.display = '';
+      errorLine.textContent = 'No server groups available on this tenant.';
+      return;
+    }
+    select.appendChild(h('option', { value: '' }, 'Select a destination group...'));
+    const sorted = groups.slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+    for (const g of sorted) {
+      select.appendChild(h('option', {
+        value: g.resourceUrl,
+        'data-name': g.name
+      }, g.name));
+    }
+    select.disabled = false;
+    if (store.params?.groupUrl) {
+      select.value = store.params.groupUrl;
+    }
+    refreshNextDisabled();
+  } catch (err) {
+    select.innerHTML = '';
+    select.appendChild(h('option', { value: '' }, '(failed to load)'));
+    select.disabled = true;
+    errorLine.style.display = '';
+    errorLine.textContent = `Failed to load server groups: ${err?.message ?? err}`;
+  }
+}
+
+async function fetchCurrentParents({ store, call }) {
+  const targets = Array.isArray(store.targets) ? store.targets : [];
+  const ids = targets.map((t) => t?.id).filter((id) => Number.isFinite(id));
+  if (ids.length === 0) return;
+  try {
+    const res = await call('bulk-composer:list-server-parents-batch', { serverIds: ids });
+    const map = (res && res.byServerId) || {};
+    for (const t of targets) {
+      if (!t || t.id == null) continue;
+      if (!Object.prototype.hasOwnProperty.call(map, t.id)) continue;
+      t.parentGroup = map[t.id]; // null is a definitive "no parent", not the placeholder branch
+    }
+  } catch {
+    // describe() falls through to its placeholder branch on unenriched rows.
   }
 }
