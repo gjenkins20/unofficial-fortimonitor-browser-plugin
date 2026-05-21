@@ -52,6 +52,12 @@ export function renderStep(stepInput, opts = {}) {
   const onNext = typeof opts.onNext === 'function' ? opts.onNext : noop;
   const onDismiss = typeof opts.onDismiss === 'function' ? opts.onDismiss : noop;
 
+  // FMN-229: dispatch on step_type. Checklist steps render a centered
+  // card with an interactive checklist; no spotlight, no anchor.
+  if (step.step_type === 'checklist') {
+    return renderChecklistStep(step, { doc, onNext, onDismiss, onChecklistChange: opts.onChecklistChange, initialChecked: opts.initialChecked });
+  }
+
   const host = doc.createElement('div');
   host.className = 'fmn-tour-overlay';
   host.setAttribute('data-fmn-tour-step', step.id);
@@ -153,6 +159,115 @@ function isAlreadyNormalized(s) {
     && 'caption_html' in s
     && 'anchor_fallback' in s
     && 'auto_ms' in s;
+}
+
+// FMN-229: render an off-FortiMonitor checklist step. No spotlight,
+// no DOM anchor. Visual matches docs/harnesses/fmn-168-onsight-checklist-demo.html.
+//
+// opts.initialChecked: Map | Object<string,bool> from the engine's
+// persistence layer so a re-entry restores prior state.
+// opts.onChecklistChange(stepId, checkedItems): fires whenever the
+// checked state changes (engine persists).
+function renderChecklistStep(step, { doc, onNext, onDismiss, onChecklistChange, initialChecked }) {
+  const host = doc.createElement('div');
+  host.className = 'fmn-tour-overlay fmn-tour-overlay--floating fmn-tour-overlay--checklist';
+  host.setAttribute('data-fmn-tour-step', step.id);
+  host.setAttribute('data-fmn-tour-step-type', 'checklist');
+  host.setAttribute('role', 'dialog');
+  host.setAttribute('aria-modal', 'false');
+  host.setAttribute('aria-label', 'FortiMonitor tour - checklist');
+
+  const card = doc.createElement('div');
+  card.className = 'fmn-tour-card fmn-tour-card--checklist';
+  host.appendChild(card);
+
+  const dismissBtn = doc.createElement('button');
+  dismissBtn.type = 'button';
+  dismissBtn.className = 'fmn-tour-dismiss';
+  dismissBtn.setAttribute('aria-label', 'Dismiss tour');
+  dismissBtn.textContent = '×';
+  dismissBtn.addEventListener('click', () => onDismiss(step));
+  card.appendChild(dismissBtn);
+
+  const body = doc.createElement('div');
+  body.className = 'fmn-tour-card-body';
+  appendSanitizedCaption(body, step, doc);
+  card.appendChild(body);
+
+  // Read initial checked state (Map or plain object, both accepted).
+  const checkedSet = new Set();
+  if (initialChecked) {
+    const ids = initialChecked instanceof Map
+      ? Array.from(initialChecked.entries()).filter(([, v]) => v).map(([k]) => k)
+      : Object.keys(initialChecked).filter((k) => initialChecked[k]);
+    for (const id of ids) checkedSet.add(id);
+  }
+
+  const list = doc.createElement('ul');
+  list.className = 'fmn-tour-checklist';
+  for (const item of step.checklist) {
+    const li = doc.createElement('li');
+    li.className = 'fmn-tour-checklist-item';
+    li.setAttribute('data-fmn-checklist-item', item.id);
+    const cb = doc.createElement('input');
+    cb.type = 'checkbox';
+    cb.id = `fmn-tour-cb-${step.id}-${item.id}`;
+    cb.checked = checkedSet.has(item.id);
+    const lbl = doc.createElement('label');
+    lbl.setAttribute('for', cb.id);
+    lbl.appendChild(doc.createTextNode(item.label));
+    if (item.help) {
+      const help = doc.createElement('span');
+      help.className = 'fmn-tour-checklist-help';
+      help.textContent = item.help;
+      lbl.appendChild(help);
+    }
+    cb.addEventListener('change', () => {
+      if (cb.checked) checkedSet.add(item.id);
+      else checkedSet.delete(item.id);
+      refreshNextEnabled();
+      onChecklistChange?.(step.id, Array.from(checkedSet));
+    });
+    li.appendChild(cb);
+    li.appendChild(lbl);
+    list.appendChild(li);
+  }
+  card.appendChild(list);
+
+  const footer = doc.createElement('div');
+  footer.className = 'fmn-tour-card-footer';
+  const meta = doc.createElement('span');
+  meta.className = 'fmn-tour-checklist-meta';
+  footer.appendChild(meta);
+  const nextBtn = doc.createElement('button');
+  nextBtn.type = 'button';
+  nextBtn.className = 'fmn-tour-next';
+  nextBtn.textContent = 'Next';
+  nextBtn.addEventListener('click', () => onNext(step));
+  footer.appendChild(nextBtn);
+  card.appendChild(footer);
+
+  function refreshNextEnabled() {
+    const total = step.checklist.length;
+    const checked = checkedSet.size;
+    meta.textContent = `${checked} of ${total} confirmed`;
+    if (step.advance === 'all-checked') {
+      nextBtn.disabled = checked < total;
+    } else {
+      // advance === 'next-button' — always enabled
+      nextBtn.disabled = false;
+    }
+  }
+  refreshNextEnabled();
+
+  doc.body.appendChild(host);
+
+  return {
+    hostNode: host,
+    cardNode: card,
+    nextButton: nextBtn,
+    dispose() { try { host.remove(); } catch { /* noop */ } }
+  };
 }
 
 function appendSanitizedCaption(target, step, doc) {

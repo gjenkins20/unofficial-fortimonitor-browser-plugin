@@ -65,9 +65,20 @@ export class IntroTour {
     this.doc = opts.doc || (typeof document !== 'undefined' ? document : null);
     this.storage = opts.storage || createNoopStorage();
     this.storageKey = String(opts.storageKey || DEFAULT_STORAGE_KEY);
+    // FMN-229: storageTier metadata. The bridge picks chrome.storage.session
+    // (default) or chrome.storage.local based on whether the tour content
+    // is expected to outlive the browser session (OnSight deployment can
+    // span days, so it uses 'local'). The engine itself just records the
+    // value for inspection; storage I/O still goes through this.storage.
+    this.storageTier = opts.storageTier === 'local' ? 'local' : 'session';
     this.onComplete = typeof opts.onComplete === 'function' ? opts.onComplete : noop;
     this.onDismiss = typeof opts.onDismiss === 'function' ? opts.onDismiss : noop;
     this.onAdvance = typeof opts.onAdvance === 'function' ? opts.onAdvance : noop;
+    // FMN-229: per-step checklist state. Mirrors storage on writes.
+    // start() hydrates this from storage; activate / commit / dismiss
+    // touch it as needed.
+    this._checklistState = null;
+    this._startedAt = null;
 
     const initialId = opts.initialStepId || normalized[0].id;
     const initialIdx = normalized.findIndex((s) => s.id === initialId);
@@ -90,6 +101,21 @@ export class IntroTour {
   async start() {
     if (this.isActive) return;
     this.isActive = true;
+    // FMN-229: hydrate persisted checklist state (if any) so a re-entry
+    // restores per-step checks. active_step_id is honored too when
+    // initialStepId wasn't supplied at construction.
+    try {
+      const data = await this.storage.get(this.storageKey);
+      const prior = data && data[this.storageKey];
+      if (prior && typeof prior === 'object') {
+        if (prior.checklist && typeof prior.checklist === 'object') {
+          this._checklistState = { ...prior.checklist };
+        }
+        if (this._startedAt == null && typeof prior.started_at === 'number') {
+          this._startedAt = prior.started_at;
+        }
+      }
+    } catch { /* noop */ }
     await this._writeState();
     await this.renderNow();
   }
@@ -113,10 +139,22 @@ export class IntroTour {
     await this._waitForAnchor(step);
 
     if (this._mount) this._mount.dispose();
+    // FMN-229: pass per-step checklist state to the renderer when the
+    // step is a checklist. Persisted under state.checklist[stepId].
+    const initialChecked = step.step_type === 'checklist'
+      ? (this._checklistState?.[step.id] ?? null)
+      : null;
     this._mount = renderStep(step, {
       doc: this.doc,
       onNext: () => { this.advance(); },
-      onDismiss: () => { this.dismiss(); }
+      onDismiss: () => { this.dismiss(); },
+      initialChecked,
+      onChecklistChange: (stepId, checkedIds) => {
+        if (!this._checklistState) this._checklistState = {};
+        this._checklistState[stepId] = checkedIds.slice();
+        // Fire-and-forget; state is best-effort.
+        this._writeState();
+      }
     });
     this._dispatchEvent(step.on_enter);
   }
@@ -161,7 +199,11 @@ export class IntroTour {
     const payload = {
       tour_id: this.tour_id,
       active_step_id: this.currentStep?.id ?? null,
-      started_at: Date.now()
+      started_at: this._startedAt ?? (this._startedAt = Date.now()),
+      // FMN-229: persist per-step checklist state so an operator who
+      // leaves mid-step and returns (possibly after a browser restart
+      // when storageTier === 'local') resumes with their checks intact.
+      checklist: this._checklistState ?? {}
     };
     try {
       await this.storage.set({ [this.storageKey]: payload });
@@ -171,6 +213,8 @@ export class IntroTour {
   async _waitForAnchor(step) {
     const doc = this.doc;
     if (!doc) return;
+    // FMN-229: checklist steps don't have a DOM anchor.
+    if (step.step_type === 'checklist' || !step.anchor) return;
     if (safeQuery(doc, step.anchor)) return;
     // Wait up to step.anchor_timeout_ms for the anchor to show up. The
     // engine bails (renders against the fallback) if the anchor never

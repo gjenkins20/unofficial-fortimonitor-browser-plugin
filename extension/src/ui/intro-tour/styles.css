@@ -234,3 +234,66 @@
 .fmn-tour-quiz-review li.review-wrong .review-marker { color: #c43c31; }
 
 .fmn-tour-quiz-actions { display: flex; justify-content: flex-end; }
+
+/* FMN-229: checklist step variant. Mirrors the visual in
+   docs/harnesses/fmn-168-onsight-checklist-demo.html. Off-FortiMonitor
+   steps don't have an anchor to highlight, so the card centers itself
+   without a spotlight. */
+.fmn-tour-overlay--checklist .fmn-tour-card--checklist {
+  max-width: 480px;
+  width: calc(100vw - 32px);
+  padding: 18px 20px;
+}
+.fmn-tour-checklist {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 14px;
+  border-top: 1px solid #e6e9ee;
+}
+.fmn-tour-checklist-item {
+  padding: 10px 0;
+  border-bottom: 1px solid #e6e9ee;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13.5px;
+}
+.fmn-tour-checklist-item input[type="checkbox"] {
+  margin-top: 3px;
+  width: 16px;
+  height: 16px;
+  accent-color: #d9541e;
+  pointer-events: auto;
+}
+.fmn-tour-checklist-item label {
+  pointer-events: auto;
+  cursor: pointer;
+  color: #1f262f;
+}
+.fmn-tour-checklist-item code {
+  background: #f3f5f7;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 12.5px;
+}
+.fmn-tour-checklist-help {
+  display: block;
+  color: #5a6473;
+  font-size: 12.5px;
+  margin-top: 2px;
+}
+.fmn-tour-checklist-meta {
+  font-size: 12px;
+  color: #5a6473;
+  flex-grow: 1;
+}
+.fmn-tour-card--checklist .fmn-tour-card-footer {
+  align-items: center;
+  gap: 10px;
+}
+.fmn-tour-card--checklist .fmn-tour-next:disabled {
+  background: #d9d9d9;
+  border-color: #d9d9d9;
+  cursor: not-allowed;
+  color: #ffffff;
+}

@@ -3,10 +3,21 @@
 // The schema is the contract between content authors and the engine.
 // See docs/planning/intro-tour-plan.md section 2 for field reference.
 
-export const ADVANCE_MODES = Object.freeze(['click', 'auto', 'next-button']);
+// FMN-229: 'all-checked' joined the advance modes for checklist steps.
+// A checklist step's Next button enables only when every item in
+// step.checklist is checked.
+export const ADVANCE_MODES = Object.freeze(['click', 'auto', 'next-button', 'all-checked']);
 export const PLACEMENTS = Object.freeze(['top', 'right', 'bottom', 'left', 'auto']);
 
+// FMN-229: step_type discriminates between DOM-anchored spotlight
+// steps ('anchor', the FMN-167 default and the only type before this
+// extension) and off-FortiMonitor checklist steps ('checklist', the
+// FMN-168 OnSight deployment use case). The default stays 'anchor' so
+// every existing intro-tour step validates and renders without changes.
+export const STEP_TYPES = Object.freeze(['anchor', 'checklist']);
+
 export const STEP_DEFAULTS = Object.freeze({
+  step_type: 'anchor',
   anchor_fallback: 'body',
   when: Object.freeze({ always: true }),
   advance: 'next-button',
@@ -16,7 +27,8 @@ export const STEP_DEFAULTS = Object.freeze({
   on_enter: null,
   on_exit: null,
   audio_url: null,
-  caption_markdown: null
+  caption_markdown: null,
+  checklist: Object.freeze([])
 });
 
 /**
@@ -44,18 +56,64 @@ export function validateStep(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     return { ok: false, errors: ['step must be a plain object'] };
   }
+  // FMN-229: resolve step_type up front. Anything missing/unknown is
+  // an error so authors who typo'd 'checklist' as 'cheecklist' get
+  // a clear signal rather than silent fallback to 'anchor'.
+  const stepType = input.step_type === undefined || input.step_type === null
+    ? 'anchor'
+    : String(input.step_type);
+  if (!STEP_TYPES.includes(stepType)) {
+    errors.push(`step_type must be one of: ${STEP_TYPES.join(', ')}`);
+  }
   if (typeof input.id !== 'string' || input.id.trim() === '') {
     errors.push('id is required and must be a non-empty string');
   }
-  if (typeof input.anchor !== 'string' || input.anchor.trim() === '') {
-    errors.push('anchor is required and must be a non-empty string (CSS selector)');
+  // FMN-229: anchor required only for step_type='anchor'. Checklist
+  // steps render as a centered card without a DOM target.
+  if (stepType === 'anchor') {
+    if (typeof input.anchor !== 'string' || input.anchor.trim() === '') {
+      errors.push('anchor is required and must be a non-empty string (CSS selector)');
+    }
+  }
+  // FMN-229: checklist[] required (>= 1 entry) when step_type='checklist'.
+  // Each entry must carry id + label.
+  if (stepType === 'checklist') {
+    if (!Array.isArray(input.checklist) || input.checklist.length === 0) {
+      errors.push('checklist (>= 1 entry) is required when step_type is "checklist"');
+    } else {
+      const seen = new Set();
+      input.checklist.forEach((item, i) => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) {
+          errors.push(`checklist[${i}] must be a plain object`);
+          return;
+        }
+        if (typeof item.id !== 'string' || item.id.trim() === '') {
+          errors.push(`checklist[${i}].id is required and must be a non-empty string`);
+        } else if (seen.has(item.id)) {
+          errors.push(`checklist[${i}].id "${item.id}" duplicates an earlier entry`);
+        } else {
+          seen.add(item.id);
+        }
+        if (typeof item.label !== 'string' || item.label.trim() === '') {
+          errors.push(`checklist[${i}].label is required and must be a non-empty string`);
+        }
+      });
+    }
+    if (input.advance !== undefined && input.advance !== null && input.advance !== 'all-checked' && input.advance !== 'next-button') {
+      errors.push("checklist steps support advance: 'all-checked' (default) or 'next-button'");
+    }
   }
   const hasHtml = typeof input.caption_html === 'string' && input.caption_html.trim() !== '';
   const hasMd = typeof input.caption_markdown === 'string' && input.caption_markdown.trim() !== '';
   if (!hasHtml && !hasMd) {
     errors.push('caption_html or caption_markdown is required');
   }
-  if (!ADVANCE_MODES.includes(input.advance)) {
+  // advance: for anchor steps, defaults to 'next-button' if missing.
+  // For checklist steps, defaults to 'all-checked' if missing.
+  const effectiveAdvance = input.advance === undefined || input.advance === null
+    ? (stepType === 'checklist' ? 'all-checked' : 'next-button')
+    : input.advance;
+  if (!ADVANCE_MODES.includes(effectiveAdvance)) {
     errors.push(`advance must be one of: ${ADVANCE_MODES.join(', ')}`);
   }
   if (input.when !== undefined && input.when !== null) {
@@ -91,15 +149,36 @@ export function validateStep(input) {
  * downstream code can't mutate the canonical form.
  */
 export function normalizeStep(input) {
+  const stepType = STEP_TYPES.includes(input.step_type) ? input.step_type : STEP_DEFAULTS.step_type;
+  // FMN-229: checklist steps don't carry an anchor selector; record a
+  // sentinel that the renderer can branch on. anchor_fallback stays
+  // for parity but is unused on the checklist path.
+  const anchor = stepType === 'checklist'
+    ? null
+    : String(input.anchor ?? '').trim();
+  // Default advance differs by step_type: 'all-checked' for checklist,
+  // 'next-button' for anchor (matches the existing FMN-167 default).
+  const defaultAdvance = stepType === 'checklist' ? 'all-checked' : STEP_DEFAULTS.advance;
+  const advance = ADVANCE_MODES.includes(input.advance) ? input.advance : defaultAdvance;
+  // Normalize checklist entries; freeze each so downstream callers
+  // can't mutate the canonical form.
+  const checklist = stepType === 'checklist' && Array.isArray(input.checklist)
+    ? Object.freeze(input.checklist.map((item) => Object.freeze({
+        id: String(item.id).trim(),
+        label: String(item.label).trim(),
+        help: typeof item.help === 'string' && item.help.trim() ? item.help.trim() : null
+      })))
+    : STEP_DEFAULTS.checklist;
   const out = {
     id: String(input.id).trim(),
-    anchor: String(input.anchor).trim(),
+    step_type: stepType,
+    anchor,
     anchor_fallback: typeof input.anchor_fallback === 'string' && input.anchor_fallback.trim()
       ? input.anchor_fallback.trim() : STEP_DEFAULTS.anchor_fallback,
     caption_html: typeof input.caption_html === 'string' ? input.caption_html : null,
     caption_markdown: typeof input.caption_markdown === 'string' ? input.caption_markdown : null,
     when: normalizeWhen(input.when),
-    advance: input.advance,
+    advance,
     auto_ms: typeof input.auto_ms === 'number' && Number.isFinite(input.auto_ms) && input.auto_ms > 0
       ? input.auto_ms : STEP_DEFAULTS.auto_ms,
     placement: PLACEMENTS.includes(input.placement) ? input.placement : STEP_DEFAULTS.placement,
@@ -107,7 +186,8 @@ export function normalizeStep(input) {
       ? input.anchor_timeout_ms : STEP_DEFAULTS.anchor_timeout_ms,
     on_enter: typeof input.on_enter === 'string' && input.on_enter.trim() ? input.on_enter.trim() : null,
     on_exit: typeof input.on_exit === 'string' && input.on_exit.trim() ? input.on_exit.trim() : null,
-    audio_url: typeof input.audio_url === 'string' && input.audio_url.trim() ? input.audio_url.trim() : null
+    audio_url: typeof input.audio_url === 'string' && input.audio_url.trim() ? input.audio_url.trim() : null,
+    checklist
   };
   return Object.freeze(out);
 }

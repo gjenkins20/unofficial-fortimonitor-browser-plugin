@@ -167,3 +167,104 @@ test('stepMatchesPath: invalid regex returns false (does not throw)', () => {
   const s = normalizeStep({ ...VALID_STEP, when: { path_regex: '[' } });
   assert.equal(stepMatchesPath(s, '/anything'), false);
 });
+
+// =====================================================================
+// FMN-229: step_type + checklist support
+// =====================================================================
+
+const VALID_CHECKLIST_STEP = {
+  id: 'network-access',
+  step_type: 'checklist',
+  caption_html: '<p>Before powering on the OnSight, confirm the following:</p>',
+  checklist: [
+    { id: 'outbound-443', label: 'Outbound TCP/443 to api.panopta.com' },
+    { id: 'dns-resolve', label: 'DNS resolves api.panopta.com', help: 'Verify from same VLAN if possible.' }
+  ]
+};
+
+test('validateStep: step_type defaults to "anchor" when not provided (backward compatible)', () => {
+  const res = validateStep(VALID_STEP);
+  assert.equal(res.ok, true);
+  assert.equal(res.step.step_type, 'anchor');
+});
+
+test('validateStep: unknown step_type rejected', () => {
+  const res = validateStep({ ...VALID_STEP, step_type: 'chcklist' });
+  assert.equal(res.ok, false);
+  assert.ok(res.errors.some((e) => /step_type/.test(e)));
+});
+
+test('validateStep: checklist step does NOT require anchor', () => {
+  const { anchor, ...noAnchor } = VALID_CHECKLIST_STEP;
+  void anchor;
+  const res = validateStep(noAnchor);
+  assert.equal(res.ok, true);
+  assert.equal(res.step.anchor, null);
+});
+
+test('validateStep: anchor step still REQUIRES anchor', () => {
+  const { anchor, ...noAnchor } = VALID_STEP;
+  void anchor;
+  const res = validateStep(noAnchor);
+  assert.equal(res.ok, false);
+  assert.ok(res.errors.some((e) => /anchor is required/.test(e)));
+});
+
+test('validateStep: checklist step requires checklist[] with >=1 entry', () => {
+  const r1 = validateStep({ ...VALID_CHECKLIST_STEP, checklist: undefined });
+  assert.equal(r1.ok, false);
+  const r2 = validateStep({ ...VALID_CHECKLIST_STEP, checklist: [] });
+  assert.equal(r2.ok, false);
+  const r3 = validateStep(VALID_CHECKLIST_STEP);
+  assert.equal(r3.ok, true);
+});
+
+test('validateStep: checklist items require id + label', () => {
+  const r = validateStep({
+    ...VALID_CHECKLIST_STEP,
+    checklist: [{ id: '', label: 'no id' }, { id: 'ok', label: '' }]
+  });
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.some((e) => /checklist\[0\]\.id/.test(e)));
+  assert.ok(r.errors.some((e) => /checklist\[1\]\.label/.test(e)));
+});
+
+test('validateStep: duplicate checklist ids rejected', () => {
+  const r = validateStep({
+    ...VALID_CHECKLIST_STEP,
+    checklist: [{ id: 'a', label: 'first' }, { id: 'a', label: 'second' }]
+  });
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.some((e) => /duplicates an earlier entry/.test(e)));
+});
+
+test('validateStep: checklist step defaults advance to "all-checked"', () => {
+  const { advance, ...noAdvance } = VALID_CHECKLIST_STEP;
+  void advance;
+  const r = validateStep(noAdvance);
+  assert.equal(r.ok, true);
+  assert.equal(r.step.advance, 'all-checked');
+});
+
+test('validateStep: anchor step defaults advance to "next-button"', () => {
+  const { advance, ...noAdvance } = VALID_STEP;
+  void advance;
+  const r = validateStep(noAdvance);
+  assert.equal(r.ok, true);
+  assert.equal(r.step.advance, 'next-button');
+});
+
+test('validateStep: checklist step rejects advance="click"', () => {
+  const r = validateStep({ ...VALID_CHECKLIST_STEP, advance: 'click' });
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.some((e) => /checklist steps support advance/.test(e)));
+});
+
+test('normalizeStep: checklist items get help defaulted to null and are frozen', () => {
+  const s = normalizeStep(VALID_CHECKLIST_STEP);
+  assert.equal(s.checklist.length, 2);
+  assert.equal(s.checklist[0].help, null);
+  assert.equal(s.checklist[1].help, 'Verify from same VLAN if possible.');
+  assert.ok(Object.isFrozen(s.checklist));
+  assert.ok(Object.isFrozen(s.checklist[0]));
+});
