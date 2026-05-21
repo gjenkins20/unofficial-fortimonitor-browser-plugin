@@ -12,8 +12,10 @@ import * as removeTag from './remove-tag.js';
 import * as applyTemplate from './apply-template.js';
 import * as applyBestPracticeFabric from './apply-stock-fabric-templates.js';
 import * as profileAndCreateTemplates from './profile-and-create-templates.js';
+import * as addPortScope from './add-port-scope.js';
+import * as removePortScope from './remove-port-scope.js';
 
-export const ACTIONS = [addTag, removeTag, applyTemplate, applyBestPracticeFabric, profileAndCreateTemplates];
+export const ACTIONS = [addTag, removeTag, applyTemplate, applyBestPracticeFabric, profileAndCreateTemplates, addPortScope, removePortScope];
 
 const BY_ID = new Map(ACTIONS.map((a) => [a.id, a]));
 

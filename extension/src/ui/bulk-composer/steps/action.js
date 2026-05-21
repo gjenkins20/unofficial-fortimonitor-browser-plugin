@@ -18,7 +18,7 @@ export function render({ container, store, navigate }) {
   frame.appendChild(h('div', { class: 'step-header' },
     bulkBreadcrumbs('action'),
     h('h2', {}, `Pick an action to apply to ${store.targets.length} instance${store.targets.length === 1 ? '' : 's'}`),
-    h('p', {}, 'v1 supports Add Tag, Remove Tag, and Apply Template. Each action requires a configured FortiMonitor v2 API key.')
+    h('p', {}, 'Each action card lists the auth surface it needs (v2 API key or FortiMonitor session) and the write method it uses.')
   ));
 
   const body = h('div', { class: 'body-section' });

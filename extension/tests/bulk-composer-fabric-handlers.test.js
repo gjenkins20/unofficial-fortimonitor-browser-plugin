@@ -196,6 +196,54 @@ test('list-template-names-batch ignores non-array serverIds', async () => {
   assert.deepEqual(out.byServerId, {});
 });
 
+// ---------- bulk-composer:list-device-ports-batch (FMN-162) ----------
+
+test('list-device-ports-batch returns ports + totals per server id', async () => {
+  const fmClient = {
+    async getDevicePorts(id) {
+      if (id === 1) return {
+        ports: [
+          { name: 'port1', index: 0, isActive: true, admin_status: 'up', oper_status: 'up' },
+          { name: 'port2', index: 1, isActive: false, admin_status: 'up', oper_status: 'down' }
+        ],
+        portFilters: { searchTerm: '', filters: [] }
+      };
+      if (id === 2) return {
+        ports: [{ name: 'wan1', index: 0, isActive: true, admin_status: 'up', oper_status: 'up' }],
+        portFilters: { searchTerm: 'wan', filters: [{ key: 'k', value: 'v' }] }
+      };
+      throw new Error('unexpected');
+    }
+  };
+  const handlers = makeHandlers({ fortimonitorClient: fmClient });
+  const out = await handlers['bulk-composer:list-device-ports-batch']({ serverIds: [1, 2] });
+  assert.equal(out.byServerId[1].ports.length, 2);
+  assert.equal(out.byServerId[1].ports[0].name, 'port1');
+  assert.equal(out.byServerId[1].ports[0].isActive, true);
+  assert.equal(out.byServerId[1].totalPortCount, 2);
+  assert.equal(out.byServerId[2].searchTerm, 'wan');
+  assert.deepEqual(out.byServerId[2].filters, [{ key: 'k', value: 'v' }]);
+});
+
+test('list-device-ports-batch maps per-server failures to null', async () => {
+  const fmClient = {
+    async getDevicePorts(id) {
+      if (id === 99) throw new Error('boom');
+      return { ports: [{ name: 'p', index: 0, isActive: true }], portFilters: {} };
+    }
+  };
+  const handlers = makeHandlers({ fortimonitorClient: fmClient });
+  const out = await handlers['bulk-composer:list-device-ports-batch']({ serverIds: [1, 99] });
+  assert.ok(out.byServerId[1]);
+  assert.equal(out.byServerId[99], null);
+});
+
+test('list-device-ports-batch returns empty map for empty input', async () => {
+  const handlers = makeHandlers({ fortimonitorClient: {} });
+  const out = await handlers['bulk-composer:list-device-ports-batch']({ serverIds: [] });
+  assert.deepEqual(out.byServerId, {});
+});
+
 // ---------- bulk-composer:list-monitoring-policy-vocab ----------
 
 test('list-monitoring-policy-vocab returns rulesets and nounOptions from the live envelope', async () => {

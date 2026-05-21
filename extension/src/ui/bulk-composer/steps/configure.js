@@ -63,6 +63,9 @@ export function render({ container, store, navigate, call }) {
       const destOk = (destGroup !== '' && newGroupName === '')
         || (destGroup === '' && newGroupName !== '');
       nextBtn.disabled = optedIn.length === 0 || !destOk;
+    } else if (store.actionId === 'add-port-scope' || store.actionId === 'remove-port-scope') {
+      const names = Array.isArray(params.portNames) ? params.portNames : [];
+      nextBtn.disabled = names.filter((n) => typeof n === 'string' && n.trim()).length === 0;
     } else {
       nextBtn.disabled = true;
     }
@@ -76,6 +79,8 @@ export function render({ container, store, navigate, call }) {
     renderBestPracticeFabricForm({ body, store, refreshNextDisabled, call, stateLabel });
   } else if (store.actionId === 'profile-and-create-templates') {
     renderProfileAndCreateTemplatesForm({ body, store, refreshNextDisabled, call, stateLabel });
+  } else if (store.actionId === 'add-port-scope' || store.actionId === 'remove-port-scope') {
+    renderPortScopeForm({ body, store, refreshNextDisabled, call });
   } else {
     body.appendChild(h('p', {}, 'Unknown action; pick again on the previous step.'));
   }
@@ -1297,4 +1302,182 @@ function renderPortCell(cluster) {
   const min = Math.min(...distinct);
   const max = Math.max(...distinct);
   return h('span', { title: `Per-device port counts: ${memberPorts.join(', ')}` }, `${min}-${max} ports`);
+}
+
+// =====================================================================
+// FMN-162: Port Scope (add / remove) action forms.
+//
+// Shared between add-port-scope and remove-port-scope. Fires
+// bulk-composer:list-device-ports-batch on entry to populate
+// store.targets[i].ports, then renders a chip row of port names
+// found across the picked fleet (with counts) plus a free-form input.
+// Clicking a chip toggles it in/out of params.portNames; manual input
+// is comma/space separated and stays in sync with the chips.
+// =====================================================================
+
+function renderPortScopeForm({ body, store, refreshNextDisabled, call }) {
+  const isRemove = store.actionId === 'remove-port-scope';
+  body.appendChild(h('h3', { class: 'subhead' }, isRemove ? 'Ports to remove' : 'Ports to add'));
+
+  store.params = { ...store.params, portNames: Array.isArray(store.params?.portNames) ? store.params.portNames.slice() : [] };
+
+  const chipMount = h('div', { 'data-test': 'configure-port-chip-mount' });
+  chipMount.appendChild(h('p', {
+    'data-test': 'configure-ports-loading',
+    class: 'muted',
+    style: 'font-size:0.85rem;color:var(--text-muted);margin:0 0 0.5rem;'
+  }, 'Loading ports across selected instances...'));
+  body.appendChild(chipMount);
+
+  body.appendChild(h('h4', {
+    style: 'font-size:0.9rem;margin:0.6rem 0 0.3rem;font-weight:600;'
+  }, 'Or enter port names manually'));
+
+  const input = h('input', {
+    type: 'text',
+    class: 'paste-area',
+    'data-test': 'configure-port-input',
+    placeholder: 'e.g. port3, port4, wan1',
+    style: 'min-height:0;height:auto;padding:0.5rem 0.7rem;font-family:inherit;'
+  });
+  input.value = (store.params.portNames || []).join(', ');
+  body.appendChild(input);
+  body.appendChild(h('p', { class: 'muted', style: 'font-size:0.85rem;margin-top:0.4rem;color:var(--text-muted);' },
+    isRemove
+      ? 'Ports already out of scope are skipped. Matching is case-insensitive.'
+      : 'Ports already in scope are skipped. Matching is case-insensitive.'
+  ));
+
+  let chipFor = new Map();
+  function syncChipHighlight() {
+    const selected = new Set((store.params.portNames || []).map((n) => String(n).toLowerCase()));
+    for (const [name, chip] of chipFor) {
+      const active = selected.has(String(name).toLowerCase());
+      chip.style.background = active ? '#1f6feb' : '#eef2f7';
+      chip.style.color = active ? '#fff' : 'var(--text)';
+      chip.dataset.selected = active ? '1' : '0';
+    }
+  }
+
+  function parseInput() {
+    return input.value.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
+  }
+
+  input.addEventListener('input', () => {
+    store.params = { ...store.params, portNames: parseInput() };
+    syncChipHighlight();
+    refreshNextDisabled();
+  });
+
+  void fetchAndRenderPortChips({ chipMount, store, input, call, refreshNextDisabled, isRemove,
+    onChipsReady: (map) => { chipFor = map; syncChipHighlight(); }
+  });
+
+  refreshNextDisabled();
+}
+
+async function fetchAndRenderPortChips({ chipMount, store, input, call, refreshNextDisabled, isRemove, onChipsReady }) {
+  const targets = Array.isArray(store.targets) ? store.targets : [];
+  const ids = targets.map((t) => t?.id).filter((id) => Number.isFinite(id));
+  let byServerId = {};
+  if (ids.length > 0) {
+    try {
+      const res = await call('bulk-composer:list-device-ports-batch', { serverIds: ids });
+      byServerId = (res && res.byServerId) || {};
+    } catch {
+      // Live fetch failed; chip row falls through to empty state.
+    }
+  }
+
+  // Cache full per-target port arrays on store.targets[i].ports for the
+  // Preview step's describe() (FMN-162 mirror of FMN-210's
+  // template_names caching pattern).
+  for (const t of targets) {
+    if (!t || t.id == null) continue;
+    const data = byServerId[t.id];
+    if (data && Array.isArray(data.ports)) {
+      t.ports = data.ports.slice();
+      t.totalPortCount = data.totalPortCount;
+      t.portFilters = { searchTerm: data.searchTerm ?? '', filters: data.filters ?? [] };
+    } else if (Object.prototype.hasOwnProperty.call(byServerId, t.id)) {
+      t.ports = null;
+    }
+  }
+
+  // Build chip row: union of port names with frequency counts. For
+  // remove-port-scope, only include ports currently active on at least
+  // one instance (you can't remove something not in scope). For
+  // add-port-scope, include all ports (active + inactive).
+  const nameCounts = new Map();
+  const nameActiveSomewhere = new Map();
+  for (const t of targets) {
+    if (!Array.isArray(t.ports)) continue;
+    for (const p of t.ports) {
+      if (!p?.name) continue;
+      nameCounts.set(p.name, (nameCounts.get(p.name) || 0) + 1);
+      if (p.isActive) nameActiveSomewhere.set(p.name, (nameActiveSomewhere.get(p.name) || 0) + 1);
+    }
+  }
+  while (chipMount.firstChild) chipMount.removeChild(chipMount.firstChild);
+  const entries = Array.from(nameCounts.entries())
+    .filter(([name]) => !isRemove || nameActiveSomewhere.has(name))
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  if (entries.length === 0) {
+    chipMount.appendChild(h('p', {
+      class: 'muted',
+      style: 'font-size:0.85rem;color:var(--text-muted);margin:0 0 0.5rem;'
+    }, isRemove
+      ? 'No active ports found on the selected instances. Enter port names manually below.'
+      : 'No ports discovered on the selected instances. Enter port names manually below.'));
+    onChipsReady?.(new Map());
+    return;
+  }
+  chipMount.appendChild(h('h4', {
+    style: 'font-size:0.9rem;margin:0.2rem 0 0.5rem;font-weight:600;'
+  }, isRemove ? 'Ports currently in scope across selected instances' : 'Ports discovered across selected instances'));
+  const chipRow = h('div', {
+    'data-test': 'configure-port-chips',
+    style: 'display:flex;flex-wrap:wrap;gap:0.35rem;margin-bottom:0.5rem;'
+  });
+  const chipFor = new Map();
+  for (const [name, count] of entries) {
+    const activeCount = nameActiveSomewhere.get(name) || 0;
+    const subtitle = isRemove
+      ? `in scope on ${count} of ${targets.length}`
+      : (activeCount > 0
+          ? `in scope on ${activeCount} of ${count} that have it`
+          : `present on ${count} of ${targets.length}`);
+    const chip = h('button', {
+      type: 'button',
+      class: 'port-chip',
+      'data-test': 'configure-port-chip',
+      'data-port-name': name,
+      title: subtitle,
+      style: 'padding:0.2rem 0.6rem;border-radius:11px;border:none;cursor:pointer;font-size:0.78rem;background:#eef2f7;'
+    }, `${name} · ${count}`);
+    chip.addEventListener('click', () => {
+      const current = new Set((store.params.portNames || []).map((n) => String(n).toLowerCase()));
+      const lower = String(name).toLowerCase();
+      let next;
+      if (current.has(lower)) {
+        next = (store.params.portNames || []).filter((n) => String(n).toLowerCase() !== lower);
+      } else {
+        next = (store.params.portNames || []).concat([name]);
+      }
+      store.params = { ...store.params, portNames: next };
+      input.value = next.join(', ');
+      const selected = new Set(next.map((n) => String(n).toLowerCase()));
+      for (const [n2, c2] of chipFor) {
+        const active = selected.has(String(n2).toLowerCase());
+        c2.style.background = active ? '#1f6feb' : '#eef2f7';
+        c2.style.color = active ? '#fff' : 'var(--text)';
+        c2.dataset.selected = active ? '1' : '0';
+      }
+      refreshNextDisabled();
+    });
+    chipFor.set(name, chip);
+    chipRow.appendChild(chip);
+  }
+  chipMount.appendChild(chipRow);
+  onChipsReady?.(chipFor);
 }

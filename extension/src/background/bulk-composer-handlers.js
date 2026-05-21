@@ -20,6 +20,10 @@
 //   bulk-composer:list-template-names-batch  - batch listServerTemplateMappings + name lookup
 //                                              for the Preview step pre-flight
 //
+// FMN-162:
+//   bulk-composer:list-device-ports-batch    - full per-device port list for the
+//                                              add/remove-port-scope bulk actions
+//
 // The composer's preview step is a pure-client computation (each action's
 // describe()) so we don't expose a "preview" message - the UI computes it
 // directly from the cached omni-search entries.
@@ -375,6 +379,48 @@ export function createBulkComposerHandlers({ events = {}, getClient, getFortimon
       const byServerId = {};
       for (const r of settled) {
         if (r.status === 'fulfilled') byServerId[r.value.id] = r.value.ports;
+      }
+      return { byServerId };
+    },
+
+    /**
+     * FMN-162: full per-device port list for the add-port-scope /
+     * remove-port-scope bulk actions. Returns the operator-visible
+     * port name + index + isActive (in scope) per port, plus the
+     * portFilters and total count we need to round-trip to
+     * /config/save_port_selection. Per-id failures map to null.
+     */
+    'bulk-composer:list-device-ports-batch': async (payload = {}) => {
+      const ids = Array.isArray(payload?.serverIds) ? payload.serverIds.slice(0, MAX_TARGETS) : [];
+      if (ids.length === 0) return { byServerId: {} };
+      const fmClient = await fmFactory();
+      const concurrency = Math.max(1, Math.min(10, payload?.concurrency || DEFAULT_CONCURRENCY));
+      const settled = await mapConcurrent(ids, async (id) => {
+        try {
+          const parsed = await fmClient.getDevicePorts(id);
+          const ports = (parsed?.ports || []).map((p) => ({
+            name: p?.name ?? '',
+            index: p?.index,
+            isActive: !!p?.isActive,
+            admin_status: p?.admin_status ?? null,
+            oper_status: p?.oper_status ?? null
+          }));
+          return {
+            id,
+            data: {
+              ports,
+              totalPortCount: ports.length,
+              searchTerm: parsed?.portFilters?.searchTerm ?? '',
+              filters: parsed?.portFilters?.filters ?? []
+            }
+          };
+        } catch {
+          return { id, data: null };
+        }
+      }, { concurrency });
+      const byServerId = {};
+      for (const r of settled) {
+        if (r.status === 'fulfilled') byServerId[r.value.id] = r.value.data;
       }
       return { byServerId };
     },
