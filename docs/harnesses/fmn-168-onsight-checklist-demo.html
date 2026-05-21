@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>FMN-168 — OnSight checklist step demo</title>
+  <link rel="stylesheet" href="../../extension/src/ui/intro-tour/styles.css">
+  <style>
+    body { margin: 0; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; background: #eef0f3; color: #1f262f; }
+    .demo-frame { max-width: 760px; margin: 0 auto; }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    .demo-frame > p.muted { color: #5a6473; font-size: 13px; margin: 0 0 18px; }
+
+    /* Standalone checklist-step rendering. When the real schema
+       extension lands, the engine builds this from a step_type
+       === 'checklist' record; the visual lives here so the operator
+       can compare side-by-side with the intro-tour palette before
+       any framework code ships. */
+    .fmn-tour-checklist-host {
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 18px 20px;
+      background: #ffffff;
+      border: 1px solid #c5cbd3;
+      border-radius: 8px;
+      box-shadow: 0 12px 24px rgba(8, 14, 28, 0.12);
+    }
+    .fmn-tour-checklist-host h2 {
+      font-size: 14px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #5a6473;
+      margin: 0 0 4px;
+    }
+    .fmn-tour-checklist-host h3 {
+      font-size: 17px;
+      margin: 0 0 10px;
+      color: #1f262f;
+    }
+    .fmn-tour-checklist-host p { margin: 0 0 12px; }
+    .fmn-tour-checklist {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 14px;
+      border-top: 1px solid #e6e9ee;
+    }
+    .fmn-tour-checklist-item {
+      padding: 10px 0;
+      border-bottom: 1px solid #e6e9ee;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 13.5px;
+    }
+    .fmn-tour-checklist-item input[type="checkbox"] {
+      margin-top: 3px;
+      width: 16px;
+      height: 16px;
+      accent-color: #d9541e;
+    }
+    .fmn-tour-checklist-item code { background: #f3f5f7; padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+    .fmn-tour-checklist-item .help { display: block; color: #5a6473; font-size: 12.5px; margin-top: 2px; }
+    .fmn-tour-card-buttons { display: flex; justify-content: space-between; gap: 10px; margin-top: 6px; }
+    .fmn-tour-btn {
+      padding: 7px 14px;
+      border-radius: 4px;
+      border: 1px solid #c5cbd3;
+      background: #ffffff;
+      color: #1f262f;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .fmn-tour-btn--primary { background: #d9541e; border-color: #d9541e; color: #ffffff; }
+    .fmn-tour-btn--primary:disabled { background: #d9d9d9; border-color: #d9d9d9; cursor: not-allowed; color: #ffffff; }
+    .fmn-tour-step-meta {
+      font-size: 12px;
+      color: #5a6473;
+      margin-top: 14px;
+      text-align: right;
+    }
+  </style>
+</head>
+<body>
+  <div class="demo-frame">
+    <h1>FMN-168 — OnSight Deployment Guide: checklist-step demo</h1>
+    <p class="muted">
+      Standalone visual of the off-FortiMonitor checklist step proposed in <code>docs/planning/onsight-deployment-tour-plan.md</code> §3.
+      Renders the "Network access" step (Section B) without depending on the live engine. Validates the palette match against the intro-tour styles.
+      Click the boxes to toggle the Next button.
+    </p>
+
+    <div class="fmn-tour-checklist-host" role="dialog" aria-labelledby="step-title">
+      <h2>Step 3 of 13 · OnSight Deployment Guide</h2>
+      <h3 id="step-title">Confirm network access for the OnSight</h3>
+      <p>
+        Before powering on the OnSight, confirm the items below are in place.
+        These are firewall and DNS prerequisites; FortiMonitor cannot fix them after the fact.
+      </p>
+      <ul class="fmn-tour-checklist" id="checklist">
+        <li class="fmn-tour-checklist-item">
+          <input type="checkbox" id="cb-1">
+          <label for="cb-1">
+            Outbound TCP/443 from the OnSight subnet to <code>api.panopta.com</code>
+            <span class="help">Required for heartbeat and metric upload.</span>
+          </label>
+        </li>
+        <li class="fmn-tour-checklist-item">
+          <input type="checkbox" id="cb-2">
+          <label for="cb-2">
+            DNS resolves <code>api.panopta.com</code> from the OnSight subnet
+            <span class="help">Verify from a host in the same VLAN if possible.</span>
+          </label>
+        </li>
+        <li class="fmn-tour-checklist-item">
+          <input type="checkbox" id="cb-3">
+          <label for="cb-3">
+            NTP / Chrony reachable for the OnSight
+            <span class="help">Certificate validation depends on the system clock being within a few minutes of real time.</span>
+          </label>
+        </li>
+        <li class="fmn-tour-checklist-item">
+          <input type="checkbox" id="cb-4">
+          <label for="cb-4">
+            MAC address recorded for the planned OnSight switch port (if MAC pinning is in use)
+            <span class="help">Skip if MAC pinning is not used on the OnSight's subnet.</span>
+          </label>
+        </li>
+      </ul>
+      <div class="fmn-tour-card-buttons">
+        <button class="fmn-tour-btn" type="button">Pause and resume later</button>
+        <button class="fmn-tour-btn fmn-tour-btn--primary" id="next-btn" type="button" disabled>Next →</button>
+      </div>
+      <div class="fmn-tour-step-meta">0 of 4 confirmed</div>
+    </div>
+  </div>
+
+  <script>
+    // Minimal interaction shim. The real engine will own this once the
+    // step_type schema extension lands; here it's just enough to show
+    // the "all-checked unlocks Next" behavior.
+    (function () {
+      const list = document.getElementById('checklist');
+      const next = document.getElementById('next-btn');
+      const meta = document.querySelector('.fmn-tour-step-meta');
+      const boxes = list.querySelectorAll('input[type="checkbox"]');
+      function refresh() {
+        let n = 0;
+        for (const b of boxes) if (b.checked) n++;
+        next.disabled = n !== boxes.length;
+        meta.textContent = `${n} of ${boxes.length} confirmed`;
+      }
+      list.addEventListener('change', refresh);
+      refresh();
+    })();
+  </script>
+</body>
+</html>
