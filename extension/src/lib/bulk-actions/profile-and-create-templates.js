@@ -69,6 +69,7 @@ export function validate(params = {}) {
       template_type: typeof params?.template_type === 'string' && params.template_type.trim()
         ? params.template_type.trim()
         : 'fabric_template',
+      create_mpws: params?.create_mpws === true,
       clusters
     }
   };
@@ -112,7 +113,7 @@ export function describe(target, params) {
 export async function commit(target, params, ctx = {}) {
   const v = validate(params);
   if (!v.ok) throw new Error(v.error);
-  const { dry_run: dryRun, destination_group, destination_group_create_name, template_type, clusters } = v.value;
+  const { dry_run: dryRun, destination_group, destination_group_create_name, template_type, create_mpws, clusters } = v.value;
   const { client, fortimonitorClient, sharedState } = ctx;
   if (!client) throw new Error('PanoptaClient required for template attach + name lookup.');
   if (!fortimonitorClient) throw new Error('FortimonitorClient required for template create.');
@@ -156,6 +157,21 @@ export async function commit(target, params, ctx = {}) {
     dryRun
   });
 
+  // FMN-228: optional MPW authoring step. Same shared-state memoization
+  // pattern apply-stock-fabric-templates uses: first commit for a cluster
+  // creates the cached MPW promise; the rest await it. Memoizes the
+  // rulesets list + nounOptions fetch so we don't hammer the
+  // monitoring_policy endpoints across concurrent per-target commits.
+  let mpwResult = null;
+  if (create_mpws) {
+    mpwResult = await ensureMpwForCluster(cluster, {
+      ensureResult,
+      fmClient: fortimonitorClient,
+      sharedState,
+      dryRun
+    });
+  }
+
   if (dryRun) {
     return {
       status: 200,
@@ -167,7 +183,8 @@ export async function commit(target, params, ctx = {}) {
         would_create: !!ensureResult.would_create,
         would_populate_count: ensureResult.would_populate_count ?? 0,
         would_attach: true
-      }
+      },
+      mpw: mpwResult
     };
   }
 
@@ -186,6 +203,7 @@ export async function commit(target, params, ctx = {}) {
       noop: ensureResult.created === false && ensureResult.reused === true,
       reason: 'template-already-attached',
       dry_run: false,
+      mpw: mpwResult,
       template: {
         id: ensureResult.templateId,
         name: ensureResult.name,
@@ -204,6 +222,7 @@ export async function commit(target, params, ctx = {}) {
     status: attachResult.status,
     noop: false,
     dry_run: false,
+    mpw: mpwResult,
     template: {
       id: ensureResult.templateId,
       name: ensureResult.name,
@@ -314,3 +333,142 @@ function ensureForCluster(cluster, { panopta, fmClient, sharedState, destination
   sharedState.set(stateKey, promise);
   return promise;
 }
+
+// FMN-228: optional MPW-authoring step. Adapts the createOrFindPolicy /
+// simulatePolicyCreate pattern from apply-stock-fabric-templates.js to
+// the profile-and-create-templates surface. One MPW per cluster, keyed
+// by name so re-runs are idempotent. The MPW is generated AFTER the
+// cluster's template is ensured so it can reference the new template id.
+async function ensureMpwForCluster(cluster, { ensureResult, fmClient, sharedState, dryRun }) {
+  if (!cluster || !ensureResult) return null;
+  const proposalName = buildMpwName(cluster, ensureResult);
+  const stateKey = dryRun ? `mpw:dry:${cluster.key}` : `mpw:${cluster.key}`;
+  const cached = sharedState.get(stateKey);
+  if (cached) return cached;
+  const promise = dryRun
+    ? simulateMpwCreate(cluster, ensureResult, proposalName, fmClient, sharedState)
+    : createOrFindMpw(cluster, ensureResult, proposalName, fmClient, sharedState);
+  sharedState.set(stateKey, promise);
+  return promise;
+}
+
+function buildMpwName(cluster, ensureResult) {
+  const templateName = ensureResult.name || cluster.proposed_template_name || '(template)';
+  const make = cluster.make || '(make)';
+  const model = cluster.model || '(model)';
+  return `Toolkit: auto-attach ${templateName} to ${make} ${model}`;
+}
+
+async function createOrFindMpw(cluster, ensureResult, proposalName, fmClient, sharedState) {
+  const rulesets = await getCachedRulesets(fmClient, sharedState);
+  const existing = rulesets.find((r) => r && r.name === proposalName);
+  if (existing) {
+    return { id: existing.id, name: existing.name, created: false, reused: true };
+  }
+  // Need nounOptions for clause construction. Memoize alongside rulesets.
+  const nounOptions = await getCachedNounOptions(fmClient, sharedState);
+  const clauses = buildClausesFromCluster(cluster, nounOptions);
+  const warnings = [];
+  if (clauses.length === 0) {
+    warnings.push('No vocabulary entries for this cluster\'s make/model; MPW created without predicate (will match everything by default).');
+  }
+  const created = await fmClient.createMonitoringPolicy({
+    name: proposalName,
+    index: 0,
+    description: ''
+  });
+  const config = {
+    rules: [
+      {
+        enabled: true,
+        name: `Apply ${ensureResult.name} to ${cluster.make} ${cluster.model}`,
+        conditions: [
+          {
+            clauses: clauses.map((c) => ({ ...c, error: false })),
+            operator: 'and'
+          }
+        ],
+        actions: [
+          { action_type: 'apply_template', action_value: String(ensureResult.templateId) }
+        ]
+      }
+    ]
+  };
+  await fmClient.updateMonitoringPolicyConfig(created.id, config);
+  return { id: created.id, name: created.name, created: true, reused: false, warnings };
+}
+
+async function simulateMpwCreate(cluster, ensureResult, proposalName, fmClient, sharedState) {
+  // Dry-run: still read rulesets so the per-row result reflects the
+  // would-create-vs-would-skip decision honestly.
+  const rulesets = await getCachedRulesets(fmClient, sharedState);
+  const existing = rulesets.find((r) => r && r.name === proposalName);
+  if (existing) {
+    return { id: existing.id, name: existing.name, created: false, would_create: false, reused: true };
+  }
+  return { id: null, name: proposalName, created: false, would_create: true, reused: false };
+}
+
+function getCachedRulesets(fmClient, sharedState) {
+  const key = 'mpw:rulesets';
+  const cached = sharedState.get(key);
+  if (cached) return cached;
+  const promise = fmClient.getMonitoringPolicyPageData().then((data) =>
+    Array.isArray(data?.rulesets) ? data.rulesets : []
+  );
+  sharedState.set(key, promise);
+  return promise;
+}
+
+function getCachedNounOptions(fmClient, sharedState) {
+  const key = 'mpw:nounOptions';
+  const cached = sharedState.get(key);
+  if (cached) return cached;
+  const promise = fmClient.getMonitoringPolicyPageData().then((data) => data?.nounOptions ?? {});
+  sharedState.set(key, promise);
+  return promise;
+}
+
+// Build the policy clauses from a cluster's (make, model) using the
+// same shape pickFamilyClause / pickModelClause produce in the
+// recommendation engine (kept inline to avoid coupling
+// profile-and-create-templates to the BPA-focused engine module).
+function buildClausesFromCluster(cluster, nounOptions) {
+  const out = [];
+  const make = String(cluster?.make ?? '').trim();
+  const model = String(cluster?.model ?? '').trim();
+  if (!make) return out;
+
+  const familyList = Array.isArray(nounOptions?.device_types) ? nounOptions.device_types : [];
+  const lowerMake = make.toLowerCase();
+  const familyHit = familyList.find((opt) =>
+    opt && typeof opt.label === 'string'
+    && (opt.label.toLowerCase() === lowerMake || opt.label.toLowerCase().includes(lowerMake))
+  );
+  if (familyHit) {
+    out.push({ datatype: 'device_type', match_type: 'pick_one', match_key: null, match_value: familyHit.value });
+  }
+
+  if (model) {
+    const groups = Array.isArray(nounOptions?.attribute_types) ? nounOptions.attribute_types : [];
+    let group = groups.find((g) => g && typeof g.label === 'string' && g.label.toLowerCase() === lowerMake);
+    if (!group) {
+      group = groups.find((g) => g && typeof g.label === 'string' && g.label.toLowerCase().includes(lowerMake));
+    }
+    if (group && Array.isArray(group.options)) {
+      for (const opt of group.options) {
+        if (!opt || typeof opt.value !== 'string') continue;
+        const i = opt.value.indexOf(',');
+        const textkey = i < 0 ? opt.value : opt.value.slice(i + 1);
+        if (textkey.endsWith('.model')) {
+          out.push({ datatype: 'attribute', match_type: 'pick_one', match_key: textkey, match_value: model });
+          break;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+// Exported for tests
+export const _internals = { buildMpwName, buildClausesFromCluster };

@@ -649,6 +649,25 @@ function renderProfileAndCreateTemplatesForm({ body, store, refreshNextDisabled,
     h('span', {}, 'Dry run (preview without writing - no templates created, no metrics added, no attaches)')
   ));
 
+  // FMN-228: optional MPW-authoring step. Operator-driven; off by
+  // default. When on, each created template gets a paired monitoring-
+  // policy workflow whose predicate matches the cluster's make+model
+  // and whose action attaches the new template. Future onboards of
+  // that make+model get the template auto-attached by FortiMonitor.
+  const createMpwsChk = h('input', {
+    type: 'checkbox',
+    'data-test': 'configure-pact-create-mpws',
+    checked: store.params?.create_mpws === true
+  });
+  body.appendChild(h('label', {
+    style: 'display:flex;gap:0.4rem;align-items:center;margin:0.2rem 0 0.8rem;font-size:0.9rem;'
+  },
+    createMpwsChk,
+    h('span', {},
+      'Also create a monitoring-policy workflow per cluster so future onboards of the same make + model auto-attach the new template'
+    )
+  ));
+
   // FMN-209: similarity threshold slider. Lower threshold = more
   // devices merge into the same cluster. 1.0 = exact match (original
   // FMN-200 behavior); 0.8 (default) merges near-identical configs.
@@ -726,6 +745,7 @@ function renderProfileAndCreateTemplatesForm({ body, store, refreshNextDisabled,
     store.params = {
       ...(store.params || {}),
       dry_run: dryRunChk.checked,
+      create_mpws: createMpwsChk.checked,
       destination_group: isNew ? '' : (destSelect.value || ''),
       destination_group_create_name: isNew ? newGroupInput.value.trim() : '',
       template_type: 'fabric_template'
@@ -738,6 +758,7 @@ function renderProfileAndCreateTemplatesForm({ body, store, refreshNextDisabled,
     emit();
   });
   newGroupInput.addEventListener('input', emit);
+  createMpwsChk.addEventListener('change', emit);
   dryRunChk.addEventListener('change', emit);
 
   (async () => {
@@ -884,6 +905,7 @@ function renderProfileAndCreateTemplatesForm({ body, store, refreshNextDisabled,
     store.params = {
       ...(store.params || {}),
       dry_run: dryRunChk.checked,
+      create_mpws: createMpwsChk.checked,
       destination_group: isNewSelected ? '' : (destSelect.value || ''),
       destination_group_create_name: isNewSelected ? newGroupInput.value.trim() : '',
       template_type: 'fabric_template',
