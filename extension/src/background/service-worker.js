@@ -28,6 +28,7 @@ import {
   attachReportNotificationAlarms,
 } from './report-notification-handlers.js';
 import { attachIntroTourStartHandler } from './intro-tour-dispatch.js';
+import { attachCustomMetricsTourStartHandler } from './custom-metrics-tour-dispatch.js';
 import { resolveFortimonitorOrigin } from '../lib/origin-resolver.js';
 import { applyAllProviderRules, WATCHED_STORAGE_KEYS } from '../lib/origin-rewrite.js';
 import { checkForUpdate } from './update-check.js';
@@ -76,6 +77,10 @@ globalThis.__fmDebugHandlerKeys = Object.keys(handlers).sort();
 // context messages and doesn't fan out to tabs. This listener returns
 // true to keep the response channel open for the async tab work.
 attachIntroTourStartHandler();
+// FMN-244: sibling fan-out for the Custom Metrics training tour. Same
+// pattern as intro-tour; isolated message type so the two tours don't
+// stomp on each other.
+attachCustomMetricsTourStartHandler();
 
 chrome.runtime.onInstalled.addListener(() => {
   const m = chrome.runtime.getManifest();

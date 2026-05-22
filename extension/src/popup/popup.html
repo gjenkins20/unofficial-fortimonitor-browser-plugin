@@ -91,6 +91,22 @@
         </div>
         <div class="chevron">›</div>
       </button>
+      <!-- FMN-244: Custom Metrics training module. Independently gated -->
+      <!-- on fm:customMetricsTourEnabled (Beta, default off). -->
+      <button class="tool-card"
+              id="training-custom-metrics-tile"
+              data-tool="custom-metrics-tour"
+              data-fmn-trigger="custom-metrics-tour-start"
+              hidden>
+        <div class="tool-meta">
+          <div class="tool-name">
+            Custom Metrics
+            <span class="badge beta">Beta</span>
+          </div>
+          <div class="tool-desc">What custom metrics are, when to use one, how the management UI works, and how breaches turn into incidents.</div>
+        </div>
+        <div class="chevron">›</div>
+      </button>
     </div>
 
     <!-- FMN-91: tool cards are sorted alphabetically (single flat list) at -->
@@ -573,6 +589,17 @@
       <label class="toggle-row">
         <input id="intro-tour-toggle" type="checkbox">
         <span>Show Introduction to FortiMonitor tile in the popup Training section</span>
+      </label>
+    </div>
+
+    <div class="settings-section">
+      <label class="settings-label" for="custom-metrics-tour-toggle">Custom Metrics (Beta)</label>
+      <p class="settings-help">
+        Off by default. When on, the toolkit adds a <strong>Custom Metrics</strong> tile to the popup Training section. The tile launches a guided module that covers what a custom metric is, when to author one, where the management UI lives, the four configuration concerns (identity, data source, units, scope), frequency + thresholds, and how custom metrics flow into FortiMonitor's incident pipeline. A 3-question quiz follows. Beta status; content is shippable, page anchors may shift as the operator confirms selectors.
+      </p>
+      <label class="toggle-row">
+        <input id="custom-metrics-tour-toggle" type="checkbox">
+        <span>Show Custom Metrics training tile in the popup Training section</span>
       </label>
     </div>
 

@@ -58,6 +58,14 @@
       ],
       "js": ["src/content/intro-tour-bridge.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://fortimonitor.forticloud.com/*",
+        "https://*.fortimonitor.com/*"
+      ],
+      "js": ["src/content/custom-metrics-tour-bridge.js"],
+      "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
@@ -78,7 +86,8 @@
         "src/ui/intro-tour/step-schema.js",
         "src/ui/intro-tour/quiz.js",
         "src/ui/intro-tour/quiz-renderer.js",
-        "src/ui/intro-tour/styles.css"
+        "src/ui/intro-tour/styles.css",
+        "src/ui/training-modules/custom-metrics/steps.js"
       ],
       "matches": [
         "https://fortimonitor.forticloud.com/*",

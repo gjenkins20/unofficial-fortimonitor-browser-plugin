@@ -40,7 +40,9 @@ import {
   isShowInfoBubblesEnabled,
   setShowInfoBubblesEnabled,
   isIntroTourEnabled,
-  setIntroTourEnabled
+  setIntroTourEnabled,
+  isCustomMetricsTourEnabled,
+  setCustomMetricsTourEnabled
 } from '../lib/settings.js';
 import { mountInfoBubbles } from '../lib/info-bubble.js';
 import {
@@ -339,8 +341,29 @@ async function loadIntroTourState() {
   const enabled = await isIntroTourEnabled();
   const settingsToggle = document.getElementById('intro-tour-toggle');
   if (settingsToggle) settingsToggle.checked = enabled;
+  const introTile = document.getElementById('training-intro-tour-tile');
+  if (introTile) introTile.hidden = !enabled;
+  await applyTrainingSectionVisibility();
+}
+
+// FMN-244: Custom Metrics training tile state. Independent flag from
+// intro-tour. The Training section as a whole stays visible if EITHER
+// tile is enabled (each tile self-hides when its flag is off).
+async function loadCustomMetricsTourState() {
+  const enabled = await isCustomMetricsTourEnabled();
+  const settingsToggle = document.getElementById('custom-metrics-tour-toggle');
+  if (settingsToggle) settingsToggle.checked = enabled;
+  const tile = document.getElementById('training-custom-metrics-tile');
+  if (tile) tile.hidden = !enabled;
+  await applyTrainingSectionVisibility();
+}
+
+async function applyTrainingSectionVisibility() {
   const section = document.getElementById('training-section');
-  if (section) section.hidden = !enabled;
+  if (!section) return;
+  const anyTileVisible =
+    (await isIntroTourEnabled()) || (await isCustomMetricsTourEnabled());
+  section.hidden = !anyTileVisible;
 }
 
 async function loadOmniSearchIntoToggle() {
@@ -1255,6 +1278,7 @@ function init() {
   // when the flag is on. Independent of Settings being opened so a
   // fresh popup load still shows the tile for opted-in operators.
   loadIntroTourState().catch(() => { /* failure means tile stays hidden */ });
+  loadCustomMetricsTourState().catch(() => { /* failure means tile stays hidden */ });
 
   // FMN-191: render the recent-completions card + clear the toolbar
   // badge (the popup being open is the read-receipt). History stays.
@@ -1335,6 +1359,7 @@ function init() {
     await loadShowFeatureBadgesIntoToggle();
     await loadShowInfoBubblesIntoToggle();
     await loadIntroTourState();
+    await loadCustomMetricsTourState();
     await loadOmniSearchIntoToggle();
     await loadSnapshotDiffIntoToggle();
     await applySnapshotDiffControlsVisibility();
@@ -1538,8 +1563,9 @@ function init() {
   if (introTourToggle) {
     introTourToggle.addEventListener('change', async (e) => {
       await setIntroTourEnabled(e.target.checked);
-      const section = document.getElementById('training-section');
-      if (section) section.hidden = !e.target.checked;
+      const tile = document.getElementById('training-intro-tour-tile');
+      if (tile) tile.hidden = !e.target.checked;
+      await applyTrainingSectionVisibility();
     });
   }
 
@@ -1553,6 +1579,28 @@ function init() {
       if (!(await isIntroTourEnabled())) return;
       try {
         await chrome.runtime.sendMessage({ type: 'fm:intro-tour:start' });
+      } catch { /* SW unreachable - dispatch is best-effort */ }
+      window.close();
+    });
+  }
+
+  // FMN-244: Custom Metrics training tile. Independent flag; same
+  // dispatch shape as intro-tour but its own message type.
+  const customMetricsToggle = document.getElementById('custom-metrics-tour-toggle');
+  if (customMetricsToggle) {
+    customMetricsToggle.addEventListener('change', async (e) => {
+      await setCustomMetricsTourEnabled(e.target.checked);
+      const tile = document.getElementById('training-custom-metrics-tile');
+      if (tile) tile.hidden = !e.target.checked;
+      await applyTrainingSectionVisibility();
+    });
+  }
+  const customMetricsTile = document.getElementById('training-custom-metrics-tile');
+  if (customMetricsTile) {
+    customMetricsTile.addEventListener('click', async () => {
+      if (!(await isCustomMetricsTourEnabled())) return;
+      try {
+        await chrome.runtime.sendMessage({ type: 'fm:custom-metrics-tour:start' });
       } catch { /* SW unreachable - dispatch is best-effort */ }
       window.close();
     });

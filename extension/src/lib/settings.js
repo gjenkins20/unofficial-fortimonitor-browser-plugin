@@ -89,6 +89,12 @@ export const INTRO_TOUR_ENABLED_KEY = 'fm:introTourEnabled';
 // post-FMN-240 opt-out.
 export const INTRO_TOUR_FMN240_MIGRATED_KEY = 'fm:introTourFmn240Migrated';
 
+// FMN-244: Custom Metrics training module. Beta. Defaults OFF; operator
+// opts in via the Settings toggle, which reveals the popup tile in the
+// Training section. Independent of fm:introTourEnabled per the
+// per-tool-visibility-flag rule.
+export const CUSTOM_METRICS_TOUR_ENABLED_KEY = 'fm:customMetricsTourEnabled';
+
 export const ASK_CLAUDE_TOOL_TIERS = ['readonly', 'readwrite', 'all'];
 export const DEFAULT_ASK_CLAUDE_TOOL_TIER = 'readonly';
 
@@ -524,6 +530,26 @@ export async function isIntroTourEnabled(storage = defaultStorage()) {
  */
 export async function setIntroTourEnabled(enabled, storage = defaultStorage()) {
   await storage.set({ [INTRO_TOUR_ENABLED_KEY]: Boolean(enabled) });
+}
+
+/**
+ * FMN-244: read the Custom Metrics training-module flag. Defaults OFF
+ * (Beta) so the tile stays hidden until the operator opts in.
+ */
+export async function isCustomMetricsTourEnabled(storage = defaultStorage()) {
+  try {
+    const data = await storage.get(CUSTOM_METRICS_TOUR_ENABLED_KEY);
+    return Boolean(data?.[CUSTOM_METRICS_TOUR_ENABLED_KEY]);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * FMN-244: persist the Custom Metrics training-module flag.
+ */
+export async function setCustomMetricsTourEnabled(enabled, storage = defaultStorage()) {
+  await storage.set({ [CUSTOM_METRICS_TOUR_ENABLED_KEY]: Boolean(enabled) });
 }
 
 /**
