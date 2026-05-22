@@ -1,5 +1,10 @@
 # Unofficial FortiMonitor Toolkit
 
+<!-- FMN-242: version line below stays in sync with extension/manifest.json -->
+<!-- via tools/dev/sync-readme-version.mjs (run from release-bump script).   -->
+<!-- Do not hand-edit; run `node tools/dev/sync-readme-version.mjs` instead. -->
+**Current version: [v1.8.1](https://github.com/gjenkins20/unofficial-fortimonitor-browser-plugin/releases)** — compare against your installed copy in `chrome://extensions` to see how far behind you are. Run `git pull` in your clone and reload the extension to upgrade.
+
 A Chrome browser extension that turns FortiMonitor's one-device-at-a-time workflows into bulk operations. **Bulk Action Composer** is the flagship loop: load a list of instances, pick an action, preview every change, then commit. Standalone tools cover the work that doesn't fit that shape (server lookup, fabric-connection onboarding, in-plugin AI chat, page-side augmentations of the FortiMonitor web UI).
 
 **This project is not affiliated with, endorsed by, or associated with Fortinet.** It's an unofficial operator tool that automates batch tasks the FortiMonitor web UI exposes one-at-a-time.
