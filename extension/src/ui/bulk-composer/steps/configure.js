@@ -12,6 +12,7 @@ import { getAction } from '../../../lib/bulk-actions/index.js';
 import { buildFabricProfile } from '../../../lib/fabric-profile.js';
 import { buildRecommendations } from '../../../lib/recommendation-engine.js';
 import { buildTemplateClusters } from '../../../lib/template-clusterer.js';
+import { suggestRegexPatterns } from '../../../lib/regex-suggestions.js';
 
 const STOCK_GROUP_NAME = 'Default Monitoring Templates';
 
@@ -1565,6 +1566,14 @@ function renderAutoTagByNameForm({ body, store, refreshNextDisabled, call }) {
     tagTemplate: typeof store.params?.tagTemplate === 'string' ? store.params.tagTemplate : ''
   };
 
+  // FMN-234: similarity-driven suggestion chips. Populated below once
+  // regexInput / tplInput refs exist.
+  const suggestionsContainer = h('div', {
+    'data-test': 'auto-tag-suggestions',
+    style: 'margin:0.3rem 0 0.6rem;display:none;'
+  });
+  body.appendChild(suggestionsContainer);
+
   const regexLabel = h('label', {
     style: 'display:block;font-size:0.85rem;margin:0.3rem 0 0.2rem;font-weight:600;'
   }, 'Regex (with capture groups)');
@@ -1718,8 +1727,50 @@ function renderAutoTagByNameForm({ body, store, refreshNextDisabled, call }) {
   // is just attached to store.targets[i] for the Preview step.
   void fetchTagsForAutoTag({ store, call });
 
+  function populateSuggestions() {
+    while (suggestionsContainer.firstChild) suggestionsContainer.removeChild(suggestionsContainer.firstChild);
+    const names = (Array.isArray(store.targets) ? store.targets : [])
+      .map((t) => (typeof t?.name === 'string' ? t.name : ''))
+      .filter(Boolean);
+    const suggestions = suggestRegexPatterns(names, { minMatches: 3, maxSuggestions: 5 });
+    if (suggestions.length === 0) {
+      suggestionsContainer.style.display = 'none';
+      return;
+    }
+    suggestionsContainer.style.display = '';
+    suggestionsContainer.appendChild(h('div', {
+      style: 'font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:0.3rem;'
+    }, 'Suggestions'));
+    const chipRow = h('div', { style: 'display:flex;flex-wrap:wrap;gap:0.35rem;' });
+    for (const sug of suggestions) {
+      const chip = h('button', {
+        type: 'button',
+        'data-test': 'auto-tag-suggestion-chip',
+        'data-source': sug.source,
+        'data-regex': sug.regex,
+        title: `${sug.description} (${sug.matches} match${sug.matches === 1 ? '' : 'es'})`,
+        style: 'border:1px solid var(--border);background:#f3f6fa;border-radius:14px;padding:0.25rem 0.7rem;font-family:"SF Mono",Menlo,monospace;font-size:0.78rem;cursor:pointer;color:var(--text);display:inline-flex;align-items:center;gap:0.4rem;'
+      });
+      chip.appendChild(h('span', {}, sug.regex));
+      chip.appendChild(h('span', {
+        style: 'color:var(--text-muted);font-size:0.7rem;'
+      }, `${sug.matches}`));
+      chip.addEventListener('click', () => {
+        regexInput.value = sug.regex;
+        tplInput.value = sug.tagTemplate;
+        store.params = { ...store.params, regex: sug.regex, tagTemplate: sug.tagTemplate };
+        checkRegex();
+        renderPreview();
+        refreshNextDisabled();
+      });
+      chipRow.appendChild(chip);
+    }
+    suggestionsContainer.appendChild(chipRow);
+  }
+
   checkRegex();
   renderPreview();
+  populateSuggestions();
   refreshNextDisabled();
 }
 
