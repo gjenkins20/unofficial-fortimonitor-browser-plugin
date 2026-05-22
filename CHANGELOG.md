@@ -37,6 +37,7 @@ Bulk Action Composer expansion, FMN-228 MPW fix, info-bubble + tour-framework po
 - FMN-168 (planning): OnSight Deployment Guide design doc at `docs/planning/onsight-deployment-tour-plan.md` + standalone visual harness at `docs/harnesses/fmn-168-onsight-checklist-demo.html`. Reuses the FMN-229 framework. Four follow-up tickets filed for the framework extension (FMN-229), content authoring (FMN-230), popup trigger (FMN-231), and live-validation hooks (FMN-232).
 - FMN-227 (investigation): tenant configuration export/import feasibility catalog at `docs/planning/tenant-config-export-import-investigation.md`. 14 configuration classes catalogued with read/write paths, identity-rewrite requirements for replicate mode, restore-mode semantics, dependency order, and per-class gaps. Eight follow-up sub-tickets recommended.
 - FMN-170/171/172 QA verdict (2026-05-21): hidden from the Bulk Action Composer's action picker by default - they duplicate FortiMonitor's own one-off UI without adding bulk-specific value. New `fm:showFortimonitorNativeBulkActions` Settings flag (default false) controls visibility; flip it on to expose them.
+- FMN-228 E2E QA fix (2026-05-21): `PanoptaClient.createServerGroup()` now reads the `Location` header instead of expecting a JSON body. POST `/v2/server_group` returns 201 with an empty body; the previous "Malformed" guard tripped on every live run. Same family of bug as the FMN-206 PUT-stricter-than-GET findings - the live contract diverged from what the SDK pattern assumed and unit-test mocks masked it.
 
 ## v1.7.0 - 2026-05-14
 
