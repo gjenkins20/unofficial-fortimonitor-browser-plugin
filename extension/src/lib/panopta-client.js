@@ -439,6 +439,12 @@ export class PanoptaClient {
     };
   }
 
+  async deleteServerGroup(id) {
+    if (id == null) throw new TypeError('deleteServerGroup: id is required');
+    const { res } = await this._request('DELETE', `/server_group/${encodeURIComponent(id)}`);
+    return { status: res.status };
+  }
+
   async listOnsightGroups({ limit = 100 } = {}) {
     const { body } = await this._request('GET', `/onsight_group?limit=${limit}`);
     return parseListResponse(body, 'onsight_group_list', this.baseUrl);

@@ -48,6 +48,14 @@ import { mapConcurrent } from '../lib/concurrency.js';
 import { getAction } from '../lib/bulk-actions/index.js';
 import { ensureTemplate } from '../lib/template-ensurer.js';
 import { parseMonitoringTree } from '../lib/monitoring-tree.js';
+import {
+  appendRun,
+  aggregateRunEffects,
+  listRuns,
+  getRun,
+  setRollbackOutcome
+} from '../lib/bulk-composer-journal.js';
+import { rollbackRun } from '../lib/bulk-composer-rollback.js';
 
 const DRAFT_STORAGE_KEY = 'fm:bulkDrafts';
 const SELECTION_STORAGE_KEY = 'fm:bulkComposerSelection';
@@ -141,14 +149,70 @@ export function createBulkComposerHandlers({ events = {}, getClient, getFortimon
           }
         }, { concurrency, signal: ac.signal });
         const rows = settled.map((r) => r.value);
+        const finishedAt = new Date().toISOString();
+
+        // FMN-237: append a journal record for the run so the operator
+        // can roll back the resources we created. Skip dry-runs and
+        // skip aborted runs (their effects are incoherent). Per-row
+        // and shared (run-scoped) created resources are merged.
+        let journalRunId = null;
+        try {
+          if (!ac.signal.aborted && params?.dry_run !== true) {
+            const perRow = aggregateRunEffects(rows, actionId);
+            const sharedGroups = Array.isArray(sharedState.get('__journaled.server_groups'))
+              ? sharedState.get('__journaled.server_groups')
+              : [];
+            const sharedGroupEntries = sharedGroups.map((g) => ({
+              id: g.id, name: g.name ?? null, viaRowIndex: null
+            }));
+            // Place server_groups at the very front of the order list so
+            // rollback walks them LAST (group must be empty before
+            // delete is meaningful).
+            const order = [
+              ...sharedGroupEntries.map((g) => `server_group:${g.id}`),
+              ...perRow.order
+            ];
+            const created = {
+              templates: perRow.created.templates,
+              mpws: perRow.created.mpws,
+              server_groups: [...perRow.created.server_groups, ...sharedGroupEntries],
+              attributes: perRow.created.attributes,
+              tags: perRow.created.tags
+            };
+            const totalCreated =
+              created.templates.length + created.mpws.length + created.server_groups.length
+              + created.attributes.length + created.tags.length;
+            const totalAttached = perRow.attached.templateAttachments.length;
+            if (totalCreated > 0 || totalAttached > 0) {
+              const stored = await appendRun({
+                actionId,
+                actionLabel: action.label ?? actionId,
+                startedAt: currentRun.startedAt,
+                finishedAt,
+                targetIds: targets.map((t) => t?.id ?? null).filter((id) => id != null),
+                created,
+                attached: perRow.attached,
+                order
+              });
+              journalRunId = stored.runId;
+            }
+          }
+        } catch (err) {
+          // Journal write failure shouldn't break the commit response.
+          // Surface in the response so the UI can hint the operator
+          // that rollback won't be available for this run.
+          emit('bulk-composer:journal-error', { error: err?.message ?? String(err) });
+        }
+
         return {
           actionId, params, rows,
           startedAt: currentRun.startedAt,
-          finishedAt: new Date().toISOString(),
+          finishedAt,
           aborted: ac.signal.aborted,
           succeeded: rows.filter((r) => r.status === 'succeeded').length,
           failed: rows.filter((r) => r.status === 'failed').length,
-          noops: rows.filter((r) => r.noop).length
+          noops: rows.filter((r) => r.noop).length,
+          journalRunId
         };
       } finally {
         currentRun = null;
@@ -193,6 +257,52 @@ export function createBulkComposerHandlers({ events = {}, getClient, getFortimon
       } catch (err) {
         return { ok: false, error: err?.message ?? String(err) };
       }
+    },
+
+    // ---------------- FMN-237 rollback handlers ----------------
+
+    /**
+     * List journal entries (newest first). Bounded ring buffer; see
+     * MAX_ENTRIES in bulk-composer-journal.js.
+     */
+    'bulk-composer:list-runs': async () => {
+      try {
+        const runs = await listRuns();
+        return { runs };
+      } catch (err) {
+        return { runs: [], error: err?.message ?? String(err) };
+      }
+    },
+
+    /**
+     * Roll back a single run by id. Walks the journal record's `order`
+     * list in reverse, calling the inverse operation for each entry.
+     * Treats 404 / not-found as a successful no-op (operator may have
+     * already manually cleaned up). Per-step outcome is persisted back
+     * onto the journal entry so the UI can show what happened.
+     */
+    'bulk-composer:rollback-run': async (payload = {}) => {
+      const runId = String(payload?.runId ?? '');
+      if (!runId) throw new Error('runId is required');
+      const record = await getRun(runId);
+      if (!record) throw new Error(`No journal entry for runId ${runId}`);
+      // Defensive: don't allow double-rollback. If the run was already
+      // rolled back successfully, refuse.
+      if (record.rollback && record.rollback.finishedAt) {
+        const fullyDone = (record.rollback.steps || []).every(
+          (s) => s.status === 'succeeded' || s.status === 'already-gone'
+        );
+        if (fullyDone) {
+          return { runId, alreadyRolledBack: true, rollback: record.rollback };
+        }
+      }
+      let panopta = null;
+      let fortimonitor = null;
+      try { panopta = await factory(); } catch { /* allow null - per-step error surfaces */ }
+      try { fortimonitor = await fmFactory(); } catch { /* allow null */ }
+      const outcome = await rollbackRun(record, { panopta, fortimonitor });
+      await setRollbackOutcome(runId, outcome);
+      return { runId, rollback: outcome };
     },
 
     'bulk-composer:current-selection': async () => {

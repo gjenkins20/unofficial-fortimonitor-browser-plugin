@@ -288,6 +288,12 @@ async function ensureDestinationGroup({ destination_group, destination_group_cre
     if (!created || created.id == null) {
       throw new Error(`createServerGroup for "${name}" returned no id`);
     }
+    // FMN-237: record run-scoped creation so the commit handler can
+    // pull it into the journal after settle. Per-row results don't
+    // carry this (it's shared across the whole run).
+    const journaled = sharedState.get('__journaled.server_groups') || [];
+    journaled.push({ id: created.id, name: created.name ?? name });
+    sharedState.set('__journaled.server_groups', journaled);
     return `grp-${created.id}`;
   })();
   sharedState.set(cacheKey, promise);

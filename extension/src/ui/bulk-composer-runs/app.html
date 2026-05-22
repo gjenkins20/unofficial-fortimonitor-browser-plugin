@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<!--
+  Unofficial FortiMonitor Toolkit - Rollback Changes
+  Built by Gregori Jenkins · https://www.linkedin.com/in/gregorijenkins
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Rollback Changes · Unofficial FortiMonitor Toolkit</title>
+<meta name="author" content="Gregori Jenkins">
+<meta name="description" content="Review and roll back changes the toolkit committed.">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  .runs-page { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
+  .runs-page h1 { font-size: 20px; margin-bottom: 4px; }
+  .runs-page .subtitle { color: var(--fg-subdued, #555); font-size: 13px; margin-bottom: 18px; }
+  .runs-page .empty {
+    border: 1px dashed var(--border-subtle, #ccc);
+    padding: 24px;
+    text-align: center;
+    color: var(--fg-subdued, #555);
+    border-radius: 8px;
+  }
+  .runs-page .run-card {
+    border: 1px solid var(--border-subtle, #ddd);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    background: var(--bg-card, #fff);
+  }
+  .runs-page .run-card h3 { margin: 0 0 4px; font-size: 15px; }
+  .runs-page .run-card .meta { font-size: 12px; color: var(--fg-subdued, #666); margin-bottom: 8px; }
+  .runs-page .resource-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px 16px; font-size: 12px; margin: 6px 0 10px; }
+  .runs-page .resource-list .label { color: var(--fg-subdued, #555); }
+  .runs-page .run-actions { display: flex; gap: 8px; align-items: center; }
+  .runs-page button.rollback-btn { padding: 6px 14px; }
+  .runs-page button.rollback-btn[disabled] { opacity: 0.55; cursor: not-allowed; }
+  .runs-page .rollback-outcome {
+    margin-top: 10px;
+    padding: 10px 12px;
+    background: var(--bg-subtle, #f6f6f8);
+    border-radius: 6px;
+    font-size: 12px;
+  }
+  .runs-page .rollback-outcome .step { display: grid; grid-template-columns: 80px 1fr; gap: 8px; padding: 2px 0; }
+  .runs-page .rollback-outcome .step .status { font-weight: 600; }
+  .runs-page .rollback-outcome .step .status.succeeded { color: #1f7a3e; }
+  .runs-page .rollback-outcome .step .status.already-gone { color: #6b6b6b; }
+  .runs-page .rollback-outcome .step .status.failed { color: #b00020; }
+  .runs-page .toolbar { display: flex; gap: 8px; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+<div class="runs-page" id="app-root">
+  <h1>Rollback Changes</h1>
+  <p class="subtitle">
+    Last 50 commits, newest first. Rollback walks the recorded creations in reverse
+    dependency order. Resources already deleted in FortiMonitor are skipped silently.
+  </p>
+  <div class="toolbar">
+    <button type="button" id="refresh-btn">Refresh</button>
+  </div>
+  <div id="runs-list"></div>
+</div>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
