@@ -481,10 +481,26 @@ function positionCard(cardEl, anchor, placement, doc) {
       left = rect.left + scrollX;
       break;
   }
+  // FMN-240: clamp the card to the viewport. Without this, an anchor near
+  // the bottom edge (sidebar-add, sidebar-collapse) with 'right' placement
+  // positions the card at the anchor's top, which pushes the card's bottom
+  // below the viewport and the body+button become unreachable.
+  const VPAD = 8;
+  const minTop = scrollY + VPAD;
+  const maxTop = Math.max(minTop, scrollY + docH - cardH - VPAD);
+  const minLeft = scrollX + VPAD;
+  const maxLeft = Math.max(minLeft, scrollX + docW - cardW - VPAD);
+  const rawTop = top;
+  const rawLeft = left;
+  top = Math.min(Math.max(top, minTop), maxTop);
+  left = Math.min(Math.max(left, minLeft), maxLeft);
   cardEl.style.position = 'absolute';
-  cardEl.style.top = `${Math.max(0, top)}px`;
-  cardEl.style.left = `${Math.max(0, left)}px`;
+  cardEl.style.top = `${top}px`;
+  cardEl.style.left = `${left}px`;
   cardEl.setAttribute('data-placement-resolved', resolved);
+  if (top !== rawTop || left !== rawLeft) {
+    cardEl.setAttribute('data-placement-clamped', `${top !== rawTop ? 'y' : ''}${left !== rawLeft ? 'x' : ''}`);
+  }
 }
 
 function safeSelector(sel) {

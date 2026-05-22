@@ -464,20 +464,20 @@ export async function setNoiseAnalyzerEnabled(enabled, storage = defaultStorage(
 }
 
 /**
- * Read the FMN-167 intro-tour-enabled flag. Off by default so the
- * content-script bridge ignores start messages until the operator opts
- * in via Settings (FMN-167b will surface the toggle in the popup; for
- * the FMN-167 stub the flag must be flipped manually via DevTools).
- * Storage errors fail closed (return false).
+ * Read the FMN-167 intro-tour-enabled flag. On by default (FMN-240) so
+ * new operators see the Introduction to FortiMonitor tile on first
+ * popup open without needing to flip a Setting first. Explicit-false
+ * still suppresses the tile. Storage errors fail open.
  *
  * @param {{ get: (key: string) => Promise<Record<string, any>> }} [storage]
  */
 export async function isIntroTourEnabled(storage = defaultStorage()) {
   try {
     const data = await storage.get(INTRO_TOUR_ENABLED_KEY);
-    return Boolean(data?.[INTRO_TOUR_ENABLED_KEY]);
+    const value = data?.[INTRO_TOUR_ENABLED_KEY];
+    return value === undefined ? true : Boolean(value);
   } catch {
-    return false;
+    return true;
   }
 }
 

@@ -18,6 +18,8 @@ place.
 
 ## Unreleased
 
+- FMN-240: Introduction to FortiMonitor tour - sidebar-add / sidebar-collapse step cards no longer render below the viewport. `positionCard` in `step-renderer.js` now clamps the card so its bottom edge stays inside the viewport when the anchor is near the bottom (previously the card's body + Next button were clipped off-screen). Tour also promoted out of Beta: the `(Beta)` suffix is removed from the Settings label and the popup tile's badge, `isIntroTourEnabled()` defaults to true (FMN-167's default-off was the stub-era posture; FMN-240 flips it now that the tour is operator-verified), and explicit-false in `chrome.storage.local` still suppresses the tile.
+
 ## v1.8.1 - 2026-05-21
 
 - FMN-238: `FortimonitorClient.deleteServerOrTemplate(id)` ships. Wraps the session-auth `POST /config/deleteServer` endpoint with `server_id={id}` body (no XSRF). Endpoint captured live via operator-paired UI capture during FMN-228 cleanup; same endpoint handles both servers and templates because they share the s-{id} namespace. v2 has no DELETE for `/server_template` (405); this is the only programmatic path. Unblocks FMN-237 (Toolkit rollback). Full wire details + cross-tenant caveats in `docs/api-discovery/templates-delete.md`.

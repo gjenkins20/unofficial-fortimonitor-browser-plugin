@@ -38,7 +38,10 @@ import {
   DEFAULT_LMSTUDIO_URL,
   isUpdateCheckEnabled,
   setUpdateCheckEnabled,
-  UPDATE_CHECK_ENABLED_KEY
+  UPDATE_CHECK_ENABLED_KEY,
+  isIntroTourEnabled,
+  setIntroTourEnabled,
+  INTRO_TOUR_ENABLED_KEY
 } from '../src/lib/settings.js';
 import { createStorageMock } from './fixtures/chrome-mocks.js';
 
@@ -405,4 +408,36 @@ test('setUpdateCheckEnabled coerces non-boolean values to strict booleans (FMN-1
   assert.equal(storage.__raw()[UPDATE_CHECK_ENABLED_KEY], true);
   await setUpdateCheckEnabled(0, storage);
   assert.equal(storage.__raw()[UPDATE_CHECK_ENABLED_KEY], false);
+});
+
+// ---------- FMN-240: intro-tour default-on ----------
+
+test('isIntroTourEnabled defaults to true on empty storage (FMN-240)', async () => {
+  const storage = createStorageMock();
+  assert.equal(await isIntroTourEnabled(storage), true);
+});
+
+test('isIntroTourEnabled returns false when explicitly disabled (FMN-240)', async () => {
+  const storage = createStorageMock();
+  await setIntroTourEnabled(false, storage);
+  assert.equal(await isIntroTourEnabled(storage), false);
+  assert.equal(storage.__raw()[INTRO_TOUR_ENABLED_KEY], false);
+});
+
+test('isIntroTourEnabled roundtrips a true write (FMN-240)', async () => {
+  const storage = createStorageMock();
+  await setIntroTourEnabled(true, storage);
+  assert.equal(await isIntroTourEnabled(storage), true);
+  assert.equal(storage.__raw()[INTRO_TOUR_ENABLED_KEY], true);
+});
+
+test('isIntroTourEnabled fails open (returns true) on storage error (FMN-240)', async () => {
+  const brokenStorage = {
+    async get() { throw new Error('storage unavailable'); }
+  };
+  assert.equal(await isIntroTourEnabled(brokenStorage), true);
+});
+
+test('INTRO_TOUR_ENABLED_KEY uses the documented storage key', () => {
+  assert.equal(INTRO_TOUR_ENABLED_KEY, 'fm:introTourEnabled');
 });

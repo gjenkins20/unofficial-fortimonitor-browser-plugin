@@ -75,9 +75,8 @@ test('popup launcher (configured state)', async ({ extensionContext, extensionId
   await page.setViewportSize({ width: 360, height: 800 });
   await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
   // FMN-215: the intro-tour tile (data-tool="intro-tour") sorts first in
-  // DOM but is hidden by default (gated on fm:introTourEnabled). Scope
-  // the visibility wait to non-tour tiles so we don't fail on the
-  // hidden first match.
+  // DOM. FMN-240: it is visible by default; we still scope this wait to
+  // non-tour tiles to ensure the rest of the popup body has hydrated.
   await expect(page.locator('.tool-card:not([data-tool="intro-tour"])').first()).toBeVisible();
   // Wait for the session-strip + guards to settle (sessionActive() and
   // apiKeyConfigured() are async; the popup only flips into configured

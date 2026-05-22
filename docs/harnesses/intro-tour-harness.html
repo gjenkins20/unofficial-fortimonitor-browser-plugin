@@ -112,9 +112,14 @@
 <div class="controls">
   <button id="btn-start" class="harness-btn" data-test="start-tour">Start tour</button>
   <button id="btn-start-multi" class="harness-btn" data-test="start-multi">Start multi-step tour</button>
+  <button id="btn-start-bottom-anchor" class="harness-btn" data-test="start-bottom-anchor">Start near-bottom anchor</button>
   <button id="btn-validate-good" class="harness-btn" data-test="validate-good">Validate sample step (good)</button>
   <button id="btn-validate-bad" class="harness-btn" data-test="validate-bad">Validate sample step (bad)</button>
 </div>
+<!-- FMN-240: anchor pinned to the viewport bottom-left, ~30px tall, used
+     to verify positionCard clamps the card inside the viewport instead
+     of letting it dangle off the bottom. -->
+<div id="bottom-anchor" data-test="bottom-anchor" style="position: fixed; left: 30px; bottom: 30px; width: 80px; height: 30px; background: #d9541e; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; border-radius: 4px;">+ Add</div>
 <div class="layout">
   <nav class="pa-side-nav" id="fake-nav">
     <ul class="pa-side-nav__list">
@@ -206,6 +211,29 @@ document.getElementById('btn-start-multi').addEventListener('click', async () =>
     onComplete: () => note('onComplete fired'),
     onDismiss: () => note('onDismiss fired'),
     onAdvance: (from, to) => note(`onAdvance ${from?.id} -> ${to?.id}`)
+  });
+  window.__harnessTour = tour;
+});
+
+// FMN-240: drive a tour against the bottom-anchor fixture. The card's
+// 'right' placement at the anchor's top would push the card below the
+// viewport without the clamp; this button exists so the Playwright spec
+// can verify positionCard clamps the card back inside.
+const BOTTOM_ANCHOR_STEP = [
+  {
+    id: 'bottom-anchor-step',
+    anchor: '#bottom-anchor',
+    caption_html: '<p>Anchor sits near the viewport bottom; the card must stay in-bounds.</p>',
+    advance: 'next-button',
+    placement: 'right'
+  }
+];
+
+document.getElementById('btn-start-bottom-anchor').addEventListener('click', async () => {
+  note('starting bottom-anchor tour');
+  const tour = await runTour(BOTTOM_ANCHOR_STEP, {
+    onComplete: () => note('onComplete fired'),
+    onDismiss: () => note('onDismiss fired')
   });
   window.__harnessTour = tour;
 });

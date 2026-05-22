@@ -333,9 +333,8 @@ async function loadShowInfoBubblesIntoToggle() {
 }
 
 // FMN-167: load the intro-tour toggle into Settings + reveal the popup
-// Training section + tile when the flag is on. Called once on popup init
-// and whenever Settings is opened. The section is hidden by default so
-// operators who haven't opted in never see a Beta tile.
+// Training section + tile. Called once on popup init and whenever Settings
+// is opened. FMN-240: tile is on by default; explicit-off still hides it.
 async function loadIntroTourState() {
   const enabled = await isIntroTourEnabled();
   const settingsToggle = document.getElementById('intro-tour-toggle');

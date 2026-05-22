@@ -151,4 +151,26 @@ test.describe('FMN-167 intro tour engine + renderer (headless harness)', () => {
     await page.locator('[data-test="validate-bad"]').click();
     await expect(page.locator('[data-test="event-log"]')).toContainText('validate bad: ok=false');
   });
+
+  test('FMN-240: card stays inside the viewport when the anchor is near the bottom edge', async ({ ctx }) => {
+    const { page, errors } = await gotoHarness(ctx);
+    const viewport = page.viewportSize();
+    expect(viewport).not.toBeNull();
+    await page.locator('[data-test="start-bottom-anchor"]').click();
+
+    const card = page.locator('.fmn-tour-card');
+    await expect(card).toBeVisible();
+    const cardBox = await card.boundingBox();
+    expect(cardBox).not.toBeNull();
+    // Card bottom edge must be inside the viewport (small fudge for fractional pixels).
+    expect(cardBox.y + cardBox.height).toBeLessThanOrEqual(viewport.height);
+    expect(cardBox.y).toBeGreaterThanOrEqual(0);
+    expect(cardBox.x).toBeGreaterThanOrEqual(0);
+    expect(cardBox.x + cardBox.width).toBeLessThanOrEqual(viewport.width);
+    // Clamped attribute is set when positionCard had to nudge the card back.
+    await expect(card).toHaveAttribute('data-placement-clamped', /y/);
+
+    expect(errors).toEqual([]);
+    await page.close();
+  });
 });

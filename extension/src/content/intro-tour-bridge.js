@@ -10,7 +10,8 @@
 // alongside without touching this module's internals.
 //
 // Activation contract:
-//   1. The flag fm:introTourEnabled must be true (default false).
+//   1. The flag fm:introTourEnabled must be true (default true since
+//      FMN-240; explicit-false in storage still suppresses).
 //   2. A runtime message { type: 'fm:intro-tour:start' } arrives - sent
 //      by the popup tile (future FMN-167b) or any extension context.
 //
