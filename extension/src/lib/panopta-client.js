@@ -403,24 +403,38 @@ export class PanoptaClient {
     const { body, res } = await this._request('POST', `/server_group`, {
       body: { name: name.trim() }
     });
-    if (!body || typeof body !== 'object') {
-      throw new PanoptaError('Malformed server_group create response', {
+    // FMN-228 QA (2026-05-21): v2 POST /server_group returns 201 with
+    // EMPTY body. The created resource's URL is in the Location header
+    // and the id in the `id` header. The previous "Malformed response"
+    // guard never tripped during code review because the JSON-body
+    // expectation looked reasonable, but live API returns empty body
+    // (Content-Type: application/json, Content-Length: 0). Read the
+    // headers; only fall back to body parsing for older / cached
+    // tenants that might return a body.
+    const headerLocation = res?.headers?.get?.('location') ?? null;
+    const headerId = res?.headers?.get?.('id') ?? null;
+    let url = headerLocation;
+    let id = headerId != null ? Number(headerId) : null;
+    let resolvedName = name.trim();
+    if (body && typeof body === 'object') {
+      if (typeof body.url === 'string' && !url) url = body.url;
+      if (id == null && body.id != null) id = body.id;
+      if (typeof body.name === 'string' && body.name.trim()) resolvedName = body.name;
+    }
+    if (id == null && url) {
+      const m = String(url).match(/\/server_group\/(\d+)\/?$/);
+      if (m) id = Number(m[1]);
+    }
+    if (id == null && !url) {
+      throw new PanoptaError('server_group create response missing id and Location header', {
         phase: 'write',
         responseBody: body,
         status: res.status
       });
     }
-    // v2 typically returns the created resource directly. Normalize to
-    // the same shape parseListResponse produces.
-    const url = typeof body.url === 'string' ? body.url : null;
-    let id = body.id ?? null;
-    if (id == null && url) {
-      const m = url.match(/\/server_group\/(\d+)\/?$/);
-      if (m) id = Number(m[1]);
-    }
     return {
       id,
-      name: body.name ?? name.trim(),
+      name: resolvedName,
       resourceUrl: url
     };
   }
