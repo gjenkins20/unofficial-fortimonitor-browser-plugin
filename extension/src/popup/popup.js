@@ -226,8 +226,13 @@ function sortExperimentalTogglesAlphabetically() {
 
 function filterTools(query) {
   const q = query.trim().toLowerCase();
-  const cards = document.querySelectorAll('.tool-card');
-  const groupLabels = document.querySelectorAll('.tool-group-label');
+  // FMN-246: scope the filter to the main-view tile area. The training
+  // drill-in's tiles are managed independently by loadIntroTourState() /
+  // loadCustomMetricsTourState() against their per-tile flags; including
+  // them here would let a search query override the flag-disabled hidden
+  // state and leak the tile on Back-to-main.
+  const cards = document.querySelectorAll('#main-view .tool-card');
+  const groupLabels = document.querySelectorAll('#main-view .tool-group-label');
   const empty = document.getElementById('no-matches');
 
   if (q === '') {
@@ -267,6 +272,21 @@ function hideSettings() {
   document.getElementById('main-view').hidden = false;
   // Re-apply tool guards in case the API key state changed.
   refreshGuards();
+}
+
+// -------- Training drill-in (FMN-246) --------
+
+// Mirror of showSettings/hideSettings. The main view stays in the DOM so
+// the search input value and scroll position are preserved verbatim
+// across drill-in/back navigation.
+function showTraining() {
+  document.getElementById('main-view').hidden = true;
+  document.getElementById('training-view').hidden = false;
+}
+
+function hideTraining() {
+  document.getElementById('training-view').hidden = true;
+  document.getElementById('main-view').hidden = false;
 }
 
 function setStatus(kind, message) {
@@ -358,12 +378,18 @@ async function loadCustomMetricsTourState() {
   await applyTrainingSectionVisibility();
 }
 
+// FMN-246: the Training section is now a drill-in subview reached from a
+// single launcher tile in the main popup list. The launcher tile auto-
+// hides when no module is enabled so operators never land in an empty
+// subview. The name applyTrainingSectionVisibility() is kept for the few
+// callers that already invoke it; the helper now operates on the
+// launcher tile instead of the legacy #training-section container.
 async function applyTrainingSectionVisibility() {
-  const section = document.getElementById('training-section');
-  if (!section) return;
+  const launcher = document.getElementById('training-launcher-tile');
+  if (!launcher) return;
   const anyTileVisible =
     (await isIntroTourEnabled()) || (await isCustomMetricsTourEnabled());
-  section.hidden = !anyTileVisible;
+  launcher.hidden = !anyTileVisible;
 }
 
 async function loadOmniSearchIntoToggle() {
@@ -1373,6 +1399,15 @@ function init() {
     showSettings();
   });
   document.getElementById('settings-back').addEventListener('click', hideSettings);
+
+  // FMN-246: Training drill-in. Launcher tile in the main popup list
+  // enters the subview; Back returns. The .tool-card generic click
+  // handler above ignores cards with no data-url, so the launcher
+  // tile only fires this listener.
+  const trainingLauncher = document.getElementById('training-launcher-tile');
+  if (trainingLauncher) trainingLauncher.addEventListener('click', showTraining);
+  const trainingBack = document.getElementById('training-back');
+  if (trainingBack) trainingBack.addEventListener('click', hideTraining);
   document.getElementById('api-key-save').addEventListener('click', saveApiKey);
   document.getElementById('api-key-clear').addEventListener('click', clearApiKey);
   document.getElementById('api-key-test').addEventListener('click', testConnection);

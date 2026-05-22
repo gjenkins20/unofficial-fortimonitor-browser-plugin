@@ -73,41 +73,25 @@
     <!-- DOM order keeps Training at the top (FMN-167 intent); structurally -->
     <!-- it now lives inside the same overflow viewport as #tool-list. -->
     <div class="tool-scroll" id="tool-scroll">
-    <!-- FMN-167 Training section. Gated on fm:introTourEnabled. -->
-    <!-- FMN-249 emergency hot-fix (2026-05-22): default flipped back to -->
-    <!-- OFF after a recent push left the Training UI in a broken state. -->
-    <!-- Hidden in markup; popup.js reveals only when the operator has -->
-    <!-- explicitly opted in via Settings (value === true). -->
-    <div id="training-section" hidden>
-      <button class="tool-card"
-              id="training-intro-tour-tile"
-              data-tool="intro-tour"
-              data-fmn-trigger="intro-tour-start">
-        <div class="tool-meta">
-          <div class="tool-name">
-            Introduction to FortiMonitor
-          </div>
-          <div class="tool-desc">Guided walk-through of the FortiMonitor UI with a short quiz at the end.</div>
+    <!-- FMN-246: Training is a single tile pinned at the top of the tool -->
+    <!-- list. Clicking it drills into #training-view (sibling of #main- -->
+    <!-- view / #settings-view). Individual module tiles live inside the -->
+    <!-- drill-in, never inline here. Launcher tile auto-hides when no -->
+    <!-- module is enabled (FMN-249 default-off intro-tour + Beta-off -->
+    <!-- custom-metrics module means a fresh install shows nothing here -->
+    <!-- until the operator opts in via Settings). -->
+    <button class="tool-card"
+            id="training-launcher-tile"
+            data-tool="training-launcher"
+            hidden>
+      <div class="tool-meta">
+        <div class="tool-name">
+          Training
         </div>
-        <div class="chevron">›</div>
-      </button>
-      <!-- FMN-244: Custom Metrics training module. Independently gated -->
-      <!-- on fm:customMetricsTourEnabled (Beta, default off). -->
-      <button class="tool-card"
-              id="training-custom-metrics-tile"
-              data-tool="custom-metrics-tour"
-              data-fmn-trigger="custom-metrics-tour-start"
-              hidden>
-        <div class="tool-meta">
-          <div class="tool-name">
-            Custom Metrics
-            <span class="badge beta">Beta</span>
-          </div>
-          <div class="tool-desc">What custom metrics are, when to use one, how the management UI works, and how breaches turn into incidents.</div>
-        </div>
-        <div class="chevron">›</div>
-      </button>
-    </div>
+        <div class="tool-desc">Guided walk-throughs and training modules for FortiMonitor concepts.</div>
+      </div>
+      <div class="chevron">›</div>
+    </button>
 
     <!-- FMN-91: tool cards are sorted alphabetically (single flat list) at -->
     <!-- runtime in popup.js (sortToolCardsAlphabetically). New cards can be -->
@@ -330,6 +314,52 @@
 
     <div id="no-matches" class="empty-search" hidden>
       No tools match - try a different keyword.
+    </div>
+  </div>
+
+  <!-- FMN-246: Training drill-in subview. Hosts the individual training -->
+  <!-- module tiles (Introduction to FortiMonitor + Custom Metrics + any -->
+  <!-- future module). Sibling of #main-view / #settings-view; the same -->
+  <!-- show/hide pattern as Settings is used. Back affordance returns -->
+  <!-- to the main list with no state loss. -->
+  <div id="training-view" class="training-view" hidden>
+    <div class="subview-header">
+      <button id="training-back" class="link-btn" aria-label="Back">‹ Back</button>
+      <span class="subview-title">Training</span>
+    </div>
+    <p class="subview-intro">
+      Guided walk-throughs and training modules. Pick a module to begin.
+    </p>
+    <div class="tool-list" id="training-module-list">
+      <button class="tool-card"
+              id="training-intro-tour-tile"
+              data-tool="intro-tour"
+              data-fmn-trigger="intro-tour-start"
+              hidden>
+        <div class="tool-meta">
+          <div class="tool-name">Introduction to FortiMonitor</div>
+          <div class="tool-desc">Guided walk-through of the FortiMonitor UI with a short quiz at the end.</div>
+        </div>
+        <div class="chevron">›</div>
+      </button>
+      <!-- FMN-244: Custom Metrics training module. Independently gated -->
+      <!-- on fm:customMetricsTourEnabled (Beta, default off). -->
+      <button class="tool-card"
+              id="training-custom-metrics-tile"
+              data-tool="custom-metrics-tour"
+              data-fmn-trigger="custom-metrics-tour-start"
+              hidden>
+        <div class="tool-meta">
+          <div class="tool-name">
+            Custom Metrics
+            <span class="badge beta">Beta</span>
+          </div>
+          <div class="tool-desc">What custom metrics are, when to use one, how the management UI works, and how breaches turn into incidents.</div>
+        </div>
+        <div class="chevron">›</div>
+      </button>
+      <!-- Future modules (FMN-230 OnSight Deployment Guide, FMN-159 -->
+      <!-- Topology tour, etc.) slot here as additional tool-cards. -->
     </div>
   </div>
 
@@ -584,22 +614,22 @@
     <div class="settings-section">
       <label class="settings-label" for="intro-tour-toggle">Introduction to FortiMonitor</label>
       <p class="settings-help">
-        Off by default. The toolkit adds an <strong>Introduction to FortiMonitor</strong> tile to a <strong>Training</strong> section at the top of the popup. The tile launches a 14-step guided walk-through of the FortiMonitor UI on whichever FortiMonitor tab you have open (the toolkit opens a tab to <code>/dashboards</code> if none is open). The walk-through covers the page layout, the Header, the Control Panel, every sidebar entry, and the +Add and Collapse controls. A 3-question quiz follows to help solidify the material. Toggle on to reveal the tile.
+        Off by default. The toolkit adds an <strong>Introduction to FortiMonitor</strong> tile inside the popup's <strong>Training</strong> drill-in (the Training tile at the top of the main popup list). The tile launches a 14-step guided walk-through of the FortiMonitor UI on whichever FortiMonitor tab you have open (the toolkit opens a tab to <code>/dashboards</code> if none is open). The walk-through covers the page layout, the Header, the Control Panel, every sidebar entry, and the +Add and Collapse controls. A 3-question quiz follows to help solidify the material. Toggle on to reveal the tile.
       </p>
       <label class="toggle-row">
         <input id="intro-tour-toggle" type="checkbox">
-        <span>Show Introduction to FortiMonitor tile in the popup Training section</span>
+        <span>Show Introduction to FortiMonitor tile in the Training drill-in</span>
       </label>
     </div>
 
     <div class="settings-section">
       <label class="settings-label" for="custom-metrics-tour-toggle">Custom Metrics (Beta)</label>
       <p class="settings-help">
-        Off by default. When on, the toolkit adds a <strong>Custom Metrics</strong> tile to the popup Training section. The tile launches a guided module that covers what a custom metric is, when to author one, where the management UI lives, the four configuration concerns (identity, data source, units, scope), frequency + thresholds, and how custom metrics flow into FortiMonitor's incident pipeline. A 3-question quiz follows. Beta status; content is shippable, page anchors may shift as the operator confirms selectors.
+        Off by default. When on, the toolkit adds a <strong>Custom Metrics</strong> tile inside the popup's <strong>Training</strong> drill-in (the Training tile at the top of the main popup list). The tile launches a guided module that covers what a custom metric is, when to author one, where the management UI lives, the four configuration concerns (identity, data source, units, scope), frequency + thresholds, and how custom metrics flow into FortiMonitor's incident pipeline. A 3-question quiz follows. Beta status; content is shippable, page anchors may shift as the operator confirms selectors.
       </p>
       <label class="toggle-row">
         <input id="custom-metrics-tour-toggle" type="checkbox">
-        <span>Show Custom Metrics training tile in the popup Training section</span>
+        <span>Show Custom Metrics training tile in the Training drill-in</span>
       </label>
     </div>
 
