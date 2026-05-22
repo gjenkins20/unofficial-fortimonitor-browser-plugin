@@ -111,6 +111,47 @@ test('parseDevicePortsResponse throws on malformed input', () => {
   assert.throws(() => parseDevicePortsResponse({ data: null }), FortimonitorError);
 });
 
+// ----- FortimonitorClient.deleteServerOrTemplate (FMN-238) -----
+
+test('deleteServerOrTemplate POSTs server_id={id} to /config/deleteServer without XSRF', async () => {
+  let captured;
+  const fetchMock = createFetchMock(async (url, init) => { captured = { url, init }; return jsonResponse({ success: true }); });
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'abc123' });
+  const out = await client.deleteServerOrTemplate(44077868);
+  assert.equal(captured.url, `${FM_ORIGIN}/config/deleteServer`);
+  assert.equal(captured.init.method, 'POST');
+  assert.equal(captured.init.credentials, 'include');
+  assert.equal(captured.init.headers['Content-Type'], 'application/x-www-form-urlencoded');
+  // No XSRF: the UI capture (FMN-238) showed this endpoint accepts the session cookie alone
+  assert.equal(captured.init.headers['X-XSRF-TOKEN'], undefined);
+  assert.equal(captured.init.body, 'server_id=44077868');
+  assert.equal(out.status, 200);
+});
+
+test('deleteServerOrTemplate accepts string ids', async () => {
+  const fetchMock = createFetchMock(async () => jsonResponse({ success: true }));
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'tok' });
+  await client.deleteServerOrTemplate('s-42');
+  assert.equal(fetchMock.calls[0].init.body, 'server_id=s-42');
+});
+
+test('deleteServerOrTemplate rejects empty / missing id', async () => {
+  const fetchMock = createFetchMock(async () => jsonResponse({ success: true }));
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'tok' });
+  await assert.rejects(client.deleteServerOrTemplate(undefined), TypeError);
+  await assert.rejects(client.deleteServerOrTemplate(''), TypeError);
+  assert.equal(fetchMock.calls.length, 0, 'no fetch should happen when id is missing');
+});
+
+test('deleteServerOrTemplate throws FortimonitorError on HTTP failure', async () => {
+  const fetchMock = createFetchMock(async () => errorResponse(500));
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'tok' });
+  await assert.rejects(
+    client.deleteServerOrTemplate(42),
+    (err) => err instanceof FortimonitorError && err.status === 500 && err.phase === 'write'
+  );
+});
+
 // ----- FortimonitorClient.getDevicePorts -------------------------
 
 test('getDevicePorts hits the expected URL with credentials and JSON Accept', async () => {

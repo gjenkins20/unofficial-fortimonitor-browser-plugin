@@ -18,6 +18,10 @@ place.
 
 ## Unreleased
 
+## v1.8.1 - 2026-05-21
+
+- FMN-238: `FortimonitorClient.deleteServerOrTemplate(id)` ships. Wraps the session-auth `POST /config/deleteServer` endpoint with `server_id={id}` body (no XSRF). Endpoint captured live via operator-paired UI capture during FMN-228 cleanup; same endpoint handles both servers and templates because they share the s-{id} namespace. v2 has no DELETE for `/server_template` (405); this is the only programmatic path. Unblocks FMN-237 (Toolkit rollback). Full wire details + cross-tenant caveats in `docs/api-discovery/templates-delete.md`.
+
 ## v1.8.0 - 2026-05-21
 
 Bulk Action Composer expansion, FMN-228 MPW fix, info-bubble + tour-framework polish.

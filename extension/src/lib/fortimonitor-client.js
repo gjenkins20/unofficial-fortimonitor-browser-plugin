@@ -251,6 +251,53 @@ export class FortimonitorClient {
   }
 
   /**
+   * Delete a server OR a template by id. FortiMonitor templates share the
+   * s-{id} namespace with servers, and the canonical delete endpoint is
+   * the same: `POST /config/deleteServer` with `server_id={id}` body.
+   * The form field name is "server_id" even when the target is a
+   * template; see docs/api-discovery/templates-delete.md.
+   *
+   * Captured live during FMN-228 cleanup (2026-05-21) by intercepting
+   * the UI's Delete Template POST. The v2 API does NOT support DELETE
+   * on /server_template (schema discovery + live 405); this session-
+   * auth surface is the only programmatic path.
+   *
+   * Notable: NO X-XSRF-Token header required (different from
+   * /config/createServerTemplate and /config/save_port_selection which
+   * DO need it). Session cookie alone is sufficient.
+   *
+   * @param {number|string} id  Server OR template id (they share the
+   *                             same numeric namespace).
+   * @returns {Promise<{status:number}>}
+   */
+  async deleteServerOrTemplate(id) {
+    if (id === undefined || id === null || String(id).trim() === '') {
+      throw new TypeError('deleteServerOrTemplate: id is required');
+    }
+    const origin = await this.origin();
+    const fd = new URLSearchParams();
+    fd.append('server_id', String(id));
+    const res = await this.fetch(`${origin}/config/deleteServer`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Accept': 'application/json, text/plain, */*',
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: fd.toString()
+    });
+    if (!res.ok) {
+      throw new FortimonitorError(`deleteServer failed: HTTP ${res.status}`, {
+        status: res.status,
+        phase: 'write',
+        responseUrl: redactSensitive(res.url ?? `${origin}/config/deleteServer`)
+      });
+    }
+    return { status: res.status };
+  }
+
+  /**
    * Resolve a server id to its human-readable name. Returns null on any
    * failure (non-existent id, expired session, SPA-shell HTML response,
    * JSON parse error, missing name field). Callers should treat null as
