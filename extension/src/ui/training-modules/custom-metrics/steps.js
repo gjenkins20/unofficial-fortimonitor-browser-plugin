@@ -195,6 +195,25 @@ export const CUSTOM_METRICS_TOUR_STEPS = [
     placement: 'auto'
   },
   {
+    id: 'example-callout',
+    anchor: 'body',
+    anchor_fallback: 'body',
+    caption_html: [
+      '<p><strong>Try it yourself.</strong> The toolkit ships a complete, ',
+      'reproducible example you can stand up end to end: a custom metric that ',
+      'reports the number of active SSH sessions on an OnSight appliance, using ',
+      "only FortiMonitor's built-in script-execution data source (no third-party ",
+      'tooling).</p>',
+      '<p>In your cloned toolkit repository, open ',
+      '<code>docs/training/custom-metrics/</code>. It carries a field-by-field ',
+      'configuration walkthrough, the data-source script, and a checklist for ',
+      'watching the metric cross a warning threshold and open an incident.</p>'
+    ].join(''),
+    when: { always: true },
+    advance: 'next-button',
+    placement: 'auto'
+  },
+  {
     id: 'wrap-up',
     anchor: 'body',
     anchor_fallback: 'body',

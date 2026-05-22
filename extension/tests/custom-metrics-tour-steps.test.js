@@ -63,6 +63,19 @@ test('module covers the key concepts (id-based smoke test)', () => {
   }
 });
 
+// FMN-245: the module must point operators at the reproducible example docs.
+// A prior rewrite (FMN-244 live-capture) dropped the callout and orphaned the
+// docs; this guards the pairing mechanically so it fails here, not in review.
+test('FMN-245: a step points operators at the example docs (docs/training/custom-metrics)', () => {
+  const linking = CUSTOM_METRICS_TOUR_STEPS.filter(
+    (s) => typeof s.caption_html === 'string' && s.caption_html.includes('docs/training/custom-metrics')
+  );
+  assert.ok(
+    linking.length >= 1,
+    'no step references docs/training/custom-metrics/ - the FMN-245 example pairing was dropped'
+  );
+});
+
 test('first step is welcome, last step is wrap-up', () => {
   assert.equal(CUSTOM_METRICS_TOUR_STEPS[0].id, 'welcome');
   assert.equal(CUSTOM_METRICS_TOUR_STEPS[CUSTOM_METRICS_TOUR_STEPS.length - 1].id, 'wrap-up');
