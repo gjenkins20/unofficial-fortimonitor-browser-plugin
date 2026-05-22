@@ -79,6 +79,16 @@ export const DISMISSED_INFO_BUBBLES_KEY = 'fm:dismissedInfoBubbles';
 // visibility rule.
 export const INTRO_TOUR_ENABLED_KEY = 'fm:introTourEnabled';
 
+// FMN-240 one-time-migration marker. During the Beta period (FMN-167 →
+// FMN-228) the intro tour defaulted to OFF; an operator who opened the
+// Settings toggle to ON and then back to OFF would land in storage with
+// an explicit `false`. FMN-240 flipped the default to ON, but explicit
+// `false` continues to suppress the tile - which would leave those
+// operators without the un-Beta'd tour. The migration clears the legacy
+// explicit-false exactly once; this marker prevents re-clearing a
+// post-FMN-240 opt-out.
+export const INTRO_TOUR_FMN240_MIGRATED_KEY = 'fm:introTourFmn240Migrated';
+
 export const ASK_CLAUDE_TOOL_TIERS = ['readonly', 'readwrite', 'all'];
 export const DEFAULT_ASK_CLAUDE_TOOL_TIER = 'readonly';
 
@@ -469,12 +479,27 @@ export async function setNoiseAnalyzerEnabled(enabled, storage = defaultStorage(
  * popup open without needing to flip a Setting first. Explicit-false
  * still suppresses the tile. Storage errors fail open.
  *
- * @param {{ get: (key: string) => Promise<Record<string, any>> }} [storage]
+ * FMN-240 one-time migration: the first read after upgrading clears a
+ * Beta-era explicit `false` so the new default-on takes over. The
+ * INTRO_TOUR_FMN240_MIGRATED_KEY marker guards the migration so a
+ * post-FMN-240 explicit opt-out is never silently re-enabled.
+ *
+ * @param {{ get: (key: string) => Promise<Record<string, any>>,
+ *           set: (obj: Record<string, any>) => Promise<void>,
+ *           remove: (key: string) => Promise<void> }} [storage]
  */
 export async function isIntroTourEnabled(storage = defaultStorage()) {
   try {
-    const data = await storage.get(INTRO_TOUR_ENABLED_KEY);
-    const value = data?.[INTRO_TOUR_ENABLED_KEY];
+    const data = await storage.get([INTRO_TOUR_ENABLED_KEY, INTRO_TOUR_FMN240_MIGRATED_KEY]);
+    let value = data?.[INTRO_TOUR_ENABLED_KEY];
+    const migrated = data?.[INTRO_TOUR_FMN240_MIGRATED_KEY] === true;
+    if (!migrated) {
+      if (value === false) {
+        try { await storage.remove(INTRO_TOUR_ENABLED_KEY); } catch { /* best-effort */ }
+        value = undefined;
+      }
+      try { await storage.set({ [INTRO_TOUR_FMN240_MIGRATED_KEY]: true }); } catch { /* best-effort */ }
+    }
     return value === undefined ? true : Boolean(value);
   } catch {
     return true;
