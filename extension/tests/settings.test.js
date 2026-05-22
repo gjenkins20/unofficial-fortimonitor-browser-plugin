@@ -42,7 +42,10 @@ import {
   isIntroTourEnabled,
   setIntroTourEnabled,
   INTRO_TOUR_ENABLED_KEY,
-  INTRO_TOUR_FMN240_MIGRATED_KEY
+  INTRO_TOUR_FMN240_MIGRATED_KEY,
+  isOmniSearchEnabled,
+  setOmniSearchEnabled,
+  OMNI_SEARCH_ENABLED_KEY
 } from '../src/lib/settings.js';
 import { createStorageMock } from './fixtures/chrome-mocks.js';
 
@@ -409,6 +412,38 @@ test('setUpdateCheckEnabled coerces non-boolean values to strict booleans (FMN-1
   assert.equal(storage.__raw()[UPDATE_CHECK_ENABLED_KEY], true);
   await setUpdateCheckEnabled(0, storage);
   assert.equal(storage.__raw()[UPDATE_CHECK_ENABLED_KEY], false);
+});
+
+// ---------- FMN-239: omni-search default-on ----------
+
+test('isOmniSearchEnabled defaults to true on empty storage (FMN-239)', async () => {
+  const storage = createStorageMock();
+  assert.equal(await isOmniSearchEnabled(storage), true);
+});
+
+test('isOmniSearchEnabled returns false when explicitly disabled (FMN-239)', async () => {
+  const storage = createStorageMock();
+  await setOmniSearchEnabled(false, storage);
+  assert.equal(await isOmniSearchEnabled(storage), false);
+  assert.equal(storage.__raw()[OMNI_SEARCH_ENABLED_KEY], false);
+});
+
+test('isOmniSearchEnabled roundtrips a true write (FMN-239)', async () => {
+  const storage = createStorageMock();
+  await setOmniSearchEnabled(true, storage);
+  assert.equal(await isOmniSearchEnabled(storage), true);
+  assert.equal(storage.__raw()[OMNI_SEARCH_ENABLED_KEY], true);
+});
+
+test('isOmniSearchEnabled fails open (returns true) on storage error (FMN-239)', async () => {
+  const brokenStorage = {
+    async get() { throw new Error('storage unavailable'); }
+  };
+  assert.equal(await isOmniSearchEnabled(brokenStorage), true);
+});
+
+test('OMNI_SEARCH_ENABLED_KEY uses the omni-prefixed storage key', () => {
+  assert.equal(OMNI_SEARCH_ENABLED_KEY, 'fm:omniSearchEnabled');
 });
 
 // ---------- FMN-240: intro-tour default-on ----------

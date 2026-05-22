@@ -371,17 +371,21 @@ export async function setSidebarLauncherEnabled(enabled, storage = defaultStorag
 }
 
 /**
- * Read the FMN-152 omni-search-enabled flag. Off by default: a fresh
- * install leaves FortiMonitor's native "Search Instances" untouched.
+ * Read the FMN-152 omni-search-enabled flag. On by default (FMN-239):
+ * fresh installs see FM TK Search replace FortiMonitor's native
+ * "Search Instances" immediately. An explicit stored value of false
+ * still suppresses; only an absent key resolves to the default-on.
  *
  * @param {{ get: (key: string) => Promise<Record<string, any>> }} [storage]
  */
 export async function isOmniSearchEnabled(storage = defaultStorage()) {
   try {
     const data = await storage.get(OMNI_SEARCH_ENABLED_KEY);
-    return Boolean(data?.[OMNI_SEARCH_ENABLED_KEY]);
+    const stored = data?.[OMNI_SEARCH_ENABLED_KEY];
+    if (stored === undefined || stored === null) return true;
+    return Boolean(stored);
   } catch {
-    return false;
+    return true;
   }
 }
 
