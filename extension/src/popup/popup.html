@@ -73,10 +73,11 @@
     <!-- DOM order keeps Training at the top (FMN-167 intent); structurally -->
     <!-- it now lives inside the same overflow viewport as #tool-list. -->
     <div class="tool-scroll" id="tool-scroll">
-    <!-- FMN-167 Training section. First entry in the scrollable tool list -->
-    <!-- so guided walk-throughs surface to new operators on first popup -->
-    <!-- open. FMN-240: gated on fm:introTourEnabled (default on; explicit -->
-    <!-- false still hides). Hidden in markup; popup.js reveals on load. -->
+    <!-- FMN-167 Training section. Gated on fm:introTourEnabled. -->
+    <!-- FMN-249 emergency hot-fix (2026-05-22): default flipped back to -->
+    <!-- OFF after a recent push left the Training UI in a broken state. -->
+    <!-- Hidden in markup; popup.js reveals only when the operator has -->
+    <!-- explicitly opted in via Settings (value === true). -->
     <div id="training-section" hidden>
       <button class="tool-card"
               id="training-intro-tour-tile"
@@ -567,7 +568,7 @@
     <div class="settings-section">
       <label class="settings-label" for="intro-tour-toggle">Introduction to FortiMonitor</label>
       <p class="settings-help">
-        On by default. The toolkit adds an <strong>Introduction to FortiMonitor</strong> tile to a <strong>Training</strong> section at the top of the popup. The tile launches a 14-step guided walk-through of the FortiMonitor UI on whichever FortiMonitor tab you have open (the toolkit opens a tab to <code>/dashboards</code> if none is open). The walk-through covers the page layout, the Header, the Control Panel, every sidebar entry, and the +Add and Collapse controls. A 3-question quiz follows to help solidify the material. Toggle off to hide the tile.
+        Off by default. The toolkit adds an <strong>Introduction to FortiMonitor</strong> tile to a <strong>Training</strong> section at the top of the popup. The tile launches a 14-step guided walk-through of the FortiMonitor UI on whichever FortiMonitor tab you have open (the toolkit opens a tab to <code>/dashboards</code> if none is open). The walk-through covers the page layout, the Header, the Control Panel, every sidebar entry, and the +Add and Collapse controls. A 3-question quiz follows to help solidify the material. Toggle on to reveal the tile.
       </p>
       <label class="toggle-row">
         <input id="intro-tour-toggle" type="checkbox">

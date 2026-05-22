@@ -478,15 +478,25 @@ export async function setNoiseAnalyzerEnabled(enabled, storage = defaultStorage(
 }
 
 /**
- * Read the FMN-167 intro-tour-enabled flag. On by default (FMN-240) so
- * new operators see the Introduction to FortiMonitor tile on first
- * popup open without needing to flip a Setting first. Explicit-false
- * still suppresses the tile. Storage errors fail open.
+ * Read the FMN-167 intro-tour-enabled flag.
  *
- * FMN-240 one-time migration: the first read after upgrading clears a
- * Beta-era explicit `false` so the new default-on takes over. The
- * INTRO_TOUR_FMN240_MIGRATED_KEY marker guards the migration so a
- * post-FMN-240 explicit opt-out is never silently re-enabled.
+ * FMN-249 emergency hot-fix (2026-05-22): a recent push left the
+ * Training UI entry in a broken state. Flag is OFF by default until
+ * the underlying breakage is characterized in a follow-up ticket.
+ * Operators who explicitly toggled the tile ON via Settings keep
+ * their opt-in (value === true returns true). Operators who never
+ * opted in see no Training tile until they flip the Settings toggle.
+ *
+ * The FMN-240 one-time migration is neutralized: it used to clear
+ * Beta-era explicit-false so the (now-reverted) default-on would take
+ * over. With the default flipped back to off, that migration would
+ * silently move some operators from "explicit-false" to "default-off"
+ * (same observable state) and is therefore a no-op; the marker write
+ * is retained so callers that probe the marker do not re-read a stale
+ * shape, but the explicit-false removal is gone.
+ *
+ * Storage errors fail closed (return false) so a transient blip
+ * never reveals the broken tile.
  *
  * @param {{ get: (key: string) => Promise<Record<string, any>>,
  *           set: (obj: Record<string, any>) => Promise<void>,
@@ -495,18 +505,14 @@ export async function setNoiseAnalyzerEnabled(enabled, storage = defaultStorage(
 export async function isIntroTourEnabled(storage = defaultStorage()) {
   try {
     const data = await storage.get([INTRO_TOUR_ENABLED_KEY, INTRO_TOUR_FMN240_MIGRATED_KEY]);
-    let value = data?.[INTRO_TOUR_ENABLED_KEY];
+    const value = data?.[INTRO_TOUR_ENABLED_KEY];
     const migrated = data?.[INTRO_TOUR_FMN240_MIGRATED_KEY] === true;
     if (!migrated) {
-      if (value === false) {
-        try { await storage.remove(INTRO_TOUR_ENABLED_KEY); } catch { /* best-effort */ }
-        value = undefined;
-      }
       try { await storage.set({ [INTRO_TOUR_FMN240_MIGRATED_KEY]: true }); } catch { /* best-effort */ }
     }
-    return value === undefined ? true : Boolean(value);
+    return value === true;
   } catch {
-    return true;
+    return false;
   }
 }
 
