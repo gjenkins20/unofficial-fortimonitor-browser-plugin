@@ -8,6 +8,7 @@
 import { h, titleBar, downloadBlob } from '../../../lib/dom.js';
 import { bulkBreadcrumbs } from './breadcrumbs.js';
 import { getAction } from '../../../lib/bulk-actions/index.js';
+import { saveRecentPick } from '../../../lib/recent-picks.js';
 
 const TOOL_NAME = 'Bulk Action Composer';
 
@@ -229,6 +230,10 @@ export function render({ container, store, navigate, events, call }) {
         concurrency: 3
       });
       store.runResult = result;
+      // FMN-235: persist the device snapshot so the Pick step can offer
+      // "Use same devices as last run". Fire-and-forget; failures are
+      // logged by the helper but never block the commit-success path.
+      void saveRecentPick(store.targets);
       stateLabel.textContent = `Done in ${msSinceStart(result.startedAt, result.finishedAt)}s · ${result.succeeded} ok · ${result.failed} failed · ${result.noops} skipped`;
       exportBtn.disabled = false;
       // FMN-155 QA fix: re-enable the button and re-label it so the operator

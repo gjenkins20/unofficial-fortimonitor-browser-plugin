@@ -30,6 +30,7 @@ import { parseServerList } from '../../parse-csv.js';
 import { call } from '../../../lib/messaging.js';
 import { bulkBreadcrumbs } from './breadcrumbs.js';
 import { unionMembers } from '../../../lib/monitoring-tree.js';
+import { loadRecentPicks, humanizeAge } from '../../../lib/recent-picks.js';
 
 const TOOL_NAME = 'Bulk Action Composer';
 
@@ -49,6 +50,18 @@ export function render({ container, store, navigate }) {
 
   const body = h('div', { class: 'body-section' });
   frame.appendChild(body);
+
+  // ----- Recent runs (FMN-235) --------------------------------------
+  // Above the tab strip: a row of cards from previous successful
+  // commits. Click loads the saved device set into store.targets and
+  // validates each ID against the live tenant via list-tags-batch
+  // (null sentinel = missing).
+  const recentPicksRow = h('div', {
+    class: 'pick-recent-row',
+    'data-test': 'pick-recent-row',
+    style: 'display:none;margin-bottom:0.8rem;'
+  });
+  body.appendChild(recentPicksRow);
 
   // ----- Tab strip --------------------------------------------------
   const tabStrip = h('div', { class: 'pick-tab-strip', role: 'tablist' });
@@ -553,9 +566,126 @@ export function render({ container, store, navigate }) {
     navigate('/action');
   });
 
+  // ================================================================
+  // Recent runs (FMN-235)
+  // ================================================================
+
+  async function loadRecentPickEntry(entry) {
+    // Reset both input panes so the loaded set is the single source of
+    // truth in the parse-result panel.
+    pickedGroupIds.clear();
+    store.pickedGroupIds = [];
+    for (const cb of groupsList.querySelectorAll('input[type="checkbox"]')) cb.checked = false;
+    groupsSummary.textContent = 'No groups selected.';
+
+    // Switch the active mode to paste so the loaded set populates the
+    // textarea (operator can refine inline) and the groups pane hides.
+    activeMode = 'paste';
+    store.pickMode = 'paste';
+    pastePane.style.display = '';
+    groupsPane.style.display = 'none';
+    for (const btn of [pasteTabBtn, groupsTabBtn]) {
+      const isActive = btn.dataset.tab === 'paste';
+      btn.classList.toggle('active', isActive);
+      btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    }
+
+    // Show a transient "validating" state while we ping list-tags-batch.
+    parseResult.className = 'parse-result';
+    parseResult.replaceChildren(
+      h('div', { class: 'headline' }, `Validating ${entry.targets.length} instance${entry.targets.length === 1 ? '' : 's'} from a previous run…`),
+      h('div', { class: 'sub' }, 'Checking that each instance still exists on this tenant.')
+    );
+    nextBtn.disabled = true;
+
+    // Validate via list-tags-batch (null sentinel == not found). On
+    // validator failure (network / handler error) we proceed with the
+    // full set and surface no warning; the commit step's per-row
+    // describe() will catch any survivors that got deleted.
+    let present = entry.targets.slice();
+    let missingCount = 0;
+    try {
+      const res = await call('bulk-composer:list-tags-batch', {
+        serverIds: entry.targets.map((t) => t.id)
+      });
+      const byServerId = (res && res.byServerId) || {};
+      const survivors = [];
+      for (const t of entry.targets) {
+        if (Object.prototype.hasOwnProperty.call(byServerId, t.id) && byServerId[t.id] === null) {
+          missingCount++;
+        } else {
+          survivors.push(t);
+        }
+      }
+      present = survivors;
+    } catch {
+      // proceed with the full set
+    }
+
+    if (present.length === 0) {
+      paste.value = '';
+      renderEmpty(
+        'All instances from this run are no longer available',
+        'They may have been deleted from FortiMonitor. Use Paste / CSV or Server groups to pick a different set.'
+      );
+      return;
+    }
+
+    paste.value = present.map((t) => t.name ? `${t.id},${t.name}` : String(t.id)).join('\n');
+
+    const ids = present.map((t) => String(t.id));
+    const nameById = {};
+    for (const t of present) if (t.name) nameById[String(t.id)] = t.name;
+    const warnings = missingCount > 0
+      ? [`${missingCount} of ${entry.targets.length} instance${entry.targets.length === 1 ? '' : 's'} from this run no longer exist on this tenant; proceeding with ${present.length}.`]
+      : [];
+    renderParsed({ serverIds: ids, nameById, totalLines: null, warnings });
+  }
+
+  async function renderRecentPicksRow() {
+    let entries = [];
+    try {
+      entries = await loadRecentPicks();
+    } catch {
+      entries = [];
+    }
+    if (!entries || entries.length === 0) {
+      recentPicksRow.style.display = 'none';
+      recentPicksRow.replaceChildren();
+      return;
+    }
+    recentPicksRow.style.display = '';
+    recentPicksRow.replaceChildren(
+      h('div', {
+        style: 'font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:0.3rem;'
+      }, 'Recent runs')
+    );
+    const chipRow = h('div', { style: 'display:flex;flex-wrap:wrap;gap:0.4rem;' });
+    for (const entry of entries) {
+      const names = entry.targets.map((t) => t.name || `#${t.id}`).join(', ');
+      const card = h('button', {
+        type: 'button',
+        class: 'recent-pick-card',
+        'data-test': 'recent-pick-card',
+        'data-count': String(entry.targets.length),
+        title: names,
+        style: 'border:1px solid var(--border);background:#f3f6fa;border-radius:4px;padding:0.45rem 0.7rem;cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;gap:0.1rem;color:var(--text);text-align:left;min-width:130px;font-family:inherit;'
+      });
+      card.appendChild(h('strong', { style: 'font-size:0.88rem;' },
+        `${entry.targets.length} instance${entry.targets.length === 1 ? '' : 's'}`));
+      card.appendChild(h('span', {
+        style: 'font-size:0.75rem;color:var(--text-muted);'
+      }, humanizeAge(entry.savedAt)));
+      card.addEventListener('click', () => { void loadRecentPickEntry(entry); });
+      chipRow.appendChild(card);
+    }
+    recentPicksRow.appendChild(chipRow);
+  }
+
   // Always render the parse-result once on mount so the empty state shows
   // its "No server IDs detected" headline immediately (matches Port Scope).
   activate(activeMode);
+  void renderRecentPicksRow();
 }
 
 // Two-column Name | Server ID preview, same shape as Port Scope's. Up to 25
