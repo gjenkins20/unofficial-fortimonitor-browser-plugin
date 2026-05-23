@@ -39,10 +39,6 @@ import {
   isUpdateCheckEnabled,
   setUpdateCheckEnabled,
   UPDATE_CHECK_ENABLED_KEY,
-  isIntroTourEnabled,
-  setIntroTourEnabled,
-  INTRO_TOUR_ENABLED_KEY,
-  INTRO_TOUR_FMN240_MIGRATED_KEY,
   isOmniSearchEnabled,
   setOmniSearchEnabled,
   OMNI_SEARCH_ENABLED_KEY
@@ -444,73 +440,4 @@ test('isOmniSearchEnabled fails open (returns true) on storage error (FMN-239)',
 
 test('OMNI_SEARCH_ENABLED_KEY uses the omni-prefixed storage key', () => {
   assert.equal(OMNI_SEARCH_ENABLED_KEY, 'fm:omniSearchEnabled');
-});
-
-// ---------- FMN-249 emergency hot-fix: intro-tour default OFF ----------
-// Supersedes the FMN-240 default-on behavior. A recent push left the
-// Training UI entry in a broken state; the flag is opt-in only until
-// the underlying breakage is characterized.
-
-test('isIntroTourEnabled defaults to false on empty storage (FMN-249)', async () => {
-  const storage = createStorageMock();
-  assert.equal(await isIntroTourEnabled(storage), false);
-  // Migration marker is still set on first read so callers that probe
-  // the marker shape do not re-read stale state.
-  assert.equal(storage.__raw()[INTRO_TOUR_FMN240_MIGRATED_KEY], true);
-});
-
-test('isIntroTourEnabled returns false when explicit-false in storage (FMN-249)', async () => {
-  const storage = createStorageMock({ [INTRO_TOUR_FMN240_MIGRATED_KEY]: true });
-  await setIntroTourEnabled(false, storage);
-  assert.equal(await isIntroTourEnabled(storage), false);
-  assert.equal(storage.__raw()[INTRO_TOUR_ENABLED_KEY], false);
-});
-
-test('isIntroTourEnabled honors an explicit-true opt-in (FMN-249)', async () => {
-  const storage = createStorageMock();
-  await setIntroTourEnabled(true, storage);
-  assert.equal(await isIntroTourEnabled(storage), true);
-  assert.equal(storage.__raw()[INTRO_TOUR_ENABLED_KEY], true);
-});
-
-test('isIntroTourEnabled fails closed (returns false) on storage error (FMN-249)', async () => {
-  const brokenStorage = {
-    async get() { throw new Error('storage unavailable'); }
-  };
-  assert.equal(await isIntroTourEnabled(brokenStorage), false);
-});
-
-test('INTRO_TOUR_ENABLED_KEY uses the documented storage key', () => {
-  assert.equal(INTRO_TOUR_ENABLED_KEY, 'fm:introTourEnabled');
-});
-
-// ---------- FMN-249 migration neutralization ----------
-// The FMN-240 migration used to clear a Beta-era explicit-false on
-// first read so the (now-reverted) default-on would take over. With
-// default flipped back to off, that clear is a no-op; explicit-false
-// must survive untouched.
-
-test('explicit-false in storage survives untouched on first read (FMN-249 neutralized migration)', async () => {
-  const storage = createStorageMock({ [INTRO_TOUR_ENABLED_KEY]: false });
-  assert.equal(await isIntroTourEnabled(storage), false);
-  assert.equal(storage.__raw()[INTRO_TOUR_ENABLED_KEY], false);
-  assert.equal(storage.__raw()[INTRO_TOUR_FMN240_MIGRATED_KEY], true);
-});
-
-test('explicit-true survives the FMN-249 migration-marker write', async () => {
-  const storage = createStorageMock({ [INTRO_TOUR_ENABLED_KEY]: true });
-  assert.equal(await isIntroTourEnabled(storage), true);
-  assert.equal(storage.__raw()[INTRO_TOUR_ENABLED_KEY], true);
-  assert.equal(storage.__raw()[INTRO_TOUR_FMN240_MIGRATED_KEY], true);
-});
-
-test('FMN-249: post-marker explicit-opt-in roundtrips cleanly', async () => {
-  const storage = createStorageMock({ [INTRO_TOUR_FMN240_MIGRATED_KEY]: true });
-  // First read: no explicit value, default off.
-  assert.equal(await isIntroTourEnabled(storage), false);
-  // Operator opts in via Settings.
-  await setIntroTourEnabled(true, storage);
-  // Second read: opt-in honored.
-  assert.equal(await isIntroTourEnabled(storage), true);
-  assert.equal(storage.__raw()[INTRO_TOUR_ENABLED_KEY], true);
 });

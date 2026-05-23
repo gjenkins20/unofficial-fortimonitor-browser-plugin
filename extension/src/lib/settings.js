@@ -70,25 +70,6 @@ export const SHOW_INFO_BUBBLES_KEY = 'fm:showInfoBubbles';
 // in chrome.storage.local (Sets are not JSON-serializable). Each entry is
 // a featureId from extension/src/lib/info-bubble-registry.js.
 export const DISMISSED_INFO_BUBBLES_KEY = 'fm:dismissedInfoBubbles';
-// FMN-167: per-tool flag for the FortiMonitor intro walk-through. Off
-// by default until the framework graduates and the captioned-script
-// follow-up ticket ships real content. When on, the popup shows the
-// "Introduction to FortiMonitor" tile in the Training section and the content-script
-// bridge accepts the start message. Specific to the intro tour - sibling
-// tour tickets (FMN-168 OnSight) ship their own flags per the per-tool
-// visibility rule.
-export const INTRO_TOUR_ENABLED_KEY = 'fm:introTourEnabled';
-
-// FMN-240 one-time-migration marker. During the Beta period (FMN-167 →
-// FMN-228) the intro tour defaulted to OFF; an operator who opened the
-// Settings toggle to ON and then back to OFF would land in storage with
-// an explicit `false`. FMN-240 flipped the default to ON, but explicit
-// `false` continues to suppress the tile - which would leave those
-// operators without the un-Beta'd tour. The migration clears the legacy
-// explicit-false exactly once; this marker prevents re-clearing a
-// post-FMN-240 opt-out.
-export const INTRO_TOUR_FMN240_MIGRATED_KEY = 'fm:introTourFmn240Migrated';
-
 // FMN-244: Custom Metrics training module. Beta. Defaults OFF; operator
 // opts in via the Settings toggle, which reveals the popup tile in the
 // Training section. Independent of fm:introTourEnabled per the
@@ -481,55 +462,6 @@ export async function isNoiseAnalyzerEnabled(storage = defaultStorage()) {
  */
 export async function setNoiseAnalyzerEnabled(enabled, storage = defaultStorage()) {
   await storage.set({ [NOISE_ANALYZER_ENABLED_KEY]: Boolean(enabled) });
-}
-
-/**
- * Read the FMN-167 intro-tour-enabled flag.
- *
- * FMN-249 emergency hot-fix (2026-05-22): a recent push left the
- * Training UI entry in a broken state. Flag is OFF by default until
- * the underlying breakage is characterized in a follow-up ticket.
- * Operators who explicitly toggled the tile ON via Settings keep
- * their opt-in (value === true returns true). Operators who never
- * opted in see no Training tile until they flip the Settings toggle.
- *
- * The FMN-240 one-time migration is neutralized: it used to clear
- * Beta-era explicit-false so the (now-reverted) default-on would take
- * over. With the default flipped back to off, that migration would
- * silently move some operators from "explicit-false" to "default-off"
- * (same observable state) and is therefore a no-op; the marker write
- * is retained so callers that probe the marker do not re-read a stale
- * shape, but the explicit-false removal is gone.
- *
- * Storage errors fail closed (return false) so a transient blip
- * never reveals the broken tile.
- *
- * @param {{ get: (key: string) => Promise<Record<string, any>>,
- *           set: (obj: Record<string, any>) => Promise<void>,
- *           remove: (key: string) => Promise<void> }} [storage]
- */
-export async function isIntroTourEnabled(storage = defaultStorage()) {
-  try {
-    const data = await storage.get([INTRO_TOUR_ENABLED_KEY, INTRO_TOUR_FMN240_MIGRATED_KEY]);
-    const value = data?.[INTRO_TOUR_ENABLED_KEY];
-    const migrated = data?.[INTRO_TOUR_FMN240_MIGRATED_KEY] === true;
-    if (!migrated) {
-      try { await storage.set({ [INTRO_TOUR_FMN240_MIGRATED_KEY]: true }); } catch { /* best-effort */ }
-    }
-    return value === true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Persist the FMN-167 intro-tour-enabled flag.
- *
- * @param {boolean} enabled
- * @param {{ set: (obj: Record<string, any>) => Promise<void> }} [storage]
- */
-export async function setIntroTourEnabled(enabled, storage = defaultStorage()) {
-  await storage.set({ [INTRO_TOUR_ENABLED_KEY]: Boolean(enabled) });
 }
 
 /**

@@ -76,14 +76,12 @@
     <!-- FMN-246: Training is a single tile pinned at the top of the tool -->
     <!-- list. Clicking it drills into #training-view (sibling of #main- -->
     <!-- view / #settings-view). Individual module tiles live inside the -->
-    <!-- drill-in, never inline here. Launcher tile auto-hides when no -->
-    <!-- module is enabled (FMN-249 default-off intro-tour + Beta-off -->
-    <!-- custom-metrics module means a fresh install shows nothing here -->
-    <!-- until the operator opts in via Settings). -->
+    <!-- drill-in, never inline here. FMN-250: Intro to FortiMonitor is -->
+    <!-- always-on (the per-module toggle was retired), so the launcher -->
+    <!-- tile and the Intro tile inside the drill-in are always visible. -->
     <button class="tool-card"
             id="training-launcher-tile"
-            data-tool="training-launcher"
-            hidden>
+            data-tool="training-launcher">
       <div class="tool-meta">
         <div class="tool-name">
           Training
@@ -334,8 +332,7 @@
       <button class="tool-card"
               id="training-intro-tour-tile"
               data-tool="intro-tour"
-              data-fmn-trigger="intro-tour-start"
-              hidden>
+              data-fmn-trigger="intro-tour-start">
         <div class="tool-meta">
           <div class="tool-name">Introduction to FortiMonitor</div>
           <div class="tool-desc">Guided walk-through of the FortiMonitor UI with a short quiz at the end.</div>
@@ -608,17 +605,6 @@
       <label class="toggle-row">
         <input id="omni-search-toggle" type="checkbox">
         <span>Use FM TK Search instead of native "Search Instances"</span>
-      </label>
-    </div>
-
-    <div class="settings-section">
-      <label class="settings-label" for="intro-tour-toggle">Introduction to FortiMonitor</label>
-      <p class="settings-help">
-        Off by default. The toolkit adds an <strong>Introduction to FortiMonitor</strong> tile inside the popup's <strong>Training</strong> drill-in (the Training tile at the top of the main popup list). The tile launches a 14-step guided walk-through of the FortiMonitor UI on whichever FortiMonitor tab you have open (the toolkit opens a tab to <code>/dashboards</code> if none is open). The walk-through covers the page layout, the Header, the Control Panel, every sidebar entry, and the +Add and Collapse controls. A 3-question quiz follows to help solidify the material. Toggle on to reveal the tile.
-      </p>
-      <label class="toggle-row">
-        <input id="intro-tour-toggle" type="checkbox">
-        <span>Show Introduction to FortiMonitor tile in the Training drill-in</span>
       </label>
     </div>
 

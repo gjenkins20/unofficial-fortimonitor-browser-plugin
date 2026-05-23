@@ -39,8 +39,6 @@ import {
   setNoiseAnalyzerEnabled,
   isShowInfoBubblesEnabled,
   setShowInfoBubblesEnabled,
-  isIntroTourEnabled,
-  setIntroTourEnabled,
   isCustomMetricsTourEnabled,
   setCustomMetricsTourEnabled
 } from '../lib/settings.js';
@@ -354,42 +352,16 @@ async function loadShowInfoBubblesIntoToggle() {
   toggle.checked = await isShowInfoBubblesEnabled();
 }
 
-// FMN-167: load the intro-tour toggle into Settings + reveal the popup
-// Training section + tile. Called once on popup init and whenever Settings
-// is opened. FMN-240: tile is on by default; explicit-off still hides it.
-async function loadIntroTourState() {
-  const enabled = await isIntroTourEnabled();
-  const settingsToggle = document.getElementById('intro-tour-toggle');
-  if (settingsToggle) settingsToggle.checked = enabled;
-  const introTile = document.getElementById('training-intro-tour-tile');
-  if (introTile) introTile.hidden = !enabled;
-  await applyTrainingSectionVisibility();
-}
-
-// FMN-244: Custom Metrics training tile state. Independent flag from
-// intro-tour. The Training section as a whole stays visible if EITHER
-// tile is enabled (each tile self-hides when its flag is off).
+// FMN-244: Custom Metrics training tile state. Independent (Beta) flag.
+// FMN-250 retired the Intro-tour toggle, so the launcher tile is always
+// visible (Intro is always inside the drill-in); only the Custom Metrics
+// tile inside the drill-in is conditionally hidden.
 async function loadCustomMetricsTourState() {
   const enabled = await isCustomMetricsTourEnabled();
   const settingsToggle = document.getElementById('custom-metrics-tour-toggle');
   if (settingsToggle) settingsToggle.checked = enabled;
   const tile = document.getElementById('training-custom-metrics-tile');
   if (tile) tile.hidden = !enabled;
-  await applyTrainingSectionVisibility();
-}
-
-// FMN-246: the Training section is now a drill-in subview reached from a
-// single launcher tile in the main popup list. The launcher tile auto-
-// hides when no module is enabled so operators never land in an empty
-// subview. The name applyTrainingSectionVisibility() is kept for the few
-// callers that already invoke it; the helper now operates on the
-// launcher tile instead of the legacy #training-section container.
-async function applyTrainingSectionVisibility() {
-  const launcher = document.getElementById('training-launcher-tile');
-  if (!launcher) return;
-  const anyTileVisible =
-    (await isIntroTourEnabled()) || (await isCustomMetricsTourEnabled());
-  launcher.hidden = !anyTileVisible;
 }
 
 async function loadOmniSearchIntoToggle() {
@@ -1300,10 +1272,9 @@ function init() {
   applyExperimentalVisibility();
   refreshGuards();
 
-  // FMN-167: reveal the Training section + tile on initial popup paint
-  // when the flag is on. Independent of Settings being opened so a
-  // fresh popup load still shows the tile for opted-in operators.
-  loadIntroTourState().catch(() => { /* failure means tile stays hidden */ });
+  // FMN-244/250: reveal the Custom Metrics tile on initial popup paint
+  // when its flag is on. The Intro tile and the Training launcher tile
+  // are always visible and need no async hydration.
   loadCustomMetricsTourState().catch(() => { /* failure means tile stays hidden */ });
 
   // FMN-191: render the recent-completions card + clear the toolbar
@@ -1384,7 +1355,6 @@ function init() {
     await loadSidebarLauncherIntoToggle();
     await loadShowFeatureBadgesIntoToggle();
     await loadShowInfoBubblesIntoToggle();
-    await loadIntroTourState();
     await loadCustomMetricsTourState();
     await loadOmniSearchIntoToggle();
     await loadSnapshotDiffIntoToggle();
@@ -1589,29 +1559,15 @@ function init() {
     });
   }
 
-  // FMN-167: intro-tour Settings toggle. Flipping it on reveals the
-  // Training section in the popup immediately (no popup reload needed);
-  // flipping off hides it. The popup tile click handler is wired below
-  // and is conditional on the flag check at click time (defense in depth
-  // in case the section was somehow visible without the flag).
-  const introTourToggle = document.getElementById('intro-tour-toggle');
-  if (introTourToggle) {
-    introTourToggle.addEventListener('change', async (e) => {
-      await setIntroTourEnabled(e.target.checked);
-      const tile = document.getElementById('training-intro-tour-tile');
-      if (tile) tile.hidden = !e.target.checked;
-      await applyTrainingSectionVisibility();
-    });
-  }
-
-  // FMN-167: tile click -> send fm:intro-tour:start to the SW. The SW
-  // fans the message out to every FortiMonitor tab; if none are open it
-  // opens one to /dashboards first. Close the popup after dispatching
-  // so the operator's focus snaps to the tour.
+  // FMN-167/250: Intro to FortiMonitor tile click -> send
+  // fm:intro-tour:start to the SW. The SW fans the message out to every
+  // FortiMonitor tab; if none are open it opens one to /dashboards
+  // first. Close the popup after dispatching so the operator's focus
+  // snaps to the tour. The Settings toggle was retired in FMN-250 (the
+  // tile is now always available inside the Training drill-in).
   const introTourTile = document.getElementById('training-intro-tour-tile');
   if (introTourTile) {
     introTourTile.addEventListener('click', async () => {
-      if (!(await isIntroTourEnabled())) return;
       try {
         await chrome.runtime.sendMessage({ type: 'fm:intro-tour:start' });
       } catch { /* SW unreachable - dispatch is best-effort */ }
@@ -1619,7 +1575,7 @@ function init() {
     });
   }
 
-  // FMN-244: Custom Metrics training tile. Independent flag; same
+  // FMN-244: Custom Metrics training tile. Independent (Beta) flag; same
   // dispatch shape as intro-tour but its own message type.
   const customMetricsToggle = document.getElementById('custom-metrics-tour-toggle');
   if (customMetricsToggle) {
@@ -1627,7 +1583,6 @@ function init() {
       await setCustomMetricsTourEnabled(e.target.checked);
       const tile = document.getElementById('training-custom-metrics-tile');
       if (tile) tile.hidden = !e.target.checked;
-      await applyTrainingSectionVisibility();
     });
   }
   const customMetricsTile = document.getElementById('training-custom-metrics-tile');
