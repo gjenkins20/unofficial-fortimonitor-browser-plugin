@@ -2376,9 +2376,15 @@
   async function loadOmniSearchFlag() {
     try {
       const data = await chrome.storage.local.get(OMNI_SEARCH_KEY);
-      omniSearchEnabled = Boolean(data && data[OMNI_SEARCH_KEY]);
+      const stored = data?.[OMNI_SEARCH_KEY];
+      // FMN-239 / FMN-251: default-on when the storage key is absent so
+      // fresh installs mount FM TK Search immediately. Explicit false
+      // still suppresses; only undefined/null resolves to the default.
+      // Mirrors settings.js isOmniSearchEnabled() so the popup toggle
+      // and the content-script flag agree on initial state.
+      omniSearchEnabled = (stored === undefined || stored === null) ? true : Boolean(stored);
     } catch {
-      omniSearchEnabled = false;
+      omniSearchEnabled = true;
     }
     omniSearchFlagLoaded = true;
   }
@@ -2389,7 +2395,10 @@
       if (areaName && areaName !== 'local') return;
       const change = changes && changes[OMNI_SEARCH_KEY];
       if (!change) return;
-      const next = Boolean(change.newValue);
+      // FMN-239 / FMN-251: undefined newValue (storage entry removed)
+      // resolves to default-on, matching loadOmniSearchFlag.
+      const stored = change.newValue;
+      const next = (stored === undefined || stored === null) ? true : Boolean(stored);
       if (next === omniSearchEnabled) return;
       omniSearchEnabled = next;
       if (!next) teardownOmniSearch();
