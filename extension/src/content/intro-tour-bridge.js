@@ -1,6 +1,5 @@
 // Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
-// FMN-167: content-script bridge for the intro tour. Wires the engine
-// to the FortiMonitor page: reads the per-tool visibility flag, listens
+// FMN-167 / FMN-250: content-script bridge for the intro tour. Listens
 // for the runtime "start" message, mounts the scoped stylesheet, and
 // drives the engine over INTRO_TOUR_STEPS.
 //
@@ -9,21 +8,17 @@
 // self-contained so future tour tickets (FMN-168 OnSight) can register
 // alongside without touching this module's internals.
 //
-// Activation contract:
-//   1. The flag fm:introTourEnabled must be true (default true since
-//      FMN-240; explicit-false in storage still suppresses).
-//   2. A runtime message { type: 'fm:intro-tour:start' } arrives - sent
-//      by the popup tile (future FMN-167b) or any extension context.
-//
-// To exercise the stub before FMN-167b ships the popup tile, the
-// operator can:
-//   chrome.storage.local.set({ 'fm:introTourEnabled': true })
-//   chrome.runtime.sendMessage({ type: 'fm:intro-tour:start' })
-// from the popup's DevTools console; the message broadcasts to all
-// FortiMonitor tabs.
+// Activation contract (FMN-250):
+//   A runtime message { type: 'fm:intro-tour:start' } from the popup's
+//   Intro tile (inside the Training drill-in) drives the tour. The
+//   per-module Settings flag was retired; the popup tile is always
+//   available inside the drill-in, so no storage-side gate exists.
 
 (() => {
-  const FLAG_KEY = 'fm:introTourEnabled';
+  // FMN-250 retired the per-module Settings toggle for this tour; the
+  // Intro tile lives unconditionally inside the popup's Training drill-
+  // in. There is no longer a flag to gate startTour() on - any
+  // fm:intro-tour:start message that reaches the bridge is honored.
   const START_MESSAGE_TYPE = 'fm:intro-tour:start';
   const STYLE_LINK_ID = 'fmn-intro-tour-styles';
   const STYLE_HREF = chrome.runtime.getURL('src/ui/intro-tour/styles.css');
@@ -351,19 +346,6 @@
   let activeQuiz = null;
 
   /**
-   * Read the fm:introTourEnabled flag. Storage errors fail closed so a
-   * blip never accidentally launches the tour.
-   */
-  async function isEnabled() {
-    try {
-      const data = await chrome.storage.local.get(FLAG_KEY);
-      return Boolean(data?.[FLAG_KEY]);
-    } catch {
-      return false;
-    }
-  }
-
-  /**
    * Append the scoped stylesheet to <head> if it isn't already there.
    * Idempotent - the id check prevents duplicate <link> tags on tab
    * navigations that re-run augment.js.
@@ -416,7 +398,6 @@
   }
 
   async function startTour() {
-    if (!(await isEnabled())) return;
     if (activeTour && activeTour.isActive) return;
     if (activeQuiz) { activeQuiz.dispose(); activeQuiz = null; }
     ensureStyles();
