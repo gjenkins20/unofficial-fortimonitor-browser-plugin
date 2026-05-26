@@ -305,6 +305,10 @@ html, body {
   display: flex;
   flex-direction: column;
 }
+/* FMN-246 QA fix: the display:flex above defeats the [hidden] attribute,
+   so the drill-in rendered on top of #main-view from first paint (Training
+   appeared twice). Restore the guard per memory html_hidden_vs_class_display. */
+.training-view[hidden] { display: none; }
 .subview-header {
   display: flex;
   align-items: center;
