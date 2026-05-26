@@ -14,14 +14,31 @@ function makeTabsApi({
   existing = [],
   createdTab = { id: 9999 },
   autoComplete = true,
+  staleUntilReload = false, // FMN-253: sendMessage rejects until the tab is reloaded
 } = {}) {
   const sent = [];
   const created = [];
+  const reloaded = [];
   const listeners = new Set();
+  const fresh = new Set(); // tab ids whose content-script bridge is "loaded"
   return {
-    sent, created, listeners,
+    sent, created, reloaded, listeners,
     async query() { return existing.slice(); },
-    async sendMessage(tabId, msg) { sent.push({ tabId, msg }); },
+    async sendMessage(tabId, msg) {
+      if (staleUntilReload && !fresh.has(tabId)) {
+        throw new Error('Could not establish connection. Receiving end does not exist.');
+      }
+      sent.push({ tabId, msg });
+    },
+    async reload(tabId) {
+      reloaded.push(tabId);
+      fresh.add(tabId); // reload re-injects the content-script bridge
+      if (autoComplete) {
+        setTimeout(() => {
+          for (const fn of listeners) fn(tabId, { status: 'complete' });
+        }, 0);
+      }
+    },
     async create(opts) {
       created.push(opts);
       if (autoComplete) {
@@ -65,6 +82,24 @@ test('dispatch: with no existing FM tab, opens one and dispatches once it loads'
   assert.ok(tabsApi.created[0].url.includes('fortimonitor'));
   assert.equal(tabsApi.sent.length, 1);
   assert.equal(tabsApi.sent[0].tabId, 555);
+});
+
+test('dispatch: stale/absent bridge (all sends fail) reloads a tab and redispatches (FMN-253)', async () => {
+  const tabsApi = makeTabsApi({ existing: [{ id: 42 }], staleUntilReload: true });
+  const result = await dispatchCustomMetricsTourStart({ tabsApi });
+  assert.equal(result.delivered, 1);
+  assert.equal(result.reloadedTab, 42);
+  assert.deepEqual(tabsApi.reloaded, [42]);
+  assert.equal(tabsApi.sent.length, 1); // only the post-reload send lands
+  assert.equal(tabsApi.sent[0].tabId, 42);
+});
+
+test('dispatch: a single healthy tab is never reloaded (FMN-253 regression guard)', async () => {
+  const tabsApi = makeTabsApi({ existing: [{ id: 7 }] });
+  const result = await dispatchCustomMetricsTourStart({ tabsApi });
+  assert.equal(result.delivered, 1);
+  assert.equal(result.reloadedTab, null);
+  assert.equal(tabsApi.reloaded.length, 0);
 });
 
 test('handler: intercepts only fm:custom-metrics-tour:start and answers async', async () => {

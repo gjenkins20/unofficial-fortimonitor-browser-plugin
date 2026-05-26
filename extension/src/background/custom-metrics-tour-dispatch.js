@@ -26,16 +26,33 @@ const TAB_LOAD_TIMEOUT_MS = 25_000;
 export async function dispatchCustomMetricsTourStart({ tabsApi = chrome.tabs } = {}) {
   const existing = await tabsApi.query({ url: FM_TAB_URL_PATTERNS });
   if (Array.isArray(existing) && existing.length > 0) {
+    let okCount = 0;
     for (const t of existing) {
-      try { await tabsApi.sendMessage(t.id, START_MESSAGE); } catch { /* tab may be navigating */ }
+      try { await tabsApi.sendMessage(t.id, START_MESSAGE); okCount += 1; } catch { /* this tab's bridge is stale/absent or navigating */ }
     }
-    return { delivered: existing.length, openedTab: null };
+    if (okCount > 0) return { delivered: existing.length, openedTab: null, reloadedTab: null };
+
+    // FMN-253: every open FortiMonitor tab rejected the message - the
+    // content-script bridge is stale or absent (typical when the extension
+    // was reloaded/updated with a tab already open). Without this fallback
+    // the tile click is a silent no-op and the toolkit looks broken. Reload
+    // one tab to re-inject the bridge, then dispatch once it hits 'complete'.
+    const target = existing[0];
+    let delivered = 0;
+    try {
+      await tabsApi.reload(target.id);
+      await waitForTabComplete(target.id, { tabsApi, timeoutMs: TAB_LOAD_TIMEOUT_MS });
+      await tabsApi.sendMessage(target.id, START_MESSAGE);
+      delivered = 1;
+    } catch { /* reload or redispatch failed; report delivered:0 */ }
+    return { delivered, openedTab: null, reloadedTab: target.id };
   }
 
   const newTab = await tabsApi.create({ url: FM_DEFAULT_LANDING_URL, active: true });
   await waitForTabComplete(newTab.id, { tabsApi, timeoutMs: TAB_LOAD_TIMEOUT_MS });
-  try { await tabsApi.sendMessage(newTab.id, START_MESSAGE); } catch { /* timeout / navigation */ }
-  return { delivered: 1, openedTab: newTab.id };
+  let delivered = 0;
+  try { await tabsApi.sendMessage(newTab.id, START_MESSAGE); delivered = 1; } catch { /* timeout / navigation */ }
+  return { delivered, openedTab: newTab.id, reloadedTab: null };
 }
 
 function waitForTabComplete(tabId, { tabsApi, timeoutMs }) {
