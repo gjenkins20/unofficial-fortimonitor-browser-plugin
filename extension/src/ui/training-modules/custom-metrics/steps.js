@@ -2,20 +2,34 @@
 // FMN-244: Custom Metrics training module - tour content + quiz.
 //
 // Reuses the FMN-167 tour engine (steps + captions + anchors) so the
-// in-page runtime experience matches Introduction to FortiMonitor. Content
-// is authored from FortiMonitor 26.2.0 user guide pages 66910 (Custom
-// Metric Management) and 382178 (Custom Metrics and Incidents).
+// in-page runtime experience matches Introduction to FortiMonitor.
 //
-// Anchor strategy: this module leans on conceptual centered cards (anchor:
-// 'body') with the engine's floating fallback for the bulk of the tour
-// because the Custom Metric management UI selectors have not been
-// operator-confirmed yet (memory: operator_pairing_for_dom_anchors). The
-// few page-level anchors below use the same anchorByText / anchorBySelector
-// hint shape that intro-tour-bridge.js already resolves, so the same
-// resolver can be reused if/when we extract a shared helper.
+// Content shape (FMN-244 QA rewrite, 2026-05-26): the conceptual intro runs
+// through the management-UI overview, then the tour PIVOTS TO HANDS-ON against
+// the real Custom Metrics page. Every page fact below was captured live from
+// fortimonitor.forticloud.com/config/ListCustomMetrics (tools/qa/fmn-244-
+// capture-custom-metrics.mjs), not from docs - the earlier draft's authoring
+// dialog and threshold framing were fabricated and are corrected here.
 //
-// Beta status: the tour content is shippable as-is; later QA passes will
-// tighten anchors where the operator confirms selectors.
+// Verified live UI facts:
+//   - Location: sidebar Monitoring > Advanced Metrics; page title "Custom
+//     Metrics"; URL /config/ListCustomMetrics. Sub-tabs: Custom Metrics /
+//     Custom Perfmon Metrics.
+//   - List columns: Plugin Textkey, Metric Textkey, Category, Name, Units,
+//     Boolean Values. Per-row kebab menu. "Add Custom Metric" button.
+//   - Add Custom Metric -> "Metric Configuration" dialog has exactly six
+//     required fields: Plugin Textkey, Metric Textkey, Category, Name,
+//     Metric Type (Number / Boolean / Percent), Units, plus Save. NO
+//     threshold or frequency fields - those are NOT set on this surface.
+//   - Thresholds/frequency for a custom metric are configured per-instance
+//     (monitoring config) or via Monitoring Policies once the metric is
+//     attached, exactly like any built-in metric (alert_items model,
+//     FMN-135).
+//
+// Anchor strategy: sidebar steps anchor by text ("Advanced Metrics", present
+// on every page); the dialog step anchors the "Add Custom Metric" button with
+// a body fallback; conceptual cards use anchor:'body'. The dispatch landing
+// page is /config/ListCustomMetrics so a fresh tour resolves these anchors.
 
 export const CUSTOM_METRICS_TOUR_STEPS = [
   {
@@ -25,9 +39,8 @@ export const CUSTOM_METRICS_TOUR_STEPS = [
     caption_html: [
       '<p><strong>Custom Metrics in FortiMonitor.</strong> This walkthrough ',
       'covers what a custom metric is, when to reach for one, where the ',
-      'management UI lives, and how the metric you author flows into ',
-      "FortiMonitor's incident pipeline. A short 3-question check follows ",
-      'at the end.</p>',
+      'management UI lives, and how to author one on the real Custom Metrics ',
+      'page. A short 3-question check follows at the end.</p>',
       '<p>Click <strong>Next</strong> to begin.</p>'
     ].join(''),
     when: { always: true },
@@ -79,15 +92,15 @@ export const CUSTOM_METRICS_TOUR_STEPS = [
   },
   {
     id: 'where-to-find-it',
-    anchorByText: 'Monitoring',
+    anchorByText: 'Advanced Metrics',
     anchor_fallback: 'body',
     caption_html: [
-      '<p>Custom Metric management lives under the <strong>Monitoring</strong> ',
-      "section of the sidebar. The exact entry name and depth depends on ",
-      "your tenant's UI version - look for a <em>Custom Metrics</em> ",
-      'submenu or section header.</p>',
-      '<p>From that page you can browse existing custom metrics, drill into ',
-      "any one's history, and add a new metric type.</p>"
+      '<p>Custom metrics live under <strong>Monitoring &rsaquo; Advanced ',
+      'Metrics</strong> in the sidebar (URL <code>/config/ListCustomMetrics</code>). ',
+      'The page is titled <strong>Custom Metrics</strong> and has two tabs: ',
+      '<em>Custom Metrics</em> and <em>Custom Perfmon Metrics</em>.</p>',
+      '<p>Click <strong>Advanced Metrics</strong> if you want to follow ',
+      'along on the real page as we go.</p>'
     ].join(''),
     when: { always: true },
     advance: 'next-button',
@@ -98,40 +111,43 @@ export const CUSTOM_METRICS_TOUR_STEPS = [
     anchor: 'body',
     anchor_fallback: 'body',
     caption_html: [
-      '<p>The <strong>Custom Metric Management</strong> view lists every ',
-      'custom metric defined on this tenant. Each row shows the metric ',
-      "name, the instance scope it is attached to, the evaluation ",
-      'frequency, and the most recent value. Click any row to inspect the ',
-      'configuration or recent history; use the <em>Add Custom Metric</em> ',
-      'action to author a new one.</p>',
-      '<p>Custom metrics that you no longer need can be deactivated from ',
-      'this list - deactivation stops evaluation without deleting the ',
-      'historical points already collected.</p>'
+      '<p>The <strong>Custom Metrics</strong> list shows every custom metric ',
+      'type defined on this tenant. Each row carries the <strong>Plugin ',
+      'Textkey</strong>, <strong>Metric Textkey</strong>, <strong>Category', '</strong>, ',
+      '<strong>Name</strong>, <strong>Units</strong>, and <strong>Boolean ',
+      'Values</strong>; the per-row menu lets you edit or remove a metric ',
+      'type.</p>',
+      '<p>The <strong>Add Custom Metric</strong> button opens the authoring ',
+      'dialog. That is where the hands-on part begins.</p>'
     ].join(''),
     when: { always: true },
     advance: 'next-button',
     placement: 'auto'
   },
   {
-    id: 'configuration-fields',
-    anchor: 'body',
+    id: 'authoring-dialog',
+    anchorByText: 'Add Custom Metric',
     anchor_fallback: 'body',
     caption_html: [
-      '<p>When you author a custom metric, the configuration covers four ',
-      'concerns:</p>',
+      '<p>Clicking <strong>Add Custom Metric</strong> opens the ',
+      '<strong>Metric Configuration</strong> dialog. It has six required ',
+      'fields:</p>',
       '<ol>',
-      '<li><strong>Identity:</strong> name + description (shown in lists, ',
-      'incident captions, dashboards).</li>',
-      '<li><strong>Data source:</strong> the script, API, or SNMP OID ',
-      'that returns the value. FortiMonitor evaluates the source on the ',
-      'schedule you set and records the result.</li>',
-      '<li><strong>Units + display:</strong> the unit string (e.g. "ms", ',
-      '"count", "%") and any display formatting hints. This is what ',
-      'shows up on graphs and in dashboard cards.</li>',
-      '<li><strong>Scope:</strong> the instances or instance group the ',
-      'metric attaches to. A custom metric can be attached to one ',
-      'instance, to many, or to a server group as a default.</li>',
-      '</ol>'
+      '<li><strong>Plugin Textkey</strong> and <strong>Metric Textkey</strong>: ',
+      'the textkey pair that identifies this metric to the plugin that ',
+      'reports it.</li>',
+      '<li><strong>Category</strong>: the grouping the metric appears under. ',
+      'Note: changing it updates the category for every metric that uses the ',
+      'same plugin.</li>',
+      '<li><strong>Name</strong>: the human-readable label shown in lists, ',
+      'graphs, and incident captions.</li>',
+      '<li><strong>Metric Type</strong>: <em>Number</em>, <em>Boolean</em>, ',
+      'or <em>Percent</em> - how FortiMonitor stores and renders the value.</li>',
+      '<li><strong>Units</strong>: the unit string (e.g. "ms", "count", "%") ',
+      'shown on graphs and dashboard cards.</li>',
+      '</ol>',
+      '<p><strong>Save</strong> writes the metric type. This dialog defines ',
+      'the metric only - it carries no threshold or schedule fields.</p>'
     ].join(''),
     when: { always: true },
     advance: 'next-button',
@@ -142,17 +158,17 @@ export const CUSTOM_METRICS_TOUR_STEPS = [
     anchor: 'body',
     anchor_fallback: 'body',
     caption_html: [
-      '<p><strong>Frequency</strong> is how often FortiMonitor evaluates ',
-      'the metric. Short frequencies catch transient anomalies but cost ',
-      'evaluation overhead; long frequencies are cheap but blur sharp ',
-      'changes. The catalog default is one minute; many custom metrics ',
-      'run at five minutes once tuned.</p>',
-      '<p><strong>Thresholds</strong> turn raw numbers into actionable ',
-      'state. Each threshold carries a severity (warning, critical), a ',
-      'comparison (greater-than, less-than, equals, range), and a ',
-      'timeline (how long the breach must persist before a state change ',
-      'fires). Multiple thresholds on the same metric give you a ',
-      'graduated response.</p>'
+      '<p>The Custom Metrics page <strong>defines the metric type</strong>. ',
+      'How often it is evaluated (<strong>frequency</strong>) and what ',
+      '<strong>thresholds</strong> alert on it are configured separately, ',
+      'once the metric is attached to an instance - on that instance\'s ',
+      'monitoring configuration, or through a <strong>Monitoring Policy</strong>. ',
+      'This is the same path every built-in metric uses.</p>',
+      '<p>An alerting threshold carries a <strong>severity</strong> ',
+      '(warning, critical), a <strong>comparison</strong> (greater-than, ',
+      'less-than, equals, range), and a <strong>timeline</strong> (how long ',
+      'the condition must hold before a state change fires). Multiple ',
+      'thresholds on the same metric give you a graduated response.</p>'
     ].join(''),
     when: { always: true },
     advance: 'next-button',
@@ -163,9 +179,9 @@ export const CUSTOM_METRICS_TOUR_STEPS = [
     anchor: 'body',
     anchor_fallback: 'body',
     caption_html: [
-      '<p>A custom metric that breaches a threshold flows into the same ',
+      '<p>When a custom metric crosses a threshold, it flows into the same ',
       '<strong>incident pipeline</strong> as every other FortiMonitor ',
-      'alert. The incident inherits the metric name, the breaching value, ',
+      'alert. The incident inherits the metric name, the triggering value, ',
       'the threshold severity, and the instance the metric was scoped to. ',
       "From there it routes through your tenant's notification schedules, ",
       'shows up under <em>Incidents</em>, and respects acknowledgement ',
@@ -179,28 +195,14 @@ export const CUSTOM_METRICS_TOUR_STEPS = [
     placement: 'auto'
   },
   {
-    id: 'example-metric-callout',
-    anchor: 'body',
-    anchor_fallback: 'body',
-    caption_html: [
-      '<p>An end-to-end <strong>example custom metric</strong> is checked ',
-      'in under <code>docs/training/custom-metrics/</code>. It walks you ',
-      'through wiring a small helper, attaching it to an instance, and ',
-      "tracing the breach all the way to an incident. Open that doc when ",
-      "you are ready to build your first one.</p>"
-    ].join(''),
-    when: { always: true },
-    advance: 'next-button',
-    placement: 'auto'
-  },
-  {
     id: 'wrap-up',
     anchor: 'body',
     anchor_fallback: 'body',
     caption_html: [
-      '<p>You now know what a custom metric is, when to author one, how ',
-      "the management UI is structured, and how custom metrics turn into ",
-      'incidents.</p>',
+      '<p>You now know what a custom metric is, when to author one, where ',
+      'the Custom Metrics page lives (Monitoring &rsaquo; Advanced Metrics), ',
+      'the six fields in the authoring dialog, and how thresholds turn a ',
+      'custom metric into an incident.</p>',
       '<p>Click <strong>Next</strong> to take a short 3-question check.</p>'
     ].join(''),
     when: { always: true },
@@ -224,23 +226,23 @@ export const CUSTOM_METRICS_QUIZ = Object.freeze([
     ]
   },
   {
-    id: 'q-threshold',
-    prompt: 'A custom-metric threshold carries:',
+    id: 'q-dialog-fields',
+    prompt: 'The Add Custom Metric dialog (Metric Configuration) is where you set:',
     options: [
-      { id: 'a', label: 'A severity, a comparison, and a timeline.', correct: true },
-      { id: 'b', label: 'Only a severity.' },
-      { id: 'c', label: 'A list of users to wake up.' },
-      { id: 'd', label: 'The script source code that produced the value.' }
+      { id: 'a', label: 'The alert thresholds and evaluation frequency.' },
+      { id: 'b', label: 'Plugin/Metric Textkey, Category, Name, Metric Type, and Units - the metric definition.', correct: true },
+      { id: 'c', label: 'The on-call rotation and notification schedule.' },
+      { id: 'd', label: 'The instances the metric is attached to.' }
     ]
   },
   {
-    id: 'q-incidents',
-    prompt: 'When a custom metric breaches its threshold:',
+    id: 'q-thresholds-location',
+    prompt: 'Thresholds and evaluation frequency for a custom metric are configured:',
     options: [
-      { id: 'a', label: 'Nothing happens until you log into the metric page.' },
-      { id: 'b', label: 'A separate notification channel is required.' },
-      { id: 'c', label: 'It flows into the same incident pipeline as built-in alerts.', correct: true },
-      { id: 'd', label: 'The metric is deleted automatically.' }
+      { id: 'a', label: 'In the Add Custom Metric dialog, alongside the name and units.' },
+      { id: 'b', label: 'Nowhere - custom metrics cannot alert.' },
+      { id: 'c', label: 'Per-instance on the monitoring configuration, or via a Monitoring Policy, after the metric is attached.', correct: true },
+      { id: 'd', label: 'Automatically, with no way to change them.' }
     ]
   }
 ]);
@@ -249,9 +251,8 @@ export const CUSTOM_METRICS_TOUR_CONSTANTS = Object.freeze({
   TOUR_ID: 'custom-metrics-fortimonitor',
   FLAG_KEY: 'fm:customMetricsTourEnabled',
   START_MESSAGE_TYPE: 'fm:custom-metrics-tour:start',
-  // Landing page used when no FortiMonitor tab is open: lands operator on
-  // a Monitoring-anchored URL so the where-to-find-it step has DOM to
-  // attach to. Tenant URL pattern is the same across tenants; the
-  // dispatch handler defaults to fortimonitor.forticloud.com.
-  LANDING_PATH: '/dashboards'
+  // Hands-on landing page (FMN-244 QA rewrite): land the operator directly on
+  // the real Custom Metrics list so the "Advanced Metrics" and "Add Custom
+  // Metric" anchors resolve and the dialog walkthrough has live context.
+  LANDING_PATH: '/config/ListCustomMetrics'
 });

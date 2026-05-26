@@ -54,7 +54,7 @@ test('module covers the key concepts (id-based smoke test)', () => {
     'what-is-a-custom-metric',
     'when-to-use',
     'where-to-find-it',
-    'configuration-fields',
+    'authoring-dialog',
     'frequency-and-thresholds',
     'custom-metrics-into-incidents',
     'wrap-up'
@@ -107,5 +107,21 @@ test('caption_html does not contain em-dashes (memory: no_em_dashes)', () => {
     for (const o of q.options) {
       assert.ok(!o.label.includes('—'), `quiz "${q.id}" option "${o.id}" contains an em-dash`);
     }
+  }
+});
+
+// FMN-244 QA (memory: no-bare-breach-in-user-copy). "breach" alone reads as a
+// security incident; it must always sit in the same caption/prompt as the word
+// "threshold". This guards the rule mechanically so it fails here, not in live QA.
+test('user-facing copy never uses bare "breach" (must co-occur with "threshold")', () => {
+  const check = (text, where) => {
+    if (/breach/i.test(text)) {
+      assert.ok(/threshold/i.test(text), `${where} uses "breach" without "threshold" in the same string`);
+    }
+  };
+  for (const step of CUSTOM_METRICS_TOUR_STEPS) check(step.caption_html, `step ${step.id}`);
+  for (const q of CUSTOM_METRICS_QUIZ) {
+    check(q.prompt, `quiz "${q.id}" prompt`);
+    for (const o of q.options) check(o.label, `quiz "${q.id}" option "${o.id}"`);
   }
 });

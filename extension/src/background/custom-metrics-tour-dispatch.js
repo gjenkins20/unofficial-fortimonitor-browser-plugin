@@ -16,7 +16,10 @@ const FM_TAB_URL_PATTERNS = [
   'https://fortimonitor.forticloud.com/*',
   'https://*.fortimonitor.com/*',
 ];
-const FM_DEFAULT_LANDING_URL = 'https://fortimonitor.forticloud.com/dashboards';
+// FMN-244 QA rewrite: land on the real Custom Metrics page (hands-on tour)
+// so the "Advanced Metrics" / "Add Custom Metric" anchors resolve on a fresh
+// launch. Mirrors CUSTOM_METRICS_TOUR_CONSTANTS.LANDING_PATH in steps.js.
+const FM_DEFAULT_LANDING_URL = 'https://fortimonitor.forticloud.com/config/ListCustomMetrics';
 const START_MESSAGE = { type: 'fm:custom-metrics-tour:start' };
 const TAB_LOAD_TIMEOUT_MS = 25_000;
 
