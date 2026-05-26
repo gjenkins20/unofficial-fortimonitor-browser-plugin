@@ -17,6 +17,23 @@ function listResponse(envelopeKey, items, total = items.length) {
   return jsonResponse({ [envelopeKey]: items, meta: { total_count: total } });
 }
 
+// FMN-256: the run is detached now, so run-audit returns before the crawl
+// finishes. Poll get-run-status the way the page does until a terminal
+// state, then return it. Bails after a generous attempt cap so a hung run
+// fails the test instead of hanging it.
+async function waitForRun(handlers, { attempts = 200, intervalMs = 5 } = {}) {
+  for (let i = 0; i < attempts; i++) {
+    const s = await handlers['observations:get-run-status']({});
+    if (s.status !== 'running' && s.status !== 'none') return s;
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  throw new Error('waitForRun: run did not reach a terminal state');
+}
+
+// Default no-op keep-alive for handler tests so no real interval leaks
+// into the Node test process.
+const noKeepAlive = () => () => {};
+
 function buildBaselineFetch() {
   // Minimal mock: every list endpoint returns []; group/template details
   // return empty objects. Sufficient for runTenantObservations to complete cleanly.
@@ -63,7 +80,7 @@ test('createTenantObservationsHandlers: rejects concurrent observations:run-audi
   await first.catch(() => {});
 });
 
-test('createTenantObservationsHandlers: observations:abort while running surfaces an AbortError to the caller', async () => {
+test('createTenantObservationsHandlers: observations:abort while running surfaces as a cancelled status (FMN-256)', async () => {
   let resolveFirst;
   const slowFetch = createFetchMock(async (_url) => {
     await new Promise((res) => { resolveFirst = res; });
@@ -72,35 +89,55 @@ test('createTenantObservationsHandlers: observations:abort while running surface
   const handlers = createTenantObservationsHandlers({
     events: { emit: () => {} },
     getClient: async () => new PanoptaClient({ apiKey: 'k', fetch: slowFetch }),
-    storage: createStorageMock()
+    storage: createStorageMock(),
+    keepAlive: noKeepAlive
   });
-  const runPromise = handlers['observations:run-audit']({});
+  // run-audit returns immediately now; the crawl runs detached.
+  const handle = await handlers['observations:run-audit']({});
+  assert.equal(handle.status, 'started');
   await new Promise((r) => setTimeout(r, 10));
   const abortResult = await handlers['observations:abort']({});
   assert.equal(abortResult.aborted, true);
   if (resolveFirst) resolveFirst();
-  // The run rejects with AbortError reshaped to "tenant observations cancelled".
-  await assert.rejects(runPromise, (err) => err.name === 'AbortError' && /cancelled/i.test(err.message));
+  // The detached run records a 'cancelled' terminal state.
+  const terminal = await waitForRun(handlers);
+  assert.equal(terminal.status, 'cancelled');
+  assert.match(terminal.error, /cancelled/i);
+  // get-run-result refuses to hand back a non-done run.
+  await assert.rejects(
+    () => handlers['observations:get-run-result']({}),
+    /not done/
+  );
 });
 
-test('createTenantObservationsHandlers: observations:run-audit stages full result in storage and returns small handle', async () => {
+test('createTenantObservationsHandlers: observations:run-audit returns a small handle immediately and stages the full result on completion (FMN-256)', async () => {
   const storage = createStorageMock();
   const handlers = createTenantObservationsHandlers({
     events: { emit: () => {} },
     getClient: async () => new PanoptaClient({ apiKey: 'k', fetch: buildBaselineFetch() }),
-    storage
+    storage,
+    keepAlive: noKeepAlive
   });
   const handle = await handlers['observations:run-audit']({});
+  // Handle is small: runKey + status, no payload.
   assert.equal(handle.runKey, OBSERVATIONS_RUN_KEY);
-  assert.ok(handle.summary);
-  assert.equal(typeof handle.summary.started_at, 'string');
-  assert.equal(typeof handle.summary.counts, 'object');
-  // Full result should be in storage, not in the handle.
+  assert.equal(handle.status, 'started');
+  assert.equal(typeof handle.started_at, 'string');
   assert.equal(handle.inventory, undefined);
   assert.equal(handle.analysis, undefined);
+  assert.equal(handle.summary, undefined);
+  // Once the detached run finishes, the full result is staged under a
+  // { status: 'done', result } envelope, with a small summary alongside.
+  const terminal = await waitForRun(handlers);
+  assert.equal(terminal.status, 'done');
+  assert.ok(terminal.summary, 'terminal status carries a small summary');
+  assert.equal(typeof terminal.summary.counts, 'object');
+  // Status poll never ships the multi-MB result.
+  assert.equal(terminal.result, undefined, 'get-run-status must strip the result');
   const stored = storage.__raw()[OBSERVATIONS_RUN_KEY];
-  assert.ok(stored?.inventory, 'full inventory must be staged in storage');
-  assert.ok(stored?.analysis, 'full analysis must be staged in storage');
+  assert.equal(stored.status, 'done');
+  assert.ok(stored.result?.inventory, 'full inventory must be staged in storage');
+  assert.ok(stored.result?.analysis, 'full analysis must be staged in storage');
 });
 
 test('createTenantObservationsHandlers: observations:get-run-result returns staged result and clears the slot', async () => {
@@ -108,9 +145,11 @@ test('createTenantObservationsHandlers: observations:get-run-result returns stag
   const handlers = createTenantObservationsHandlers({
     events: { emit: () => {} },
     getClient: async () => new PanoptaClient({ apiKey: 'k', fetch: buildBaselineFetch() }),
-    storage
+    storage,
+    keepAlive: noKeepAlive
   });
   await handlers['observations:run-audit']({});
+  await waitForRun(handlers);
   const result = await handlers['observations:get-run-result']({});
   assert.ok(result.inventory);
   assert.ok(result.analysis);
@@ -121,6 +160,66 @@ test('createTenantObservationsHandlers: observations:get-run-result returns stag
     () => handlers['observations:get-run-result']({}),
     /No staged Observations run result/
   );
+});
+
+test('createTenantObservationsHandlers: get-run-status reports none, running, then done (FMN-256)', async () => {
+  const storage = createStorageMock();
+  // Shared gate: every client request waits on it. It stays resolved once
+  // opened, so opening it once lets the whole crawl drain (no re-park).
+  let openGate;
+  const gate = new Promise((r) => { openGate = r; });
+  const gatedFetch = createFetchMock(async (url) => {
+    if (/\/server_attribute_type/.test(url)) return listResponse('server_attribute_type_list', []);
+    await gate;
+    return jsonResponse({});
+  });
+  const handlers = createTenantObservationsHandlers({
+    events: { emit: () => {} },
+    getClient: async () => new PanoptaClient({ apiKey: 'k', fetch: gatedFetch }),
+    storage,
+    keepAlive: noKeepAlive
+  });
+  // Before any run: none.
+  assert.equal((await handlers['observations:get-run-status']({})).status, 'none');
+  await handlers['observations:run-audit']({});
+  // Let the detached run reach its first (gated) request.
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal((await handlers['observations:get-run-status']({})).status, 'running');
+  // Open the gate; the crawl drains to completion.
+  openGate();
+  const terminal = await waitForRun(handlers);
+  assert.equal(terminal.status, 'done');
+});
+
+test('createTenantObservationsHandlers: get-run-status reports lost when a running record has no live run (orphan) (FMN-256)', async () => {
+  const storage = createStorageMock();
+  // Simulate a worker that died mid-crawl: a 'running' record is on disk
+  // but this fresh handlers instance has no in-memory run.
+  await storage.set({ [OBSERVATIONS_RUN_KEY]: { status: 'running', started_at: '2026-05-26T00:00:00Z' } });
+  const handlers = createTenantObservationsHandlers({
+    events: { emit: () => {} },
+    getClient: async () => new PanoptaClient({ apiKey: 'k', fetch: buildBaselineFetch() }),
+    storage,
+    keepAlive: noKeepAlive
+  });
+  const s = await handlers['observations:get-run-status']({});
+  assert.equal(s.status, 'lost');
+  assert.equal(s.started_at, '2026-05-26T00:00:00Z');
+});
+
+test('createTenantObservationsHandlers: run-audit records error status when the crawl throws (FMN-256)', async () => {
+  const storage = createStorageMock();
+  const handlers = createTenantObservationsHandlers({
+    events: { emit: () => {} },
+    getClient: async () => { throw new Error('boom: no api key'); },
+    storage,
+    keepAlive: noKeepAlive
+  });
+  const handle = await handlers['observations:run-audit']({});
+  assert.equal(handle.status, 'started');
+  const terminal = await waitForRun(handlers);
+  assert.equal(terminal.status, 'error');
+  assert.match(terminal.error, /boom/);
 });
 
 test('runTenantObservations: returns inventory + analysis on a tiny baseline fetch', async () => {
@@ -174,8 +273,9 @@ test('createTenantObservationsHandlers: observations:run-audit forwards payload.
     storage
   });
   await handlers['observations:run-audit']({ sections: ['template-recommendations', 'monitoring-policy'] });
+  await waitForRun(handlers);
   const stored = storage.__raw()[OBSERVATIONS_RUN_KEY];
-  assert.deepEqual(stored.sections, ['template-recommendations', 'monitoring-policy']);
+  assert.deepEqual(stored.result.sections, ['template-recommendations', 'monitoring-policy']);
 });
 
 test('runTenantObservations: ["user-activity"] runs only the user analyzer and skips frontend templates walk (FMN-149)', async () => {

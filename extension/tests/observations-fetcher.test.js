@@ -5,10 +5,12 @@ import {
   ObservationsFetcher,
   createPacedFetch,
   createRetryingFetch,
+  createTimeoutFetch,
   createObservationsFetch,
   extractTrailingId,
   abortableSleep,
-  RATE_LIMIT_PER_SECOND
+  RATE_LIMIT_PER_SECOND,
+  FETCH_TIMEOUT_MS
 } from '../src/lib/observations-fetcher.js';
 import { createFetchMock, jsonResponse, errorResponse } from './fixtures/chrome-mocks.js';
 
@@ -176,6 +178,69 @@ test('createObservationsFetch paces every attempt including retries', async () =
   assert.equal(calls, 3);
   assert.ok(sleeps.includes(2000), `expected 2000ms backoff sleep; got ${sleeps}`);
   assert.ok(sleeps.includes(4000), `expected 4000ms backoff sleep; got ${sleeps}`);
+});
+
+// =============================================================================
+// createTimeoutFetch (FMN-256)
+// =============================================================================
+
+// A fetch that never resolves on its own but rejects with AbortError when
+// its signal aborts - mirrors how the real fetch() behaves under abort.
+function hangingFetch(_url, init = {}) {
+  return new Promise((_resolve, reject) => {
+    init.signal?.addEventListener?.('abort', () => {
+      const e = new Error('aborted'); e.name = 'AbortError'; reject(e);
+    });
+  });
+}
+
+test('createTimeoutFetch rejects a hung request with a retriable TimeoutError', async () => {
+  const timed = createTimeoutFetch(hangingFetch, { timeoutMs: 20 });
+  await assert.rejects(
+    () => timed('http://x'),
+    (err) => err.name === 'TimeoutError' && /timed out/.test(err.message)
+  );
+});
+
+test('createTimeoutFetch passes a fast response through unchanged', async () => {
+  const timed = createTimeoutFetch(async () => jsonResponse({ ok: 1 }), { timeoutMs: 1000 });
+  const res = await timed('http://x');
+  assert.equal(res.status, 200);
+});
+
+test('createTimeoutFetch surfaces a caller abort as AbortError, not TimeoutError', async () => {
+  const ctl = new AbortController();
+  const timed = createTimeoutFetch(hangingFetch, { timeoutMs: 5000 });
+  const p = timed('http://x', { signal: ctl.signal });
+  ctl.abort();
+  await assert.rejects(p, (err) => err.name === 'AbortError');
+});
+
+test('createTimeoutFetch with timeoutMs<=0 returns the fetch unchanged (disabled)', () => {
+  const base = async () => jsonResponse({});
+  assert.equal(createTimeoutFetch(base, { timeoutMs: 0 }), base);
+});
+
+test('createTimeoutFetch exports a sane default timeout', () => {
+  assert.equal(typeof FETCH_TIMEOUT_MS, 'number');
+  assert.ok(FETCH_TIMEOUT_MS > 0);
+});
+
+test('createObservationsFetch retries a timed-out attempt and then succeeds', async () => {
+  let calls = 0;
+  const baseFetch = (url, init = {}) => {
+    calls++;
+    if (calls === 1) return hangingFetch(url, init); // first attempt hangs -> times out
+    return Promise.resolve(jsonResponse({ ok: 1 }));
+  };
+  const fetch = createObservationsFetch(baseFetch, {
+    rateLimit: 0,          // no pacing sleeps
+    timeoutMs: 15,         // real timer, fires fast
+    sleep: async () => {}  // instant backoff
+  });
+  const res = await fetch('http://x');
+  assert.equal(calls, 2);
+  assert.equal(res.status, 200);
 });
 
 // =============================================================================

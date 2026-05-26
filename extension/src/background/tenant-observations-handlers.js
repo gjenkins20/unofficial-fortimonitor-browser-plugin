@@ -11,14 +11,28 @@
 //
 // Cancellation: single-flight; observations:abort aborts the active run.
 //
+// Run lifecycle (FMN-256): the crawl runs DETACHED from the message
+// channel. observations:run-audit kicks off the run and returns
+// immediately with { runKey, status: 'started' }; it does NOT hold the
+// sendMessage channel open for the (multi-minute) crawl. Holding it open
+// is what killed real runs on large tenants: MV3 terminates the service
+// worker while the handler is still awaiting, and the page sees "the
+// message channel closed before a response was received". The page polls
+// observations:get-run-status for terminal state and pulls the full
+// payload via observations:get-run-result once status === 'done'.
+//
+// Keep-alive: while a run is active we ping a cheap extension API on an
+// interval to reset the MV3 idle timer across the crawl's paced sleeps,
+// retry backoffs, and analyzer CPU work (the page's own polling helps too,
+// but a backgrounded tab can be throttled past the idle threshold).
+//
 // Result delivery: the inventory + analysis payload is multi-megabyte on
 // real tenants (1000+ outages, hundreds of servers, deep-dive multipliers).
-// chrome.runtime.sendMessage round-trips of that size are unreliable - in
-// FMN-133 first-tenant QA the popup never received the response after a
-// 5-minute run. We sidestep the transport entirely by writing the result
-// to chrome.storage.session under OBSERVATIONS_RUN_KEY and returning a small handle;
-// the popup reads it back via observations:get-run-result, which clears the slot
-// after consumption so a stale run can never bleed into a fresh one.
+// The run writes it to chrome.storage.session under OBSERVATIONS_RUN_KEY
+// inside a { status, result } envelope. get-run-status strips the result
+// (never ships MB over the poll channel); get-run-result returns it once
+// over a fresh short-lived channel and clears the slot so a stale run can
+// never bleed into a fresh one.
 
 import { PanoptaError } from '../lib/panopta-client.js';
 import { ObservationsFetcher, createObservationsFetch } from '../lib/observations-fetcher.js';
@@ -252,11 +266,37 @@ function summarizeResult(result) {
   };
 }
 
+// FMN-256: ping interval. Comfortably under the MV3 ~30s idle threshold.
+export const KEEPALIVE_INTERVAL_MS = 20000;
+
+/**
+ * Default keep-alive: ping a cheap extension API on an interval. Each
+ * extension API call resets the MV3 service-worker idle timer, so the
+ * worker survives the crawl's paced sleeps, retry backoffs, and analyzer
+ * CPU work even if the page polling that would otherwise keep it warm is
+ * throttled (backgrounded tab). Returns a stop function. No-op when chrome
+ * APIs are unavailable (Node tests inject their own, or get this no-op).
+ */
+function defaultKeepAlive() {
+  if (typeof chrome === 'undefined' || typeof chrome.runtime?.getPlatformInfo !== 'function') {
+    return () => {};
+  }
+  const timer = setInterval(() => {
+    try {
+      // Callback form swallows the result; touch lastError so Chrome
+      // doesn't log an unchecked-error warning.
+      chrome.runtime.getPlatformInfo(() => { void chrome.runtime.lastError; });
+    } catch { /* ignore */ }
+  }, KEEPALIVE_INTERVAL_MS);
+  return () => clearInterval(timer);
+}
+
 export function createTenantObservationsHandlers({
   events = {},
   getClient,
   resolveOrigin,
-  storage
+  storage,
+  keepAlive
 } = {}) {
   const emit = events.emit ?? (() => {});
   const factory = getClient ?? (() => defaultClientFactory());
@@ -264,42 +304,98 @@ export function createTenantObservationsHandlers({
   // restart - the right scope for a one-shot run handoff). Tests inject
   // a Map-backed mock.
   const sessionStorage = storage ?? (typeof chrome !== 'undefined' ? chrome.storage?.session : null);
+  const startKeepAlive = keepAlive ?? defaultKeepAlive;
 
+  // Set for the lifetime of a detached run. Its presence is also how a
+  // poll distinguishes a live run from an orphaned 'running' record left
+  // behind by a worker that died mid-crawl (see get-run-status).
   let currentRun = null;
+
+  async function writeState(state) {
+    if (sessionStorage?.set) {
+      await sessionStorage.set({ [OBSERVATIONS_RUN_KEY]: state });
+    }
+  }
 
   return {
     'observations:run-audit': async (payload) => {
       if (currentRun) throw new Error('A tenant observations run is already in progress');
-      const ac = new AbortController();
-      currentRun = { ac };
-      try {
-        const client = await factory();
-        const result = await runTenantObservations({
-          client,
-          deep: Boolean(payload?.deep),
-          maxServers: Number.isFinite(payload?.maxServers) ? payload.maxServers : 0,
-          includeFrontend: Boolean(payload?.includeFrontend),
-          sections: payload?.sections,
-          frontendOrigin: resolveOrigin,
-          signal: ac.signal,
-          onProgress: (evt) => emit('observations:progress', evt)
-        });
-        if (!sessionStorage?.set) {
-          throw new Error('chrome.storage.session is unavailable; cannot stage Observations run result');
-        }
-        await sessionStorage.set({ [OBSERVATIONS_RUN_KEY]: result });
-        return { runKey: OBSERVATIONS_RUN_KEY, summary: summarizeResult(result) };
-      } catch (err) {
-        if (err?.name === 'AbortError') {
-          const e = new Error('tenant observations cancelled');
-          e.name = 'AbortError';
-          throw e;
-        }
-        if (err instanceof PanoptaError || err?.name === 'PanoptaError') throw err;
-        throw err;
-      } finally {
-        currentRun = null;
+      if (!sessionStorage?.set) {
+        throw new Error('chrome.storage.session is unavailable; cannot stage Observations run result');
       }
+      const ac = new AbortController();
+      const startedAt = new Date().toISOString();
+      currentRun = { ac, startedAt };
+      // Seed a 'running' record synchronously so a poll arriving before
+      // the crawl's first state write still sees the right status.
+      await writeState({ status: 'running', started_at: startedAt });
+
+      const stopKeepAlive = startKeepAlive();
+
+      // Detach: run the crawl WITHOUT holding this message channel open.
+      // The page polls observations:get-run-status and pulls the full
+      // result via observations:get-run-result when status === 'done'.
+      // Progress events still stream to the page over the broadcast.
+      const run = (async () => {
+        try {
+          const client = await factory();
+          const result = await runTenantObservations({
+            client,
+            deep: Boolean(payload?.deep),
+            maxServers: Number.isFinite(payload?.maxServers) ? payload.maxServers : 0,
+            includeFrontend: Boolean(payload?.includeFrontend),
+            sections: payload?.sections,
+            frontendOrigin: resolveOrigin,
+            signal: ac.signal,
+            onProgress: (evt) => emit('observations:progress', evt)
+          });
+          await writeState({
+            status: 'done',
+            started_at: startedAt,
+            finished_at: result.finished_at,
+            summary: summarizeResult(result),
+            result
+          });
+          emit('observations:run-status', { status: 'done' });
+        } catch (err) {
+          const aborted = err?.name === 'AbortError';
+          const message = aborted
+            ? 'tenant observations cancelled'
+            : (err?.message ?? String(err));
+          await writeState({
+            status: aborted ? 'cancelled' : 'error',
+            started_at: startedAt,
+            error: message,
+            name: err?.name ?? 'Error'
+          });
+          emit('observations:run-status', { status: aborted ? 'cancelled' : 'error', error: message });
+        } finally {
+          try { stopKeepAlive?.(); } catch { /* best-effort */ }
+          currentRun = null;
+        }
+      })();
+      // Expose the run promise for tests; production fire-and-forgets it.
+      if (currentRun) currentRun.promise = run;
+
+      return { runKey: OBSERVATIONS_RUN_KEY, status: 'started', started_at: startedAt };
+    },
+
+    // Lightweight poll target. Returns the run-state envelope MINUS the
+    // multi-MB result (which only get-run-result ships). Never clears.
+    'observations:get-run-status': async () => {
+      if (!sessionStorage?.get) throw new Error('chrome.storage.session is unavailable');
+      const stored = await sessionStorage.get(OBSERVATIONS_RUN_KEY);
+      const state = stored?.[OBSERVATIONS_RUN_KEY] ?? null;
+      if (!state) return { status: 'none' };
+      // Orphan detection: 'running' on disk but no in-memory run means the
+      // worker was terminated mid-crawl and the detached run died with it.
+      // Report 'lost' so the page stops polling and offers a retry instead
+      // of spinning forever.
+      if (state.status === 'running' && !currentRun) {
+        return { status: 'lost', started_at: state.started_at };
+      }
+      const { result, ...rest } = state;
+      return rest;
     },
 
     'observations:get-run-result': async (payload) => {
@@ -308,10 +404,14 @@ export function createTenantObservationsHandlers({
         throw new Error('chrome.storage.session is unavailable');
       }
       const stored = await sessionStorage.get(key);
-      const result = stored?.[key] ?? null;
-      if (!result) {
+      const state = stored?.[key] ?? null;
+      if (!state) {
         throw new Error('No staged Observations run result. The previous run may have been evicted.');
       }
+      if (state.status && state.status !== 'done') {
+        throw new Error(`Observations run is "${state.status}", not done`);
+      }
+      const result = state.result ?? state; // tolerate any legacy bare-result shape
       // One-shot: clear the slot so a stale run can't be misread as fresh.
       if (sessionStorage.remove) {
         try { await sessionStorage.remove(key); } catch { /* best-effort */ }

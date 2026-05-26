@@ -94,6 +94,7 @@ export function render({ container, store, navigate, events }) {
   let requests = 0;
   let endpointsDone = 0;
   let cancelled = false;
+  let disposed = false;   // set on unmount; stops the FMN-256 poll loop
   const endpointItems = new Map();              // name -> <li>
   const startTime = Date.now();
   const elapsedTimer = setInterval(() => {
@@ -249,8 +250,48 @@ export function render({ container, store, navigate, events }) {
     innerUnsub();
   }
 
+  // FMN-256: poll the detached run's status until it reaches a terminal
+  // state. Resolves on 'done'; throws on 'error' / 'cancelled' / 'lost' /
+  // 'none' so the existing catch renders the right UI. Polling also keeps
+  // the service worker warm, but the SW-side keep-alive is the real guard
+  // for when this tab is backgrounded and its timers are throttled.
+  const POLL_INTERVAL_MS = 1500;
+  function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+  async function pollUntilTerminal() {
+    for (;;) {
+      if (disposed) {
+        const e = new Error('disposed'); e.name = 'AbortError'; throw e;
+      }
+      const s = await call('observations:get-run-status', {});
+      const status = s?.status;
+      if (status === 'done') return;
+      if (status === 'cancelled') {
+        const e = new Error('tenant observations cancelled');
+        e.name = 'AbortError';
+        throw e;
+      }
+      if (status === 'error') {
+        throw new Error(s.error || 'Tenant observations run failed');
+      }
+      if (status === 'lost') {
+        throw new Error('The background worker stopped before the run finished. Reload the extension and run again.');
+      }
+      if (status === 'none') {
+        throw new Error('Run state was lost before completion. Reload the extension and run again.');
+      }
+      await sleep(POLL_INTERVAL_MS);
+    }
+  }
+
   (async () => {
     try {
+      // FMN-256: the run is DETACHED in the service worker now. run-audit
+      // returns immediately with a small handle; we poll get-run-status
+      // for terminal state rather than holding one sendMessage channel
+      // open for the whole (multi-minute) crawl - the long-held channel is
+      // what MV3 killed the worker under, producing "the message channel
+      // closed before a response was received". Progress events above
+      // still drive the live UI; this loop just watches for the end.
       const handle = await call('observations:run-audit', {
         deep: Boolean(store.deep),
         maxServers: store.maxServers ?? 0,
@@ -266,9 +307,12 @@ export function render({ container, store, navigate, events }) {
           ? store.sections
           : ['all']
       });
-      // The run handler stages the multi-megabyte result in chrome.storage.session
-      // and returns a small handle. Pull the full payload back via a separate
-      // call so this one's response stays small.
+
+      await pollUntilTerminal();
+
+      // The run handler staged the multi-megabyte result in chrome.storage.session.
+      // Pull the full payload back via a separate call so this response
+      // travels over a fresh, short-lived channel.
       const result = await call('observations:get-run-result', { runKey: handle?.runKey });
       markResolved();
       store.runResult = result;
@@ -301,6 +345,7 @@ export function render({ container, store, navigate, events }) {
   })();
 
   return () => {
+    disposed = true;
     unsubscribe();
     innerUnsub();
     clearTimeout(stallTimer);

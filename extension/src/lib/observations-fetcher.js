@@ -37,6 +37,13 @@ export const BACKOFF_DELAYS_MS = [2000, 4000, 6000];
 export const MAX_RETRY_ATTEMPTS = BACKOFF_DELAYS_MS.length + 1; // 4 total
 export const DEFAULT_MAX_ITEMS_PER_ENDPOINT = 5000;
 export const DEFAULT_PAGE_SIZE = 200;
+// FMN-256: per-request wall-clock timeout. MV3 has no socket-level
+// timeout, so a single page request that hangs behind a slow proxy on a
+// constrained client stalls the whole crawl until Chrome's service-worker
+// request timeout kills the worker (the caller then sees "the message
+// channel closed before a response was received"). Failing the hung
+// attempt fast and retrying it is the fix.
+export const FETCH_TIMEOUT_MS = 30000;
 
 /**
  * Sleep that honors AbortSignal. Resolves when timeout elapses; rejects
@@ -145,17 +152,70 @@ export function createRetryingFetch(fetch, {
 }
 
 /**
- * Compose pacing + retry. Pacing wraps retry so each individual attempt
- * (including retries) is rate-limited. This matches the Python source,
- * where the throttle and retry both live in FortiMonitorAPI.get().
+ * Wrap a fetch with a per-request wall-clock timeout. A request that does
+ * not settle within timeoutMs is aborted and rejected with a *retriable*
+ * TimeoutError (name !== 'AbortError', so createRetryingFetch's
+ * network-error path retries it rather than treating it as a user cancel).
+ *
+ * The caller's own AbortSignal (the run-level cancel) is forwarded to the
+ * underlying fetch; when it fires, the rejection surfaces as a genuine
+ * AbortError that is NOT retried. We distinguish the two by tracking which
+ * side fired: `timedOut` true + caller signal not aborted => timeout.
+ *
+ * Pass timeoutMs <= 0 to disable (returns fetch unchanged). See FMN-256.
+ *
+ * @param {typeof fetch} fetch
+ * @param {object} [options]
+ * @param {number} [options.timeoutMs]
+ */
+export function createTimeoutFetch(fetch, { timeoutMs = FETCH_TIMEOUT_MS } = {}) {
+  if (typeof fetch !== 'function') {
+    throw new TypeError('createTimeoutFetch: fetch must be a function');
+  }
+  if (!(timeoutMs > 0)) return fetch;
+  return async function timeoutFetch(url, init = {}) {
+    const callerSignal = init.signal;
+    if (callerSignal?.aborted) {
+      const err = new Error('aborted'); err.name = 'AbortError'; throw err;
+    }
+    const ctl = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; ctl.abort(); }, timeoutMs);
+    const onCallerAbort = () => ctl.abort();
+    callerSignal?.addEventListener?.('abort', onCallerAbort, { once: true });
+    try {
+      return await fetch(url, { ...init, signal: ctl.signal });
+    } catch (err) {
+      // Our timeout fired and the caller did NOT cancel: surface a
+      // retriable TimeoutError so the retry layer gives it another go.
+      if (timedOut && !callerSignal?.aborted) {
+        const e = new Error(`request timed out after ${timeoutMs}ms`);
+        e.name = 'TimeoutError';
+        throw e;
+      }
+      throw err; // genuine user-abort, or a real network error
+    } finally {
+      clearTimeout(timer);
+      callerSignal?.removeEventListener?.('abort', onCallerAbort);
+    }
+  };
+}
+
+/**
+ * Compose timeout + pacing + retry. Pacing wraps retry so each individual
+ * attempt (including retries) is rate-limited; retry wraps timeout so a
+ * timed-out attempt is retried. This matches the Python source, where the
+ * throttle and retry both live in FortiMonitorAPI.get().
  */
 export function createObservationsFetch(fetch, {
   rateLimit = RATE_LIMIT_PER_SECOND,
   backoffSchedule = BACKOFF_DELAYS_MS,
+  timeoutMs = FETCH_TIMEOUT_MS,
   now,
   sleep = abortableSleep
 } = {}) {
-  const retrying = createRetryingFetch(fetch, { backoffSchedule, sleep });
+  const timed = createTimeoutFetch(fetch, { timeoutMs });
+  const retrying = createRetryingFetch(timed, { backoffSchedule, sleep });
   return createPacedFetch(retrying, { rateLimit, now, sleep });
 }
 
