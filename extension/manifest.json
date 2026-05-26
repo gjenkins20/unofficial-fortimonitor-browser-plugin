@@ -17,6 +17,7 @@
   "permissions": [
     "cookies",
     "storage",
+    "unlimitedStorage",
     "alarms",
     "declarativeNetRequestWithHostAccess"
   ],

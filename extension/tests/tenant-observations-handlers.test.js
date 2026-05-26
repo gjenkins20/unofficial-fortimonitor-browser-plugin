@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {
   createTenantObservationsHandlers,
   runTenantObservations,
-  OBSERVATIONS_RUN_KEY
+  OBSERVATIONS_RUN_KEY,
+  OBSERVATIONS_RESULT_KEY
 } from '../src/background/tenant-observations-handlers.js';
 import { PanoptaClient, PanoptaError } from '../src/lib/panopta-client.js';
 import {
@@ -119,25 +120,27 @@ test('createTenantObservationsHandlers: observations:run-audit returns a small h
     keepAlive: noKeepAlive
   });
   const handle = await handlers['observations:run-audit']({});
-  // Handle is small: runKey + status, no payload.
+  // Handle is small: keys + status, no payload.
   assert.equal(handle.runKey, OBSERVATIONS_RUN_KEY);
+  assert.equal(handle.resultKey, OBSERVATIONS_RESULT_KEY);
   assert.equal(handle.status, 'started');
   assert.equal(typeof handle.started_at, 'string');
   assert.equal(handle.inventory, undefined);
   assert.equal(handle.analysis, undefined);
   assert.equal(handle.summary, undefined);
-  // Once the detached run finishes, the full result is staged under a
-  // { status: 'done', result } envelope, with a small summary alongside.
+  // Once the detached run finishes, the small status key flips to 'done'
+  // with a summary, and the big result lands under the SEPARATE result key.
   const terminal = await waitForRun(handlers);
   assert.equal(terminal.status, 'done');
   assert.ok(terminal.summary, 'terminal status carries a small summary');
   assert.equal(typeof terminal.summary.counts, 'object');
-  // Status poll never ships the multi-MB result.
-  assert.equal(terminal.result, undefined, 'get-run-status must strip the result');
-  const stored = storage.__raw()[OBSERVATIONS_RUN_KEY];
-  assert.equal(stored.status, 'done');
-  assert.ok(stored.result?.inventory, 'full inventory must be staged in storage');
-  assert.ok(stored.result?.analysis, 'full analysis must be staged in storage');
+  // Status key never carries the multi-MB result.
+  assert.equal(terminal.result, undefined, 'status key must not hold the result');
+  const raw = storage.__raw();
+  assert.equal(raw[OBSERVATIONS_RUN_KEY].status, 'done');
+  assert.equal(raw[OBSERVATIONS_RUN_KEY].result, undefined, 'status key must not hold the result');
+  assert.ok(raw[OBSERVATIONS_RESULT_KEY]?.inventory, 'full inventory must be staged under the result key');
+  assert.ok(raw[OBSERVATIONS_RESULT_KEY]?.analysis, 'full analysis must be staged under the result key');
 });
 
 test('createTenantObservationsHandlers: observations:get-run-result returns staged result and clears the slot', async () => {
@@ -153,7 +156,8 @@ test('createTenantObservationsHandlers: observations:get-run-result returns stag
   const result = await handlers['observations:get-run-result']({});
   assert.ok(result.inventory);
   assert.ok(result.analysis);
-  // Slot should be cleared after consumption.
+  // Both keys should be cleared after consumption.
+  assert.equal(storage.__raw()[OBSERVATIONS_RESULT_KEY], undefined);
   assert.equal(storage.__raw()[OBSERVATIONS_RUN_KEY], undefined);
   // Second call must reject - nothing left to read.
   await assert.rejects(
@@ -222,6 +226,37 @@ test('createTenantObservationsHandlers: run-audit records error status when the 
   assert.match(terminal.error, /boom/);
 });
 
+test('createTenantObservationsHandlers: a result-staging quota failure records error, not a half-done state (FMN-256)', async () => {
+  // Reproduces the live failure: the crawl succeeds but writing the
+  // multi-MB result to storage throws "quota bytes exceeded". The run must
+  // record 'error' and leave no readable result behind - never a 'done'
+  // status pointing at a missing result.
+  const base = createStorageMock();
+  const store = {
+    get: (k) => base.get(k),
+    set: async (obj) => {
+      if (Object.prototype.hasOwnProperty.call(obj, OBSERVATIONS_RESULT_KEY)) {
+        throw new Error('Session storage quota bytes exceeded. Values were not stored.');
+      }
+      return base.set(obj);
+    },
+    remove: (k) => base.remove(k),
+    __raw: () => base.__raw()
+  };
+  const handlers = createTenantObservationsHandlers({
+    events: { emit: () => {} },
+    getClient: async () => new PanoptaClient({ apiKey: 'k', fetch: buildBaselineFetch() }),
+    storage: store,
+    keepAlive: noKeepAlive
+  });
+  await handlers['observations:run-audit']({});
+  const terminal = await waitForRun(handlers);
+  assert.equal(terminal.status, 'error');
+  assert.match(terminal.error, /quota/i);
+  assert.equal(base.__raw()[OBSERVATIONS_RESULT_KEY], undefined, 'no partial result left behind');
+  await assert.rejects(() => handlers['observations:get-run-result']({}), /not done|No staged/);
+});
+
 test('runTenantObservations: returns inventory + analysis on a tiny baseline fetch', async () => {
   const fetch = buildBaselineFetch();
   const client = new PanoptaClient({ apiKey: 'k', fetch });
@@ -274,8 +309,8 @@ test('createTenantObservationsHandlers: observations:run-audit forwards payload.
   });
   await handlers['observations:run-audit']({ sections: ['template-recommendations', 'monitoring-policy'] });
   await waitForRun(handlers);
-  const stored = storage.__raw()[OBSERVATIONS_RUN_KEY];
-  assert.deepEqual(stored.result.sections, ['template-recommendations', 'monitoring-policy']);
+  const stored = storage.__raw()[OBSERVATIONS_RESULT_KEY];
+  assert.deepEqual(stored.sections, ['template-recommendations', 'monitoring-policy']);
 });
 
 test('runTenantObservations: ["user-activity"] runs only the user analyzer and skips frontend templates walk (FMN-149)', async () => {

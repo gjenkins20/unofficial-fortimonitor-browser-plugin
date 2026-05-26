@@ -27,12 +27,16 @@
 // but a backgrounded tab can be throttled past the idle threshold).
 //
 // Result delivery: the inventory + analysis payload is multi-megabyte on
-// real tenants (1000+ outages, hundreds of servers, deep-dive multipliers).
-// The run writes it to chrome.storage.session under OBSERVATIONS_RUN_KEY
-// inside a { status, result } envelope. get-run-status strips the result
-// (never ships MB over the poll channel); get-run-result returns it once
-// over a fresh short-lived channel and clears the slot so a stale run can
-// never bleed into a fresh one.
+// real tenants - a 3047-server tenant blew past chrome.storage.session's
+// hard 10MB cap entirely ("Session storage quota bytes exceeded"; FMN-256
+// live QA). So the payload goes to chrome.storage.LOCAL (which the
+// unlimitedStorage permission frees from the 10MB cap) under
+// OBSERVATIONS_RESULT_KEY, and the small status envelope lives alongside
+// under OBSERVATIONS_RUN_KEY. The page polls observations:get-run-status
+// (small) and, on 'done', reads the result KEY directly from
+// chrome.storage.local - it is never shipped over sendMessage, which is
+// unreliable at this size. get-run-result is retained as an SW-side
+// accessor (tests, fallbacks) and clears both keys.
 
 import { PanoptaError } from '../lib/panopta-client.js';
 import { ObservationsFetcher, createObservationsFetch } from '../lib/observations-fetcher.js';
@@ -42,7 +46,14 @@ import { ObservationsFrontendFetcher, fetchCustomerIdentity, fetchAccountHistory
 import { sanitize as sanitizeSections } from '../ui/tenant-observations/section-selection.js';
 import { needsFrontendUsers, needsFrontendTemplates } from '../lib/observations-section-deps.js';
 
+// Small run-status envelope: { status, started_at, finished_at, summary,
+// error, name }. Polled frequently; always tiny.
 export const OBSERVATIONS_RUN_KEY = 'observations.lastRun';
+// The multi-megabyte { inventory, analysis, ... } payload. Stored under a
+// SEPARATE key so a status poll never has to load it, and read by the page
+// directly out of chrome.storage (NOT shipped over sendMessage - that path
+// is unreliable at this size; see [[mv3_sendmessage_multimb_stall]]).
+export const OBSERVATIONS_RESULT_KEY = 'observations.lastResult';
 
 /**
  * Build a paced + retrying PanoptaClient for the Observations crawl. Pulled out
@@ -300,10 +311,12 @@ export function createTenantObservationsHandlers({
 } = {}) {
   const emit = events.emit ?? (() => {});
   const factory = getClient ?? (() => defaultClientFactory());
-  // Default to chrome.storage.session (MV3, in-memory, cleared on browser
-  // restart - the right scope for a one-shot run handoff). Tests inject
-  // a Map-backed mock.
-  const sessionStorage = storage ?? (typeof chrome !== 'undefined' ? chrome.storage?.session : null);
+  // chrome.storage.LOCAL (not session): the result blob exceeds session's
+  // hard 10MB cap on large tenants, and the unlimitedStorage permission
+  // frees local from the 10MB limit. Holds both the small status envelope
+  // (OBSERVATIONS_RUN_KEY) and the big result (OBSERVATIONS_RESULT_KEY).
+  // Tests inject a Map-backed mock.
+  const store = storage ?? (typeof chrome !== 'undefined' ? chrome.storage?.local : null);
   const startKeepAlive = keepAlive ?? defaultKeepAlive;
 
   // Set for the lifetime of a detached run. Its presence is also how a
@@ -311,31 +324,31 @@ export function createTenantObservationsHandlers({
   // behind by a worker that died mid-crawl (see get-run-status).
   let currentRun = null;
 
-  async function writeState(state) {
-    if (sessionStorage?.set) {
-      await sessionStorage.set({ [OBSERVATIONS_RUN_KEY]: state });
-    }
+  async function writeStatus(state) {
+    if (store?.set) await store.set({ [OBSERVATIONS_RUN_KEY]: state });
   }
 
   return {
     'observations:run-audit': async (payload) => {
       if (currentRun) throw new Error('A tenant observations run is already in progress');
-      if (!sessionStorage?.set) {
-        throw new Error('chrome.storage.session is unavailable; cannot stage Observations run result');
+      if (!store?.set) {
+        throw new Error('chrome.storage is unavailable; cannot stage Observations run result');
       }
       const ac = new AbortController();
       const startedAt = new Date().toISOString();
       currentRun = { ac, startedAt };
-      // Seed a 'running' record synchronously so a poll arriving before
-      // the crawl's first state write still sees the right status.
-      await writeState({ status: 'running', started_at: startedAt });
+      // Clear any stale result from a prior run, then seed a 'running'
+      // record synchronously so a poll arriving before the crawl's first
+      // state write still sees the right status.
+      if (store.remove) { try { await store.remove(OBSERVATIONS_RESULT_KEY); } catch { /* best-effort */ } }
+      await writeStatus({ status: 'running', started_at: startedAt });
 
       const stopKeepAlive = startKeepAlive();
 
       // Detach: run the crawl WITHOUT holding this message channel open.
-      // The page polls observations:get-run-status and pulls the full
-      // result via observations:get-run-result when status === 'done'.
-      // Progress events still stream to the page over the broadcast.
+      // The page polls observations:get-run-status and reads the result KEY
+      // directly from chrome.storage on 'done'. Progress events still
+      // stream to the page over the broadcast.
       const run = (async () => {
         try {
           const client = await factory();
@@ -349,12 +362,15 @@ export function createTenantObservationsHandlers({
             signal: ac.signal,
             onProgress: (evt) => emit('observations:progress', evt)
           });
-          await writeState({
+          // Stage the big payload FIRST, then flip status to 'done'. If the
+          // result write fails (e.g. quota), the catch records 'error' and
+          // the page never sees a 'done' with no readable result.
+          await store.set({ [OBSERVATIONS_RESULT_KEY]: result });
+          await writeStatus({
             status: 'done',
             started_at: startedAt,
             finished_at: result.finished_at,
-            summary: summarizeResult(result),
-            result
+            summary: summarizeResult(result)
           });
           emit('observations:run-status', { status: 'done' });
         } catch (err) {
@@ -362,7 +378,9 @@ export function createTenantObservationsHandlers({
           const message = aborted
             ? 'tenant observations cancelled'
             : (err?.message ?? String(err));
-          await writeState({
+          // Drop any partial result so a failed run can't be half-read.
+          if (store.remove) { try { await store.remove(OBSERVATIONS_RESULT_KEY); } catch { /* best-effort */ } }
+          await writeStatus({
             status: aborted ? 'cancelled' : 'error',
             started_at: startedAt,
             error: message,
@@ -377,14 +395,19 @@ export function createTenantObservationsHandlers({
       // Expose the run promise for tests; production fire-and-forgets it.
       if (currentRun) currentRun.promise = run;
 
-      return { runKey: OBSERVATIONS_RUN_KEY, status: 'started', started_at: startedAt };
+      return {
+        runKey: OBSERVATIONS_RUN_KEY,
+        resultKey: OBSERVATIONS_RESULT_KEY,
+        status: 'started',
+        started_at: startedAt
+      };
     },
 
-    // Lightweight poll target. Returns the run-state envelope MINUS the
-    // multi-MB result (which only get-run-result ships). Never clears.
+    // Lightweight poll target. Reads only the small status key; never the
+    // result. Never clears.
     'observations:get-run-status': async () => {
-      if (!sessionStorage?.get) throw new Error('chrome.storage.session is unavailable');
-      const stored = await sessionStorage.get(OBSERVATIONS_RUN_KEY);
+      if (!store?.get) throw new Error('chrome.storage is unavailable');
+      const stored = await store.get(OBSERVATIONS_RUN_KEY);
       const state = stored?.[OBSERVATIONS_RUN_KEY] ?? null;
       if (!state) return { status: 'none' };
       // Orphan detection: 'running' on disk but no in-memory run means the
@@ -394,27 +417,30 @@ export function createTenantObservationsHandlers({
       if (state.status === 'running' && !currentRun) {
         return { status: 'lost', started_at: state.started_at };
       }
-      const { result, ...rest } = state;
+      const { result, ...rest } = state; // defensive: status key never holds result
       return rest;
     },
 
-    'observations:get-run-result': async (payload) => {
-      const key = payload?.runKey ?? OBSERVATIONS_RUN_KEY;
-      if (!sessionStorage?.get) {
-        throw new Error('chrome.storage.session is unavailable');
+    // SW-side result accessor (tests / fallback). The page normally reads
+    // OBSERVATIONS_RESULT_KEY directly from chrome.storage rather than
+    // shipping multi-MB over sendMessage. Clears BOTH keys on read.
+    'observations:get-run-result': async () => {
+      if (!store?.get) {
+        throw new Error('chrome.storage is unavailable');
       }
-      const stored = await sessionStorage.get(key);
-      const state = stored?.[key] ?? null;
-      if (!state) {
+      const statusStored = await store.get(OBSERVATIONS_RUN_KEY);
+      const status = statusStored?.[OBSERVATIONS_RUN_KEY]?.status;
+      if (status && status !== 'done') {
+        throw new Error(`Observations run is "${status}", not done`);
+      }
+      const stored = await store.get(OBSERVATIONS_RESULT_KEY);
+      const result = stored?.[OBSERVATIONS_RESULT_KEY] ?? null;
+      if (!result) {
         throw new Error('No staged Observations run result. The previous run may have been evicted.');
       }
-      if (state.status && state.status !== 'done') {
-        throw new Error(`Observations run is "${state.status}", not done`);
-      }
-      const result = state.result ?? state; // tolerate any legacy bare-result shape
-      // One-shot: clear the slot so a stale run can't be misread as fresh.
-      if (sessionStorage.remove) {
-        try { await sessionStorage.remove(key); } catch { /* best-effort */ }
+      // One-shot: clear both keys so a stale run can't be misread as fresh.
+      if (store.remove) {
+        try { await store.remove([OBSERVATIONS_RESULT_KEY, OBSERVATIONS_RUN_KEY]); } catch { /* best-effort */ }
       }
       return result;
     },

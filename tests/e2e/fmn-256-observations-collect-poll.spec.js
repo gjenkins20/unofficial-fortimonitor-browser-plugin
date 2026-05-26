@@ -23,7 +23,11 @@ function makeStubScript(scenario) {
   return `(() => {
     const SCENARIO = ${JSON.stringify(scenario)};
     const RUNNING_POLLS = 1; // one 'running' poll, then the terminal state
-    window.__obsStub = { runAudit: 0, status: 0, getResult: 0, abort: 0 };
+    const RESULT_KEY = 'observations.lastResult';
+    const RUN_KEY = 'observations.lastRun';
+    window.__obsStub = { runAudit: 0, status: 0, getResult: 0, abort: 0, storageGet: 0, storageRemove: 0 };
+    // Backing store for the staged result, read DIRECTLY by the page.
+    const localData = { [RESULT_KEY]: { inventory: {}, analysis: {}, deep: false } };
     const listeners = new Set();
     function respond(callback, obj) { setTimeout(() => { try { callback && callback(obj); } catch (e) {} }, 0); }
     window.chrome = {
@@ -35,7 +39,7 @@ function makeStubScript(scenario) {
           const type = message && message.type;
           if (type === 'observations:run-audit') {
             window.__obsStub.runAudit++;
-            return respond(callback, { ok: true, result: { runKey: 'observations.lastRun', status: 'started', started_at: new Date().toISOString() } });
+            return respond(callback, { ok: true, result: { runKey: RUN_KEY, resultKey: RESULT_KEY, status: 'started', started_at: new Date().toISOString() } });
           }
           if (type === 'observations:get-run-status') {
             window.__obsStub.status++;
@@ -48,8 +52,9 @@ function makeStubScript(scenario) {
             return respond(callback, { ok: true, result: { status: 'none' } });
           }
           if (type === 'observations:get-run-result') {
+            // Fallback path only; the page should read storage directly.
             window.__obsStub.getResult++;
-            return respond(callback, { ok: true, result: { inventory: {}, analysis: {}, deep: false } });
+            return respond(callback, { ok: true, result: localData[RESULT_KEY] });
           }
           if (type === 'observations:abort') {
             window.__obsStub.abort++;
@@ -61,6 +66,21 @@ function makeStubScript(scenario) {
         onMessage: {
           addListener: (fn) => listeners.add(fn),
           removeListener: (fn) => listeners.delete(fn)
+        }
+      },
+      storage: {
+        local: {
+          get: async (key) => {
+            window.__obsStub.storageGet++;
+            if (typeof key === 'string') return { [key]: localData[key] };
+            if (Array.isArray(key)) { const o = {}; for (const k of key) o[k] = localData[k]; return o; }
+            return { ...localData };
+          },
+          remove: async (keys) => {
+            window.__obsStub.storageRemove++;
+            const list = Array.isArray(keys) ? keys : [keys];
+            for (const k of list) delete localData[k];
+          }
         }
       }
     };
@@ -82,12 +102,14 @@ test.describe('Tenant Observations Collect polling (FMN-256)', () => {
     await expect(page).toHaveURL(/#\/analyze$/, { timeout: 15000 });
     await expect(page.getByRole('heading', { name: /Analysis ready/i })).toBeVisible();
 
-    // The full message sequence ran: start, at least one status poll,
-    // and exactly one result pull.
+    // The full sequence ran: start, >=2 status polls, and the result was
+    // read DIRECTLY from chrome.storage.local (not over sendMessage).
     const stub = await page.evaluate(() => window.__obsStub);
     expect(stub.runAudit).toBe(1);
     expect(stub.status).toBeGreaterThanOrEqual(2);
-    expect(stub.getResult).toBe(1);
+    expect(stub.storageGet).toBeGreaterThanOrEqual(1);
+    expect(stub.storageRemove).toBeGreaterThanOrEqual(1);
+    expect(stub.getResult).toBe(0); // never used the sendMessage fallback
 
     await page.close();
   });

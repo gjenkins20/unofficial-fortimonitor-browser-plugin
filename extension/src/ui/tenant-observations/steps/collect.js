@@ -217,12 +217,12 @@ export function render({ container, store, navigate, events }) {
     try { await call('observations:abort', {}); } catch { /* run promise will reject */ }
   });
 
-  // Watchdog: if analyze:done has fired but the run-audit response hasn't
-  // come back within this window, surface a stalled-state warning instead
-  // of an indefinite spinner. (FMN-133 first-tenant QA hit a stall caused
-  // by a sendMessage transport issue; the result is now staged in
-  // chrome.storage.session, but if anything else stalls we want a visible
-  // affordance rather than a forever-running spinner.)
+  // Watchdog: if analyze:done has fired but the run hasn't reached a
+  // terminal state within this window, surface a stalled-state warning
+  // instead of an indefinite spinner. (FMN-133 first-tenant QA hit a stall
+  // caused by a sendMessage transport issue; the result is now staged in
+  // chrome.storage.local and read directly, but if anything else stalls we
+  // want a visible affordance rather than a forever-running spinner.)
   let stallTimer = null;
   const STALL_TIMEOUT_MS = 8000;
   const innerUnsub = events.on((event, payload) => {
@@ -283,6 +283,29 @@ export function render({ container, store, navigate, events }) {
     }
   }
 
+  // FMN-256: read the staged result blob straight out of chrome.storage.local
+  // and clear both staging keys. No sendMessage round-trip for the
+  // multi-MB payload. Falls back to the SW accessor only if chrome.storage
+  // is somehow unavailable (it isn't, on an extension page).
+  const DEFAULT_RESULT_KEY = 'observations.lastResult';
+  const DEFAULT_RUN_KEY = 'observations.lastRun';
+  async function readStagedResult(resultKey) {
+    const key = resultKey || DEFAULT_RESULT_KEY;
+    const local = (typeof chrome !== 'undefined') ? chrome.storage?.local : null;
+    if (local?.get) {
+      const stored = await local.get(key);
+      const result = stored?.[key];
+      if (!result) {
+        throw new Error('Run finished but its result was not found in storage. Reload the extension and run again.');
+      }
+      if (local.remove) { try { await local.remove([key, DEFAULT_RUN_KEY]); } catch { /* best-effort */ } }
+      return result;
+    }
+    // Fallback: ask the service worker (returns the payload over the
+    // channel). Only reached if chrome.storage.local is unavailable.
+    return call('observations:get-run-result', {});
+  }
+
   (async () => {
     try {
       // FMN-256: the run is DETACHED in the service worker now. run-audit
@@ -310,10 +333,12 @@ export function render({ container, store, navigate, events }) {
 
       await pollUntilTerminal();
 
-      // The run handler staged the multi-megabyte result in chrome.storage.session.
-      // Pull the full payload back via a separate call so this response
-      // travels over a fresh, short-lived channel.
-      const result = await call('observations:get-run-result', { runKey: handle?.runKey });
+      // The run handler staged the multi-megabyte result in
+      // chrome.storage.local (under handle.resultKey). Read it DIRECTLY
+      // from storage rather than over sendMessage - the payload is too
+      // large to ship reliably across the message channel ([[mv3_sendmessage_multimb_stall]]),
+      // and this is an extension page with first-class chrome.storage access.
+      const result = await readStagedResult(handle?.resultKey);
       markResolved();
       store.runResult = result;
       stateLabel.textContent = `Done in ${formatElapsed(Date.now() - startTime)}.`;
