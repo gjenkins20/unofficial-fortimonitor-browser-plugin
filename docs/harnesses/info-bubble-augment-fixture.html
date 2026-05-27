@@ -155,12 +155,20 @@
   const storageState = {
     'fm:showInfoBubbles': true,
     'fm:omniSearchEnabled': true,
+    // FMN-260: enable the snapshot-diff card so its augment surface (and the
+    // info-bubble icon anchored on its h3) mounts deterministically. Without
+    // this the card surface stayed gated and its icon raced under batch load.
+    'fm:snapshotDiffEnabled': true,
   };
   const storageListeners = [];
 
   window.chrome = {
     runtime: {
-      getURL: (p) => 'chrome-extension://harness/' + p,
+      // FMN-259/FMN-260: return a routable same-origin URL (not
+      // chrome-extension://, which Playwright cannot intercept) so augment.js's
+      // dynamic import() of info-bubble-registry.js resolves. The spec routes
+      // **/__fmn_ext__/** to serve the real extension file.
+      getURL: (p) => 'https://fortimonitor.forticloud.com/__fmn_ext__/' + p,
       sendMessage: () => Promise.resolve(),
       onMessage: { addListener: () => {} },
       lastError: null,

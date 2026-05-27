@@ -204,6 +204,19 @@ async function gotoAugmentHarness(ctx) {
       body: buildAugmentHarnessHtml()
     });
   });
+  // FMN-260: augment.js loads info-bubble-registry.js via a dynamic import()
+  // of chrome.runtime.getURL(...). The harness getURL returns a same-origin
+  // /__fmn_ext__/<path> URL (chrome-extension:// can't be routed); serve the
+  // real extension module from disk so the import resolves and the
+  // info-bubble icons mount deterministically.
+  await page.route('**/__fmn_ext__/**', async (route) => {
+    const rel = new URL(route.request().url()).pathname.replace(/^\/__fmn_ext__\//, '');
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/javascript; charset=utf-8',
+      body: fs.readFileSync(path.resolve(REPO_ROOT, 'extension', rel), 'utf-8')
+    });
+  });
   await page.goto(FORTIMONITOR_URL);
   // augment.js does a Promise.all([loadFlags()]).finally(ensureAll).
   // Wait for the info-bubble register entry to land its icon.
@@ -214,8 +227,7 @@ async function gotoAugmentHarness(ctx) {
 test.describe('FMN-169 augment.js synthetic surface', () => {
   test('icon mounts next to the omni-search chip', async ({ ctx }) => {
     const { page, errors } = await gotoAugmentHarness(ctx);
-    const iconCount = await page.locator('#fmn-omni-search-container .fmn-info-bubble-icon').count();
-    expect(iconCount).toBe(1);
+    await expect(page.locator('#fmn-omni-search-container .fmn-info-bubble-icon')).toHaveCount(1);
     expect(errors).toEqual([]);
     await page.close();
   });
@@ -247,14 +259,24 @@ test.describe('FMN-169 augment.js synthetic surface', () => {
     await page.close();
   });
 
-  test('icon mounts inside the snapshot card title (h3 anchor)', async ({ ctx }) => {
+  test('snapshot card info-bubble: self-mode ribbon wires a hover bubble (no icon by design)', async ({ ctx }) => {
     const { page } = await gotoAugmentHarness(ctx);
-    // The card's FMN-86 ribbon is pointer-events:none, so we anchor on
-    // the card's h3 title and append an icon there.
-    const iconCount = await page.locator(
-      '[data-fmn-entry="fmn-snapshot-diff-card"] h3 .fmn-info-bubble-icon[data-fmn-info-bubble-feature="snapshot-diff-card"]'
-    ).count();
-    expect(iconCount).toBe(1);
+    // FMN-260: the snapshot-diff-card registry entry is anchorMode:'self' on
+    // the card's ribbon - it wires hover/click handlers onto the ribbon itself
+    // and inserts NO separate icon (verified against live FortiMonitor:
+    // the ribbon carries data-fmn-info-bubble-ready=1 and hovering it shows the
+    // bubble; there is no icon element). The previous assertion looked for a
+    // '.fmn-info-bubble-icon' that self-mode never creates, so it always failed.
+    const ribbon = page.locator('[data-fmn-entry="fmn-snapshot-diff-card"] .fmn-pa-card-ribbon');
+    await expect(ribbon).toHaveAttribute('data-fmn-info-bubble-ready', '1', { timeout: 5000 });
+    await expect(page.locator('[data-fmn-entry="fmn-snapshot-diff-card"] .fmn-info-bubble-icon')).toHaveCount(0);
+    // The harness ribbon is an empty decorative span (aria-hidden, 0-size), so
+    // Playwright .hover() can't target it; dispatch the same mouseenter the
+    // self-mode handler listens for. (Live, the ribbon is hoverable - verified.)
+    await ribbon.dispatchEvent('mouseenter');
+    const bubble = page.locator('.fmn-info-bubble[data-fmn-info-bubble-feature="snapshot-diff-card"]');
+    await expect(bubble).toBeVisible({ timeout: 2000 });
+    await expect(bubble.locator('.fmn-info-bubble-title')).toHaveText('Snapshot & Diff');
     await page.close();
   });
 
