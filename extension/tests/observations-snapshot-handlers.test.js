@@ -428,3 +428,29 @@ test('status: in-flight in-memory (same-SW-session) returns the runtime start ti
   // Don't await takePromise - it intentionally never resolves.
   void takePromise;
 });
+
+// =============================================================================
+// observations-snapshots:take - MV3 keep-alive (FMN-261)
+// =============================================================================
+
+test('take: starts the keep-alive heartbeat and stops it even when the run fails', async () => {
+  // The snapshot crawl is multi-minute; without a worker-survival heartbeat
+  // the MV3 worker is evicted mid-run and the take fails silently (FMN-261).
+  // Assert :take starts the (injected) keep-alive and always stops it -
+  // here via a getClient that rejects, exercising the finally path.
+  let started = 0;
+  let stopped = 0;
+  const keepAlive = () => {
+    started += 1;
+    return () => { stopped += 1; };
+  };
+  const handlers = createObservationsSnapshotHandlers({
+    storage: createStorageMock(),
+    sessionStorage: createStorageMock(),
+    keepAlive,
+    getClient: () => Promise.reject(new Error('no api key')),
+  });
+  await assert.rejects(handlers['observations-snapshots:take']({}), /no api key/);
+  assert.equal(started, 1, 'keep-alive started once for the run');
+  assert.equal(stopped, 1, 'keep-alive stopped in the finally');
+});

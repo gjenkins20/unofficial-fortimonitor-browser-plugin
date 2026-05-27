@@ -7,7 +7,7 @@
 // handler that condenses the result via observations-snapshots.js before
 // persisting.
 
-import { runTenantObservations } from './tenant-observations-handlers.js';
+import { runTenantObservations, defaultKeepAlive } from './tenant-observations-handlers.js';
 import { createObservationsFetch } from '../lib/observations-fetcher.js';
 import { PanoptaClient, PanoptaError } from '../lib/panopta-client.js';
 import {
@@ -55,10 +55,14 @@ export function createObservationsSnapshotHandlers({
   resolveOrigin,
   storage,
   sessionStorage,
+  keepAlive,
 } = {}) {
   const emit = events.emit ?? (() => {});
   const local = storage ?? (typeof chrome !== 'undefined' ? chrome.storage?.local : null);
   const session = sessionStorage ?? (typeof chrome !== 'undefined' ? chrome.storage?.session : null);
+  // FMN-261: same MV3 worker-survival heartbeat observations:run-audit uses
+  // (FMN-256). Injectable for tests; defaults to the getPlatformInfo pinger.
+  const startKeepAlive = keepAlive ?? defaultKeepAlive;
 
   let runInFlight = false;
   let runStartedAt = null;
@@ -133,6 +137,12 @@ export function createObservationsSnapshotHandlers({
       // for the same-SW-session case; the persisted record is the recovery
       // path. (FMN-164)
       await persistRunState({ startedAt: runStartedAt });
+      // FMN-261: keep the worker alive across the crawl's paced sleeps and
+      // retry backoffs. Without this the MV3 worker is evicted mid-run, the
+      // writeSnapshot below never executes, and the take fails silently -
+      // exactly why captures stopped landing once the run grew long enough.
+      // observations:run-audit got this in FMN-256; the snapshot take did not.
+      const stopKeepAlive = startKeepAlive();
       try {
         const client = await factory();
         const result = await runTenantObservations({
@@ -152,6 +162,7 @@ export function createObservationsSnapshotHandlers({
           previousTakenAt: next.previous?.takenAt ?? null,
         };
       } finally {
+        try { stopKeepAlive?.(); } catch { /* best-effort */ }
         runInFlight = false;
         runStartedAt = null;
         await persistRunState(null);

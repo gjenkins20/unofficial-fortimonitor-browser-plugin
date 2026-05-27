@@ -288,7 +288,10 @@ export const KEEPALIVE_INTERVAL_MS = 20000;
  * throttled (backgrounded tab). Returns a stop function. No-op when chrome
  * APIs are unavailable (Node tests inject their own, or get this no-op).
  */
-function defaultKeepAlive() {
+// FMN-261: exported so observations-snapshot-handlers.js reuses the exact
+// same worker-survival mechanism. The snapshot :take runs the same
+// multi-minute crawl and was evicted mid-run without it.
+export function defaultKeepAlive() {
   if (typeof chrome === 'undefined' || typeof chrome.runtime?.getPlatformInfo !== 'function') {
     return () => {};
   }
