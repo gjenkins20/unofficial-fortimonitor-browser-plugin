@@ -71,14 +71,17 @@ async function disable(page) {
 }
 
 test.describe('FMN-152 omni-search content-script UI', () => {
-  test('default (flag off): no FM TK container, native search visible', async ({ ctx }) => {
+  test('default (flag unset -> on per FMN-239): FM TK container present, native hidden', async ({ ctx }) => {
     const { page, errors } = await gotoHarness(ctx);
     const state = await page.evaluate(() => ({
       omni: !!document.getElementById('fmn-omni-search-container'),
       nativeHidden: !!document.querySelector('.search-form[data-fmn-omni-search-hidden]'),
-      fmInputPresent: !!document.querySelector('input[placeholder="Search Instances"]'),
     }));
-    expect(state).toEqual({ omni: false, nativeHidden: false, fmInputPresent: true });
+    // FMN-239/FMN-251/FMN-259: omni-search is enabled by default (an unset
+    // flag reads as on, per isOmniSearchEnabled), so the FM TK container mounts
+    // and the native search is hidden on load. The off-state is covered by the
+    // 'toggle on -> off' test below.
+    expect(state).toEqual({ omni: true, nativeHidden: true });
     expect(errors).toEqual([]);
     await page.close();
   });
@@ -116,7 +119,10 @@ test.describe('FMN-152 omni-search content-script UI', () => {
 
   test('warm pulse: chip carries is-warming and input placeholder reads "Caching..." during fetch, both clear after', async ({ ctx }) => {
     const { page } = await gotoHarness(ctx);
-    // Slow the stub so we can observe the warming state.
+    // FMN-239/FMN-259: omni-search is default-on, so it already mounted and
+    // warmed on load. Reset to off, slow the stub, then re-enable so the warm
+    // pulse fires on the off -> on transition this test asserts.
+    await disable(page);
     await page.evaluate(() => window.__omniHarness.setWarmDelay(400));
     await enable(page);
     // Right after enable, chip pulses AND placeholder explains the wait.

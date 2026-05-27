@@ -2667,11 +2667,19 @@
 
   // Wire the progress listener once at content-script load. The SW emits
   // observations-snapshots:progress as { type: '__event__', event: '...', payload }.
-  chrome.runtime.onMessage.addListener((msg) => {
-    if (!msg || typeof msg !== 'object') return;
-    if (msg.type !== '__event__') return;
-    if (msg.event === 'observations-snapshots:progress') handleSnapshotProgressEvent(msg.payload);
-  });
+  // FMN-259: guard chrome.runtime.onMessage the same way every
+  // chrome.storage.onChanged registration above is guarded. In production
+  // onMessage always exists; in the synthetic harnesses (which stub chrome
+  // minimally) it does not, and an unguarded .addListener threw at startup,
+  // aborting the rest of augment.js's mount and reporting as a content-script
+  // failure across the harness-driven specs.
+  if (chrome.runtime && chrome.runtime.onMessage && chrome.runtime.onMessage.addListener) {
+    chrome.runtime.onMessage.addListener((msg) => {
+      if (!msg || typeof msg !== 'object') return;
+      if (msg.type !== '__event__') return;
+      if (msg.event === 'observations-snapshots:progress') handleSnapshotProgressEvent(msg.payload);
+    });
+  }
 
   async function fetchSnapshotEstimate() {
     try {

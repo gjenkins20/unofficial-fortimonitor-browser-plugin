@@ -140,15 +140,16 @@ test.describe('FMN-167 quiz renderer (headless)', () => {
     expect(errors).toEqual([]);
   });
 
-  test('correct answer: option marked correct, explanation appears, advance after delay', async ({ ctx }) => {
+  test('correct answer: option marked correct, explanation appears, Next advances', async ({ ctx }) => {
     const { page, errors } = await gotoHarness(ctx);
     await page.click('#mount');
     // Question 1 correct answer is "Instances" (option index 1).
     await pickOption(page, 1);
     await expect(page.locator('.fmn-tour-quiz-option').nth(1)).toHaveClass(/fmn-tour-quiz-option-correct/);
     await expect(page.locator('.fmn-tour-quiz-explanation')).toBeVisible();
-    // Wait for the 900ms advance.
-    await page.waitForTimeout(1100);
+    // FMN-192/FMN-259: the quiz is manual-advance now (no auto-advance); the
+    // operator clicks Next after reading the explanation.
+    await page.locator('[data-fmn-quiz-next]').click();
     await expect(page.locator('.fmn-tour-quiz-header')).toContainText('Question 2 of 3');
     expect(errors).toEqual([]);
   });
@@ -168,12 +169,14 @@ test.describe('FMN-167 quiz renderer (headless)', () => {
     const { page, errors } = await gotoHarness(ctx);
     await page.click('#mount');
     // Correct indices: Q1=1 (Instances), Q2=2 (Incidents), Q3=1 (toolkit augments).
+    // FMN-192/FMN-259: manual-advance - click Next between questions; the last
+    // Next ("See results") surfaces the results panel.
     await pickOption(page, 1);
-    await page.waitForTimeout(1000);
+    await page.locator('[data-fmn-quiz-next]').click();
     await pickOption(page, 2);
-    await page.waitForTimeout(1000);
+    await page.locator('[data-fmn-quiz-next]').click();
     await pickOption(page, 1);
-    await page.waitForTimeout(1000);
+    await page.locator('[data-fmn-quiz-next]').click();
     await expect(page.locator('.fmn-tour-quiz-header')).toContainText('Quiz complete');
     await expect(page.locator('.fmn-tour-quiz-prompt')).toContainText('3 of 3 correct (100%)');
     await expect(page.locator('.fmn-tour-quiz-review li.review-correct')).toHaveCount(3);
@@ -184,11 +187,11 @@ test.describe('FMN-167 quiz renderer (headless)', () => {
     const { page, errors } = await gotoHarness(ctx);
     await page.click('#mount');
     await pickOption(page, 0); // wrong
-    await page.waitForTimeout(1000);
+    await page.locator('[data-fmn-quiz-next]').click();
     await pickOption(page, 2); // correct
-    await page.waitForTimeout(1000);
+    await page.locator('[data-fmn-quiz-next]').click();
     await pickOption(page, 0); // wrong
-    await page.waitForTimeout(1000);
+    await page.locator('[data-fmn-quiz-next]').click(); // "See results"
     await expect(page.locator('.fmn-tour-quiz-prompt')).toContainText('1 of 3 correct');
     await expect(page.locator('.fmn-tour-quiz-review li.review-wrong')).toHaveCount(2);
     await expect(page.locator('.fmn-tour-quiz-review li.review-correct')).toHaveCount(1);
@@ -198,13 +201,13 @@ test.describe('FMN-167 quiz renderer (headless)', () => {
   test('Done button disposes the quiz overlay and fires onFinish with the score', async ({ ctx }) => {
     const { page, errors } = await gotoHarness(ctx);
     await page.click('#mount');
-    // Three correct picks.
+    // Three correct picks, manual-advance via Next (FMN-192/FMN-259).
     await pickOption(page, 1);
-    await page.waitForTimeout(1000);
+    await page.locator('[data-fmn-quiz-next]').click();
     await pickOption(page, 2);
-    await page.waitForTimeout(1000);
+    await page.locator('[data-fmn-quiz-next]').click();
     await pickOption(page, 1);
-    await page.waitForTimeout(1000);
+    await page.locator('[data-fmn-quiz-next]').click(); // "See results"
     await page.locator('button[data-fmn-quiz-done]').click();
     await expect(page.locator('.fmn-tour-quiz-overlay')).toHaveCount(0);
     const score = await page.evaluate(() => window.__getLastScore());

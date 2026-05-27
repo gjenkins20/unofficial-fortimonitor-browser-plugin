@@ -17,11 +17,10 @@ test.describe('FMN-208 - training tile scrolls with tool list', () => {
     await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
     // Wait for the tool list to render at least one card.
     await expect(page.locator('.tool-card[data-tool="find-servers"]')).toBeAttached();
-    // Reveal the Training section regardless of flag state.
-    await page.evaluate(() => {
-      const section = document.getElementById('training-section');
-      if (section) section.hidden = false;
-    });
+    // FMN-246/FMN-259: the inline #training-section was replaced by a single
+    // #training-launcher-tile (drill-in). It is always visible (FMN-250), so
+    // no reveal is needed; just confirm it rendered.
+    await expect(page.locator('#training-launcher-tile')).toBeAttached();
     test.info()._page = page;
   });
 
@@ -30,11 +29,11 @@ test.describe('FMN-208 - training tile scrolls with tool list', () => {
     if (page) await page.close();
   });
 
-  test('#tool-scroll contains both #training-section and #tool-list', async () => {
+  test('#tool-scroll contains both #training-launcher-tile and #tool-list', async () => {
     const page = test.info()._page;
     const result = await page.evaluate(() => {
       const scroll = document.getElementById('tool-scroll');
-      const training = document.getElementById('training-section');
+      const training = document.getElementById('training-launcher-tile');
       const list = document.getElementById('tool-list');
       return {
         scrollExists: !!scroll,
@@ -79,7 +78,7 @@ test.describe('FMN-208 - training tile scrolls with tool list', () => {
     expect(overflowState.scrollHeight).toBeGreaterThan(overflowState.clientHeight);
 
     const before = await page.evaluate(() => {
-      const tile = document.getElementById('training-intro-tour-tile');
+      const tile = document.getElementById('training-launcher-tile');
       return tile.getBoundingClientRect().top;
     });
 
@@ -90,7 +89,7 @@ test.describe('FMN-208 - training tile scrolls with tool list', () => {
     });
 
     const after = await page.evaluate(() => {
-      const tile = document.getElementById('training-intro-tour-tile');
+      const tile = document.getElementById('training-launcher-tile');
       return tile.getBoundingClientRect().top;
     });
 

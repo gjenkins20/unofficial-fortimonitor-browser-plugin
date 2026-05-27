@@ -43,6 +43,24 @@ const test = base.extend({
   }, { scope: 'worker' }],
 });
 
+// FMN-259: this spec is launcher-backed (drives the operator's live Chromium
+// over CDP at :9222). On a plain `npx playwright test` run with no launcher,
+// connectOverCDP threw and the spec reported as FAILED, making the suite
+// misleadingly red. Skip cleanly when :9222 is unreachable so red == real
+// breakage; the spec still runs in full when the launcher is up.
+async function launcherReachable() {
+  try {
+    const r = await fetch(`${CDP_URL}/json/version`, { signal: AbortSignal.timeout(2000) });
+    return r.ok;
+  } catch { return false; }
+}
+test.beforeAll(async () => {
+  test.skip(
+    !(await launcherReachable()),
+    `Dev launcher not reachable at ${CDP_URL}; run "node tools/dev/launcher.mjs" to exercise this CDP-backed spec (FMN-259).`
+  );
+});
+
 test.setTimeout(20 * 60 * 1000);
 
 function sanitizeForPut(server, overrides) {

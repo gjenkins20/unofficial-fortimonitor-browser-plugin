@@ -119,13 +119,21 @@ test.describe('FMN-155: Bulk Action Composer popup wiring', () => {
     // Wait for step 2 to render.
     await expect(page.locator('.step-breadcrumbs .step.active')).toContainText('2. Pick action', { timeout: 5000 });
     const cards = page.locator('[data-test="action-card"]');
-    // FMN-196 adds 'apply-stock-fabric-templates'; FMN-200 adds
-    // 'profile-and-create-templates'.
-    await expect(cards).toHaveCount(5);
+    // FMN-259: nine actions render by default. The three native-duplicate
+    // actions (set-parent-group, set-agent-resource-status,
+    // schedule-maintenance-window) are hidden unless the
+    // SHOW_FORTIMONITOR_NATIVE_BULK_ACTIONS flag is on (FMN-170/171/172).
+    await expect(cards).toHaveCount(9);
     const ids = await cards.evaluateAll((els) => els.map((e) => e.getAttribute('data-action-id')));
     expect(ids).toEqual(expect.arrayContaining([
       'add-tag', 'remove-tag', 'apply-template',
-      'apply-stock-fabric-templates', 'profile-and-create-templates'
+      'apply-stock-fabric-templates', 'profile-and-create-templates',
+      'add-port-scope', 'remove-port-scope',
+      'auto-tag-by-name', 'auto-set-attribute-by-name'
+    ]));
+    // Native-duplicate actions stay hidden by default.
+    expect(ids).not.toEqual(expect.arrayContaining([
+      'set-parent-group', 'set-agent-resource-status', 'schedule-maintenance-window'
     ]));
     await page.close();
   });
