@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# FMN-248 (follow-up to FMN-242): block a commit that lets the README's
+# "Current version" line drift from extension/manifest.json.
+#
+# Only runs when extension/manifest.json or README.md is part of the commit,
+# so commits that touch neither are never gated (and a fast no-op otherwise).
+#
+# Activated via core.hooksPath=tools/git-hooks. The root package.json
+# "prepare" script sets that on `npm install`; to wire it by hand once:
+#   git config core.hooksPath tools/git-hooks
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+
+# Skip unless one of the two version sources is staged.
+if ! git diff --cached --name-only | grep -qE '^(extension/manifest\.json|README\.md)$'; then
+  exit 0
+fi
+
+if ! node "$ROOT/tools/dev/sync-readme-version.mjs" --check; then
+  echo ""
+  echo "pre-commit: README version line is out of sync with extension/manifest.json."
+  echo "  Fix:  node tools/dev/sync-readme-version.mjs   &&   git add README.md"
+  echo "  (bypass once with: git commit --no-verify)"
+  exit 1
+fi
+
+exit 0
