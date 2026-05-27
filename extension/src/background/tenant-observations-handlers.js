@@ -45,6 +45,7 @@ import { runAllAnalyzers } from '../lib/observation-analyzers/index.js';
 import { ObservationsFrontendFetcher, fetchCustomerIdentity, fetchAccountHistory } from '../lib/observations-frontend-fetcher.js';
 import { sanitize as sanitizeSections } from '../ui/tenant-observations/section-selection.js';
 import { needsFrontendUsers, needsFrontendTemplates } from '../lib/observations-section-deps.js';
+import { progressPhaseToStepperPhase } from '../ui/tenant-observations/collect-phases.js';
 
 // Small run-status envelope: { status, started_at, finished_at, summary,
 // error, name }. Polled frequently; always tiny.
@@ -339,14 +340,36 @@ export function createTenantObservationsHandlers({
       }
       const ac = new AbortController();
       const startedAt = new Date().toISOString();
-      currentRun = { ac, startedAt };
+      // FMN-257: track the latest stepper phase the run has entered so the
+      // status poll can carry it. The page's persistent phase stepper reads
+      // this when broadcast progress events don't arrive (MV3 may drop them
+      // for a backgrounded SW), keeping the indicator truthful.
+      currentRun = { ac, startedAt, phase: null };
       // Clear any stale result from a prior run, then seed a 'running'
       // record synchronously so a poll arriving before the crawl's first
       // state write still sees the right status.
       if (store.remove) { try { await store.remove(OBSERVATIONS_RESULT_KEY); } catch { /* best-effort */ } }
-      await writeStatus({ status: 'running', started_at: startedAt });
+      await writeStatus({ status: 'running', started_at: startedAt, phase: null });
 
       const stopKeepAlive = startKeepAlive();
+
+      // FMN-257: broadcast every progress event (live UI), AND persist the
+      // current stepper phase into the run-status record whenever the run
+      // crosses a phase boundary. Per-endpoint detail events do not cross a
+      // boundary, so this writes at most ~5 times per run, not per event.
+      const onProgress = (evt) => {
+        emit('observations:progress', evt);
+        if (!currentRun) return;
+        const stepperPhase = progressPhaseToStepperPhase(evt?.phase, evt);
+        if (stepperPhase && stepperPhase !== currentRun.phase) {
+          currentRun.phase = stepperPhase;
+          // Best-effort: the broadcast already happened; a failed phase
+          // write must not break the run. The running status carries the
+          // latest phase for poll-driven recovery.
+          writeStatus({ status: 'running', started_at: startedAt, phase: stepperPhase })
+            .catch(() => { /* best-effort phase persistence */ });
+        }
+      };
 
       // Detach: run the crawl WITHOUT holding this message channel open.
       // The page polls observations:get-run-status and reads the result KEY
@@ -363,7 +386,7 @@ export function createTenantObservationsHandlers({
             sections: payload?.sections,
             frontendOrigin: resolveOrigin,
             signal: ac.signal,
-            onProgress: (evt) => emit('observations:progress', evt)
+            onProgress
           });
           // Stage the big payload FIRST, then flip status to 'done'. If the
           // result write fails (e.g. quota), the catch records 'error' and
@@ -373,6 +396,7 @@ export function createTenantObservationsHandlers({
             status: 'done',
             started_at: startedAt,
             finished_at: result.finished_at,
+            phase: currentRun?.phase ?? null,
             summary: summarizeResult(result)
           });
           emit('observations:run-status', { status: 'done' });
@@ -386,6 +410,7 @@ export function createTenantObservationsHandlers({
           await writeStatus({
             status: aborted ? 'cancelled' : 'error',
             started_at: startedAt,
+            phase: currentRun?.phase ?? null,
             error: message,
             name: err?.name ?? 'Error'
           });
@@ -418,7 +443,9 @@ export function createTenantObservationsHandlers({
       // Report 'lost' so the page stops polling and offers a retry instead
       // of spinning forever.
       if (state.status === 'running' && !currentRun) {
-        return { status: 'lost', started_at: state.started_at };
+        // FMN-257: forward the last persisted phase so the stepper can mark
+        // the phase the worker died in as failed rather than resetting.
+        return { status: 'lost', started_at: state.started_at, phase: state.phase ?? null };
       }
       const { result, ...rest } = state; // defensive: status key never holds result
       return rest;

@@ -195,6 +195,43 @@ test('createTenantObservationsHandlers: get-run-status reports none, running, th
   assert.equal(terminal.status, 'done');
 });
 
+test('createTenantObservationsHandlers: status record carries the latest stepper phase (FMN-257)', async () => {
+  // The page's persistent phase stepper reads `phase` off the poll record
+  // so it stays truthful even when broadcast progress events are dropped.
+  // A clean run over the baseline (empty) tenant ends in the analyze phase.
+  const storage = createStorageMock();
+  const handlers = createTenantObservationsHandlers({
+    events: { emit: () => {} },
+    getClient: async () => new PanoptaClient({ apiKey: 'k', fetch: buildBaselineFetch() }),
+    storage,
+    keepAlive: noKeepAlive
+  });
+  const handle = await handlers['observations:run-audit']({});
+  assert.equal(handle.status, 'started');
+  const terminal = await waitForRun(handlers);
+  assert.equal(terminal.status, 'done');
+  // The run progressed through collect -> ... -> analyze; the last stepper
+  // phase persisted is analyze.
+  assert.equal(terminal.phase, 'analyze', 'done status carries the final stepper phase');
+});
+
+test('createTenantObservationsHandlers: lost (orphan) status forwards the last persisted phase (FMN-257)', async () => {
+  const storage = createStorageMock();
+  // Orphaned run that died with a deep-dive phase persisted.
+  await storage.set({
+    [OBSERVATIONS_RUN_KEY]: { status: 'running', started_at: '2026-05-26T00:00:00Z', phase: 'deep' }
+  });
+  const handlers = createTenantObservationsHandlers({
+    events: { emit: () => {} },
+    getClient: async () => new PanoptaClient({ apiKey: 'k', fetch: buildBaselineFetch() }),
+    storage,
+    keepAlive: noKeepAlive
+  });
+  const s = await handlers['observations:get-run-status']({});
+  assert.equal(s.status, 'lost');
+  assert.equal(s.phase, 'deep', 'lost status forwards the phase the worker died in');
+});
+
 test('createTenantObservationsHandlers: get-run-status reports lost when a running record has no live run (orphan) (FMN-256)', async () => {
   const storage = createStorageMock();
   // Simulate a worker that died mid-crawl: a 'running' record is on disk

@@ -1702,3 +1702,115 @@ tr.hidden-scope { display: none; }
   background: var(--warn-soft);
   color: var(--warn);
 }
+
+/* --- Tenant Observations: persistent Collect phase stepper (FMN-257) ---
+   A vertical, up-front list of every run phase. Each phase advances
+   pending -> active -> done (or error). The active phase nests its
+   per-endpoint detail below the label so nothing flashes in random
+   positions (FMN-256 QA feedback). */
+.phase-stepper {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--card);
+}
+.phase-step {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  column-gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  align-items: start;
+}
+.phase-step:last-child { border-bottom: none; }
+
+/* The status marker column (left): a numbered chip for pending, a spinner
+   for active, a check for done, a cross for error. */
+.phase-step .phase-marker {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1.5px solid var(--border-strong);
+  background: var(--card);
+  color: var(--text-muted);
+  flex: none;
+}
+.phase-step .phase-body { min-width: 0; }
+.phase-step .phase-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+.phase-step .phase-detail {
+  margin-top: 4px;
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  word-break: break-word;
+}
+.phase-step .phase-summary {
+  margin-top: 3px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+/* pending: dim, numbered, no detail shown */
+.phase-step.pending .phase-name { color: var(--text-muted); opacity: 0.75; }
+
+/* active: running accent, spinner marker, detail visible */
+.phase-step.active { background: var(--running-soft); }
+.phase-step.active .phase-name { color: var(--running); font-weight: 600; }
+.phase-step.active .phase-marker {
+  border-color: var(--running);
+  color: var(--running);
+  background: var(--card);
+}
+.phase-step.active .phase-spinner {
+  width: 13px; height: 13px;
+  border: 2px solid var(--running-soft);
+  border-top-color: var(--running);
+  border-radius: 50%;
+  animation: phase-spin 0.8s linear infinite;
+}
+@keyframes phase-spin { to { transform: rotate(360deg); } }
+.phase-step .phase-detail.error { color: var(--danger); }
+
+/* done: green check, summary count visible */
+.phase-step.done .phase-name { color: var(--text); }
+.phase-step.done .phase-marker {
+  border-color: #b8dfc2;
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+/* error: red cross + danger-tinted row */
+.phase-step.error { background: var(--danger-soft); }
+.phase-step.error .phase-name { color: var(--danger); font-weight: 600; }
+.phase-step.error .phase-marker {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* Run-level error banner shown above the stepper when the whole run
+   failed / was lost (vs a single phase erroring). */
+.phase-run-error {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--danger-soft);
+  border: 1px solid #f0c4c1;
+  color: var(--danger);
+  font-size: 12px;
+}
+/* The aggregate fetch-error list keeps its own affordance below the
+   stepper; scoped so [hidden] still hides it (html_hidden_vs_class_display). */
+.phase-error-list { margin-top: 12px; }
+.phase-error-list[hidden] { display: none; }

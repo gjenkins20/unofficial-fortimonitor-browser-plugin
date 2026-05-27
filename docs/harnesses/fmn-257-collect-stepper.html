@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Harness: Tenant Observations Collect phase stepper (FMN-257)</title>
+<!--
+  Synthetic harness for FMN-257. Loads the REAL collect step component
+  (extension/src/ui/tenant-observations/steps/collect.js) with the REAL
+  shared styles, against a configurable chrome.runtime / chrome.storage
+  stub. A Playwright spec drives it through every stepper state:
+
+    - all pending (run started, nothing entered)
+    - mid-run: one phase active + nested per-endpoint detail, earlier done
+    - all done (every phase checked)
+    - error (a phase marked failed via a poll 'error')
+    - worker lost (poll 'lost' - SW-idle-eviction recovery path)
+    - cancelled (in-flight phase reverts to pending)
+    - deep vs non-deep + scoped-selection sequences (phase count differs)
+
+  The harness drives the component via window.__stepperHarness:
+    mount(opts)            - render collect.js with { deep, sections }
+    emitProgress(evt)      - push an 'observations:progress' event
+    setStatus(obj)         - control the next get-run-status poll response
+    snapshotPhases()       - read each phase row's id + state class + text
+
+  Companion spec: tests/e2e/fmn-257-collect-stepper.spec.js.
+
+  Built by Gregori Jenkins - https://www.linkedin.com/in/gregorijenkins
+-->
+<link rel="stylesheet" href="../../extension/src/ui/styles.css" />
+<style>
+  body { padding: 24px; }
+  .heartbeat {
+    position: fixed; bottom: 8px; left: 8px; background: #d6f5d6;
+    border: 1px solid #67c167; border-radius: 4px; padding: 2px 8px;
+    font-variant-numeric: tabular-nums; font-family: monospace; z-index: 9999;
+  }
+  .heartbeat.frozen { background: #f7c7c7; border-color: #c25c5c; }
+  .harness-controls {
+    max-width: 820px; margin: 0 auto 16px; display: flex; flex-wrap: wrap; gap: 6px;
+  }
+  .harness-controls button {
+    font-size: 12px; padding: 4px 10px; border-radius: 5px;
+    border: 1px solid #c5cbd3; background: #fff; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<div class="harness-controls" id="controls"></div>
+<div id="app-root"></div>
+<div class="heartbeat" id="hb">heartbeat: 0</div>
+
+<script>
+  // Heartbeat: a frozen counter means the component starved the main thread
+  // (the FMN-72 augment-loop class of bug). The stepper isn't under a
+  // MutationObserver, but the heartbeat is cheap insurance.
+  (function () {
+    const el = document.getElementById('hb');
+    let n = 0; let last = performance.now();
+    setInterval(function () {
+      n += 1;
+      const now = performance.now();
+      const gap = now - last; last = now;
+      el.textContent = 'heartbeat: ' + n + ' (gap ' + Math.round(gap) + 'ms)';
+      if (gap > 800) { el.classList.add('frozen'); el.textContent += ' [STARVED]'; }
+    }, 100);
+  })();
+
+  // ---- chrome.* stubs ------------------------------------------------------
+  (function () {
+    const local = {};
+    // The harness controls what get-run-status returns. Default: keep
+    // 'running' (no phase) so the stepper sits where events leave it; the
+    // spec flips this to a terminal status to exercise done/error/lost.
+    const cfg = { status: { status: 'running' } };
+    function clone(v) { return v == null ? v : JSON.parse(JSON.stringify(v)); }
+
+    window.chrome = {
+      runtime: {
+        id: 'harness-extension-id',
+        lastError: null,
+        getURL: (p) => p,
+        sendMessage: function (msg, cb) {
+          const respond = (result, err) => {
+            window.chrome.runtime.lastError = err ? { message: err } : null;
+            if (cb) { try { cb(err ? { ok: false, error: err } : { ok: true, result }); } catch (e) { console.error(e); } }
+            window.chrome.runtime.lastError = null;
+          };
+          const type = msg && msg.type;
+          if (type === 'observations:run-audit') {
+            respond({ runKey: 'observations.lastRun', resultKey: 'observations.lastResult', status: 'started', started_at: new Date().toISOString() });
+          } else if (type === 'observations:get-run-status') {
+            setTimeout(() => respond(clone(cfg.status)), 2);
+          } else if (type === 'observations:abort') {
+            respond({ aborted: true });
+          } else if (type === 'observations:get-run-result') {
+            respond({ inventory: {}, analysis: {} });
+          } else {
+            respond(null, 'Unknown message type: ' + type);
+          }
+        },
+        onMessage: { addListener: function () {}, removeListener: function () {} }
+      },
+      storage: {
+        local: {
+          get: (key) => new Promise((resolve) => {
+            if (typeof key === 'string') { const o = {}; if (key in local) o[key] = clone(local[key]); resolve(o); }
+            else resolve(clone(local));
+          }),
+          set: (obj) => new Promise((resolve) => { for (const k of Object.keys(obj)) local[k] = clone(obj[k]); resolve(); }),
+          remove: (key) => new Promise((resolve) => { const ks = Array.isArray(key) ? key : [key]; for (const k of ks) delete local[k]; resolve(); })
+        }
+      }
+    };
+
+    // Seed a staged result so the 'done' path can read it without error.
+    local['observations.lastResult'] = { inventory: {}, analysis: {} };
+
+    window.__stepperCfg = cfg;
+    window.__stepperLocal = local;
+  })();
+</script>
+
+<script type="module">
+  import { render } from '../../extension/src/ui/tenant-observations/steps/collect.js';
+
+  // Minimal app.js-equivalent event bus (the real app passes the component
+  // exactly this shape).
+  function makeEvents() {
+    const listeners = new Set();
+    return {
+      on(cb) { listeners.add(cb); return () => listeners.delete(cb); },
+      emit(event, payload) { for (const cb of listeners) { try { cb(event, payload); } catch (e) { console.error(e); } } }
+    };
+  }
+
+  let active = null; // { teardown, events, store }
+
+  function mount(opts = {}) {
+    if (active && active.teardown) { try { active.teardown(); } catch {} }
+    // Re-seed the staged result + reset the poll status on every mount so
+    // each scenario starts clean. (collect.js's done-path reads and REMOVES
+    // observations.lastResult; without re-seeding, a second done scenario
+    // would find it gone and error.) Also resets status to a neutral
+    // 'running' so a scenario that doesn't set a terminal status doesn't
+    // inherit the previous scenario's terminal state.
+    window.__stepperLocal['observations.lastResult'] = { inventory: {}, analysis: {} };
+    window.__stepperCfg.status = { status: 'running' };
+    window.__lastNavigate = undefined;
+    const root = document.getElementById('app-root');
+    root.innerHTML = '';
+    const events = makeEvents();
+    const store = {
+      deep: Boolean(opts.deep),
+      maxServers: 0,
+      sections: opts.sections || ['all'],
+      runResult: null, runError: null, runCancelled: false
+    };
+    const teardown = render({
+      container: root,
+      store,
+      navigate: (to) => { window.__lastNavigate = to; }, // no-op router
+      events
+    });
+    active = { teardown, events, store };
+    return active;
+  }
+
+  window.__stepperHarness = {
+    mount,
+    emitProgress: (evt) => { if (active) active.events.emit('observations:progress', evt); },
+    setStatus: (obj) => { window.__stepperCfg.status = obj; },
+    store: () => (active ? active.store : null),
+    // Read each phase row's structural + visual state for spec assertions.
+    snapshotPhases: () => {
+      const rows = Array.from(document.querySelectorAll('.phase-step'));
+      return rows.map((li) => {
+        const name = li.querySelector('.phase-name');
+        const detail = li.querySelector('.phase-detail');
+        const summary = li.querySelector('.phase-summary');
+        const marker = li.querySelector('.phase-marker');
+        return {
+          id: li.getAttribute('data-phase'),
+          state: li.className.replace('phase-step', '').trim(),
+          name: name ? name.textContent : null,
+          marker: marker ? marker.textContent : null,
+          hasSpinner: !!li.querySelector('.phase-spinner'),
+          detail: detail && !detail.hidden ? detail.textContent : null,
+          summary: summary && !summary.hidden ? summary.textContent : null
+        };
+      });
+    },
+    runError: () => {
+      const b = document.querySelector('.phase-run-error');
+      return b && !b.hidden ? b.textContent : null;
+    },
+    stateLabel: () => {
+      const el = document.querySelector('[data-test="state-label"]');
+      return el ? el.textContent : null;
+    }
+  };
+
+  // Quick manual-drive buttons (so a human opening the file sees something).
+  const controls = document.getElementById('controls');
+  const mk = (label, fn) => { const b = document.createElement('button'); b.textContent = label; b.onclick = fn; controls.appendChild(b); };
+  const H = window.__stepperHarness;
+  mk('Mount (deep, all)', () => H.mount({ deep: true, sections: ['all'] }));
+  mk('Mount (non-deep, all)', () => H.mount({ deep: false, sections: ['all'] }));
+  mk('Mount (incidents)', () => H.mount({ deep: false, sections: ['incidents'] }));
+  mk('-> collect start', () => H.emitProgress({ phase: 'collect:start', deep: true }));
+  mk('-> endpoint tick', () => { H.emitProgress({ phase: 'collect:event', type: 'endpoint-start', name: 'server' }); H.emitProgress({ phase: 'collect:event', type: 'endpoint-done', name: 'server', count: 42 }); });
+  mk('-> deep tick', () => H.emitProgress({ phase: 'collect:event', type: 'deep-server', index: 88, total: 140 }));
+  mk('-> users', () => H.emitProgress({ phase: 'frontend:start', total: 38 }));
+  mk('-> analyze', () => H.emitProgress({ phase: 'analyze:start' }));
+  mk('done', () => { H.setStatus({ status: 'done', phase: 'analyze' }); });
+  mk('error', () => { H.setStatus({ status: 'error', error: 'boom', phase: 'deep' }); });
+  mk('lost', () => { H.setStatus({ status: 'lost', phase: 'deep' }); });
+
+  // Auto-mount the default scenario.
+  H.mount({ deep: true, sections: ['all'] });
+</script>
+
+</body>
+</html>
