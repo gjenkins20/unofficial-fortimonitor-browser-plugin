@@ -76,8 +76,8 @@ export function describe(target, params) {
       note: 'Capture-group substitution produced an empty tag; will skip.'
     };
   }
-  const existing = Array.isArray(target?.tags) ? target.tags : null;
-  if (existing === null) {
+  const tags = target?.tags;
+  if (tags === null) {
     return {
       prev: '(not found)',
       next: '(not found)',
@@ -86,6 +86,20 @@ export function describe(target, params) {
       note: 'Instance not found on this tenant; will skip.'
     };
   }
+  // FMN-258: target.tags === undefined means the chip-fetch has not resolved
+  // yet. commit() already executes optimistically in this case (it only skips
+  // on null), so match the preview rather than mislabelling the row as "not
+  // found / skip".
+  if (!Array.isArray(tags)) {
+    return {
+      prev: '(tags not loaded)',
+      next: `+ ${resultTag}`,
+      willChange: true,
+      skip: false,
+      note: `Will add tag "${resultTag}" on commit (matched "${m[0]}"); no-op if already present.`
+    };
+  }
+  const existing = tags;
   const has = existing.includes(resultTag);
   return {
     prev: existing.length ? existing.join(', ') : '(none)',

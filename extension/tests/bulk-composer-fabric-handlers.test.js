@@ -73,10 +73,10 @@ test('list-tags-batch returns tag arrays from PanoptaClient.getServer', async ()
   assert.deepEqual(out.byServerId[12], ['other']);
 });
 
-test('list-tags-batch maps failed GETs to null', async () => {
+test('list-tags-batch maps a genuine 404 to null (instance not found)', async () => {
   const panopta = {
     async getServer(id) {
-      if (id === 20) throw new Error('boom');
+      if (id === 20) { const e = new Error('GET /server/20 failed: HTTP 404'); e.status = 404; throw e; }
       return { id, tags: ['ok'] };
     }
   };
@@ -85,6 +85,25 @@ test('list-tags-batch maps failed GETs to null', async () => {
   assert.deepEqual(out.byServerId[19], ['ok']);
   assert.equal(out.byServerId[20], null);
   assert.deepEqual(out.byServerId[21], ['ok']);
+});
+
+// FMN-258: a transient failure (network blip, rate-limit, 5xx) must NOT be
+// recorded as null ("instance not found"), which silently skipped the write
+// under concurrent load. Omit the id so the caller treats tags as unknown and
+// the commit's authoritative GET decides.
+test('list-tags-batch OMITS a server on a transient (non-404) error (FMN-258)', async () => {
+  const panopta = {
+    async getServer(id) {
+      if (id === 20) throw new Error('Network error: ECONNRESET'); // no .status
+      if (id === 21) { const e = new Error('HTTP 503'); e.status = 503; throw e; }
+      return { id, tags: ['ok'] };
+    }
+  };
+  const handlers = makeHandlers({ panoptaClient: panopta });
+  const out = await handlers['bulk-composer:list-tags-batch']({ serverIds: [19, 20, 21] });
+  assert.deepEqual(out.byServerId[19], ['ok']);
+  assert.equal(Object.prototype.hasOwnProperty.call(out.byServerId, '20'), false, 'transient (no status) id omitted, not null');
+  assert.equal(Object.prototype.hasOwnProperty.call(out.byServerId, '21'), false, 'transient 5xx id omitted, not null');
 });
 
 test('list-tags-batch returns empty array (not null) when server has no tags field', async () => {

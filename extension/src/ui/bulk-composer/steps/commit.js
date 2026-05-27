@@ -12,6 +12,26 @@ import { saveRecentPick } from '../../../lib/recent-picks.js';
 
 const TOOL_NAME = 'Bulk Action Composer';
 
+// FMN-258: build the per-target payload sent to bulk-composer:commit while
+// preserving the tags tri-state - array = known tags; null = the chip-fetch
+// confirmed the instance is gone (skip downstream); undefined = tags not
+// loaded yet (fast Configure -> Commit). Collapsing undefined to null made the
+// service worker treat "unknown" as "not found" and silently skip the write.
+// Array/null go verbatim; unknown omits the field so the SW's authoritative
+// GET-modify-PUT decides. Exported for unit coverage.
+export function buildCommitTargets(targets) {
+  return (Array.isArray(targets) ? targets : []).map((t) => {
+    const out = {
+      id: t.id,
+      name: t.name ?? null,
+      template_names: Array.isArray(t.template_names) ? t.template_names : null
+    };
+    if (Array.isArray(t.tags)) out.tags = t.tags;
+    else if (t.tags === null) out.tags = null;
+    return out;
+  });
+}
+
 export function render({ container, store, navigate, events, call }) {
   const frame = h('div', { class: 'mockup-frame' });
   frame.appendChild(titleBar('Preview & commit', { toolName: TOOL_NAME }));
@@ -221,12 +241,7 @@ export function render({ container, store, navigate, events, call }) {
       const result = await call('bulk-composer:commit', {
         actionId: store.actionId,
         params: store.params,
-        targets: store.targets.map((t) => ({
-          id: t.id,
-          name: t.name ?? null,
-          tags: Array.isArray(t.tags) ? t.tags : null,
-          template_names: Array.isArray(t.template_names) ? t.template_names : null
-        })),
+        targets: buildCommitTargets(store.targets),
         concurrency: 3
       });
       store.runResult = result;

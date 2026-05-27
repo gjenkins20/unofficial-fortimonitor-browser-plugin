@@ -20,12 +20,12 @@ export function describe(target, params) {
   const v = validate(params);
   if (!v.ok) return { prev: '-', next: '-', willChange: false, error: v.error };
   const { tag } = v.value;
-  const existing = Array.isArray(target?.tags) ? target.tags : null;
+  const tags = target?.tags;
   // FMN-207: target.tags === null after the always-live chip-fetch
   // (FMN-206) means the live GET 404'd - the instance doesn't exist on
   // this tenant. Skip with clear copy; the legacy "(tags unknown) /
   // read-modify-write" branch was for the dead cache-first path.
-  if (existing === null) {
+  if (tags === null) {
     return {
       prev: '(not found)',
       next: '(not found)',
@@ -34,6 +34,21 @@ export function describe(target, params) {
       note: 'Instance not found on this tenant; will skip.'
     };
   }
+  // FMN-258: target.tags === undefined means the chip-fetch has not resolved
+  // yet (operator advanced fast). The current tags are UNKNOWN - do NOT
+  // collapse that into "not found / skip" (it silently dropped the removal).
+  // Classify optimistically and let commit()'s authoritative GET-modify-PUT
+  // decide; removeServerTag is idempotent (an absent tag is a no-op).
+  if (!Array.isArray(tags)) {
+    return {
+      prev: '(tags not loaded)',
+      next: `- ${tag}`,
+      willChange: true,
+      skip: false,
+      note: 'Existing tags not loaded yet; will attempt removal on commit (no-op if absent).'
+    };
+  }
+  const existing = tags;
   const has = existing.includes(tag);
   const after = existing.filter((t) => t !== tag);
   return {
@@ -52,7 +67,11 @@ export async function commit(target, params, { client }) {
   // (target.tags === null). Skip the commit-time GET round-trip and
   // report as a skip without an API call. Operator can re-run if state
   // changed in the seconds between chip-fetch and commit.
-  if (target?.tags === null || target?.tags === undefined) {
+  // FMN-258: ONLY an explicit null short-circuits. undefined means the tag
+  // list was never fetched (fast advance); fall through to removeServerTag,
+  // whose own GET-modify-PUT is authoritative and idempotent. Previously
+  // `undefined` also skipped, silently dropping the removal.
+  if (target?.tags === null) {
     return { status: 0, removedTags: [], tagsAfter: null, noop: true, skipped: true };
   }
   try {

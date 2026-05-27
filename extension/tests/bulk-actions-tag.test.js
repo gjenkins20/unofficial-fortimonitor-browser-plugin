@@ -80,12 +80,59 @@ test('remove-tag commit short-circuits (no client call) when target.tags is null
   assert.strictEqual(out.noop, true);
 });
 
-test('remove-tag commit short-circuits when target.tags is undefined (legacy targets without the field)', async () => {
-  let clientCalled = false;
+// ----- FMN-258: undefined tags (chip-fetch not resolved) must NOT skip ----
+// Previously `undefined` short-circuited like `null`, silently dropping the
+// write when the operator advanced Configure -> Commit before the live
+// tag-fetch landed. Now only an explicit null (confirmed 404) skips;
+// undefined falls through to the authoritative, idempotent client call.
+
+test('remove-tag commit executes (does NOT skip) when target.tags is undefined (FMN-258)', async () => {
+  let calledWith = null;
   const client = {
-    async removeServerTag() { clientCalled = true; }
+    async removeServerTag(serverId, tags) {
+      calledWith = { serverId, tags };
+      return { status: 204, removedTags: ['foo'], tagsAfter: [] };
+    }
   };
   const out = await removeTag.commit({ id: 1 }, { tag: 'foo' }, { client });
+  assert.deepEqual(calledWith, { serverId: 1, tags: ['foo'] });
+  assert.notStrictEqual(out.skipped, true);
+  assert.deepEqual(out.removedTags, ['foo']);
+});
+
+test('add-tag commit executes (does NOT skip) when target.tags is undefined (FMN-258)', async () => {
+  let calledWith = null;
+  const client = {
+    async addServerTag(serverId, tags) {
+      calledWith = { serverId, tags };
+      return { status: 204, addedTags: ['foo'], tagsAfter: ['foo'] };
+    }
+  };
+  const out = await addTag.commit({ id: 7 }, { tag: 'foo' }, { client });
+  assert.deepEqual(calledWith, { serverId: 7, tags: ['foo'] });
+  assert.notStrictEqual(out.skipped, true);
+  assert.deepEqual(out.addedTags, ['foo']);
+});
+
+test('add-tag describe treats undefined tags as will-add, not skip (FMN-258)', () => {
+  const d = addTag.describe({ id: 1 }, { tag: 'foo' });
+  assert.strictEqual(d.willChange, true);
+  assert.notStrictEqual(d.skip, true);
+  assert.match(d.note, /not loaded/);
+});
+
+test('remove-tag describe treats undefined tags as will-attempt, not skip (FMN-258)', () => {
+  const d = removeTag.describe({ id: 1 }, { tag: 'foo' });
+  assert.strictEqual(d.willChange, true);
+  assert.notStrictEqual(d.skip, true);
+  assert.match(d.note, /not loaded/);
+});
+
+// null (confirmed 404) still skips - the FMN-207 contract is preserved.
+test('add-tag commit still short-circuits when target.tags is null (FMN-207 preserved)', async () => {
+  let clientCalled = false;
+  const client = { async addServerTag() { clientCalled = true; throw new Error('boom'); } };
+  const out = await addTag.commit({ id: 12345, tags: null }, { tag: 'foo' }, { client });
   assert.strictEqual(clientCalled, false);
   assert.strictEqual(out.skipped, true);
 });

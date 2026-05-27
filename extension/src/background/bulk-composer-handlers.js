@@ -340,13 +340,22 @@ export function createBulkComposerHandlers({ events = {}, getClient, getFortimon
         try {
           const server = await client.getServer(id);
           return { id, tags: Array.isArray(server?.tags) ? server.tags : [] };
-        } catch {
-          return { id, tags: null };
+        } catch (err) {
+          // FMN-258: only a genuine 404 means "instance not found" -> null,
+          // which downstream (configure.js + add/remove-tag describe/commit)
+          // treats as a definitive skip. A TRANSIENT failure (network,
+          // rate-limit, 5xx) must NOT be recorded as not-found: doing so
+          // silently skipped the write when the chip-fetch hit a blip under
+          // concurrent load. Omit the id so the caller leaves target.tags
+          // "unknown" (undefined) and the commit's own authoritative
+          // GET-modify-PUT decides (idempotent; a real 404 surfaces there).
+          if (err?.status === 404) return { id, tags: null };
+          return { id, unknown: true };
         }
       }, { concurrency });
       const byServerId = {};
       for (const r of settled) {
-        if (r.status === 'fulfilled') byServerId[r.value.id] = r.value.tags;
+        if (r.status === 'fulfilled' && !r.value.unknown) byServerId[r.value.id] = r.value.tags;
       }
       return { byServerId };
     },
