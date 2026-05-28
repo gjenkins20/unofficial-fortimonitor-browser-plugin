@@ -82,6 +82,9 @@ tools/discovery/fmn-199-capture-*.json
 # FMN-151 live-FortiMonitor reproduction profile (cookies, local storage)
 tests/e2e/.profile-fmn-live/
 tests/e2e/.profile-fmn-live-cookies.json
+# FMN-241 per-port profile dirs for parallel authenticated launcher instances
+# (FMN_PROFILE_DIR=...). Contain session cookies - never commit.
+tests/e2e/.profile-fmn-live-*/
 
 # Live-spec artifacts (screenshots + JSON capture customer data from real tenant)
 tests/e2e/__artifacts__/
