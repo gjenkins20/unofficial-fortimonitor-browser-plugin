@@ -30,7 +30,15 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '../..');
 const EXTENSION_PATH = path.resolve(REPO_ROOT, 'extension');
-const PROFILE_DIR = path.resolve(REPO_ROOT, 'tests/e2e/.profile-fmn-live');
+// FMN-241: each parallel instance needs its OWN profile dir (Chrome locks a
+// profile dir to a single process), so a second launcher on another port no
+// longer collides. Auth is shared across instances through the cookie store
+// below, which every instance restores from. Default keeps the original path
+// so existing single-instance usage is unchanged.
+const PROFILE_DIR = path.resolve(REPO_ROOT, process.env.FMN_PROFILE_DIR || 'tests/e2e/.profile-fmn-live');
+// Cookie store is intentionally SHARED (not per-profile): the authenticated
+// instance writes it, every spun-up instance restores from it, so several
+// instances run signed in at once without re-login.
 const COOKIE_STORE = path.resolve(REPO_ROOT, 'tests/e2e/.profile-fmn-live-cookies.json');
 const CDP_PORT = process.env.FMN_CDP_PORT || '9222';
 const FM_ORIGIN = 'https://fortimonitor.forticloud.com';
