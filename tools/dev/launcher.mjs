@@ -29,7 +29,12 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '../..');
-const EXTENSION_PATH = path.resolve(REPO_ROOT, 'extension');
+// FMN-241: FMN_EXTENSION_PATH lets a parallel instance load a DIFFERENT
+// extension build (e.g. a worktree's) so two instances can verify two branches
+// at once. Defaults to this repo's extension/ for normal single-instance use.
+const EXTENSION_PATH = process.env.FMN_EXTENSION_PATH
+  ? path.resolve(process.env.FMN_EXTENSION_PATH)
+  : path.resolve(REPO_ROOT, 'extension');
 // FMN-241: each parallel instance needs its OWN profile dir (Chrome locks a
 // profile dir to a single process), so a second launcher on another port no
 // longer collides. Auth is shared across instances through the cookie store
@@ -72,11 +77,13 @@ const context = await chromium.launchPersistentContext(PROFILE_DIR, {
     `--disable-extensions-except=${EXTENSION_PATH}`,
     `--load-extension=${EXTENSION_PATH}`,
     `--remote-debugging-port=${CDP_PORT}`,
-    // Extension tests cannot use true headless mode (the extension's
-    // content scripts only run in a real browser). Keep the window offscreen
-    // + minimized so the operator's display stays clean.
-    '--window-position=-32000,-32000',
-    '--start-minimized',
+    // Extension tests cannot use true headless mode (the extension's content
+    // scripts only run in a real browser). Default: keep the window offscreen
+    // + minimized so the operator's display stays clean. FMN_VISIBLE=1 brings
+    // it on-screen (operator wants a window to QA in).
+    ...(process.env.FMN_VISIBLE
+      ? []
+      : ['--window-position=-32000,-32000', '--start-minimized']),
   ],
 });
 
