@@ -95,8 +95,9 @@ test.describe('Tenant Observations Collect polling (FMN-256)', () => {
     await page.addInitScript(makeStubScript('done'));
     await page.goto(COLLECT_URL(extensionId));
 
-    // The Collect step starts the detached run and polls.
-    await expect(page.locator('[data-test="phase-label"]')).toBeVisible();
+    // The Collect step starts the detached run and polls. FMN-257 replaced
+    // the old single flashing phase-label with a persistent phase stepper.
+    await expect(page.locator('[data-test="phase-stepper"]')).toBeVisible();
 
     // Terminal: the step pulled the result and navigated to /analyze.
     await expect(page).toHaveURL(/#\/analyze$/, { timeout: 15000 });
