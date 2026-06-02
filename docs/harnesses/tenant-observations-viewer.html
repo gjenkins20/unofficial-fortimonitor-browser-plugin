@@ -89,9 +89,16 @@
   const inventory = {
     // Core inventory with enough variety to flip every status / status_reasoning case
     servers: [
-      { id: 1, name: 'fgvm-prod-01', fqdn: 'fgvm-prod-01.acme.com', status: 'active', server_template: '/v2/server_template/9' },
-      { id: 2, name: 'fgvm-prod-02', fqdn: 'fgvm-prod-02.acme.com', status: 'active', server_template: '/v2/server_template/9' },
-      { id: 3, name: 'fgvm-prod-03', fqdn: 'fgvm-prod-03.acme.com', status: 'paused', server_template: '/v2/server_template/9' }
+      // FMN-263: device_type / device_sub_type give the Instance Breakdown tab
+      // a meaningful two-level table (a network_device with a named sub_type and
+      // an unspecified sibling, a plain server with no sub_type, a cloud EC2,
+      // and a docker container).
+      { id: 1, name: 'fgvm-prod-01', fqdn: 'fgvm-prod-01.acme.com', status: 'active', server_template: '/v2/server_template/9', device_type: 'network_device', device_sub_type: 'fortinet.fortigate' },
+      { id: 2, name: 'fgvm-prod-02', fqdn: 'fgvm-prod-02.acme.com', status: 'active', server_template: '/v2/server_template/9', device_type: 'server' },
+      { id: 3, name: 'fgvm-prod-03', fqdn: 'fgvm-prod-03.acme.com', status: 'paused', server_template: '/v2/server_template/9', device_type: 'server' },
+      { id: 4, name: 'core-switch-01', status: 'active', device_type: 'network_device' },
+      { id: 5, name: 'ip-10-0-0-7.compute.internal', status: 'active', device_type: 'cloud', device_sub_type: 'aws.ec2' },
+      { id: 6, name: '/app-web-1', status: 'active', device_type: 'container', device_sub_type: 'docker' }
     ],
     server_groups: [
       { id: 11, name: 'Prod', url: '/v2/server_group/11' },
@@ -124,7 +131,7 @@
     outage_stats_30d: { total: 18, by_severity: { critical: 5, warning: 13 } },
     outage_stats_60d: { total: 30 },
 
-    compound_services: [],
+    compound_services: [{ id: 1, name: 'Checkout Flow' }],
     dem_applications: [],
     dashboards: [{ id: 1, name: 'Ops' }],
     status_pages: [],
@@ -133,7 +140,7 @@
     notification_schedules: [{ id: 1 }],
     rotating_contacts: [],
     maintenance_windows: [{ id: 1 }],
-    onsights: [{ id: 1, name: 'OnSight 1' }],
+    onsights: [{ id: 1, name: 'OnSight 1' }, { id: 2, name: 'OnSight 2' }],
     fabric_connections: [{ id: 1 }],
     cloud_credentials: [],
     snmp_credentials: [],

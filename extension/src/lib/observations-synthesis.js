@@ -283,6 +283,91 @@ export function buildRawCounts(inventory = {}) {
   ];
 }
 
+/**
+ * Instance count + type breakdown (FMN-263).
+ *
+ * Two row arrays, mirroring buildFeatureUtilization's { active, underutilized }
+ * shape so the viewer can drive two sections from one builder call:
+ *
+ *   totals - resource-class counts. The headline "Total Monitored Instances"
+ *            is servers + OnSight appliances + compound services (operator
+ *            decision: count everything we monitor, not just /v2/server). The
+ *            sub-rows are indented exactly like buildRawCounts' status rows.
+ *
+ *   byType - two-level device_type -> device_sub_type breakdown over
+ *            inventory.servers. device_type / device_sub_type come straight off
+ *            the /v2/server record (verified live FMN-263, 2026-06-02). A
+ *            device_type with non-null sub_types lists each as an indented
+ *            child; mixed null/non-null gets an indented "(unspecified)" child
+ *            for the nulls; an all-null device_type (e.g. "server") gets no
+ *            children - its parent total already says everything.
+ *
+ * @param {object} inventory
+ * @returns {{ totals: {resource:string,count:number}[], byType: {type:string,count:number}[] }}
+ */
+export function buildInstanceBreakdown(inventory = {}) {
+  const servers = arr(inventory.servers);
+  const onsights = arr(inventory.onsights);
+  const compound = arr(inventory.compound_services);
+
+  const totals = [
+    { resource: 'Total Monitored Instances', count: servers.length + onsights.length + compound.length },
+    { resource: '  Servers / Devices', count: servers.length },
+    { resource: '  OnSight Appliances', count: onsights.length },
+    { resource: '  Compound Services', count: compound.length }
+  ];
+
+  // Group servers by device_type, tallying device_sub_type within each.
+  const NULL_SUB = ' null'; // sentinel for null/absent sub_type
+  const types = new Map(); // device_type -> { total, subs: Map<subKey,count> }
+  for (const s of servers) {
+    const dt = s?.device_type == null ? '(unspecified)' : String(s.device_type);
+    const subRaw = s?.device_sub_type;
+    const subKey = subRaw == null || subRaw === '' ? NULL_SUB : String(subRaw);
+    if (!types.has(dt)) types.set(dt, { total: 0, subs: new Map() });
+    const entry = types.get(dt);
+    entry.total += 1;
+    entry.subs.set(subKey, (entry.subs.get(subKey) || 0) + 1);
+  }
+
+  const byType = [];
+  const ordered = [...types.entries()].sort((a, b) => b[1].total - a[1].total);
+  for (const [dt, { total, subs }] of ordered) {
+    byType.push({ type: humanizeDeviceType(dt), count: total });
+    const hasNamedSub = [...subs.keys()].some((k) => k !== NULL_SUB);
+    if (!hasNamedSub) continue; // all-null -> parent total is enough
+    const subRows = [...subs.entries()].sort((a, b) => {
+      // (unspecified) sorts last; otherwise by count desc.
+      if (a[0] === NULL_SUB) return 1;
+      if (b[0] === NULL_SUB) return -1;
+      return b[1] - a[1];
+    });
+    for (const [subKey, count] of subRows) {
+      const label = subKey === NULL_SUB ? '(unspecified)' : subKey;
+      byType.push({ type: '  ' + label, count });
+    }
+  }
+
+  return { totals, byType };
+}
+
+// Humanize a device_type: known values get a curated label, unknown future
+// values fall back to underscore-to-space title case so they still read well.
+const DEVICE_TYPE_LABELS = Object.freeze({
+  server: 'Server',
+  network_device: 'Network Device',
+  cloud: 'Cloud',
+  container: 'Container'
+});
+function humanizeDeviceType(dt) {
+  if (DEVICE_TYPE_LABELS[dt]) return DEVICE_TYPE_LABELS[dt];
+  if (dt === '(unspecified)') return dt;
+  return String(dt)
+    .split('_')
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(' ');
+}
+
 function arr(v) { return Array.isArray(v) ? v : []; }
 function featRow(feature, n, assessment) {
   return { feature, count: String(n), assessment };

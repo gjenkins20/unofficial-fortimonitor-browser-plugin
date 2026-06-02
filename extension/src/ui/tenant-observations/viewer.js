@@ -19,7 +19,8 @@ import {
   buildExecutiveSummary,
   buildFeatureUtilization,
   buildLabs,
-  buildRawCounts
+  buildRawCounts,
+  buildInstanceBreakdown
 } from '../../lib/observations-synthesis.js';
 
 // =============================================================================
@@ -638,7 +639,37 @@ const TABS = [
     }]
   },
 
-  // 11. Raw Counts ----------------------------------------------------------
+  // 11. Instance Breakdown --------------------------------------------------
+  // FMN-263: instance count + two-level device_type/device_sub_type breakdown.
+  // Reads only `inventory` (servers/onsights/compound_services are always
+  // crawled), so it renders in analyzer-scoped and non-deep runs alike -
+  // hence 'always' visibility, like Raw Counts.
+  {
+    id: 'instance-breakdown',
+    label: 'Instance Breakdown',
+    filenamePart: 'instance-breakdown',
+    sections: [
+      {
+        label: 'Instance Totals',
+        columns: [
+          { key: 'resource', header: 'Resource', getter: (r) => r.resource },
+          { key: 'count',    header: 'Count',    getter: (r) => r.count }
+        ],
+        rows: ({ inventory }) => buildInstanceBreakdown(inventory).totals
+      },
+      {
+        label: 'Type Breakdown',
+        columns: [
+          { key: 'type',  header: 'Type',  getter: (r) => r.type },
+          { key: 'count', header: 'Count', getter: (r) => r.count }
+        ],
+        rows: ({ inventory }) => buildInstanceBreakdown(inventory).byType,
+        emptyText: 'No instances found.'
+      }
+    ]
+  },
+
+  // 12. Raw Counts ----------------------------------------------------------
   {
     id: 'raw-counts',
     label: 'Raw Counts',
@@ -679,6 +710,7 @@ const TAB_VISIBILITY = Object.freeze({
   'template-recommendations': { mode: 'section', section: 'template-recommendations' },
   'monitoring-policy':       { mode: 'section', section: 'monitoring-policy' },
   'recommended-labs':        { mode: 'all-only' },
+  'instance-breakdown':      { mode: 'always' },
   'raw-counts':              { mode: 'always' }
 });
 

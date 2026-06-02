@@ -24,11 +24,11 @@ const HARNESS_URL = `file://${HARNESS_PATH}`;
 const EXPECTED_TAB_IDS = [
   'executive-summary', 'feature-utilization', 'incident-summary', 'incidents',
   'user-activity', 'instance-analysis', 'template-recommendations',
-  'monitoring-policy', 'recommended-labs', 'raw-counts'
+  'monitoring-policy', 'recommended-labs', 'instance-breakdown', 'raw-counts'
 ];
 
 test.describe('Tenant Observations viewer harness (FMN-133)', () => {
-  test('renders all 10 tabs with no console errors', async ({ extensionContext }) => {
+  test('renders all 11 tabs with no console errors', async ({ extensionContext }) => {
     const page = await extensionContext.newPage();
     const consoleErrors = [];
     page.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push(msg.text()); });

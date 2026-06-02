@@ -4,7 +4,8 @@ import {
   buildExecutiveSummary,
   buildFeatureUtilization,
   buildLabs,
-  buildRawCounts
+  buildRawCounts,
+  buildInstanceBreakdown
 } from '../src/lib/observations-synthesis.js';
 
 // =============================================================================
@@ -170,4 +171,98 @@ test('buildRawCounts: missing inventory keys default to 0', () => {
   const rows = buildRawCounts({});
   const allCounts = rows.map((r) => r.count);
   for (const c of allCounts) assert.equal(c, 0);
+});
+
+// =============================================================================
+// buildInstanceBreakdown (FMN-263)
+// =============================================================================
+
+test('buildInstanceBreakdown: empty inventory yields zero totals and empty byType', () => {
+  const { totals, byType } = buildInstanceBreakdown({});
+  const map = new Map(totals.map((r) => [r.resource, r.count]));
+  assert.equal(map.get('Total Monitored Instances'), 0);
+  assert.equal(map.get('  Servers / Devices'), 0);
+  assert.equal(map.get('  OnSight Appliances'), 0);
+  assert.equal(map.get('  Compound Services'), 0);
+  assert.deepEqual(byType, []);
+});
+
+test('buildInstanceBreakdown: total counts servers + appliances + compound', () => {
+  const { totals } = buildInstanceBreakdown({
+    servers: [{ device_type: 'server' }, { device_type: 'server' }, { device_type: 'cloud' }],
+    onsights: [{}, {}],
+    compound_services: [{}]
+  });
+  const map = new Map(totals.map((r) => [r.resource, r.count]));
+  assert.equal(map.get('Total Monitored Instances'), 6); // 3 + 2 + 1
+  assert.equal(map.get('  Servers / Devices'), 3);
+  assert.equal(map.get('  OnSight Appliances'), 2);
+  assert.equal(map.get('  Compound Services'), 1);
+});
+
+test('buildInstanceBreakdown: all-null sub_type device_type has no child rows', () => {
+  const { byType } = buildInstanceBreakdown({
+    servers: [{ device_type: 'server' }, { device_type: 'server' }]
+  });
+  // Just the parent row, no indented children.
+  assert.deepEqual(byType, [{ type: 'Server', count: 2 }]);
+});
+
+test('buildInstanceBreakdown: named sub_types render as indented children, count desc', () => {
+  const { byType } = buildInstanceBreakdown({
+    servers: [
+      { device_type: 'cloud', device_sub_type: 'aws.ec2' },
+      { device_type: 'cloud', device_sub_type: 'aws.ec2' },
+      { device_type: 'cloud', device_sub_type: 'azure.vm' }
+    ]
+  });
+  assert.deepEqual(byType, [
+    { type: 'Cloud', count: 3 },
+    { type: '  aws.ec2', count: 2 },
+    { type: '  azure.vm', count: 1 }
+  ]);
+});
+
+test('buildInstanceBreakdown: mixed null/named sub_types group nulls as (unspecified) last', () => {
+  const { byType } = buildInstanceBreakdown({
+    servers: [
+      { device_type: 'network_device', device_sub_type: 'fortinet.fortigate' },
+      { device_type: 'network_device', device_sub_type: 'fortinet.fortigate' },
+      { device_type: 'network_device' },
+      { device_type: 'network_device', device_sub_type: null }
+    ]
+  });
+  assert.deepEqual(byType, [
+    { type: 'Network Device', count: 4 },
+    { type: '  fortinet.fortigate', count: 2 },
+    { type: '  (unspecified)', count: 2 }
+  ]);
+});
+
+test('buildInstanceBreakdown: device_types ordered by total count descending', () => {
+  const { byType } = buildInstanceBreakdown({
+    servers: [
+      { device_type: 'cloud', device_sub_type: 'aws.ec2' },
+      { device_type: 'server' },
+      { device_type: 'server' },
+      { device_type: 'server' }
+    ]
+  });
+  // server (3) before cloud (1); parents appear in that order.
+  const parents = byType.filter((r) => !r.type.startsWith('  ')).map((r) => r.type);
+  assert.deepEqual(parents, ['Server', 'Cloud']);
+});
+
+test('buildInstanceBreakdown: unknown device_type is humanized via title-case fallback', () => {
+  const { byType } = buildInstanceBreakdown({
+    servers: [{ device_type: 'edge_gateway' }]
+  });
+  assert.deepEqual(byType, [{ type: 'Edge Gateway', count: 1 }]);
+});
+
+test('buildInstanceBreakdown: null device_type bucketed as (unspecified)', () => {
+  const { byType } = buildInstanceBreakdown({
+    servers: [{ device_type: null }, {}]
+  });
+  assert.deepEqual(byType, [{ type: '(unspecified)', count: 2 }]);
 });
