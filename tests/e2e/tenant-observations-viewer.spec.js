@@ -23,8 +23,8 @@ const HARNESS_URL = `file://${HARNESS_PATH}`;
 // values for code-internal stability - their rename is FMN-219.
 const EXPECTED_TAB_IDS = [
   'executive-summary', 'feature-utilization', 'incident-summary', 'incidents',
-  'user-activity', 'instance-analysis', 'template-recommendations',
-  'monitoring-policy', 'recommended-labs', 'instance-breakdown', 'raw-counts'
+  'user-activity', 'instance-breakdown', 'instance-analysis', 'template-recommendations',
+  'monitoring-policy', 'recommended-labs', 'raw-counts'
 ];
 
 test.describe('Tenant Observations viewer harness (FMN-133)', () => {
@@ -56,6 +56,19 @@ test.describe('Tenant Observations viewer harness (FMN-133)', () => {
       await expect(page.locator('[data-test="tab-pane"] h2')).toBeVisible();
     }
     expect(errors).toEqual([]);
+    await page.close();
+  });
+
+  test('Instance Breakdown tab renders immediately before Instance Analysis (FMN-263 order guard)', async ({ extensionContext }) => {
+    const page = await extensionContext.newPage();
+    await page.goto(HARNESS_URL);
+    const order = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('button[data-tab]')).map((b) => b.getAttribute('data-tab')));
+    const ib = order.indexOf('instance-breakdown');
+    const ia = order.indexOf('instance-analysis');
+    expect(ib, 'instance-breakdown tab must be present').toBeGreaterThan(-1);
+    expect(ia, 'instance-analysis tab must be present').toBeGreaterThan(-1);
+    expect(ib, 'Instance Breakdown must render before Instance Analysis').toBeLessThan(ia);
     await page.close();
   });
 

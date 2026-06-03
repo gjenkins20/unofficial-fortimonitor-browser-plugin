@@ -435,7 +435,39 @@ const TABS = [
     }]
   },
 
-  // 6. Instance Analysis -----------------------------------------------------
+  // 6. Instance Breakdown ---------------------------------------------------
+  // FMN-263: instance count + two-level device_type/device_sub_type breakdown.
+  // Reads only `inventory` (servers/onsights/compound_services are always
+  // crawled), so it renders in analyzer-scoped and non-deep runs alike -
+  // hence 'always' visibility, like Raw Counts. Placed immediately before
+  // Instance Analysis (operator request 2026-06-03): the high-level count +
+  // type overview reads naturally just ahead of the per-instance deep dive.
+  {
+    id: 'instance-breakdown',
+    label: 'Instance Breakdown',
+    filenamePart: 'instance-breakdown',
+    sections: [
+      {
+        label: 'Instance Totals',
+        columns: [
+          { key: 'resource', header: 'Resource', getter: (r) => r.resource },
+          { key: 'count',    header: 'Count',    getter: (r) => r.count }
+        ],
+        rows: ({ inventory }) => buildInstanceBreakdown(inventory).totals
+      },
+      {
+        label: 'Type Breakdown',
+        columns: [
+          { key: 'type',  header: 'Type',  getter: (r) => r.type },
+          { key: 'count', header: 'Count', getter: (r) => r.count }
+        ],
+        rows: ({ inventory }) => buildInstanceBreakdown(inventory).byType,
+        emptyText: 'No instances found.'
+      }
+    ]
+  },
+
+  // 7. Instance Analysis -----------------------------------------------------
   {
     id: 'instance-analysis',
     label: 'Instance Analysis',
@@ -474,7 +506,7 @@ const TABS = [
     ]
   },
 
-  // 7. Template Analysis -----------------------------------------------------
+  // 8. Template Analysis -----------------------------------------------------
   // FMN-135 follow-up (2026-05-01): the default-only / cleanup / overlap
   // analyses run on CUSTOM templates only. FortiMonitor's stock "Default
   // Monitoring Templates" group is exempted - those templates get their
@@ -576,7 +608,7 @@ const TABS = [
     ]
   },
 
-  // 8. Monitoring Policy Workflow -------------------------------------------
+  // 9. Monitoring Policy Workflow -------------------------------------------
   {
     id: 'monitoring-policy',
     label: 'Monitoring Policy',
@@ -616,7 +648,7 @@ const TABS = [
     ]
   },
 
-  // 9. Quick Labs -----------------------------------------------------------
+  // 10. Quick Labs ----------------------------------------------------------
   // FMN-218 (2026-05-14): the synthesized "Recommendations" tab (formerly
   // tab #9) was removed when the tenant observations shifted to observation-only output.
   // Its prior contents duplicated the per-analyzer findings as imperatives.
@@ -639,37 +671,7 @@ const TABS = [
     }]
   },
 
-  // 11. Instance Breakdown --------------------------------------------------
-  // FMN-263: instance count + two-level device_type/device_sub_type breakdown.
-  // Reads only `inventory` (servers/onsights/compound_services are always
-  // crawled), so it renders in analyzer-scoped and non-deep runs alike -
-  // hence 'always' visibility, like Raw Counts.
-  {
-    id: 'instance-breakdown',
-    label: 'Instance Breakdown',
-    filenamePart: 'instance-breakdown',
-    sections: [
-      {
-        label: 'Instance Totals',
-        columns: [
-          { key: 'resource', header: 'Resource', getter: (r) => r.resource },
-          { key: 'count',    header: 'Count',    getter: (r) => r.count }
-        ],
-        rows: ({ inventory }) => buildInstanceBreakdown(inventory).totals
-      },
-      {
-        label: 'Type Breakdown',
-        columns: [
-          { key: 'type',  header: 'Type',  getter: (r) => r.type },
-          { key: 'count', header: 'Count', getter: (r) => r.count }
-        ],
-        rows: ({ inventory }) => buildInstanceBreakdown(inventory).byType,
-        emptyText: 'No instances found.'
-      }
-    ]
-  },
-
-  // 12. Raw Counts ----------------------------------------------------------
+  // 11. Raw Counts ----------------------------------------------------------
   {
     id: 'raw-counts',
     label: 'Raw Counts',
@@ -706,11 +708,11 @@ const TAB_VISIBILITY = Object.freeze({
   'incident-summary':        { mode: 'section', section: 'incidents' },
   'incidents':               { mode: 'section', section: 'incidents' },
   'user-activity':           { mode: 'section', section: 'user-activity' },
+  'instance-breakdown':      { mode: 'always' },
   'instance-analysis':       { mode: 'section', section: 'instance-analysis' },
   'template-recommendations': { mode: 'section', section: 'template-recommendations' },
   'monitoring-policy':       { mode: 'section', section: 'monitoring-policy' },
   'recommended-labs':        { mode: 'all-only' },
-  'instance-breakdown':      { mode: 'always' },
   'raw-counts':              { mode: 'always' }
 });
 
