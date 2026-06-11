@@ -40,6 +40,10 @@ export function isRetryable(err) {
  * @param {string} params.serverGroupUrl
  * @param {string|null} [params.applianceGroupUrl]
  * @param {number} [params.discoverFrequency]
+ * @param {boolean} [params.importImmediately=true] - Import/discover the
+ *   environment immediately after the connection is created. Defaults to
+ *   true so adding a device also kicks off discovery; without it the device
+ *   is created but discovery only runs on the next scheduled poll.
  * @param {object} [params.client] - PanoptaClient (factory call result)
  * @param {number} [params.concurrency=1]
  * @param {number} [params.maxAttempts=3]
@@ -54,6 +58,7 @@ export async function executeFabricBatch({
   serverGroupUrl,
   applianceGroupUrl = null,
   discoverFrequency = 60,
+  importImmediately = true,
   client,
   concurrency = 1,
   maxAttempts = 3,
@@ -85,7 +90,8 @@ export async function executeFabricBatch({
           upstream_host: device.ip,
           upstream_port: Number(device.port),
           upstream_sn: device.serial,
-          discover_frequency: discoverFrequency
+          discover_frequency: discoverFrequency,
+          import_immediately: importImmediately
         };
         const result = { device, status: 'succeeded', dryRun: true, preview, attempts: 1 };
         onEntryDone?.(i, result);
@@ -101,7 +107,8 @@ export async function executeFabricBatch({
             onsightUrl,
             serverGroupUrl,
             applianceGroupUrl,
-            discoverFrequency
+            discoverFrequency,
+            importImmediately
           });
         },
         {

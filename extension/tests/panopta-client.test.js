@@ -30,6 +30,15 @@ test('buildFabricConnectionPayload sets required CSF tunnel fields', () => {
   assert.equal(p.label, '10.0.0.94'); // defaults to ip
 });
 
+test('buildFabricConnectionPayload threads import_immediately when set true', () => {
+  const p = buildFabricConnectionPayload({
+    serial: 'X', ip: '1.1.1.1', port: 1,
+    onsightUrl: 'A', serverGroupUrl: 'B',
+    importImmediately: true
+  });
+  assert.equal(p.import_immediately, true, 'true should pass through to kick off discovery');
+});
+
 test('buildFabricConnectionPayload omits appliance_group when not provided', () => {
   const p = buildFabricConnectionPayload({
     serial: 'X', ip: '1.1.1.1', port: 1,

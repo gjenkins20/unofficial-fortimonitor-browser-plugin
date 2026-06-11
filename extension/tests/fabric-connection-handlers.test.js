@@ -64,6 +64,40 @@ test('executeFabricBatch happy path: 1 device', async () => {
   assert.equal(results[0].value.resourceId, '99');
 });
 
+test('executeFabricBatch: kicks off discovery by default (importImmediately true)', async () => {
+  let seen = null;
+  const client = makeClient(async (input) => { seen = input; return { status: 201, resourceId: 'X', body: {} }; });
+  await executeFabricBatch({
+    devices: [{ serial: 'FG1', ip: '10.0.0.1', port: 8013 }],
+    onsightUrl: 'A', serverGroupUrl: 'B',
+    client
+  });
+  assert.equal(seen.importImmediately, true, 'discovery should be kicked off on create');
+});
+
+test('executeFabricBatch: importImmediately can be overridden to false', async () => {
+  let seen = null;
+  const client = makeClient(async (input) => { seen = input; return { status: 201, resourceId: 'X', body: {} }; });
+  await executeFabricBatch({
+    devices: [{ serial: 'FG1', ip: '10.0.0.1', port: 8013 }],
+    onsightUrl: 'A', serverGroupUrl: 'B',
+    importImmediately: false,
+    client
+  });
+  assert.equal(seen.importImmediately, false);
+});
+
+test('executeFabricBatch: dry-run preview reflects import_immediately default', async () => {
+  const client = makeClient(async () => ({}));
+  const results = await executeFabricBatch({
+    devices: [{ serial: 'FG1', ip: '10.0.0.1', port: 8013 }],
+    onsightUrl: 'A', serverGroupUrl: 'B',
+    client,
+    dryRun: true
+  });
+  assert.equal(results[0].preview.import_immediately, true);
+});
+
 test('executeFabricBatch: dry-run does not invoke client', async () => {
   let called = false;
   const client = makeClient(async () => { called = true; return {}; });

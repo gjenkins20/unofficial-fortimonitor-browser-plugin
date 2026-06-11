@@ -66,7 +66,7 @@ Creates one OnSight CSF (Security Fabric) tunnel connection for one FortiGate de
 | `discover_frequency` | integer | `60` | Discovery frequency in seconds. |
 | `fortios_version` | integer | `7` | FortiOS major version (`6` or `7`). |
 | `verify_ssl_cert` | boolean | `false` | Whether to validate the FortiGate cert. |
-| `import_immediately` | boolean | `false` | Import environment immediately after creation. |
+| `import_immediately` | boolean | `false` | Import environment immediately after creation. **The tool always sends `true`** (FMN-266): without it the device is created but discovery only runs on the next scheduled poll, so "add device" wouldn't kick off discovery. The API default is `false`; the tool overrides it via `executeFabricBatch({ importImmediately: true })` (the default for that param). |
 
 #### Conditionally required
 
