@@ -18,6 +18,9 @@ place.
 
 ## Unreleased
 
+## v1.9.0 - 2026-06-11
+
+- FMN-266: Add Fabric Connection (Bulk) now kicks off discovery on create. The `POST /v2/fabric_connection` payload was sending `import_immediately: false` (the default inherited from the sibling Python CLI via `buildFabricConnectionPayload`), so devices were created but only imported on the next scheduled discovery poll. `executeFabricBatch` now takes `importImmediately` (default `true`) and threads it into `createFabricConnection` and the dry-run preview, so adding a device fires discovery immediately. No UI option - discovery always runs on add. Doc note in `docs/api-discovery/fabric-connection.md`.
 - FMN-240: Introduction to FortiMonitor tour - sidebar-add / sidebar-collapse step cards no longer render below the viewport. `positionCard` in `step-renderer.js` now clamps the card so its bottom edge stays inside the viewport when the anchor is near the bottom (previously the card's body + Next button were clipped off-screen). Tour also promoted out of Beta: the `(Beta)` suffix is removed from the Settings label and the popup tile's badge, `isIntroTourEnabled()` defaults to true (FMN-167's default-off was the stub-era posture; FMN-240 flips it now that the tour is operator-verified), and explicit-false in `chrome.storage.local` still suppresses the tile. **One-time migration** clears any Beta-era explicit-`false` on first read after upgrade so operators who toggled the tour off during Beta (or who landed in explicit-false via the on→off toggle sequence) get the un-Beta'd default-on without needing to flip the Settings toggle themselves; a `fm:introTourFmn240Migrated` marker prevents the migration from ever re-clearing a post-FMN-240 explicit opt-out.
 
 ## v1.8.1 - 2026-05-21
