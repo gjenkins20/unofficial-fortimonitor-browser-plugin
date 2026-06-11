@@ -375,6 +375,29 @@ textarea.paste-area:focus { outline: 2px solid var(--accent); outline-offset: -1
 .parse-result .headline { font-weight: 600; color: var(--accent); font-size: 13px; }
 .parse-result.empty .headline { color: var(--text-muted); }
 .parse-result .sub { font-size: 12px; color: var(--text); margin-top: 4px; }
+.parse-ok { font-weight: 600; color: var(--accent); font-size: 13px; }
+.parse-warn { font-weight: 600; color: var(--warn); font-size: 13px; }
+.parse-warnings { margin: 8px 0 0; padding-left: 18px; font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+.parse-hint { margin-top: 8px; font-size: 12px; color: var(--warn); }
+
+/* Include-flagged override (FMN-265) */
+.include-flagged-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: var(--warn-soft);
+  border: 1px solid var(--warn);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.include-flagged-row input[type="checkbox"] { margin-top: 2px; flex-shrink: 0; }
+.flag-badge { color: var(--warn); font-weight: 600; font-size: 11px; white-space: nowrap; }
+.review-table tr.row-flagged { background: var(--warn-soft); }
+.review-table tr.row-flagged:hover { background: var(--warn-soft); }
 .sample-ids {
   margin-top: 10px;
   background: white;

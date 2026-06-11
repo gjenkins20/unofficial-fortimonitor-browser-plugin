@@ -79,3 +79,67 @@ test('skips rows missing IP', () => {
   assert.equal(r.devices.length, 0);
   assert.match(r.warnings[0], /missing IP/);
 });
+
+// ---- FMN-265: cloud serials (hyphens) + include-flagged override ----
+
+test('accepts cloud serials with a hyphen by default (FGTAWS-)', () => {
+  const r = parseFortigateList('FGTAWS-LYSIUYW7D,10.0.0.5,8013');
+  assert.equal(r.devices.length, 0 + 1);
+  assert.deepEqual(r.devices[0], { serial: 'FGTAWS-LYSIUYW7D', ip: '10.0.0.5', port: 8013, lineNum: 1 });
+  assert.equal(r.warnings.length, 0);
+});
+
+test('a serial of only hyphens is still rejected (needs an alphanumeric)', () => {
+  const r = parseFortigateList('--------,10.0.0.5,8013');
+  assert.equal(r.devices.length, 0);
+  const soft = r.skipped.filter((s) => s.severity === 'soft');
+  assert.equal(soft.length, 1);
+});
+
+test('skipped array carries structured reason + severity', () => {
+  const r = parseFortigateList('FGVM01TM24006844,not-an-ip,8013');
+  assert.equal(r.devices.length, 0);
+  assert.equal(r.skipped.length, 1);
+  assert.equal(r.skipped[0].severity, 'soft');
+  assert.equal(r.skipped[0].serial, 'FGVM01TM24006844');
+  assert.match(r.skipped[0].reason, /not a valid IPv4/);
+});
+
+test('includeFlagged onboards an unusual serial and marks it flagged', () => {
+  const off = parseFortigateList('FGT@BADSERIAL,10.0.0.5,8013');
+  assert.equal(off.devices.length, 0);
+  assert.equal(off.skipped[0].severity, 'soft');
+
+  const on = parseFortigateList('FGT@BADSERIAL,10.0.0.5,8013', { includeFlagged: true });
+  assert.equal(on.devices.length, 1);
+  assert.equal(on.devices[0].serial, 'FGT@BADSERIAL');
+  assert.match(on.devices[0].flagged, /unusual serial/);
+});
+
+test('includeFlagged onboards a non-IPv4 host and preserves it', () => {
+  const on = parseFortigateList('FGVM01TM24006844,fgt.branch.example.com,8013', { includeFlagged: true });
+  assert.equal(on.devices.length, 1);
+  assert.equal(on.devices[0].ip, 'fgt.branch.example.com');
+  assert.match(on.devices[0].flagged, /non-IPv4 host/);
+});
+
+test('includeFlagged does NOT onboard rows missing a required field (hard skip)', () => {
+  const on = parseFortigateList('FGVM01TM24006844,,8013', { includeFlagged: true });
+  assert.equal(on.devices.length, 0);
+  assert.equal(on.skipped[0].severity, 'hard');
+});
+
+test('includeFlagged still deduplicates by serial', () => {
+  const on = parseFortigateList(
+    'FGT@BADSERIAL,10.0.0.5,8013\nFGT@BADSERIAL,10.0.0.6,8013',
+    { includeFlagged: true }
+  );
+  assert.equal(on.devices.length, 1);
+  assert.ok(on.skipped.some((s) => s.severity === 'dedup'));
+});
+
+test('includeFlagged leaves a clean serial unflagged', () => {
+  const on = parseFortigateList('FGVM01TM24006844,10.0.0.5,8013', { includeFlagged: true });
+  assert.equal(on.devices.length, 1);
+  assert.equal(on.devices[0].flagged, undefined);
+});

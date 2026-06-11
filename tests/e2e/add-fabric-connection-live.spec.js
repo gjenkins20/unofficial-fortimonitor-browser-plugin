@@ -21,11 +21,11 @@ import { seedApiKey } from './seed-api-key.js';
 
 const API_KEY = process.env.FORTIMONITOR_API_KEY;
 
-// Three throwaway, deliberately-fake FortiGate serial numbers. parse-csv.js
-// enforces /^[A-Za-z0-9]{8,}$/ (alphanumeric, no hyphens), so we shape
-// these like real FortiGate VMs (FGVM01TM-style). The dry-run path
-// never sends them to the tenant; collision with real devices doesn't
-// matter (no POST happens).
+// Three throwaway, deliberately-fake FortiGate serial numbers shaped like real
+// FortiGate VMs (FGVM01TM-style). The dry-run path never sends them to the
+// tenant; collision with real devices doesn't matter (no POST happens).
+// (As of FMN-265 parse-csv also accepts hyphenated cloud serials like
+// FGTAWS-...; the dedicated Start-step test below covers that path.)
 const TEST_DEVICES = [
   { serial: 'FGVME2ETESTFMN119A', ip: '203.0.113.10', port: '8443' },
   { serial: 'FGVME2ETESTFMN119B', ip: '203.0.113.20', port: '8443' },
@@ -131,6 +131,58 @@ test.describe('live - Add Fabric Connection (API) E2E - real tenant', () => {
       for (const d of TEST_DEVICES) {
         await expect(body).toContainText(d.serial);
       }
+    } finally {
+      await page.close();
+    }
+  });
+
+  // FMN-265: Start-step behavior matrix against the live tenant. Non-destructive
+  // - it only parses input + advances to Review (no Execute, no fc:create-batch).
+  // The dropdowns are populated from the real /v2 catalog; the assertions cover
+  // (a) a hyphenated cloud serial parsing, (b) the include-flagged override
+  // rescuing a non-IPv4 host, and (c) a host-less row staying hard-skipped.
+  test('live - cloud serials parse and the include-flagged override behaves', async ({ extensionContext, fabricConnectionUrl }) => {
+    const page = await extensionContext.newPage();
+    try {
+      await page.goto(fabricConnectionUrl);
+      await expect(page.locator('.step-header h2')).toContainText('Load FortiGate devices and pick targets');
+
+      await page.waitForFunction(() => {
+        const sels = document.querySelectorAll('select.select');
+        return sels.length >= 2 && sels[0].options.length > 1 && sels[1].options.length > 1;
+      }, undefined, { timeout: 30_000 });
+
+      const onsightSelect = page.locator('select.select').first();
+      const serverGroupSelect = page.locator('select.select').nth(1);
+      await onsightSelect.selectOption(await onsightSelect.locator('option').nth(1).getAttribute('value'));
+      await serverGroupSelect.selectOption(await serverGroupSelect.locator('option').nth(1).getAttribute('value'));
+
+      const paste = page.locator('textarea.paste-area');
+      const continueBtn = page.getByRole('button', { name: /Continue/ });
+      const flaggedToggle = page.locator('.include-flagged-row input[type="checkbox"]');
+
+      // (a) Hyphenated cloud serial parses on its own.
+      await paste.fill('FGTAWS-LIVEFMN265TEST,203.0.113.40,8443');
+      await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
+      await expect(page.locator('.flag-badge')).toHaveCount(0);
+
+      // (b) Non-IPv4 host: skipped by default, rescued by the override + flagged.
+      await paste.fill('FGVME2EFMN265HOST,fgt.live.example.com,8443');
+      await expect(continueBtn).toBeDisabled();
+      await expect(page.locator('.parse-hint')).toContainText('Include flagged devices');
+      await flaggedToggle.check();
+      await expect(continueBtn).toBeEnabled();
+      await continueBtn.click();
+      await expect(page).toHaveURL(/#\/review$/, { timeout: 10_000 });
+      await expect(page.locator('.review-table .flag-badge')).toBeVisible();
+
+      // (c) Back on Start, a host-less row stays hard-skipped even with the toggle on.
+      await page.getByRole('button', { name: /Back/ }).click();
+      await expect(page).toHaveURL(/#\/start$/, { timeout: 10_000 });
+      await page.locator('textarea.paste-area').fill('FGVME2EFMN265NOHOST,,8443');
+      await expect(page.getByRole('button', { name: /Continue/ })).toBeDisabled();
+      // `.parse-result` also matches the (empty) targets-error div; scope to the populated summary.
+      await expect(page.locator('.parse-result').first()).toContainText('missing IP');
     } finally {
       await page.close();
     }

@@ -62,10 +62,16 @@ export function render({ container, store, navigate }) {
     h('th', {}, 'Port')
   ));
   const tbody = h('tbody', {});
+  let anyFlagged = false;
   store.devices.forEach((d, i) => {
-    tbody.appendChild(h('tr', {},
+    const serialCell = h('td', {}, d.serial);
+    if (d.flagged) {
+      anyFlagged = true;
+      serialCell.appendChild(h('span', { class: 'flag-badge', title: `Included despite: ${d.flagged}` }, ' ⚑ flagged'));
+    }
+    tbody.appendChild(h('tr', { class: d.flagged ? 'row-flagged' : '' },
       h('td', {}, String(i + 1)),
-      h('td', {}, d.serial),
+      serialCell,
       h('td', {}, d.ip),
       h('td', {}, String(d.port))
     ));
@@ -73,6 +79,12 @@ export function render({ container, store, navigate }) {
   table.appendChild(thead);
   table.appendChild(tbody);
   body.appendChild(table);
+
+  if (anyFlagged) {
+    body.appendChild(h('div', { class: 'parse-hint' },
+      '⚑ Flagged devices failed a format check (unusual serial or non-IPv4 host) and were included via the "Include flagged devices" option. Confirm the serial / host are correct before going live.'
+    ));
+  }
 
   // ---- Example payload ----
   if (store.devices.length) {

@@ -44,4 +44,70 @@ test.describe('Add Fabric Connection (API) E2E - stubbed tenant', () => {
       await page.close();
     }
   });
+
+  // FMN-265: cloud serials (hyphens) + include-flagged override.
+  async function pickTargets(page) {
+    await page.waitForFunction(() => {
+      const sels = document.querySelectorAll('select.select');
+      return sels.length >= 3 && sels[0].options.length > 1 && sels[1].options.length > 1;
+    }, undefined, { timeout: 10_000 });
+    await page.locator('select.select').first().selectOption('7');
+    await page.locator('select.select').nth(1).selectOption('100');
+  }
+
+  test('cloud serial with a hyphen (FGTAWS-) parses and advances', async ({ extensionContext, fabricConnectionUrl }) => {
+    const page = await openTool(extensionContext, fabricConnectionUrl);
+    try {
+      await pickTargets(page);
+      await page.locator('textarea.paste-area').fill('FGTAWS-LYSIUYW7D,10.0.0.5,8013');
+      const continueBtn = page.getByRole('button', { name: /Continue/ });
+      await expect(continueBtn).toBeEnabled();
+      await continueBtn.click();
+      await expect(page).toHaveURL(/#\/review$/, { timeout: 10_000 });
+      await expect(page.locator('.review-table')).toContainText('FGTAWS-LYSIUYW7D');
+      // A valid cloud serial is NOT flagged.
+      await expect(page.locator('.flag-badge')).toHaveCount(0);
+    } finally {
+      await page.close();
+    }
+  });
+
+  test('non-IPv4 host is skipped by default, included via the flagged toggle', async ({ extensionContext, fabricConnectionUrl }) => {
+    const page = await openTool(extensionContext, fabricConnectionUrl);
+    try {
+      await pickTargets(page);
+      // A DNS host fails the IPv4 heuristic.
+      await page.locator('textarea.paste-area').fill('FGVM01TM24006844,fgt.branch.example.com,8013');
+
+      // Off by default: 0 devices, hint points at the override, Continue disabled.
+      const continueBtn = page.getByRole('button', { name: /Continue/ });
+      await expect(page.locator('.parse-hint')).toContainText('Include flagged devices');
+      await expect(continueBtn).toBeDisabled();
+
+      // Toggle on: the row is onboarded and flagged.
+      await page.locator('.include-flagged-row input[type="checkbox"]').check();
+      await expect(continueBtn).toBeEnabled();
+      await continueBtn.click();
+      await expect(page).toHaveURL(/#\/review$/, { timeout: 10_000 });
+      await expect(page.locator('.review-table .flag-badge')).toBeVisible();
+      await expect(page.locator('.review-table')).toContainText('fgt.branch.example.com');
+    } finally {
+      await page.close();
+    }
+  });
+
+  test('flagged toggle does not rescue a row missing its host (hard skip)', async ({ extensionContext, fabricConnectionUrl }) => {
+    const page = await openTool(extensionContext, fabricConnectionUrl);
+    try {
+      await pickTargets(page);
+      await page.locator('.include-flagged-row input[type="checkbox"]').check();
+      await page.locator('textarea.paste-area').fill('FGVM01TM24006844,,8013');
+      // Missing host can never form a POST body - stays skipped, Continue disabled.
+      await expect(page.getByRole('button', { name: /Continue/ })).toBeDisabled();
+      // `.parse-result` also matches the (empty) targets-error div; scope to the populated summary.
+      await expect(page.locator('.parse-result').first()).toContainText('missing IP');
+    } finally {
+      await page.close();
+    }
+  });
 });

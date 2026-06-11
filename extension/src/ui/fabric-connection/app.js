@@ -13,8 +13,9 @@ document.documentElement.dataset.toolMode = 'fabric-connection';
 
 const store = {
   // From the Start step:
-  devices: [],            // [{serial, ip, port}]
+  devices: [],            // [{serial, ip, port, flagged?}]
   warnings: [],
+  includeFlagged: false,  // opt-in: onboard rows that only fail soft format checks (FMN-265)
   onsightUrl: null,
   serverGroupUrl: null,
   applianceGroupUrl: null,

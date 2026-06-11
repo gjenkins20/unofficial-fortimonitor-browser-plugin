@@ -74,6 +74,17 @@ export function render({ container, store, navigate }) {
     '<pre># with header\nserial,ip,port\nFGVM01TM24006844,10.0.0.94,8013\n\n# positional\nFGVM01TM24006844,10.0.0.94,8013\nFGVM02TM24006845,10.0.0.95</pre>'
   }));
 
+  // ---- Include-flagged override (FMN-265) ----
+  const includeFlaggedCheckbox = h('input', { type: 'checkbox' });
+  includeFlaggedCheckbox.checked = !!store.includeFlagged;
+  body.appendChild(h('label', { class: 'include-flagged-row' },
+    includeFlaggedCheckbox,
+    h('span', {},
+      h('strong', {}, 'Include flagged devices'),
+      ' - onboard rows that only fail format checks (unusual serial, non-IPv4 host) anyway. Rows missing a serial or host, and duplicates, are still skipped.'
+    )
+  ));
+
   const parseResult = h('div', { class: 'parse-result empty' });
   body.appendChild(parseResult);
 
@@ -121,9 +132,21 @@ export function render({ container, store, navigate }) {
     if (!result) return;
     const ok = result.devices.length;
     const bad = result.warnings.length;
+    const flagged = result.devices.filter((d) => d.flagged).length;
+    const softSkipped = (result.skipped || []).filter((s) => s.severity === 'soft').length;
     parseResult.appendChild(h('div', { class: ok ? 'parse-ok' : 'parse-warn' },
-      `${ok} device${ok === 1 ? '' : 's'} parsed${bad ? ` · ${bad} warning${bad === 1 ? '' : 's'}` : ''}`
+      `${ok} device${ok === 1 ? '' : 's'} parsed`
+        + (flagged ? ` (${flagged} flagged)` : '')
+        + (bad ? ` · ${bad} warning${bad === 1 ? '' : 's'}` : '')
     ));
+    // When format-only rows were dropped and the override is off, point the
+    // operator at the checkbox rather than leaving them stuck (FMN-265).
+    if (softSkipped && !store.includeFlagged) {
+      parseResult.appendChild(h('div', { class: 'parse-hint' },
+        `${softSkipped} row${softSkipped === 1 ? '' : 's'} skipped by format checks. `
+          + 'Enable "Include flagged devices" above to onboard them anyway.'
+      ));
+    }
     if (bad) {
       const list = h('ul', { class: 'parse-warnings' });
       for (const w of result.warnings.slice(0, 10)) list.appendChild(h('li', {}, w));
@@ -133,14 +156,20 @@ export function render({ container, store, navigate }) {
   }
 
   function reparse() {
-    const result = parseFortigateList(paste.value);
-    store.devices = result.devices.map((d) => ({ serial: d.serial, ip: d.ip, port: d.port }));
+    const result = parseFortigateList(paste.value, { includeFlagged: store.includeFlagged });
+    store.devices = result.devices.map((d) => ({
+      serial: d.serial, ip: d.ip, port: d.port, ...(d.flagged ? { flagged: d.flagged } : {})
+    }));
     store.warnings = result.warnings;
     updateParseResult(result);
     refreshContinue();
   }
 
   paste.addEventListener('input', reparse);
+  includeFlaggedCheckbox.addEventListener('change', () => {
+    store.includeFlagged = includeFlaggedCheckbox.checked;
+    reparse();
+  });
 
   fileInput.addEventListener('change', async (e) => {
     const file = e.target.files?.[0];
