@@ -74,6 +74,14 @@ function canEnter(route) {
   if (route === '/action') return store.targets.length > 0;
   if (route === '/configure') return store.targets.length > 0 && !!store.actionId;
   if (route === '/commit') {
+    // delete-instance collects its only param (the confirm phrase) ON the
+    // commit/preview step itself, so it is "configured" for entry with just
+    // targets + action chosen. The phrase gates Apply (UI), commit(), and the
+    // service worker - not navigation. Without this exemption validate()
+    // (which requires the phrase) bounces the operator back to /pick: the
+    // route_guard_tracks_store_shape trap, here inverted (the param is
+    // collected on the destination step, not before it).
+    if (store.actionId === 'delete-instance') return store.targets.length > 0;
     return store.targets.length > 0 && !!store.actionId && hasRequiredParams();
   }
   return false;

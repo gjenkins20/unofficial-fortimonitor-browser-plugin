@@ -77,14 +77,29 @@ const test = base.extend({
 
 test.setTimeout(120_000);
 
-async function getCachedServers(sw, max = 5) {
+// Real instances to target. Prefer the warm omni-search cache; fall back to a
+// direct /v2/server fetch inside the SW (the cache is cleared on browser
+// restart, so the fallback keeps this spec self-sufficient). Returns [] when no
+// API key is configured -> the caller skips.
+async function getRealServers(sw, max = 2) {
   if (!sw) return [];
   return await sw.evaluate(async (max) => {
     const all = await chrome.storage.session.get(null);
     const cacheKey = Object.keys(all).find((k) => k.startsWith('fm:omni-search-cache:'));
-    if (!cacheKey) return [];
-    const servers = Array.isArray(all[cacheKey]?.servers) ? all[cacheKey].servers : [];
-    return servers.slice(0, max);
+    const cached = cacheKey && Array.isArray(all[cacheKey]?.servers) ? all[cacheKey].servers : [];
+    if (cached.length >= 1) return cached.slice(0, max);
+    const d = await chrome.storage.local.get('panopta.apiKey');
+    const key = d?.['panopta.apiKey'];
+    if (!key) return [];
+    const r = await fetch(`https://api2.panopta.com/v2/server?limit=${max}`, {
+      headers: { Authorization: `ApiKey ${key}` }
+    });
+    if (!r.ok) return [];
+    const b = await r.json();
+    return (b.server_list || []).map((s) => ({
+      id: s.id ?? (String(s.url ?? '').match(/\/(\d+)\/?$/) || [])[1],
+      name: s.name ?? ''
+    })).filter((s) => s.id != null);
   }, max);
 }
 
@@ -139,9 +154,9 @@ test.describe('live - FMN-267 Delete Instances action', () => {
     const keys = await sw.evaluate(() => globalThis.__fmDebugHandlerKeys || []);
     test.skip(!keys.includes('bulk-composer:commit'),
       'Launcher extension does not have bulk-composer wired; reload the launcher and re-run.');
-    const sample = await getCachedServers(sw, 2);
+    const sample = await getRealServers(sw, 2);
     test.skip(sample.length < 1,
-      'Omni-search cache holds no instances (needs an API key + a warm cache); cannot target real instances.');
+      'No instances available (needs a v2 API key); cannot target real instances.');
 
     const extensionId = sw.url().split('/')[2];
     const page = await ctx.newPage();
