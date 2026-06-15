@@ -177,7 +177,8 @@ async function renderAndReadDuplicates(page, extensionId, inventory) {
           match: axis,
           value: (tds[0]?.textContent ?? '').trim(),
           groupSize: (tds[1]?.textContent ?? '').trim(),
-          id: (tds[2]?.textContent ?? '').trim()
+          id: (tds[2]?.textContent ?? '').trim(),
+          created: (tds[5]?.textContent ?? '').trim() // FMN-273: value,size,id,name,address,created
         });
       }
     }
@@ -232,8 +233,8 @@ test.describe('live - FMN-268 Duplicates tab', () => {
     const extensionId = sw.url().split('/')[2];
     const page = await ctx.newPage();
     const inventory = { servers: [
-      { id: 901, name: 'dup-name', fqdn: '10.9.9.1' },
-      { id: 902, name: 'DUP-NAME', fqdn: '10.9.9.2' },   // name collision (case-insensitive)
+      { id: 901, name: 'dup-name', fqdn: '10.9.9.1', created: 'Thu, 12 Dec 2024 01:33:48 -0000' },
+      { id: 902, name: 'DUP-NAME', fqdn: '10.9.9.2' },   // name collision (case-insensitive); no created -> '—'
       { id: 903, name: 'alpha', fqdn: '10.9.9.9' },
       { id: 904, name: 'beta', fqdn: '10.9.9.9' },        // address collision
       { id: 905, name: 'unique', fqdn: '10.9.9.5' }       // no collision
@@ -248,6 +249,9 @@ test.describe('live - FMN-268 Duplicates tab', () => {
     expect(byMatch['Address']?.length).toBe(2);
     expect(byMatch['Address'].every((r) => r.value === '10.9.9.9')).toBe(true);
     expect(res.rows.every((r) => r.groupSize === '2')).toBe(true);
+    // FMN-273: Created column - normalized date when present, '—' when absent.
+    expect(byMatch['Name'].find((r) => r.id === '901').created).toBe('2024-12-12');
+    expect(byMatch['Name'].find((r) => r.id === '902').created).toBe('—');
     await page.close();
   });
 

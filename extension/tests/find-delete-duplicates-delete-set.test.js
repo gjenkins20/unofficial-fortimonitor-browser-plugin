@@ -5,7 +5,7 @@ import { buildDeleteSet, defaultKeepMap, buildDuplicatesCsv } from '../src/lib/f
 // Duplicate sets in the shape analyzeDuplicates().groups produces.
 function nameSet(value, ...members) { return { axis: 'name', value, count: members.length, members }; }
 function addrSet(value, ...members) { return { axis: 'address', value, count: members.length, members }; }
-const m = (id, name = `s${id}`, address = '') => ({ id: String(id), name, address });
+const m = (id, name = `s${id}`, address = '', created = '') => ({ id: String(id), name, address, created });
 
 test('defaultKeepMap keeps the lowest/oldest id per set', () => {
   const groups = [nameSet('dup', m(7), m(3), m(9))];
@@ -94,20 +94,20 @@ test('no over-deletion: union of per-set deleteIds equals deduped delete list (m
 
 // ---- buildDuplicatesCsv (FMN-271 report export) ----
 
-test('buildDuplicatesCsv: header + one row per member with axis label + disposition', () => {
+test('buildDuplicatesCsv: header + one row per member with axis label, created + disposition', () => {
   const groups = [
-    nameSet('fw-a', m(1, 'fw-a', '10.0.0.1'), m(2, 'FW-A', '10.0.0.2')),
+    nameSet('fw-a', m(1, 'fw-a', '10.0.0.1', '2024-12-12'), m(2, 'FW-A', '10.0.0.2', '2025-01-03')),
     addrSet('10.0.0.9', m(3, 'b', '10.0.0.9'), m(4, 'c', '10.0.0.9'))
   ];
   const csv = buildDuplicatesCsv(groups, defaultKeepMap(groups));
   const lines = csv.split('\n');
-  assert.equal(lines[0], 'match_on,shared_value,duplicate_set_size,instance_id,instance_name,ip_address,disposition');
+  assert.equal(lines[0], 'match_on,shared_value,duplicate_set_size,instance_id,instance_name,ip_address,created,disposition');
   assert.equal(lines.length, 5); // header + 4 members
-  // name axis labelled "Name", address axis labelled "IP address"
-  assert.ok(lines.some((l) => l.startsWith('Name,fw-a,2,1,fw-a,10.0.0.1,keep')));
-  assert.ok(lines.some((l) => l.startsWith('Name,fw-a,2,2,FW-A,10.0.0.2,delete')));
-  assert.ok(lines.some((l) => l.startsWith('IP address,10.0.0.9,2,3,b,10.0.0.9,keep')));
-  assert.ok(lines.some((l) => l.startsWith('IP address,10.0.0.9,2,4,c,10.0.0.9,delete')));
+  // name axis labelled "Name", address axis "IP address"; created column carried; blank when absent
+  assert.ok(lines.some((l) => l === 'Name,fw-a,2,1,fw-a,10.0.0.1,2024-12-12,keep'));
+  assert.ok(lines.some((l) => l === 'Name,fw-a,2,2,FW-A,10.0.0.2,2025-01-03,delete'));
+  assert.ok(lines.some((l) => l === 'IP address,10.0.0.9,2,3,b,10.0.0.9,,keep'));
+  assert.ok(lines.some((l) => l === 'IP address,10.0.0.9,2,4,c,10.0.0.9,,delete'));
 });
 
 test('buildDuplicatesCsv: a member spared by keep-elsewhere is reported as keep', () => {

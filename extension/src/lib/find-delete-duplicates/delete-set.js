@@ -131,14 +131,14 @@ export function buildDuplicatesCsv(groups, keepMap = {}) {
   const sets = Array.isArray(groups) ? groups : [];
   const plan = buildDeleteSet(sets, keepMap);
   const kept = new Set(plan.keptIds);
-  const header = ['match_on', 'shared_value', 'duplicate_set_size', 'instance_id', 'instance_name', 'ip_address', 'disposition'];
+  const header = ['match_on', 'shared_value', 'duplicate_set_size', 'instance_id', 'instance_name', 'ip_address', 'created', 'disposition'];
   const lines = [header.join(',')];
   for (const set of sets) {
     const matchOn = set.axis === 'name' ? 'Name' : 'IP address';
     for (const m of (Array.isArray(set.members) ? set.members : [])) {
       const id = String(m.id);
       const disposition = kept.has(id) ? 'keep' : 'delete';
-      lines.push([matchOn, set.value, set.members.length, id, m.name ?? '', m.address ?? '', disposition].map(csvField).join(','));
+      lines.push([matchOn, set.value, set.members.length, id, m.name ?? '', m.address ?? '', m.created ?? '', disposition].map(csvField).join(','));
     }
   }
   return lines.join('\n');

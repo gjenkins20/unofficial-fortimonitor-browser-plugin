@@ -201,6 +201,7 @@ export function renderChoose() {
         h('span', { style: 'font-family:"SF Mono",Menlo,monospace;color:var(--text-muted);min-width:90px;' }, `#${id}`),
         h('span', { style: 'flex:1;' }, member.name || '(no name)'),
         h('span', { class: 'muted', style: 'color:var(--text-muted);min-width:120px;' }, member.address || ''),
+        h('span', { 'data-test': 'member-created', class: 'muted', title: 'Created', style: 'color:var(--text-muted);min-width:90px;font-variant-numeric:tabular-nums;' }, member.created || '—'),
         h('span', { 'data-test': 'disposition', style: `min-width:54px;text-align:right;font-weight:600;color:${checked ? '#0e5a2b' : '#a02216'};` }, checked ? 'KEEP' : 'delete')
       ));
     }

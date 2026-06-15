@@ -68,6 +68,19 @@ test('derives id from url when no inline id; dedupes members by id', () => {
   assert.equal(r.groups.length, 0); // only one distinct id
 });
 
+test('carries a normalized created date (YYYY-MM-DD) onto each member', () => {
+  const r = analyzeDuplicates({ servers: [
+    { id: 1, name: 'dup', fqdn: 'a', created: 'Thu, 12 Dec 2024 01:33:48 -0000' },
+    { id: 2, name: 'dup', fqdn: 'b', created: '2025-01-03 10:00:00' },
+    { id: 3, name: 'dup', fqdn: 'c' } // no created -> ''
+  ] });
+  const set = r.groups.find((g) => g.axis === 'name');
+  const byId = new Map(set.members.map((m) => [m.id, m.created]));
+  assert.equal(byId.get('1'), '2024-12-12');
+  assert.equal(byId.get('2'), '2025-01-03');
+  assert.equal(byId.get('3'), '');
+});
+
 test('inline id is preferred and stringified', () => {
   const r = analyzeDuplicates({ servers: [
     { id: 100, name: 'shared', fqdn: 'x1' },

@@ -53,9 +53,9 @@ export function analyzeDuplicates(inventory = {}) {
     };
   }
 
-  // Normalize each server to { id, name, address } once. Records without a
-  // resolvable id are dropped: we cannot tell two real instances apart from
-  // one record counted twice without a stable identity.
+  // Normalize each server to { id, name, address, created } once. Records
+  // without a resolvable id are dropped: we cannot tell two real instances
+  // apart from one record counted twice without a stable identity.
   const records = [];
   for (const s of servers) {
     const id = s?.id != null && s.id !== '' ? String(s.id) : extractTrailingId(s?.url);
@@ -63,7 +63,8 @@ export function analyzeDuplicates(inventory = {}) {
     records.push({
       id: String(id),
       name: rowName(s, ''),
-      address: typeof s?.fqdn === 'string' ? s.fqdn.trim() : ''
+      address: typeof s?.fqdn === 'string' ? s.fqdn.trim() : '',
+      created: toCreatedDate(s?.created)
     });
   }
 
@@ -119,7 +120,7 @@ function findGroups(records, axis, valueOf) {
       // lowercased key, so the operator sees real casing.
       value: axis === 'name' ? (list[0].name || '(no name)') : (list[0].address || '(no address)'),
       count: byId.size,
-      members: list.map((m) => ({ id: m.id, name: m.name || '(no name)', address: m.address }))
+      members: list.map((m) => ({ id: m.id, name: m.name || '(no name)', address: m.address, created: m.created || '' }))
     });
   }
   return out;
@@ -127,4 +128,13 @@ function findGroups(records, axis, valueOf) {
 
 function normalize(v) {
   return typeof v === 'string' ? v.trim().toLowerCase() : '';
+}
+
+// Normalize the /v2/server `created` field (RFC-2822, e.g.
+// "Thu, 12 Dec 2024 01:33:48 -0000") to a YYYY-MM-DD date string. Returns ''
+// when absent or unparseable.
+function toCreatedDate(v) {
+  if (typeof v !== 'string' || !v) return '';
+  const t = Date.parse(v);
+  return Number.isFinite(t) ? new Date(t).toISOString().slice(0, 10) : '';
 }

@@ -163,12 +163,12 @@ test.describe('live - FMN-269 Find & Delete Duplicates', () => {
           available: true, scanned: 5,
           groups: [
             { axis: 'name', value: 'dup-name', count: 2, members: [
-              { id: '901', name: 'dup-a', address: '10.9.9.1' },
-              { id: '902', name: 'DUP-A', address: '10.9.9.2' }
+              { id: '901', name: 'dup-a', address: '10.9.9.1', created: '2024-12-12' },
+              { id: '902', name: 'DUP-A', address: '10.9.9.2', created: '2025-01-03' }
             ] },
             { axis: 'address', value: '10.9.9.9', count: 2, members: [
-              { id: '903', name: 'beta', address: '10.9.9.9' },
-              { id: '904', name: 'gamma', address: '10.9.9.9' }
+              { id: '903', name: 'beta', address: '10.9.9.9', created: '2023-06-01' },
+              { id: '904', name: 'gamma', address: '10.9.9.9', created: '2024-02-02' }
             ] }
           ],
           summary: {}
@@ -196,6 +196,9 @@ test.describe('live - FMN-269 Find & Delete Duplicates', () => {
     await expect(page.locator('[data-test="choose-summary"]')).toContainText('Will delete 2');
     // FMN-271: CSV export of the duplicates report is available on this step.
     await expect(page.locator('[data-test="export-duplicates-csv"]')).toBeVisible();
+    // FMN-273: each member row shows the instance creation date.
+    await expect(nameSection.locator('[data-test="member-created"]').first()).toHaveText('2024-12-12');
+    await expect(page.locator('[data-test="member-created"]')).toHaveCount(4);
 
     // Changing the survivor in set 0 keeps the delete count at 2 (still one
     // survivor per set) - the keep-->=1 guardrail can never zero a set out.

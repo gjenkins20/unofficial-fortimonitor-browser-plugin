@@ -46,7 +46,8 @@ export function createFindDeleteDuplicatesHandlers({ getClient, events } = {}) {
             url: typeof o?.url === 'string' ? o.url : null,
             id: o?.id ?? null,
             name: o?.name ?? '',
-            fqdn: o?.fqdn ?? ''
+            fqdn: o?.fqdn ?? '',
+            created: o?.created ?? ''
           });
         }
         emit('find-delete-duplicates:find-progress', { scanned: servers.length, total });
