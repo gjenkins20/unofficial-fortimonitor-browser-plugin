@@ -55,3 +55,40 @@ test('find: empty tenant -> available:false with scanned 0', async () => {
   assert.equal(r.scanned, 0);
   assert.equal(r.available, false);
 });
+
+test('find: emits find-progress per page with scanned count + total from meta', async () => {
+  // Two pages: 100 then 1; total_count from meta = 101.
+  const page0 = Array.from({ length: 100 }, (_, i) => ({ url: `/v2/server/${i + 1}/`, name: `s${i + 1}`, fqdn: '' }));
+  const page1 = [{ url: '/v2/server/101/', name: 's101', fqdn: '' }];
+  const client = fakeClient([page0, page1]);
+  client.getJson = async function (path) {
+    this.calls.push(path);
+    const m = /offset=(\d+)/.exec(path);
+    const idx = (m ? Number(m[1]) : 0) / 100;
+    return { meta: { total_count: 101 }, server_list: [page0, page1][idx] || [] };
+  };
+  const events = [];
+  const h = createFindDeleteDuplicatesHandlers({
+    getClient: async () => client,
+    events: { emit: (name, payload) => events.push({ name, payload }) }
+  });
+  await h['find-delete-duplicates:find']();
+  const progress = events.filter((e) => e.name === 'find-delete-duplicates:find-progress');
+  assert.equal(progress.length, 2); // one per page
+  assert.deepEqual(progress.map((e) => e.payload.scanned), [100, 101]);
+  assert.ok(progress.every((e) => e.payload.total === 101));
+});
+
+test('find: total is null when meta omits total_count (UI falls back to indeterminate)', async () => {
+  const client = fakeClient([[{ url: '/v2/server/1/', name: 'a', fqdn: '' }]]);
+  const events = [];
+  const h = createFindDeleteDuplicatesHandlers({
+    getClient: async () => client,
+    events: { emit: (name, payload) => events.push({ name, payload }) }
+  });
+  await h['find-delete-duplicates:find']();
+  const progress = events.filter((e) => e.name === 'find-delete-duplicates:find-progress');
+  assert.equal(progress.length, 1);
+  assert.equal(progress[0].payload.total, null);
+  assert.equal(progress[0].payload.scanned, 1);
+});

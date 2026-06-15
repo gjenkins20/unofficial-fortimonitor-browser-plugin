@@ -17,19 +17,30 @@ const MAX_PAGES = 500; // hard backstop (~50k instances)
  * @param {object} deps
  * @param {() => Promise<object>} [deps.getClient]  test seam; defaults to the
  *   production PanoptaClient factory.
+ * @param {{ emit?: (name:string, payload:object) => void }} [deps.events]
+ *   broadcast channel; the find loop emits per-page progress on it so the UI
+ *   can show an elapsed timer + a progress bar (FMN-271).
  */
-export function createFindDeleteDuplicatesHandlers({ getClient } = {}) {
+export function createFindDeleteDuplicatesHandlers({ getClient, events } = {}) {
   const factory = getClient ?? (() => createProductionPanoptaClient());
+  const emit = (name, payload) => { try { events?.emit?.(name, payload); } catch { /* no listener */ } };
 
   return {
     // Returns analyzeDuplicates() result over the live /v2/server list.
+    // Emits find-delete-duplicates:find-progress { scanned, total } per page
+    // so the UI can render determinate progress (total from meta.total_count).
     'find-delete-duplicates:find': async () => {
       const client = await factory();
       const servers = [];
       let offset = 0;
+      let total = null;
       for (let page = 0; page < MAX_PAGES; page++) {
         const body = await client.getJson(`/server?limit=${PAGE_LIMIT}&offset=${offset}`);
         const list = Array.isArray(body?.server_list) ? body.server_list : [];
+        if (total == null) {
+          const t = body?.meta?.total_count;
+          total = Number.isFinite(t) ? t : null;
+        }
         for (const o of list) {
           servers.push({
             url: typeof o?.url === 'string' ? o.url : null,
@@ -38,6 +49,7 @@ export function createFindDeleteDuplicatesHandlers({ getClient } = {}) {
             fqdn: o?.fqdn ?? ''
           });
         }
+        emit('find-delete-duplicates:find-progress', { scanned: servers.length, total });
         if (list.length < PAGE_LIMIT) break;
         offset += PAGE_LIMIT;
       }

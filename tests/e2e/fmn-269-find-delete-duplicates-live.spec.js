@@ -102,6 +102,13 @@ test.describe('live - FMN-269 Find & Delete Duplicates', () => {
     await page.goto(toolUrl(extensionId), { waitUntil: 'domcontentloaded' });
     await page.locator('[data-test="find-btn"]').click();
 
+    // FMN-271: while the scan runs (seconds on a real tenant) the progress area
+    // appears with an elapsed timer and a live count - the visual proof it is
+    // working. Assert these before the scan completes and replaces the view.
+    await expect(page.locator('[data-test="find-progress"]')).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('[data-test="find-elapsed"]')).toContainText('Elapsed');
+    await expect(page.locator('[data-test="find-progress-count"]')).toContainText(/Scanned|Starting/);
+
     // Wait until the Choose step resolves to either populated or empty.
     const dupSet = page.locator('[data-test="dup-set"]');
     const empty = page.locator('[data-test="choose-empty"]');
@@ -113,6 +120,11 @@ test.describe('live - FMN-269 Find & Delete Duplicates', () => {
     if (sets === 0) {
       await expect(empty).toBeVisible();
     } else {
+      // FMN-272: two labelled sections (by name / by IP address).
+      await expect(page.locator('[data-test="dup-section"][data-axis="name"]')).toHaveCount(1);
+      await expect(page.locator('[data-test="dup-section"][data-axis="address"]')).toHaveCount(1);
+      // Timer captured elapsed -> the Choose header reports the scan duration.
+      await expect(page.locator('.step-header p')).toContainText(/in \d+(\.\d+)?s/);
       // Every duplicate set must have exactly one KEEP survivor (keep-->=1).
       for (let i = 0; i < sets; i++) {
         const card = dupSet.nth(i);
@@ -120,6 +132,7 @@ test.describe('live - FMN-269 Find & Delete Duplicates', () => {
         expect(checked, `duplicate set ${i} must have exactly one survivor`).toBe(1);
       }
       await expect(page.locator('[data-test="choose-summary"]')).toContainText('Will delete');
+      await expect(page.locator('[data-test="export-duplicates-csv"]')).toBeVisible();
     }
     expect(pageErrors, `page errors: ${pageErrors.join(' | ')}`).toEqual([]);
     await page.close();
@@ -167,12 +180,22 @@ test.describe('live - FMN-269 Find & Delete Duplicates', () => {
     });
     expect(mountErr, `inject/render threw: ${mountErr}`).toBeNull();
 
+    // FMN-272: name and IP duplicates are in separate, labelled sections.
+    const nameSection = page.locator('[data-test="dup-section"][data-axis="name"]');
+    const ipSection = page.locator('[data-test="dup-section"][data-axis="address"]');
+    await expect(nameSection).toContainText('Duplicates by name');
+    await expect(ipSection).toContainText('Duplicates by IP address');
+    await expect(nameSection.locator('[data-test="dup-set"]')).toHaveCount(1);
+    await expect(ipSection.locator('[data-test="dup-set"]')).toHaveCount(1);
+
     // Two duplicate sets, each with exactly one survivor (default = lowest id).
     await expect(page.locator('[data-test="dup-set"]')).toHaveCount(2);
     for (const card of await page.locator('[data-test="dup-set"]').all()) {
       expect(await card.locator('[data-test="keep-radio"]:checked').count()).toBe(1);
     }
     await expect(page.locator('[data-test="choose-summary"]')).toContainText('Will delete 2');
+    // FMN-271: CSV export of the duplicates report is available on this step.
+    await expect(page.locator('[data-test="export-duplicates-csv"]')).toBeVisible();
 
     // Changing the survivor in set 0 keeps the delete count at 2 (still one
     // survivor per set) - the keep-->=1 guardrail can never zero a set out.

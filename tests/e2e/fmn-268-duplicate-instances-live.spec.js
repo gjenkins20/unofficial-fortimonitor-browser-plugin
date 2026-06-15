@@ -158,21 +158,32 @@ async function renderAndReadDuplicates(page, extensionId, inventory) {
 
   return await page.evaluate((hostId) => {
     const host = document.getElementById(hostId);
-    const sec = host.querySelector('.review-section');
-    const rows = Array.from(host.querySelectorAll('.review-section table.review-table tbody tr')).map((tr) => {
-      const tds = tr.querySelectorAll('td');
-      return {
-        match: (tds[0]?.textContent ?? '').trim(),
-        value: (tds[1]?.textContent ?? '').trim(),
-        groupSize: (tds[2]?.textContent ?? '').trim(),
-        id: (tds[3]?.textContent ?? '').trim()
-      };
-    });
-    // Empty state renders as <p class="muted"> inside the section (no table).
-    const emptyText = (!sec || sec.querySelector('table'))
-      ? ''
-      : (sec.querySelector('p.muted')?.textContent?.trim() || '');
-    return { rows, emptyText };
+    // FMN-272: the tab now has two sections (by name / by IP address); the
+    // axis comes from the section heading, not a column. Columns within a
+    // section: value, set-size, id, name, address.
+    const out = { rows: [], emptyText: '' };
+    let sawEmpty = false;
+    for (const sec of host.querySelectorAll('.review-section')) {
+      const heading = (sec.querySelector('h3.subhead')?.textContent || '').toLowerCase();
+      const axis = heading.includes('name') ? 'Name' : 'Address';
+      const trs = sec.querySelectorAll('table.review-table tbody tr');
+      if (trs.length === 0) {
+        if (sec.querySelector('p.muted')) { sawEmpty = true; out.emptyText = sec.querySelector('p.muted').textContent.trim(); }
+        continue;
+      }
+      for (const tr of trs) {
+        const tds = tr.querySelectorAll('td');
+        out.rows.push({
+          match: axis,
+          value: (tds[0]?.textContent ?? '').trim(),
+          groupSize: (tds[1]?.textContent ?? '').trim(),
+          id: (tds[2]?.textContent ?? '').trim()
+        });
+      }
+    }
+    if (out.rows.length > 0) out.emptyText = ''; // only report empty when nothing rendered
+    else if (!sawEmpty) out.emptyText = '';
+    return out;
   }, HOST_ID);
 }
 

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildDeleteSet, defaultKeepMap } from '../src/lib/find-delete-duplicates/delete-set.js';
+import { buildDeleteSet, defaultKeepMap, buildDuplicatesCsv } from '../src/lib/find-delete-duplicates/delete-set.js';
 
 // Duplicate sets in the shape analyzeDuplicates().groups produces.
 function nameSet(value, ...members) { return { axis: 'name', value, count: members.length, members }; }
@@ -90,4 +90,44 @@ test('no over-deletion: union of per-set deleteIds equals deduped delete list (m
   // set0 keep 1 -> {2,3}; set1 keep 3 -> {4}; but 3 is kept in set1 -> spared.
   assert.deepEqual(r.deleteIds.sort(), ['2', '4']);
   assert.ok(r.sparedByKeepElsewhere.includes('3'));
+});
+
+// ---- buildDuplicatesCsv (FMN-271 report export) ----
+
+test('buildDuplicatesCsv: header + one row per member with axis label + disposition', () => {
+  const groups = [
+    nameSet('fw-a', m(1, 'fw-a', '10.0.0.1'), m(2, 'FW-A', '10.0.0.2')),
+    addrSet('10.0.0.9', m(3, 'b', '10.0.0.9'), m(4, 'c', '10.0.0.9'))
+  ];
+  const csv = buildDuplicatesCsv(groups, defaultKeepMap(groups));
+  const lines = csv.split('\n');
+  assert.equal(lines[0], 'match_on,shared_value,duplicate_set_size,instance_id,instance_name,ip_address,disposition');
+  assert.equal(lines.length, 5); // header + 4 members
+  // name axis labelled "Name", address axis labelled "IP address"
+  assert.ok(lines.some((l) => l.startsWith('Name,fw-a,2,1,fw-a,10.0.0.1,keep')));
+  assert.ok(lines.some((l) => l.startsWith('Name,fw-a,2,2,FW-A,10.0.0.2,delete')));
+  assert.ok(lines.some((l) => l.startsWith('IP address,10.0.0.9,2,3,b,10.0.0.9,keep')));
+  assert.ok(lines.some((l) => l.startsWith('IP address,10.0.0.9,2,4,c,10.0.0.9,delete')));
+});
+
+test('buildDuplicatesCsv: a member spared by keep-elsewhere is reported as keep', () => {
+  const groups = [nameSet('n', m(1), m(2)), addrSet('a', m(2), m(3))];
+  // keep 1 in name set, keep 2 in address set -> 2 is spared from the name set.
+  const csv = buildDuplicatesCsv(groups, { 0: '1', 1: '2' });
+  const rows = csv.split('\n').slice(1);
+  // every row for id 2 must say keep
+  for (const r of rows.filter((l) => l.split(',')[3] === '2')) {
+    assert.equal(r.split(',').pop(), 'keep');
+  }
+});
+
+test('buildDuplicatesCsv: quotes fields containing commas', () => {
+  const groups = [nameSet('a,b', m(1, 'has,comma', 'x'), m(2, 'plain', 'y'))];
+  const csv = buildDuplicatesCsv(groups, { 0: '1' });
+  assert.ok(csv.includes('"a,b"'));
+  assert.ok(csv.includes('"has,comma"'));
+});
+
+test('buildDuplicatesCsv: empty input is header-only', () => {
+  assert.equal(buildDuplicatesCsv([], {}).split('\n').length, 1);
 });

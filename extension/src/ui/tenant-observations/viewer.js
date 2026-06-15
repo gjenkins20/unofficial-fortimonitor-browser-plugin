@@ -195,6 +195,21 @@ function instanceLinkCell(id, label, ctx) {
   return a;
 }
 
+// FMN-272: flatten the duplicate sets matching a single axis ('name' or
+// 'address') into one row per member. Used by the two Duplicates-tab sections.
+function duplicateRowsForAxis(analysis, axis) {
+  const d = analysis?.duplicates;
+  if (!d?.available || !Array.isArray(d.groups)) return [];
+  const out = [];
+  for (const g of d.groups) {
+    if (g.axis !== axis) continue;
+    for (const m of (g.members ?? [])) {
+      out.push({ value: g.value, group_size: g.count, id: m.id, name: m.name, address: m.address || '—' });
+    }
+  }
+  return out;
+}
+
 const TABS = [
   // 1. Executive Summary -----------------------------------------------------
   {
@@ -511,43 +526,42 @@ const TABS = [
   // primary address (fqdn) - same device re-onboarded or monitored twice.
   // Reads only the shallow servers list (analysis.duplicates), so it needs
   // neither deep mode nor frontend augmentation. One row per member of each
-  // collision group; rows carry the shared value + group size so the
-  // grouping survives CSV/PDF export (which flatten to text).
+  // duplicate set; rows carry the shared value + set size so the grouping
+  // survives CSV/PDF export (which flatten to text).
+  //
+  // FMN-272: name-based and IP-based duplicates render in SEPARATE sections
+  // (combining them in one table read as unhelpful). Each section drops the
+  // now-redundant "Match On" column.
   {
     id: 'duplicate-instances',
     label: 'Duplicates',
     filenamePart: 'duplicate-instances',
     sections: [
       {
-        label: 'Duplicate Instances',
+        label: 'Duplicates by name',
         columns: [
-          { key: 'match',      header: 'Match On',          getter: (r) => r.match },
-          { key: 'value',      header: 'Shared Value',      getter: (r) => r.value },
+          { key: 'value',      header: 'Shared Name',       getter: (r) => r.value },
           { key: 'group_size', header: 'Duplicate Set Size', getter: (r) => r.group_size },
           { key: 'id',         header: 'Instance ID',   getter: (r) => r.id,
             cellRenderer: (r, ctx) => instanceLinkCell(r.id, r.id, ctx) },
           { key: 'name',       header: 'Instance Name', getter: (r) => r.name },
-          { key: 'address',    header: 'Address',       getter: (r) => r.address }
+          { key: 'address',    header: 'IP Address',    getter: (r) => r.address }
         ],
-        rows: ({ analysis }) => {
-          const d = analysis?.duplicates;
-          if (!d?.available || !Array.isArray(d.groups)) return [];
-          const out = [];
-          for (const g of d.groups) {
-            for (const m of (g.members ?? [])) {
-              out.push({
-                match: g.axis === 'name' ? 'Name' : 'Address',
-                value: g.value,
-                group_size: g.count,
-                id: m.id,
-                name: m.name,
-                address: m.address || '—'
-              });
-            }
-          }
-          return out;
-        },
-        emptyText: 'No duplicate instances detected (no shared names or addresses across instances).'
+        rows: ({ analysis }) => duplicateRowsForAxis(analysis, 'name'),
+        emptyText: 'No instances share a name.'
+      },
+      {
+        label: 'Duplicates by IP address',
+        columns: [
+          { key: 'value',      header: 'Shared IP Address', getter: (r) => r.value },
+          { key: 'group_size', header: 'Duplicate Set Size', getter: (r) => r.group_size },
+          { key: 'id',         header: 'Instance ID',   getter: (r) => r.id,
+            cellRenderer: (r, ctx) => instanceLinkCell(r.id, r.id, ctx) },
+          { key: 'name',       header: 'Instance Name', getter: (r) => r.name },
+          { key: 'address',    header: 'IP Address',    getter: (r) => r.address }
+        ],
+        rows: ({ analysis }) => duplicateRowsForAxis(analysis, 'address'),
+        emptyText: 'No instances share an IP address.'
       }
     ]
   },

@@ -110,3 +110,36 @@ export function buildDeleteSet(groups, keepMap = {}) {
     sparedByKeepElsewhere: [...spared]
   };
 }
+
+function csvField(v) {
+  if (v === null || v === undefined) return '';
+  const s = String(v);
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+/**
+ * CSV of the found-duplicates report (FMN-271): one row per member of each
+ * duplicate set, with the disposition (keep / delete) the current keep choices
+ * would produce. "keep" covers both a set's survivor and any member spared
+ * because it is kept in another set.
+ *
+ * @param {Array} groups  analyzeDuplicates().groups (duplicate sets)
+ * @param {Object<string,string>} [keepMap]  setKey -> keptId
+ * @returns {string} CSV text
+ */
+export function buildDuplicatesCsv(groups, keepMap = {}) {
+  const sets = Array.isArray(groups) ? groups : [];
+  const plan = buildDeleteSet(sets, keepMap);
+  const kept = new Set(plan.keptIds);
+  const header = ['match_on', 'shared_value', 'duplicate_set_size', 'instance_id', 'instance_name', 'ip_address', 'disposition'];
+  const lines = [header.join(',')];
+  for (const set of sets) {
+    const matchOn = set.axis === 'name' ? 'Name' : 'IP address';
+    for (const m of (Array.isArray(set.members) ? set.members : [])) {
+      const id = String(m.id);
+      const disposition = kept.has(id) ? 'keep' : 'delete';
+      lines.push([matchOn, set.value, set.members.length, id, m.name ?? '', m.address ?? '', disposition].map(csvField).join(','));
+    }
+  }
+  return lines.join('\n');
+}

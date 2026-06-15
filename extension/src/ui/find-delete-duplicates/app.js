@@ -13,7 +13,7 @@
 
 import { h, titleBar, downloadBlob } from '../../lib/dom.js';
 import { call, onEvent } from '../../lib/messaging.js';
-import { buildDeleteSet, defaultKeepMap } from '../../lib/find-delete-duplicates/delete-set.js';
+import { buildDeleteSet, defaultKeepMap, buildDuplicatesCsv } from '../../lib/find-delete-duplicates/delete-set.js';
 import { CONFIRM_PHRASE } from '../../lib/bulk-actions/delete-instance.js';
 
 const TOOL_NAME = 'Find & Delete Duplicates';
@@ -28,10 +28,13 @@ export const store = {
   runResult: null
 };
 
-// Per-row commit events fan out to whatever the confirm step registered.
+// Commit row events and find-progress events fan out to whatever the active
+// step registered.
 let rowListener = null;
+let progressListener = null;
 onEvent((event, payload) => {
   if (rowListener) rowListener(event, payload);
+  if (progressListener) progressListener(event, payload);
 });
 
 const root = () => document.getElementById('app-root');
@@ -56,9 +59,22 @@ export function renderFind() {
   const body = h('div', { class: 'body-section' });
   f.appendChild(h('div', { class: 'step-header' },
     h('h2', {}, 'Find duplicate instances'),
-    h('p', {}, 'Scans every monitored instance and flags those that share a name or a primary address (FQDN) - likely the same device onboarded or monitored more than once.')
+    h('p', {}, 'Scans every monitored instance and flags those that share a name or an IP address - likely the same device onboarded or monitored more than once.')
   ));
   f.appendChild(body);
+
+  // Progress area (hidden until Find runs): a live count, an elapsed timer, and
+  // a determinate bar (driven by find-delete-duplicates:find-progress; the
+  // total comes from the v2 list meta). This is the visual proof that the scan
+  // is working (FMN-271).
+  const countEl = h('span', { 'data-test': 'find-progress-count' }, '');
+  const elapsedEl = h('span', { 'data-test': 'find-elapsed', style: 'font-variant-numeric:tabular-nums;' }, '');
+  const bar = h('div', { 'data-test': 'find-progress-bar', style: 'height:8px;width:0%;background:var(--accent,#d9534f);border-radius:4px;transition:width 0.15s ease-out;' });
+  const progressWrap = h('div', { 'data-test': 'find-progress', hidden: true, style: 'margin:0.6rem 0;' },
+    h('div', { style: 'display:flex;justify-content:space-between;font-size:0.8rem;color:var(--text-muted);margin-bottom:0.3rem;' }, countEl, elapsedEl),
+    h('div', { style: 'background:#eee;border-radius:4px;overflow:hidden;' }, bar)
+  );
+  body.appendChild(progressWrap);
 
   const state = h('span', { class: 'execute-state muted', 'data-test': 'find-state' }, '');
   const findBtn = h('button', { class: 'btn btn-primary', 'data-test': 'find-btn', type: 'button' }, 'Find duplicates');
@@ -70,17 +86,46 @@ export function renderFind() {
 
   findBtn.addEventListener('click', async () => {
     findBtn.disabled = true;
-    state.textContent = 'Scanning instances...';
+    state.textContent = '';
     state.className = 'execute-state';
+    progressWrap.hidden = false;
+    countEl.textContent = 'Starting scan...';
+    bar.style.width = '0%';
+    const t0 = Date.now();
+    const tick = () => { elapsedEl.textContent = `Elapsed ${((Date.now() - t0) / 1000).toFixed(1)}s`; };
+    tick();
+    const timer = setInterval(tick, 100);
+    progressListener = (event, payload) => {
+      if (event !== 'find-delete-duplicates:find-progress') return;
+      const scanned = Number(payload?.scanned ?? 0);
+      const total = Number(payload?.total);
+      if (Number.isFinite(total) && total > 0) {
+        const pct = Math.min(100, Math.round((scanned / total) * 100));
+        bar.style.width = `${pct}%`;
+        bar.style.opacity = '1';
+        countEl.textContent = `Scanned ${scanned} of ${total} instances (${pct}%)`;
+      } else {
+        // No total from the API: indeterminate - show the running count and a
+        // faint full bar so it still reads as "working".
+        bar.style.width = '100%';
+        bar.style.opacity = '0.35';
+        countEl.textContent = `Scanned ${scanned} instances...`;
+      }
+    };
     try {
       const result = await call('find-delete-duplicates:find', {});
       store.result = result;
+      store.findElapsedMs = Date.now() - t0;
       store.keepMap = defaultKeepMap(result?.groups || []);
       renderChoose();
     } catch (err) {
       state.textContent = `Error: ${err?.message ?? err}`;
       state.className = 'execute-state error';
       findBtn.disabled = false;
+      progressWrap.hidden = true;
+    } finally {
+      clearInterval(timer);
+      progressListener = null;
     }
   });
 }
@@ -92,9 +137,10 @@ export function renderChoose() {
   const result = store.result || {};
   const sets = Array.isArray(result.groups) ? result.groups : [];
   const f = frame('Choose what to keep');
+  const elapsedNote = Number.isFinite(store.findElapsedMs) ? ` in ${(store.findElapsedMs / 1000).toFixed(1)}s` : '';
   f.appendChild(h('div', { class: 'step-header' },
     h('h2', {}, `Duplicate sets: ${sets.length}`),
-    h('p', {}, `Scanned ${result.scanned ?? 0} instance${result.scanned === 1 ? '' : 's'}. In each duplicate set, pick the one instance to KEEP; the rest are marked for deletion. You can never delete every instance in a set.`)
+    h('p', {}, `Scanned ${result.scanned ?? 0} instance${result.scanned === 1 ? '' : 's'}${elapsedNote}. In each duplicate set, pick the one instance to KEEP; the rest are marked for deletion. You can never delete every instance in a set.`)
   ));
   const body = h('div', { class: 'body-section' });
   f.appendChild(body);
@@ -116,15 +162,17 @@ export function renderChoose() {
     return plan;
   }
 
-  sets.forEach((set, i) => {
-    const key = String(i);
+  // One card per duplicate set. `key` is the set's index in the FULL groups
+  // array (so it matches buildDeleteSet / keepMap), NOT its position within a
+  // section.
+  function renderSetCard(set, key) {
     const card = h('div', {
       'data-test': 'dup-set',
       'data-set-key': key,
+      'data-axis': set.axis,
       style: 'border:1px solid var(--border);border-radius:6px;padding:0.7rem 0.85rem;margin-bottom:0.7rem;'
     });
     card.appendChild(h('div', { style: 'font-weight:600;font-size:0.9rem;margin-bottom:0.4rem;' },
-      `Matched on ${set.axis === 'name' ? 'name' : 'address'}: `,
       h('code', {}, set.value),
       h('span', { class: 'muted', style: 'font-weight:400;color:var(--text-muted);' }, ` · ${set.members.length} instances`)
     ));
@@ -139,14 +187,13 @@ export function renderChoose() {
       radio.addEventListener('change', () => {
         store.keepMap[key] = id;
         refreshSummary();
-        // repaint delete badges in this card
         card.querySelectorAll('[data-test="member-row"]').forEach((rowEl) => {
           const isKeep = rowEl.dataset.id === store.keepMap[key];
           rowEl.querySelector('[data-test="disposition"]').textContent = isKeep ? 'KEEP' : 'delete';
           rowEl.querySelector('[data-test="disposition"]').style.color = isKeep ? '#0e5a2b' : '#a02216';
         });
       });
-      const row = h('label', {
+      card.appendChild(h('label', {
         'data-test': 'member-row', 'data-id': id,
         style: 'display:flex;align-items:center;gap:0.5rem;padding:0.2rem 0;font-size:0.85rem;cursor:pointer;'
       },
@@ -155,22 +202,48 @@ export function renderChoose() {
         h('span', { style: 'flex:1;' }, member.name || '(no name)'),
         h('span', { class: 'muted', style: 'color:var(--text-muted);min-width:120px;' }, member.address || ''),
         h('span', { 'data-test': 'disposition', style: `min-width:54px;text-align:right;font-weight:600;color:${checked ? '#0e5a2b' : '#a02216'};` }, checked ? 'KEEP' : 'delete')
-      );
-      card.appendChild(row);
+      ));
     }
-    body.appendChild(card);
-  });
+    return card;
+  }
+
+  // FMN-272: name-based and IP-based duplicates go in separate, clearly
+  // labelled sections (combining them read as unhelpful). Keys are the
+  // original full-array indices.
+  const entries = sets.map((set, i) => ({ set, key: String(i) }));
+  function renderAxisSection(axis, label) {
+    const section = h('div', { 'data-test': 'dup-section', 'data-axis': axis, style: 'margin-bottom:1.1rem;' });
+    const items = entries.filter((e) => e.set.axis === axis);
+    section.appendChild(h('h3', { class: 'subhead', style: 'margin:0 0 0.5rem;font-size:0.95rem;' },
+      `${label} `, h('span', { class: 'muted', style: 'font-weight:400;color:var(--text-muted);' }, `(${items.length})`)));
+    if (items.length === 0) {
+      section.appendChild(h('p', { class: 'muted', 'data-test': 'dup-section-empty', style: 'font-size:0.85rem;color:var(--text-muted);' }, 'None found.'));
+    } else {
+      for (const e of items) section.appendChild(renderSetCard(e.set, e.key));
+    }
+    return section;
+  }
+  body.appendChild(renderAxisSection('name', 'Duplicates by name'));
+  body.appendChild(renderAxisSection('address', 'Duplicates by IP address'));
 
   const backBtn = h('button', { class: 'btn btn-secondary', type: 'button' }, '← Start over');
+  const csvBtn = h('button', { class: 'btn btn-secondary', 'data-test': 'export-duplicates-csv', type: 'button' }, 'Export CSV');
   const nextBtn = h('button', { class: 'btn btn-primary', 'data-test': 'choose-next', type: 'button' }, 'Review deletions →');
   f.appendChild(h('div', { class: 'action-bar' },
     h('div', { class: 'left' }, footer),
-    h('div', { class: 'right' }, backBtn, nextBtn)
+    h('div', { class: 'right' }, backBtn, csvBtn, nextBtn)
   ));
   mount(f);
   refreshSummary();
 
   backBtn.addEventListener('click', renderFind);
+  csvBtn.addEventListener('click', () => {
+    downloadBlob(
+      `duplicate-instances-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.csv`,
+      'text/csv',
+      buildDuplicatesCsv(sets, store.keepMap)
+    );
+  });
   nextBtn.addEventListener('click', () => {
     store.plan = buildDeleteSet(sets, store.keepMap);
     if (store.plan.deleteIds.length === 0) {

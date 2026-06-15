@@ -61,7 +61,7 @@ const handlers = {
   ...createClaudeChatHandlers({ events: { emit } }),
   ...createOmniSearchHandlers({ events: { emit } }),
   ...createBulkComposerHandlers({ events: { emit } }),
-  ...createFindDeleteDuplicatesHandlers({}),
+  ...createFindDeleteDuplicatesHandlers({ events: { emit } }),
   ...createReportNotificationHandlers({})
 };
 
