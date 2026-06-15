@@ -97,6 +97,11 @@ export function render({ container, store, navigate, call }) {
       const endMs = params.endTime ? Date.parse(params.endTime) : NaN;
       const orderOk = Number.isFinite(startMs) && Number.isFinite(endMs) && endMs > startMs;
       nextBtn.disabled = !(name && orderOk);
+    } else if (store.actionId === 'delete-instance') {
+      // No configure-time params: the hard type-to-confirm gate lives on
+      // the Preview step, where the operator sees exactly which instances
+      // will be destroyed. Advancing to that preview is always allowed.
+      nextBtn.disabled = false;
     } else {
       nextBtn.disabled = true;
     }
@@ -122,6 +127,8 @@ export function render({ container, store, navigate, call }) {
     renderSetAgentResourceStatusForm({ body, store, refreshNextDisabled, call });
   } else if (store.actionId === 'schedule-maintenance-window') {
     renderScheduleMaintenanceWindowForm({ body, store, refreshNextDisabled });
+  } else if (store.actionId === 'delete-instance') {
+    renderDeleteInstanceForm({ body, store });
   } else {
     body.appendChild(h('p', {}, 'Unknown action; pick again on the previous step.'));
   }
@@ -136,6 +143,31 @@ export function render({ container, store, navigate, call }) {
   });
 
   refreshNextDisabled();
+}
+
+// Delete Instances has no configurable parameters: the targets are the
+// instances already picked, and the only "input" is the type-to-confirm
+// gate, which lives on the Preview step next to the blast-radius table.
+// Here we render an unmissable irreversibility warning so the operator
+// understands what Apply will do before they ever reach that gate.
+function renderDeleteInstanceForm({ body, store }) {
+  const n = Array.isArray(store?.targets) ? store.targets.length : 0;
+  const panel = h('div', {
+    'data-test': 'configure-delete-warning',
+    style: 'border:1px solid #e0a9a0;background:#fdf3f1;border-radius:6px;padding:0.9rem 1rem;margin:0.4rem 0;'
+  },
+    h('h3', { style: 'margin:0 0 0.4rem;color:#a02216;font-size:1rem;' }, '⚠ Permanent deletion'),
+    h('p', { style: 'margin:0 0 0.5rem;font-size:0.9rem;color:var(--text);' },
+      `This will permanently delete ${n} selected instance${n === 1 ? '' : 's'} from FortiMonitor.`),
+    h('ul', { style: 'margin:0 0 0.2rem 1.1rem;font-size:0.85rem;color:var(--text);line-height:1.5;' },
+      h('li', {}, 'Deletion is irreversible. Agent resources and metric history are destroyed, not suspended.'),
+      h('li', {}, 'Servers and templates share the same id namespace; the same endpoint removes both.'),
+      h('li', {}, 'To pause metrics without losing history, use Set Agent Resource Status instead.')
+    ),
+    h('p', { style: 'margin:0.5rem 0 0;font-size:0.85rem;color:var(--text-muted);' },
+      'On the next step you will type a confirmation phrase next to the list of instances before anything is deleted.')
+  );
+  body.appendChild(panel);
 }
 
 function renderTagForm({ body, store, refreshNextDisabled, call }) {

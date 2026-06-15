@@ -8,6 +8,7 @@
 import { h, titleBar, downloadBlob } from '../../../lib/dom.js';
 import { bulkBreadcrumbs } from './breadcrumbs.js';
 import { getAction } from '../../../lib/bulk-actions/index.js';
+import { CONFIRM_PHRASE as DELETE_CONFIRM_PHRASE } from '../../../lib/bulk-actions/delete-instance.js';
 import { saveRecentPick } from '../../../lib/recent-picks.js';
 
 const TOOL_NAME = 'Bulk Action Composer';
@@ -153,6 +154,45 @@ export function render({ container, store, navigate, events, call }) {
     ? `Apply (all ${store.targets.length} will skip)`
     : `Apply to ${willChangeCount} instance${willChangeCount === 1 ? '' : 's'}`;
   const applyBtn = h('button', { class: 'btn btn-primary', 'data-test': 'apply-btn', type: 'button' }, applyLabel);
+
+  // Hard type-to-confirm gate for destructive actions. Rendered directly
+  // under the blast-radius table so the operator confirms next to the list
+  // of instances they are about to destroy. store.params.confirm is what
+  // delete-instance's validate() checks - enforced again in the service
+  // worker, so a delete cannot run without the exact phrase even if the UI
+  // is bypassed. Only delete-instance arms this gate today.
+  const isDestructive = store.actionId === 'delete-instance';
+  if (isDestructive) {
+    applyBtn.disabled = true;
+    store.params = store.params || {};
+    // Re-entering Preview always re-arms deliberately; never inherit a
+    // stale confirmation from a previous visit.
+    store.params.confirm = '';
+    const confirmInput = h('input', {
+      type: 'text',
+      'data-test': 'delete-confirm-input',
+      autocomplete: 'off',
+      spellcheck: 'false',
+      placeholder: DELETE_CONFIRM_PHRASE,
+      style: 'margin-top:0.4rem;padding:0.4rem 0.55rem;border:1px solid #e0a9a0;border-radius:4px;font-family:"SF Mono",Menlo,monospace;font-size:0.9rem;width:220px;'
+    });
+    const confirmGate = h('div', {
+      'data-test': 'delete-confirm-gate',
+      style: 'margin-top:0.8rem;border:1px solid #e0a9a0;background:#fdf3f1;border-radius:6px;padding:0.8rem 1rem;'
+    },
+      h('div', { style: 'font-weight:600;color:#a02216;font-size:0.92rem;' },
+        `Permanent deletion of ${store.targets.length} instance${store.targets.length === 1 ? '' : 's'}`),
+      h('div', { style: 'font-size:0.84rem;color:var(--text);margin-top:0.25rem;' },
+        `This cannot be undone. Type `, h('code', { style: 'font-weight:700;' }, DELETE_CONFIRM_PHRASE), ` below to enable Apply.`),
+      confirmInput
+    );
+    body.appendChild(confirmGate);
+    confirmInput.addEventListener('input', () => {
+      store.params.confirm = confirmInput.value;
+      applyBtn.disabled = confirmInput.value !== DELETE_CONFIRM_PHRASE;
+    });
+  }
+
   const stateLabel = h('span', { class: 'execute-state muted', 'data-test': 'commit-state' }, '');
   const actionBar = h('div', { class: 'action-bar' },
     h('div', { class: 'left' }, stateLabel),
@@ -166,7 +206,11 @@ export function render({ container, store, navigate, events, call }) {
   // re-entering Preview doesn't refetch). describe() switches from the
   // "(templates unknown)" placeholder branch to the real diff branch
   // once this lands. Fire-and-forget; rows patch in place when done.
-  void preflightTemplateNames({ store, call, action, rowByTargetId, summary, applyBtn });
+  // delete-instance's describe() needs no attached-template data, so skip
+  // the per-target template-name preflight entirely for it.
+  if (!isDestructive) {
+    void preflightTemplateNames({ store, call, action, rowByTargetId, summary, applyBtn });
+  }
 
   backBtn.addEventListener('click', () => navigate('/configure'));
 
@@ -403,6 +447,8 @@ function describeOutcome(row) {
   const d = row?.detail;
   if (!d) return '';
   if (row.status === 'failed') return d.reason || 'failed';
+  if (d.deleted === true) return 'deleted';
+  if (d.reason === 'not-found') return 'skip: not-found';
   if (d.reason === 'dry-run') {
     if (d.template?.would_create) return `dry-run: would create+attach "${d.template.name}"`;
     return 'dry-run';
