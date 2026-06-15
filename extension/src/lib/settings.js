@@ -13,6 +13,10 @@ export const SHOW_FEATURE_BADGES_KEY = 'fm:showFeatureBadges';
 // merges to main; tile only renders when the operator toggles this on
 // in popup -> Settings.
 export const SDWAN_REPORT_ENABLED_KEY = 'fm:sdwanReportEnabled';
+// Per-tool Beta gating for Find & Delete Duplicates. Hidden by default until
+// Monitoring-Location resolution is validated for FortiManager-proxied
+// instances (no FortiManager lab available yet, FMN-274).
+export const FIND_DELETE_DUPLICATES_ENABLED_KEY = 'fm:findDeleteDuplicatesEnabled';
 // FMN-133: per-tool visibility flag for the Tenant Observations tile.
 // Same Beta gating pattern as SD-WAN Report; the FMN-133 ticket
 // explicitly calls for "Same gating as FMN-129 / FMN-130. Tile hidden
@@ -262,6 +266,21 @@ export async function isSdwanReportEnabled(storage = defaultStorage()) {
  */
 export async function setSdwanReportEnabled(enabled, storage = defaultStorage()) {
   await storage.set({ [SDWAN_REPORT_ENABLED_KEY]: Boolean(enabled) });
+}
+
+/** Read the Find-&-Delete-Duplicates-enabled flag. Defaults to false (Beta, hidden). */
+export async function isFindDeleteDuplicatesEnabled(storage = defaultStorage()) {
+  try {
+    const data = await storage.get(FIND_DELETE_DUPLICATES_ENABLED_KEY);
+    return Boolean(data?.[FIND_DELETE_DUPLICATES_ENABLED_KEY]);
+  } catch {
+    return false;
+  }
+}
+
+/** Persist the Find-&-Delete-Duplicates-enabled flag. */
+export async function setFindDeleteDuplicatesEnabled(enabled, storage = defaultStorage()) {
+  await storage.set({ [FIND_DELETE_DUPLICATES_ENABLED_KEY]: Boolean(enabled) });
 }
 
 /**

@@ -295,10 +295,13 @@
               data-url="src/ui/find-delete-duplicates/app.html"
               data-api-key-required="true"
               data-session-required="true"
+              data-experimental="find-delete-duplicates"
+              hidden
               title="Requires a FortiMonitor v2 API key + an active FortiMonitor session - configure in popup → Settings (⚙).">
         <div class="tool-meta">
           <div class="tool-name">
             Find &amp; Delete Duplicates
+            <span class="badge beta">Beta</span>
           </div>
           <div class="tool-desc" data-default-desc="Find duplicate instances (same name or address), choose which one to keep in each duplicate set, and permanently delete the redundant ones behind a type-to-confirm gate.">
             Find duplicate instances (same name or address), choose which one to keep in each duplicate set, and permanently delete the redundant ones behind a type-to-confirm gate.
@@ -601,6 +604,14 @@
       <label class="toggle-row">
         <input id="sdwan-report-toggle" type="checkbox">
         <span>Show SD-WAN Report</span>
+      </label>
+
+      <p class="settings-help" style="margin-top:0.75rem;">
+        <strong>Find &amp; Delete Duplicates</strong> finds duplicate instances (by name or IP), uses the Monitoring Location to flag intentional vs. accidental, and deletes the redundant ones behind a confirm gate. Beta: Monitoring-Location resolution is not yet validated for FortiManager-proxied instances, so it is hidden by default. Enable only if you understand the limitation.
+      </p>
+      <label class="toggle-row">
+        <input id="find-delete-duplicates-toggle" type="checkbox">
+        <span>Show Find &amp; Delete Duplicates (Beta)</span>
       </label>
 
       <p class="settings-help" style="margin-top:0.75rem;">

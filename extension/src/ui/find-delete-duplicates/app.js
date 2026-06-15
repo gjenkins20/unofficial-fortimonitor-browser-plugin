@@ -41,7 +41,7 @@ const root = () => document.getElementById('app-root');
 
 function frame(title) {
   const f = h('div', { class: 'mockup-frame' });
-  f.appendChild(titleBar(title, { toolName: TOOL_NAME }));
+  f.appendChild(titleBar(title, { toolName: TOOL_NAME, beta: true }));
   return f;
 }
 

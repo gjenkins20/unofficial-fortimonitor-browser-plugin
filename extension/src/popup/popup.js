@@ -19,6 +19,8 @@ import {
   setServerSearchEnabled,
   isSdwanReportEnabled,
   setSdwanReportEnabled,
+  isFindDeleteDuplicatesEnabled,
+  setFindDeleteDuplicatesEnabled,
   isTenantObservationsEnabled,
   setTenantObservationsEnabled,
   isSsoConfigEnabled,
@@ -326,6 +328,11 @@ async function loadSdwanReportIntoToggle() {
   toggle.checked = await isSdwanReportEnabled();
 }
 
+async function loadFindDeleteDuplicatesIntoToggle() {
+  const toggle = document.getElementById('find-delete-duplicates-toggle');
+  toggle.checked = await isFindDeleteDuplicatesEnabled();
+}
+
 async function loadTenantObservationsIntoToggle() {
   const toggle = document.getElementById('tenant-observations-toggle');
   toggle.checked = await isTenantObservationsEnabled();
@@ -535,6 +542,10 @@ async function applyExperimentalVisibility() {
   const sdwanReportOn = await isSdwanReportEnabled();
   for (const el of document.querySelectorAll('[data-experimental="sdwan-report"]')) {
     el.hidden = !sdwanReportOn;
+  }
+  const findDeleteDuplicatesOn = await isFindDeleteDuplicatesEnabled();
+  for (const el of document.querySelectorAll('[data-experimental="find-delete-duplicates"]')) {
+    el.hidden = !findDeleteDuplicatesOn;
   }
   const tenantObservationsOn = await isTenantObservationsEnabled();
   for (const el of document.querySelectorAll('[data-experimental="tenant-observations"]')) {
@@ -1350,6 +1361,7 @@ function init() {
     await loadProviderConfigIntoInputs('lmstudio');
     await loadServerSearchIntoToggle();
     await loadSdwanReportIntoToggle();
+    await loadFindDeleteDuplicatesIntoToggle();
     await loadTenantObservationsIntoToggle();
     await loadSsoConfigIntoToggle();
     await loadSidebarLauncherIntoToggle();
@@ -1632,6 +1644,12 @@ function init() {
 
   document.getElementById('sdwan-report-toggle').addEventListener('change', async (e) => {
     await setSdwanReportEnabled(e.target.checked);
+    await applyExperimentalVisibility();
+    await refreshGuards();
+  });
+
+  document.getElementById('find-delete-duplicates-toggle').addEventListener('change', async (e) => {
+    await setFindDeleteDuplicatesEnabled(e.target.checked);
     await applyExperimentalVisibility();
     await refreshGuards();
   });
