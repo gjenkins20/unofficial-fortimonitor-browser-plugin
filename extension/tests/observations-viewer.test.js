@@ -6,27 +6,34 @@ import { getTabs, getVisibleTabs, buildTabCsv, csvEscape, tabFilename, buildComb
 // Tab definitions sanity
 // =============================================================================
 
-test('getVisibleTabs(["all"]) returns all 10 tabs (FMN-149, FMN-218)', () => {
-  assert.equal(getVisibleTabs(['all']).length, 10);
+// 'instance-breakdown' (FMN-263) and 'raw-counts' are mode:'always' tabs,
+// so they appear in every selection. 'duplicate-instances' adds a 12th tab.
+test('getVisibleTabs(["all"]) returns all 12 tabs (FMN-149, FMN-218, FMN-263)', () => {
+  assert.equal(getVisibleTabs(['all']).length, 12);
 });
 
-test('getVisibleTabs(undefined) returns all 10 tabs (FMN-149, FMN-218)', () => {
-  assert.equal(getVisibleTabs(undefined).length, 10);
+test('getVisibleTabs(undefined) returns all 12 tabs (FMN-149, FMN-218, FMN-263)', () => {
+  assert.equal(getVisibleTabs(undefined).length, 12);
 });
 
-test('getVisibleTabs(["user-activity"]) returns only User Activity + Raw Counts (FMN-149)', () => {
+test('getVisibleTabs(["user-activity"]) returns User Activity + always-tabs (FMN-149, FMN-263)', () => {
   const ids = getVisibleTabs(['user-activity']).map((t) => t.id);
-  assert.deepEqual(ids, ['user-activity', 'raw-counts']);
+  assert.deepEqual(ids, ['user-activity', 'instance-breakdown', 'raw-counts']);
 });
 
-test('getVisibleTabs(["incidents"]) returns Incident Summary + Incidents + Raw Counts (FMN-149)', () => {
+test('getVisibleTabs(["incidents"]) returns Incident Summary + Incidents + always-tabs (FMN-149, FMN-263)', () => {
   const ids = getVisibleTabs(['incidents']).map((t) => t.id);
-  assert.deepEqual(ids, ['incident-summary', 'incidents', 'raw-counts']);
+  assert.deepEqual(ids, ['incident-summary', 'incidents', 'instance-breakdown', 'raw-counts']);
 });
 
-test('getVisibleTabs(["template-recommendations","monitoring-policy"]) returns both analyzer-scoped tabs + Raw Counts (FMN-149)', () => {
+test('getVisibleTabs(["template-recommendations","monitoring-policy"]) returns both analyzer-scoped tabs + always-tabs (FMN-149, FMN-263)', () => {
   const ids = getVisibleTabs(['template-recommendations', 'monitoring-policy']).map((t) => t.id);
-  assert.deepEqual(ids, ['template-recommendations', 'monitoring-policy', 'raw-counts']);
+  assert.deepEqual(ids, ['instance-breakdown', 'template-recommendations', 'monitoring-policy', 'raw-counts']);
+});
+
+test('getVisibleTabs(["duplicate-instances"]) returns Duplicates + always-tabs', () => {
+  const ids = getVisibleTabs(['duplicate-instances']).map((t) => t.id);
+  assert.deepEqual(ids, ['instance-breakdown', 'duplicate-instances', 'raw-counts']);
 });
 
 test('getVisibleTabs hides cross-cutting tabs in non-all mode (FMN-149)', () => {
@@ -36,21 +43,22 @@ test('getVisibleTabs hides cross-cutting tabs in non-all mode (FMN-149)', () => 
   }
 });
 
-test('buildCombinedZipEntries: sections=["user-activity"] produces only the 1 active tab CSV + README (FMN-149)', () => {
+test('buildCombinedZipEntries: sections=["user-activity"] produces the active tab CSV + always-tabs + README (FMN-149, FMN-263)', () => {
   const ctx = { inventory: {}, analysis: { users: { details: [] } }, customer: 'Acme' };
   const entries = buildCombinedZipEntries(ctx, { sections: ['user-activity'] });
-  // README + user-activity + raw-counts = 3 entries.
+  // README + user-activity + always-tabs (instance-breakdown, raw-counts).
   const filenames = entries.map((e) => e.filename).sort();
-  assert.deepEqual(filenames, ['README.txt', 'raw-counts.csv', 'user-activity.csv']);
+  assert.deepEqual(filenames, ['README.txt', 'instance-breakdown.csv', 'raw-counts.csv', 'user-activity.csv']);
 });
 
-test('getTabs: returns the 10 tabs FMN-218 spec calls for, in order', () => {
+test('getTabs: returns the 12 tabs in order (FMN-263 instance-breakdown + duplicate-instances)', () => {
   // FMN-156 rework: noise analysis folded into Incident Summary.
-  // FMN-218 rework: 'recommendations' tab removed when the tenant observations shifted
-  // to observation-only output; the prior tab #10 (Recommended Labs,
-  // now relabelled Quick Labs) is tab #9.
+  // FMN-218 rework: 'recommendations' tab removed when the tenant observations
+  // shifted to observation-only output (Recommended Labs relabelled Quick Labs).
+  // FMN-263: 'instance-breakdown' tab added before Instance Analysis.
+  // duplicate-instances: Duplicates tab added after Instance Analysis.
   const tabs = getTabs();
-  assert.equal(tabs.length, 10);
+  assert.equal(tabs.length, 12);
   const ids = tabs.map((t) => t.id);
   assert.deepEqual(ids, [
     'executive-summary',
@@ -58,7 +66,9 @@ test('getTabs: returns the 10 tabs FMN-218 spec calls for, in order', () => {
     'incident-summary',
     'incidents',
     'user-activity',
+    'instance-breakdown',
     'instance-analysis',
+    'duplicate-instances',
     'template-recommendations',
     'monitoring-policy',
     'recommended-labs',

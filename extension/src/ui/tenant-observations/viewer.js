@@ -506,6 +506,52 @@ const TABS = [
     ]
   },
 
+  // 7b. Duplicate Instances --------------------------------------------------
+  // Flags distinct /v2/server records that share a normalized name or
+  // primary address (fqdn) - same device re-onboarded or monitored twice.
+  // Reads only the shallow servers list (analysis.duplicates), so it needs
+  // neither deep mode nor frontend augmentation. One row per member of each
+  // collision group; rows carry the shared value + group size so the
+  // grouping survives CSV/PDF export (which flatten to text).
+  {
+    id: 'duplicate-instances',
+    label: 'Duplicates',
+    filenamePart: 'duplicate-instances',
+    sections: [
+      {
+        label: 'Duplicate Instances',
+        columns: [
+          { key: 'match',      header: 'Match On',      getter: (r) => r.match },
+          { key: 'value',      header: 'Shared Value',  getter: (r) => r.value },
+          { key: 'group_size', header: 'Group Size',    getter: (r) => r.group_size },
+          { key: 'id',         header: 'Instance ID',   getter: (r) => r.id,
+            cellRenderer: (r, ctx) => instanceLinkCell(r.id, r.id, ctx) },
+          { key: 'name',       header: 'Instance Name', getter: (r) => r.name },
+          { key: 'address',    header: 'Address',       getter: (r) => r.address }
+        ],
+        rows: ({ analysis }) => {
+          const d = analysis?.duplicates;
+          if (!d?.available || !Array.isArray(d.groups)) return [];
+          const out = [];
+          for (const g of d.groups) {
+            for (const m of (g.members ?? [])) {
+              out.push({
+                match: g.axis === 'name' ? 'Name' : 'Address',
+                value: g.value,
+                group_size: g.count,
+                id: m.id,
+                name: m.name,
+                address: m.address || '—'
+              });
+            }
+          }
+          return out;
+        },
+        emptyText: 'No duplicate instances detected (no shared names or addresses across instances).'
+      }
+    ]
+  },
+
   // 8. Template Analysis -----------------------------------------------------
   // FMN-135 follow-up (2026-05-01): the default-only / cleanup / overlap
   // analyses run on CUSTOM templates only. FortiMonitor's stock "Default
@@ -710,6 +756,7 @@ const TAB_VISIBILITY = Object.freeze({
   'user-activity':           { mode: 'section', section: 'user-activity' },
   'instance-breakdown':      { mode: 'always' },
   'instance-analysis':       { mode: 'section', section: 'instance-analysis' },
+  'duplicate-instances':     { mode: 'section', section: 'duplicate-instances' },
   'template-recommendations': { mode: 'section', section: 'template-recommendations' },
   'monitoring-policy':       { mode: 'section', section: 'monitoring-policy' },
   'recommended-labs':        { mode: 'all-only' },

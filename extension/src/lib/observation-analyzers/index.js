@@ -13,9 +13,10 @@ import { analyzeInstances } from './instance.js';
 import { analyzeTemplates } from './template.js';
 import { analyzeMonitoringPolicy } from './monitoring-policy.js';
 import { analyzeNoise } from './noise.js';
+import { analyzeDuplicates } from './duplicate.js';
 import { analyzerKeysForSections } from '../observations-section-deps.js';
 
-export { analyzeIncidents, analyzeUsers, analyzeInstances, analyzeTemplates, analyzeMonitoringPolicy, analyzeNoise };
+export { analyzeIncidents, analyzeUsers, analyzeInstances, analyzeTemplates, analyzeMonitoringPolicy, analyzeNoise, analyzeDuplicates };
 
 /**
  * @typedef {Object} ObservationsAnalysis
@@ -25,6 +26,7 @@ export { analyzeIncidents, analyzeUsers, analyzeInstances, analyzeTemplates, ana
  * @property {import('./template.js').TemplateResult} [templates]
  * @property {import('./monitoring-policy.js').MonitoringPolicyResult} [monitoring_policy]
  * @property {import('./noise.js').NoiseResult} [noise]
+ * @property {import('./duplicate.js').DuplicateResult} [duplicates]
  */
 
 /**
@@ -55,5 +57,8 @@ export function runAllAnalyzers(inventory = {}, { sections } = {}) {
   // same outages list the IncidentAnalyzer does, so its top-level key
   // requirement maps to the existing 'noise-analysis' section -> outages.
   if (wanted.has('noise')) out.noise = analyzeNoise(inventory);
+  // Duplicate-instance detection reads only the top-level servers list, so
+  // it runs whenever its section (or "all") is selected - no deep mode.
+  if (wanted.has('duplicates')) out.duplicates = analyzeDuplicates(inventory);
   return out;
 }

@@ -19,6 +19,7 @@ test('analyzer section IDs match the planning-doc taxonomy', () => {
   assert.deepEqual(
     [...ANALYZER_SECTION_IDS].sort(),
     [
+      'duplicate-instances',
       'incidents',
       'instance-analysis',
       'monitoring-policy',

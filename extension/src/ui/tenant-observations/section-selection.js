@@ -20,7 +20,8 @@ export const ANALYZER_SECTION_IDS = Object.freeze([
   'user-activity',
   'instance-analysis',
   'template-recommendations',
-  'monitoring-policy'
+  'monitoring-policy',
+  'duplicate-instances'
 ]);
 // FMN-156: noise analysis was a separate section id pre-operator-QA; the
 // rework folds the analyzer's output into the Incidents tab's sections,

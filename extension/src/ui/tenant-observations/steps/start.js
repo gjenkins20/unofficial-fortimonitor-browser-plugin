@@ -22,7 +22,8 @@ const SECTION_PILLS = [
   { id: 'user-activity', label: 'User Activity' },
   { id: 'instance-analysis', label: 'Instances' },
   { id: 'template-recommendations', label: 'Templates' },
-  { id: 'monitoring-policy', label: 'Monitoring Policy' }
+  { id: 'monitoring-policy', label: 'Monitoring Policy' },
+  { id: 'duplicate-instances', label: 'Duplicates' }
 ];
 
 export function reportBreadcrumbs(active) {

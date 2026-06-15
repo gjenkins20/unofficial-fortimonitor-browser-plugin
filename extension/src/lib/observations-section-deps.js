@@ -26,7 +26,8 @@ export const SECTION_ANALYZER_KEY = Object.freeze({
   'user-activity': 'users',
   'instance-analysis': 'instances',
   'template-recommendations': 'templates',
-  'monitoring-policy': 'monitoring_policy'
+  'monitoring-policy': 'monitoring_policy',
+  'duplicate-instances': 'duplicates'
 });
 
 // Additional analyzer result keys a section pulls beyond its primary
@@ -50,7 +51,10 @@ const SECTION_TOP_LEVEL_KEYS = Object.freeze({
   'user-activity': ['users'],
   'instance-analysis': ['servers', 'agent_resource_types'],
   'template-recommendations': ['server_templates'],
-  'monitoring-policy': ['servers', 'server_groups', 'server_templates']
+  'monitoring-policy': ['servers', 'server_groups', 'server_templates'],
+  // Duplicate detection reads only the shallow /v2/server list (name +
+  // fqdn) - no deep dive, no frontend augmentation.
+  'duplicate-instances': ['servers']
 });
 
 // Cross-cutting tabs touch every fetcher domain (see planning doc §1).
