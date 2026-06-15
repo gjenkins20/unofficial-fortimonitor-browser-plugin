@@ -2,12 +2,14 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createFindDeleteDuplicatesHandlers } from '../src/background/find-delete-duplicates-handlers.js';
 
-function fakeClient(pages) {
-  // pages: array of server_list arrays, returned by ascending offset
+function fakeClient(pages, nodes = []) {
+  // pages: array of server_list arrays, returned by ascending offset.
+  // nodes: monitoring_node_list returned on the /monitoring_node fetch.
   return {
     calls: [],
     async getJson(path) {
       this.calls.push(path);
+      if (path.includes('/monitoring_node')) return { monitoring_node_list: nodes };
       const m = /offset=(\d+)/.exec(path);
       const offset = m ? Number(m[1]) : 0;
       const idx = offset / 100;
@@ -43,7 +45,8 @@ test('find: pages through the full server list until a short page', async () => 
   const h = createFindDeleteDuplicatesHandlers({ getClient: async () => client });
   const r = await h['find-delete-duplicates:find']();
   assert.equal(r.scanned, 101);
-  assert.equal(client.calls.length, 2); // offset=0 then offset=100, then short page stops
+  const serverCalls = client.calls.filter((p) => p.startsWith('/server?'));
+  assert.equal(serverCalls.length, 2); // offset=0 then offset=100, then short page stops
   const nameSet = r.groups.find((g) => g.axis === 'name' && g.value.toLowerCase() === 's1');
   assert.ok(nameSet, 's1 should be a duplicate set across pages');
   assert.deepEqual(nameSet.members.map((m) => m.id).sort(), ['1', '101']);
@@ -77,6 +80,24 @@ test('find: emits find-progress per page with scanned count + total from meta', 
   assert.equal(progress.length, 2); // one per page
   assert.deepEqual(progress.map((e) => e.payload.scanned), [100, 101]);
   assert.ok(progress.every((e) => e.payload.total === 101));
+});
+
+test('find: resolves monitoring locations and classifies intentional vs accidental', async () => {
+  const servers = [
+    { url: '/v2/server/1/', name: 'acc', fqdn: '1.1.1.1', primary_monitoring_node: 'https://api2/v2/monitoring_node/10' },
+    { url: '/v2/server/2/', name: 'acc', fqdn: '1.1.1.2', primary_monitoring_node: 'https://api2/v2/monitoring_node/10' },
+    { url: '/v2/server/3/', name: 'intent', fqdn: '2.2.2.1', primary_monitoring_node: 'https://api2/v2/monitoring_node/10' },
+    { url: '/v2/server/4/', name: 'intent', fqdn: '2.2.2.2', primary_monitoring_node: 'https://api2/v2/monitoring_node/20' }
+  ];
+  const nodes = [{ url: '/v2/monitoring_node/10', name: 'Chicago 10' }, { url: '/v2/monitoring_node/20', name: 'Sydney 2' }];
+  const h = createFindDeleteDuplicatesHandlers({ getClient: async () => fakeClient([servers], nodes) });
+  const r = await h['find-delete-duplicates:find']();
+  const acc = r.groups.find((g) => g.value === 'acc');
+  const intent = r.groups.find((g) => g.value === 'intent');
+  assert.equal(acc.likely_intentional, false);                 // both in Chicago 10
+  assert.equal(intent.likely_intentional, true);               // Chicago vs Sydney
+  assert.deepEqual(acc.members.map((m) => m.location).sort(), ['Chicago 10', 'Chicago 10']);
+  assert.deepEqual(intent.members.map((m) => m.location).sort(), ['Chicago 10', 'Sydney 2']);
 });
 
 test('find: total is null when meta omits total_count (UI falls back to indeterminate)', async () => {

@@ -125,13 +125,18 @@ test.describe('live - FMN-269 Find & Delete Duplicates', () => {
       await expect(page.locator('[data-test="dup-section"][data-axis="address"]')).toHaveCount(1);
       // Timer captured elapsed -> the Choose header reports the scan duration.
       await expect(page.locator('.step-header p')).toContainText(/in \d+(\.\d+)?s/);
-      // Every duplicate set must have exactly one KEEP survivor (keep-->=1).
+      // Every duplicate set has exactly one survivor selection - EITHER a
+      // member keep-radio (accidental: keep one) OR the keep-all radio
+      // (FMN-274 intentional: keep all). keep-->=1 holds either way.
       for (let i = 0; i < sets; i++) {
         const card = dupSet.nth(i);
-        const checked = await card.locator('[data-test="keep-radio"]:checked').count();
-        expect(checked, `duplicate set ${i} must have exactly one survivor`).toBe(1);
+        const one = await card.locator('[data-test="keep-radio"]:checked').count();
+        const all = await card.locator('[data-test="keep-all-radio"]:checked').count();
+        expect(one + all, `duplicate set ${i} must have exactly one survivor selection`).toBe(1);
       }
-      await expect(page.locator('[data-test="choose-summary"]')).toContainText('Will delete');
+      // FMN-274: every member row exposes a Monitoring Location cell.
+      expect(await dupSet.first().locator('[data-test="member-location"]').count()).toBeGreaterThan(0);
+      await expect(page.locator('[data-test="choose-summary"]')).toContainText(/Will delete|keeping/);
       await expect(page.locator('[data-test="export-duplicates-csv"]')).toBeVisible();
     }
     expect(pageErrors, `page errors: ${pageErrors.join(' | ')}`).toEqual([]);
@@ -159,16 +164,18 @@ test.describe('live - FMN-269 Find & Delete Duplicates', () => {
       try {
         const mod = await import('./app.js');
         const helper = await import('../../lib/find-delete-duplicates/delete-set.js');
+        // Set 0 (name): same monitoring location -> accidental (keep oldest).
+        // Set 1 (address): different locations -> intentional (keep all).
         mod.store.result = {
           available: true, scanned: 5,
           groups: [
-            { axis: 'name', value: 'dup-name', count: 2, members: [
-              { id: '901', name: 'dup-a', address: '10.9.9.1', created: '2024-12-12' },
-              { id: '902', name: 'DUP-A', address: '10.9.9.2', created: '2025-01-03' }
+            { axis: 'name', value: 'dup-name', count: 2, likely_intentional: false, members: [
+              { id: '901', name: 'dup-a', address: '10.9.9.1', created: '2024-12-12', location: 'Chicago 10' },
+              { id: '902', name: 'DUP-A', address: '10.9.9.2', created: '2025-01-03', location: 'Chicago 10' }
             ] },
-            { axis: 'address', value: '10.9.9.9', count: 2, members: [
-              { id: '903', name: 'beta', address: '10.9.9.9', created: '2023-06-01' },
-              { id: '904', name: 'gamma', address: '10.9.9.9', created: '2024-02-02' }
+            { axis: 'address', value: '10.9.9.9', count: 2, likely_intentional: true, members: [
+              { id: '903', name: 'beta', address: '10.9.9.9', created: '2023-06-01', location: 'Chicago 10' },
+              { id: '904', name: 'gamma', address: '10.9.9.9', created: '2024-02-02', location: 'Sydney 2' }
             ] }
           ],
           summary: {}
@@ -187,30 +194,37 @@ test.describe('live - FMN-269 Find & Delete Duplicates', () => {
     await expect(ipSection).toContainText('Duplicates by IP address');
     await expect(nameSection.locator('[data-test="dup-set"]')).toHaveCount(1);
     await expect(ipSection.locator('[data-test="dup-set"]')).toHaveCount(1);
-
-    // Two duplicate sets, each with exactly one survivor (default = lowest id).
     await expect(page.locator('[data-test="dup-set"]')).toHaveCount(2);
-    for (const card of await page.locator('[data-test="dup-set"]').all()) {
-      expect(await card.locator('[data-test="keep-radio"]:checked').count()).toBe(1);
-    }
-    await expect(page.locator('[data-test="choose-summary"]')).toContainText('Will delete 2');
-    // FMN-271: CSV export of the duplicates report is available on this step.
-    await expect(page.locator('[data-test="export-duplicates-csv"]')).toBeVisible();
-    // FMN-273: each member row shows the instance creation date.
-    await expect(nameSection.locator('[data-test="member-created"]').first()).toHaveText('2024-12-12');
+
+    // FMN-274: the accidental (same-location) name set keeps oldest (one
+    // survivor); the intentional (different-location) IP set defaults to
+    // KEEP ALL with the intentional flag and is not pre-marked for deletion.
+    const nameSet = nameSection.locator('[data-test="dup-set"]');
+    const ipSet = ipSection.locator('[data-test="dup-set"]');
+    expect(await nameSet.locator('[data-test="keep-radio"]:checked').count()).toBe(1);
+    expect(await ipSet.locator('[data-test="keep-all-radio"]:checked').count()).toBe(1);
+    expect(await ipSet.locator('[data-test="keep-radio"]:checked').count()).toBe(0);
+    await expect(ipSet.locator('[data-test="intentional-flag"]')).toBeVisible();
+    await expect(nameSet.locator('[data-test="intentional-flag"]')).toHaveCount(0);
+    // only the accidental set contributes a deletion
+    await expect(page.locator('[data-test="choose-summary"]')).toContainText('Will delete 1');
+
+    // FMN-274: Monitoring Location column populated; FMN-273 Created column too.
+    await expect(ipSet.locator('[data-test="member-location"]').nth(1)).toHaveText('Sydney 2');
     await expect(page.locator('[data-test="member-created"]')).toHaveCount(4);
+    await expect(page.locator('[data-test="export-duplicates-csv"]')).toBeVisible();
 
-    // Changing the survivor in set 0 keeps the delete count at 2 (still one
-    // survivor per set) - the keep-->=1 guardrail can never zero a set out.
-    const set0 = page.locator('[data-test="dup-set"]').nth(0);
-    await set0.locator('[data-test="keep-radio"]').nth(1).check();
+    // Override the intentional set: pick a survivor -> now it deletes the other
+    // (delete count 1 -> 2), then restore keep-all -> back to 1.
+    await ipSet.locator('[data-test="keep-radio"]').first().check();
     await expect(page.locator('[data-test="choose-summary"]')).toContainText('Will delete 2');
-    expect(await set0.locator('[data-test="keep-radio"]:checked').count()).toBe(1);
+    await ipSet.locator('[data-test="keep-all-radio"]').check();
+    await expect(page.locator('[data-test="choose-summary"]')).toContainText('Will delete 1');
 
-    // Advance to Confirm and assert the type-to-confirm gate.
+    // Advance to Confirm (default selection -> 1 deletion) and assert the gate.
     await page.locator('[data-test="choose-next"]').click();
     await expect(page.locator('[data-test="delete-table"]')).toBeVisible();
-    await expect(page.locator('[data-test="delete-row"]')).toHaveCount(2);
+    await expect(page.locator('[data-test="delete-row"]')).toHaveCount(1);
 
     const apply = page.locator('[data-test="apply-btn"]');
     const input = page.locator('[data-test="delete-confirm-input"]');

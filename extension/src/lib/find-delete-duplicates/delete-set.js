@@ -22,6 +22,11 @@
 //   - The final delete list is deduped by id, so an instance is deleted at most
 //     once.
 
+// Sentinel keep value meaning "keep every member of this set, delete none."
+// Used as the default for likely-intentional sets (different monitoring
+// locations) so nothing in them is pre-marked for deletion (FMN-274).
+export const KEEP_ALL = '__all__';
+
 /** Lowest id first; numeric when both parse, lexical otherwise. Pure. */
 function lowestId(ids) {
   return [...ids].sort((a, b) => {
@@ -36,27 +41,31 @@ function memberIdsOf(set) {
 }
 
 /**
- * Resolve the kept id for a set: the operator's choice when it names a real
- * member, otherwise the default (lowest id).
+ * Resolve a set's keep selection: the operator's choice (a member id or
+ * KEEP_ALL) when valid, otherwise the default - KEEP_ALL for likely-intentional
+ * sets, lowest/oldest id for accidental ones.
  */
 function resolveKeep(set, key, keepMap) {
   const ids = memberIdsOf(set);
   const chosen = keepMap && keepMap[key] != null ? String(keepMap[key]) : null;
+  if (chosen === KEEP_ALL) return KEEP_ALL;
   if (chosen && ids.includes(chosen)) return chosen;
-  return lowestId(ids);
+  return set?.likely_intentional ? KEEP_ALL : lowestId(ids);
 }
 
 /**
- * Default keep selection: lowest/oldest id per duplicate set. Keyed by the
- * set's index in the groups array (stable for a given analysis result).
+ * Default keep selection per duplicate set, keyed by the set's index in the
+ * groups array. Accidental sets default to keep-oldest (lowest id); likely-
+ * intentional sets (different monitoring locations) default to KEEP_ALL so no
+ * member is pre-marked for deletion.
  *
  * @param {Array} groups  analyzeDuplicates().groups
- * @returns {Object<string,string>} setKey -> keptId
+ * @returns {Object<string,string>} setKey -> keptId | KEEP_ALL
  */
 export function defaultKeepMap(groups) {
   const out = {};
   (Array.isArray(groups) ? groups : []).forEach((set, i) => {
-    out[String(i)] = lowestId(memberIdsOf(set));
+    out[String(i)] = set?.likely_intentional ? KEEP_ALL : lowestId(memberIdsOf(set));
   });
   return out;
 }
@@ -78,27 +87,42 @@ export function defaultKeepMap(groups) {
 export function buildDeleteSet(groups, keepMap = {}) {
   const sets = Array.isArray(groups) ? groups : [];
 
-  // Pass 1: every kept id across all sets (a keep anywhere wins).
+  // Pass 1: every kept id across all sets (a keep anywhere wins). A KEEP_ALL
+  // set keeps ALL its members, so they are all protected from deletion in other
+  // sets too - intentional duplicates never get deleted via an overlapping set.
   const keptIds = new Set();
-  sets.forEach((set, i) => keptIds.add(resolveKeep(set, String(i), keepMap)));
+  sets.forEach((set, i) => {
+    const keep = resolveKeep(set, String(i), keepMap);
+    if (keep === KEEP_ALL) { for (const id of memberIdsOf(set)) keptIds.add(id); }
+    else keptIds.add(keep);
+  });
 
   // Pass 2: delete candidates = members minus the set's keep, minus any id
-  // kept in another set. Dedup the final list by id.
+  // kept in another set. KEEP_ALL sets contribute no deletes. Dedup by id.
   const perSet = [];
   const deleteMap = new Map();
   const spared = new Set();
   sets.forEach((set, i) => {
     const key = String(i);
-    const keptId = resolveKeep(set, key, keepMap);
+    const keep = resolveKeep(set, key, keepMap);
+    const keepAll = keep === KEEP_ALL;
     const deleteIds = [];
-    for (const m of (Array.isArray(set.members) ? set.members : [])) {
-      const id = String(m.id);
-      if (id === keptId) continue;
-      if (keptIds.has(id)) { spared.add(id); continue; }
-      deleteIds.push(id);
-      if (!deleteMap.has(id)) deleteMap.set(id, { id, name: m.name ?? '' });
+    if (!keepAll) {
+      for (const m of (Array.isArray(set.members) ? set.members : [])) {
+        const id = String(m.id);
+        if (id === keep) continue;
+        if (keptIds.has(id)) { spared.add(id); continue; }
+        deleteIds.push(id);
+        if (!deleteMap.has(id)) deleteMap.set(id, { id, name: m.name ?? '' });
+      }
     }
-    perSet.push({ key, axis: set.axis, value: set.value, keptId, deleteIds });
+    perSet.push({
+      key, axis: set.axis, value: set.value,
+      keptId: keepAll ? null : keep,
+      keepAll,
+      likely_intentional: !!set.likely_intentional,
+      deleteIds
+    });
   });
 
   const deleteTargets = [...deleteMap.values()];
@@ -131,14 +155,15 @@ export function buildDuplicatesCsv(groups, keepMap = {}) {
   const sets = Array.isArray(groups) ? groups : [];
   const plan = buildDeleteSet(sets, keepMap);
   const kept = new Set(plan.keptIds);
-  const header = ['match_on', 'shared_value', 'duplicate_set_size', 'instance_id', 'instance_name', 'ip_address', 'created', 'disposition'];
+  const header = ['match_on', 'shared_value', 'duplicate_set_size', 'classification', 'instance_id', 'instance_name', 'ip_address', 'monitoring_location', 'created', 'disposition'];
   const lines = [header.join(',')];
   for (const set of sets) {
     const matchOn = set.axis === 'name' ? 'Name' : 'IP address';
+    const classification = set.likely_intentional ? 'likely intentional' : 'likely accidental';
     for (const m of (Array.isArray(set.members) ? set.members : [])) {
       const id = String(m.id);
       const disposition = kept.has(id) ? 'keep' : 'delete';
-      lines.push([matchOn, set.value, set.members.length, id, m.name ?? '', m.address ?? '', m.created ?? '', disposition].map(csvField).join(','));
+      lines.push([matchOn, set.value, set.members.length, classification, id, m.name ?? '', m.address ?? '', m.location ?? '', m.created ?? '', disposition].map(csvField).join(','));
     }
   }
   return lines.join('\n');

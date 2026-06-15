@@ -1,11 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildDeleteSet, defaultKeepMap, buildDuplicatesCsv } from '../src/lib/find-delete-duplicates/delete-set.js';
+import { buildDeleteSet, defaultKeepMap, buildDuplicatesCsv, KEEP_ALL } from '../src/lib/find-delete-duplicates/delete-set.js';
+
+function intentionalSet(axis, value, ...members) { return { axis, value, count: members.length, likely_intentional: true, members }; }
 
 // Duplicate sets in the shape analyzeDuplicates().groups produces.
 function nameSet(value, ...members) { return { axis: 'name', value, count: members.length, members }; }
 function addrSet(value, ...members) { return { axis: 'address', value, count: members.length, members }; }
-const m = (id, name = `s${id}`, address = '', created = '') => ({ id: String(id), name, address, created });
+const m = (id, name = `s${id}`, address = '', created = '', location = '') => ({ id: String(id), name, address, created, location });
 
 test('defaultKeepMap keeps the lowest/oldest id per set', () => {
   const groups = [nameSet('dup', m(7), m(3), m(9))];
@@ -92,22 +94,70 @@ test('no over-deletion: union of per-set deleteIds equals deduped delete list (m
   assert.ok(r.sparedByKeepElsewhere.includes('3'));
 });
 
+// ---- likely-intentional sets default to KEEP_ALL (FMN-274) ----
+
+test('defaultKeepMap: likely-intentional set defaults to KEEP_ALL, accidental to oldest', () => {
+  const groups = [
+    nameSet('acc', m(3), m(7)),                          // accidental
+    intentionalSet('name', 'intent', m(5), m(9))         // intentional
+  ];
+  const km = defaultKeepMap(groups);
+  assert.equal(km['0'], '3');          // oldest
+  assert.equal(km['1'], KEEP_ALL);     // keep all
+});
+
+test('buildDeleteSet: a KEEP_ALL set deletes nothing and keeps every member', () => {
+  const groups = [intentionalSet('name', 'intent', m(5), m(9), m(2))];
+  const r = buildDeleteSet(groups, defaultKeepMap(groups));
+  assert.deepEqual(r.deleteIds, []);
+  assert.deepEqual(r.keptIds.sort(), ['2', '5', '9']);
+  assert.equal(r.perSet[0].keepAll, true);
+  assert.equal(r.perSet[0].likely_intentional, true);
+});
+
+test('intentional members are protected from deletion by an overlapping accidental set', () => {
+  // id 2 is in an accidental name set (would be deleted) AND an intentional
+  // address set (keep-all) -> the keep-all wins, 2 is never deleted.
+  const groups = [
+    nameSet('n', m(1), m(2)),                            // accidental: keep 1, delete 2
+    intentionalSet('address', 'addr', m(2), m(3))        // intentional: keep all (2,3)
+  ];
+  const r = buildDeleteSet(groups, defaultKeepMap(groups));
+  assert.equal(r.deleteIds.includes('2'), false);
+  assert.ok(r.sparedByKeepElsewhere.includes('2'));
+});
+
+test('operator can override a KEEP_ALL set by picking a survivor', () => {
+  const groups = [intentionalSet('name', 'intent', m(5), m(9))];
+  const r = buildDeleteSet(groups, { 0: '5' }); // operator overrides keep-all
+  assert.deepEqual(r.deleteIds, ['9']);
+});
+
 // ---- buildDuplicatesCsv (FMN-271 report export) ----
 
-test('buildDuplicatesCsv: header + one row per member with axis label, created + disposition', () => {
+test('buildDuplicatesCsv: header + one row per member with classification, location, created, disposition', () => {
   const groups = [
-    nameSet('fw-a', m(1, 'fw-a', '10.0.0.1', '2024-12-12'), m(2, 'FW-A', '10.0.0.2', '2025-01-03')),
+    nameSet('fw-a', m(1, 'fw-a', '10.0.0.1', '2024-12-12', 'Chicago 10'), m(2, 'FW-A', '10.0.0.2', '2025-01-03', 'Chicago 10')),
     addrSet('10.0.0.9', m(3, 'b', '10.0.0.9'), m(4, 'c', '10.0.0.9'))
   ];
   const csv = buildDuplicatesCsv(groups, defaultKeepMap(groups));
   const lines = csv.split('\n');
-  assert.equal(lines[0], 'match_on,shared_value,duplicate_set_size,instance_id,instance_name,ip_address,created,disposition');
+  assert.equal(lines[0], 'match_on,shared_value,duplicate_set_size,classification,instance_id,instance_name,ip_address,monitoring_location,created,disposition');
   assert.equal(lines.length, 5); // header + 4 members
-  // name axis labelled "Name", address axis "IP address"; created column carried; blank when absent
-  assert.ok(lines.some((l) => l === 'Name,fw-a,2,1,fw-a,10.0.0.1,2024-12-12,keep'));
-  assert.ok(lines.some((l) => l === 'Name,fw-a,2,2,FW-A,10.0.0.2,2025-01-03,delete'));
-  assert.ok(lines.some((l) => l === 'IP address,10.0.0.9,2,3,b,10.0.0.9,,keep'));
-  assert.ok(lines.some((l) => l === 'IP address,10.0.0.9,2,4,c,10.0.0.9,,delete'));
+  // both sets share one location (or none) -> likely accidental; columns carried, blank when absent
+  assert.ok(lines.some((l) => l === 'Name,fw-a,2,likely accidental,1,fw-a,10.0.0.1,Chicago 10,2024-12-12,keep'));
+  assert.ok(lines.some((l) => l === 'Name,fw-a,2,likely accidental,2,FW-A,10.0.0.2,Chicago 10,2025-01-03,delete'));
+  assert.ok(lines.some((l) => l === 'IP address,10.0.0.9,2,likely accidental,3,b,10.0.0.9,,,keep'));
+  assert.ok(lines.some((l) => l === 'IP address,10.0.0.9,2,likely accidental,4,c,10.0.0.9,,,delete'));
+});
+
+test('buildDuplicatesCsv: a likely-intentional set (different locations) reports keep for all members', () => {
+  const groups = [nameSet('x', m(1, 'x', 'a', '', 'Chicago 10'), m(2, 'x', 'b', '', 'Sydney 2'))];
+  groups[0].likely_intentional = true;
+  const csv = buildDuplicatesCsv(groups, defaultKeepMap(groups));
+  const rows = csv.split('\n').slice(1);
+  assert.ok(rows.every((r) => r.endsWith(',keep'))); // keep-all default -> nothing deleted
+  assert.ok(rows.some((r) => r.includes(',likely intentional,')));
 });
 
 test('buildDuplicatesCsv: a member spared by keep-elsewhere is reported as keep', () => {

@@ -204,7 +204,11 @@ function duplicateRowsForAxis(analysis, axis) {
   for (const g of d.groups) {
     if (g.axis !== axis) continue;
     for (const m of (g.members ?? [])) {
-      out.push({ value: g.value, group_size: g.count, id: m.id, name: m.name, address: m.address || '—', created: m.created || '—' });
+      out.push({
+        value: g.value, group_size: g.count, id: m.id, name: m.name,
+        address: m.address || '—', location: m.location || '—', created: m.created || '—',
+        classification: g.likely_intentional ? 'Likely intentional' : 'Likely accidental'
+      });
     }
   }
   return out;
@@ -546,7 +550,9 @@ const TABS = [
             cellRenderer: (r, ctx) => instanceLinkCell(r.id, r.id, ctx) },
           { key: 'name',       header: 'Instance Name', getter: (r) => r.name },
           { key: 'address',    header: 'IP Address',    getter: (r) => r.address },
-          { key: 'created',    header: 'Created',       getter: (r) => r.created }
+          { key: 'location',   header: 'Monitoring Location', getter: (r) => r.location },
+          { key: 'created',    header: 'Created',       getter: (r) => r.created },
+          { key: 'classification', header: 'Likely',    getter: (r) => r.classification }
         ],
         rows: ({ analysis }) => duplicateRowsForAxis(analysis, 'name'),
         emptyText: 'No instances share a name.'
@@ -560,7 +566,9 @@ const TABS = [
             cellRenderer: (r, ctx) => instanceLinkCell(r.id, r.id, ctx) },
           { key: 'name',       header: 'Instance Name', getter: (r) => r.name },
           { key: 'address',    header: 'IP Address',    getter: (r) => r.address },
-          { key: 'created',    header: 'Created',       getter: (r) => r.created }
+          { key: 'location',   header: 'Monitoring Location', getter: (r) => r.location },
+          { key: 'created',    header: 'Created',       getter: (r) => r.created },
+          { key: 'classification', header: 'Likely',    getter: (r) => r.classification }
         ],
         rows: ({ analysis }) => duplicateRowsForAxis(analysis, 'address'),
         emptyText: 'No instances share an IP address.'

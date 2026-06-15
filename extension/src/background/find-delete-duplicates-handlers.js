@@ -47,14 +47,32 @@ export function createFindDeleteDuplicatesHandlers({ getClient, events } = {}) {
             id: o?.id ?? null,
             name: o?.name ?? '',
             fqdn: o?.fqdn ?? '',
-            created: o?.created ?? ''
+            created: o?.created ?? '',
+            primary_monitoring_node: o?.primary_monitoring_node ?? null
           });
         }
         emit('find-delete-duplicates:find-progress', { scanned: servers.length, total });
         if (list.length < PAGE_LIMIT) break;
         offset += PAGE_LIMIT;
       }
-      const result = analyzeDuplicates({ servers });
+      // Monitoring locations (FMN-274): resolve each instance's polling node so
+      // the analyzer can tell intentional multi-location duplicates from
+      // accidental same-location ones. One small list, paged defensively.
+      const monitoringNodes = [];
+      let nodeOffset = 0;
+      for (let page = 0; page < MAX_PAGES; page++) {
+        let body;
+        try {
+          body = await client.getJson(`/monitoring_node?limit=${PAGE_LIMIT}&offset=${nodeOffset}`);
+        } catch {
+          break; // location resolution is best-effort; never fail the scan
+        }
+        const list = Array.isArray(body?.monitoring_node_list) ? body.monitoring_node_list : [];
+        for (const n of list) monitoringNodes.push({ url: n?.url ?? null, name: n?.name ?? '' });
+        if (list.length < PAGE_LIMIT) break;
+        nodeOffset += PAGE_LIMIT;
+      }
+      const result = analyzeDuplicates({ servers, monitoring_nodes: monitoringNodes });
       // Attach the scanned count even on the available:false path so the UI
       // can say "scanned N, found 0" rather than a bare empty.
       return { ...result, scanned: servers.length };

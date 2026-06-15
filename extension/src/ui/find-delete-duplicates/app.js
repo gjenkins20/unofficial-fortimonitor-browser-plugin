@@ -13,7 +13,7 @@
 
 import { h, titleBar, downloadBlob } from '../../lib/dom.js';
 import { call, onEvent } from '../../lib/messaging.js';
-import { buildDeleteSet, defaultKeepMap, buildDuplicatesCsv } from '../../lib/find-delete-duplicates/delete-set.js';
+import { buildDeleteSet, defaultKeepMap, buildDuplicatesCsv, KEEP_ALL } from '../../lib/find-delete-duplicates/delete-set.js';
 import { CONFIRM_PHRASE } from '../../lib/bulk-actions/delete-instance.js';
 
 const TOOL_NAME = 'Find & Delete Duplicates';
@@ -170,29 +170,48 @@ export function renderChoose() {
       'data-test': 'dup-set',
       'data-set-key': key,
       'data-axis': set.axis,
-      style: 'border:1px solid var(--border);border-radius:6px;padding:0.7rem 0.85rem;margin-bottom:0.7rem;'
+      'data-intentional': set.likely_intentional ? 'true' : 'false',
+      style: `border:1px solid ${set.likely_intentional ? '#cdb86a' : 'var(--border)'};border-radius:6px;padding:0.7rem 0.85rem;margin-bottom:0.7rem;${set.likely_intentional ? 'background:#fcf9ee;' : ''}`
     });
-    card.appendChild(h('div', { style: 'font-weight:600;font-size:0.9rem;margin-bottom:0.4rem;' },
+    card.appendChild(h('div', { style: 'font-weight:600;font-size:0.9rem;margin-bottom:0.2rem;' },
       h('code', {}, set.value),
       h('span', { class: 'muted', style: 'font-weight:400;color:var(--text-muted);' }, ` · ${set.members.length} instances`)
     ));
+    if (set.likely_intentional) {
+      card.appendChild(h('div', { 'data-test': 'intentional-flag', style: 'font-size:0.78rem;color:#8a6d1a;margin-bottom:0.4rem;' },
+        '⚑ Likely intentional - members are monitored from different locations (kept by default).'));
+    }
+
+    // Repaint every member row's KEEP/delete badge from the current selection.
+    function paint() {
+      const sel = store.keepMap[key];
+      card.querySelectorAll('[data-test="member-row"]').forEach((rowEl) => {
+        const isKeep = sel === KEEP_ALL || rowEl.dataset.id === sel;
+        const badge = rowEl.querySelector('[data-test="disposition"]');
+        badge.textContent = isKeep ? 'KEEP' : 'delete';
+        badge.style.color = isKeep ? '#0e5a2b' : '#a02216';
+      });
+    }
+
+    // "Keep all (do not delete)" option - default for likely-intentional sets.
+    const keepAllChecked = String(store.keepMap[key]) === KEEP_ALL;
+    const keepAllRadio = h('input', {
+      type: 'radio', name: `keep-${key}`, value: KEEP_ALL, 'data-test': 'keep-all-radio',
+      ...(keepAllChecked ? { checked: 'checked' } : {})
+    });
+    keepAllRadio.addEventListener('change', () => { store.keepMap[key] = KEEP_ALL; refreshSummary(); paint(); });
+    card.appendChild(h('label', { style: 'display:flex;align-items:center;gap:0.5rem;padding:0.2rem 0;font-size:0.82rem;cursor:pointer;color:var(--text-muted);' },
+      keepAllRadio, h('span', {}, 'Keep all (do not delete any in this set)')));
+
     for (const member of set.members) {
       const id = String(member.id);
       const checked = String(store.keepMap[key]) === id;
+      const isKeep = keepAllChecked || checked;
       const radio = h('input', {
-        type: 'radio', name: `keep-${key}`, value: id,
-        'data-test': 'keep-radio',
+        type: 'radio', name: `keep-${key}`, value: id, 'data-test': 'keep-radio',
         ...(checked ? { checked: 'checked' } : {})
       });
-      radio.addEventListener('change', () => {
-        store.keepMap[key] = id;
-        refreshSummary();
-        card.querySelectorAll('[data-test="member-row"]').forEach((rowEl) => {
-          const isKeep = rowEl.dataset.id === store.keepMap[key];
-          rowEl.querySelector('[data-test="disposition"]').textContent = isKeep ? 'KEEP' : 'delete';
-          rowEl.querySelector('[data-test="disposition"]').style.color = isKeep ? '#0e5a2b' : '#a02216';
-        });
-      });
+      radio.addEventListener('change', () => { store.keepMap[key] = id; refreshSummary(); paint(); });
       card.appendChild(h('label', {
         'data-test': 'member-row', 'data-id': id,
         style: 'display:flex;align-items:center;gap:0.5rem;padding:0.2rem 0;font-size:0.85rem;cursor:pointer;'
@@ -201,8 +220,9 @@ export function renderChoose() {
         h('span', { style: 'font-family:"SF Mono",Menlo,monospace;color:var(--text-muted);min-width:90px;' }, `#${id}`),
         h('span', { style: 'flex:1;' }, member.name || '(no name)'),
         h('span', { class: 'muted', style: 'color:var(--text-muted);min-width:120px;' }, member.address || ''),
+        h('span', { 'data-test': 'member-location', class: 'muted', title: 'Monitoring location', style: 'color:var(--text-muted);min-width:130px;' }, member.location || '—'),
         h('span', { 'data-test': 'member-created', class: 'muted', title: 'Created', style: 'color:var(--text-muted);min-width:90px;font-variant-numeric:tabular-nums;' }, member.created || '—'),
-        h('span', { 'data-test': 'disposition', style: `min-width:54px;text-align:right;font-weight:600;color:${checked ? '#0e5a2b' : '#a02216'};` }, checked ? 'KEEP' : 'delete')
+        h('span', { 'data-test': 'disposition', style: `min-width:54px;text-align:right;font-weight:600;color:${isKeep ? '#0e5a2b' : '#a02216'};` }, isKeep ? 'KEEP' : 'delete')
       ));
     }
     return card;

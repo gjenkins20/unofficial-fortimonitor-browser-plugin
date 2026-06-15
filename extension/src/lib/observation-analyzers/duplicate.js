@@ -53,9 +53,14 @@ export function analyzeDuplicates(inventory = {}) {
     };
   }
 
-  // Normalize each server to { id, name, address, created } once. Records
-  // without a resolvable id are dropped: we cannot tell two real instances
-  // apart from one record counted twice without a stable identity.
+  // node id -> human location name, from inventory.monitoring_nodes (the
+  // ObservationsFetcher collects this; the find-delete-duplicates handler
+  // passes it too). Used to resolve each server's Monitoring Location.
+  const nodeNameById = buildMonitoringNodeMap(inventory.monitoring_nodes);
+
+  // Normalize each server to { id, name, address, created, location } once.
+  // Records without a resolvable id are dropped: we cannot tell two real
+  // instances apart from one record counted twice without a stable identity.
   const records = [];
   for (const s of servers) {
     const id = s?.id != null && s.id !== '' ? String(s.id) : extractTrailingId(s?.url);
@@ -64,7 +69,8 @@ export function analyzeDuplicates(inventory = {}) {
       id: String(id),
       name: rowName(s, ''),
       address: typeof s?.fqdn === 'string' ? s.fqdn.trim() : '',
-      created: toCreatedDate(s?.created)
+      created: toCreatedDate(s?.created),
+      location: resolveLocation(s, nodeNameById)
     });
   }
 
@@ -114,16 +120,43 @@ function findGroups(records, axis, valueOf) {
     for (const m of members) if (!byId.has(m.id)) byId.set(m.id, m);
     if (byId.size < 2) continue;
     const list = [...byId.values()];
+    // Monitoring-location discriminator (FMN-274): members polled from the SAME
+    // location and sharing a name/address are likely an accidental duplicate;
+    // members in DIFFERENT locations are likely intentional (two deliberate
+    // monitoring paths). likely_intentional = >=2 distinct KNOWN locations.
+    const distinctLocations = new Set(list.map((m) => m.location).filter(Boolean));
     out.push({
       axis,
       // Show the value as it appears on the first member, not the
       // lowercased key, so the operator sees real casing.
       value: axis === 'name' ? (list[0].name || '(no name)') : (list[0].address || '(no address)'),
       count: byId.size,
-      members: list.map((m) => ({ id: m.id, name: m.name || '(no name)', address: m.address, created: m.created || '' }))
+      likely_intentional: distinctLocations.size >= 2,
+      members: list.map((m) => ({ id: m.id, name: m.name || '(no name)', address: m.address, created: m.created || '', location: m.location || '' }))
     });
   }
   return out;
+}
+
+// Build a { nodeId(string) -> location name } map from inventory.monitoring_nodes
+// ([{ url, name, ... }]). Items carry `url` (.../monitoring_node/{id}) not id.
+function buildMonitoringNodeMap(nodes) {
+  const map = new Map();
+  if (!Array.isArray(nodes)) return map;
+  for (const n of nodes) {
+    const id = n?.id != null && n.id !== '' ? String(n.id) : extractTrailingId(n?.url);
+    if (id == null) continue;
+    if (typeof n?.name === 'string' && n.name) map.set(String(id), n.name);
+  }
+  return map;
+}
+
+// Resolve a server's Monitoring Location name from its primary_monitoring_node
+// (a /v2/monitoring_node/{id} URL) via the node map. '' when unresolvable.
+function resolveLocation(server, nodeNameById) {
+  const nid = extractTrailingId(server?.primary_monitoring_node);
+  if (nid == null) return '';
+  return nodeNameById.get(String(nid)) || '';
 }
 
 function normalize(v) {

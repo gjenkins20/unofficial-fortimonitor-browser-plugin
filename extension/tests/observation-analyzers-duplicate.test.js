@@ -81,6 +81,39 @@ test('carries a normalized created date (YYYY-MM-DD) onto each member', () => {
   assert.equal(byId.get('3'), '');
 });
 
+test('resolves monitoring location from inventory.monitoring_nodes and classifies sets', () => {
+  const inv = {
+    monitoring_nodes: [
+      { url: '/v2/monitoring_node/10', name: 'Chicago 10' },
+      { url: '/v2/monitoring_node/20', name: 'Sydney 2' }
+    ],
+    servers: [
+      { id: 1, name: 'same-loc', fqdn: 'a', primary_monitoring_node: 'https://x/v2/monitoring_node/10' },
+      { id: 2, name: 'same-loc', fqdn: 'b', primary_monitoring_node: 'https://x/v2/monitoring_node/10' },
+      { id: 3, name: 'diff-loc', fqdn: 'c', primary_monitoring_node: 'https://x/v2/monitoring_node/10' },
+      { id: 4, name: 'diff-loc', fqdn: 'd', primary_monitoring_node: 'https://x/v2/monitoring_node/20' }
+    ]
+  };
+  const r = analyzeDuplicates(inv);
+  const same = r.groups.find((g) => g.value === 'same-loc');
+  const diff = r.groups.find((g) => g.value === 'diff-loc');
+  assert.equal(same.likely_intentional, false);       // both Chicago 10
+  assert.equal(diff.likely_intentional, true);         // Chicago vs Sydney
+  assert.equal(same.members.find((m) => m.id === '1').location, 'Chicago 10');
+  assert.equal(diff.members.find((m) => m.id === '4').location, 'Sydney 2');
+});
+
+test('likely_intentional is false when locations are unknown (no monitoring_nodes)', () => {
+  const r = analyzeDuplicates({ servers: [
+    { id: 1, name: 'dup', fqdn: 'a', primary_monitoring_node: 'https://x/v2/monitoring_node/10' },
+    { id: 2, name: 'dup', fqdn: 'b', primary_monitoring_node: 'https://x/v2/monitoring_node/20' }
+  ] });
+  // No monitoring_nodes map -> locations unresolved ('') -> cannot prove intentional.
+  const set = r.groups.find((g) => g.axis === 'name');
+  assert.equal(set.likely_intentional, false);
+  assert.equal(set.members.every((m) => m.location === ''), true);
+});
+
 test('inline id is preferred and stringified', () => {
   const r = analyzeDuplicates({ servers: [
     { id: 100, name: 'shared', fqdn: 'x1' },
