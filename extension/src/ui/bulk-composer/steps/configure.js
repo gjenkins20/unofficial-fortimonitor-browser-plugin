@@ -161,7 +161,7 @@ function renderDeleteInstanceForm({ body, store }) {
       `This will permanently delete ${n} selected instance${n === 1 ? '' : 's'} from FortiMonitor.`),
     h('ul', { style: 'margin:0 0 0.2rem 1.1rem;font-size:0.85rem;color:var(--text);line-height:1.5;' },
       h('li', {}, 'Deletion is irreversible. Agent resources and metric history are destroyed, not suspended.'),
-      h('li', {}, 'Servers and templates share the same id namespace; the same endpoint removes both.'),
+      h('li', {}, 'Servers only: any id that is not a server (e.g. a template id) is verified and skipped, not deleted.'),
       h('li', {}, 'To pause metrics without losing history, use Set Agent Resource Status instead.')
     ),
     h('p', { style: 'margin:0.5rem 0 0;font-size:0.85rem;color:var(--text-muted);' },
