@@ -521,9 +521,9 @@ const TABS = [
       {
         label: 'Duplicate Instances',
         columns: [
-          { key: 'match',      header: 'Match On',      getter: (r) => r.match },
-          { key: 'value',      header: 'Shared Value',  getter: (r) => r.value },
-          { key: 'group_size', header: 'Group Size',    getter: (r) => r.group_size },
+          { key: 'match',      header: 'Match On',          getter: (r) => r.match },
+          { key: 'value',      header: 'Shared Value',      getter: (r) => r.value },
+          { key: 'group_size', header: 'Duplicate Set Size', getter: (r) => r.group_size },
           { key: 'id',         header: 'Instance ID',   getter: (r) => r.id,
             cellRenderer: (r, ctx) => instanceLinkCell(r.id, r.id, ctx) },
           { key: 'name',       header: 'Instance Name', getter: (r) => r.name },
