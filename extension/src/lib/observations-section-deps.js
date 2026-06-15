@@ -54,7 +54,12 @@ const SECTION_TOP_LEVEL_KEYS = Object.freeze({
   'monitoring-policy': ['servers', 'server_groups', 'server_templates'],
   // Duplicate detection reads only the shallow /v2/server list (name +
   // fqdn) - no deep dive, no frontend augmentation.
-  'duplicate-instances': ['servers']
+  // analyzeDuplicates resolves each instance's Monitoring Location from the
+  // collector behind primary_monitoring_node - a cloud monitoring_node OR an
+  // OnSight appliance. Both lists are required so the location resolves on the
+  // report path; without them (scoped mode) every location renders blank
+  // (FMN-274 fix).
+  'duplicate-instances': ['servers', 'monitoring_nodes', 'onsights']
 });
 
 // Cross-cutting tabs touch every fetcher domain (see planning doc §1).

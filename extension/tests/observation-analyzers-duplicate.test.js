@@ -103,6 +103,50 @@ test('resolves monitoring location from inventory.monitoring_nodes and classifie
   assert.equal(diff.members.find((m) => m.id === '4').location, 'Sydney 2');
 });
 
+test('resolves Monitoring Location from OnSight (primary_monitoring_node is polymorphic)', () => {
+  // The real bug: primary_monitoring_node can be an /onsight/{id} URL, not just
+  // /monitoring_node/{id}. OnSight-proxied instances must resolve their location.
+  const inv = {
+    monitoring_nodes: [{ url: 'https://api2.panopta.com/v2/monitoring_node/632', name: 'Chicago 10' }],
+    onsights: [{ url: 'https://api2.panopta.com/v2/onsight/17887', name: 'fm-onsight-01' }],
+    servers: [
+      { id: 1, name: 'ons', fqdn: 'a', primary_monitoring_node: 'https://api2.panopta.com/v2/onsight/17887' },
+      { id: 2, name: 'ons', fqdn: 'b', primary_monitoring_node: 'https://api2.panopta.com/v2/onsight/17887' }
+    ]
+  };
+  const set = analyzeDuplicates(inv).groups.find((g) => g.axis === 'name');
+  assert.deepEqual(set.members.map((m) => m.location), ['fm-onsight-01', 'fm-onsight-01']);
+  assert.equal(set.likely_intentional, false); // same OnSight -> accidental
+});
+
+test('different collector kinds (cloud node vs OnSight) classify as intentional', () => {
+  const inv = {
+    monitoring_nodes: [{ url: 'https://x/v2/monitoring_node/632', name: 'Chicago 10' }],
+    onsights: [{ url: 'https://x/v2/onsight/17887', name: 'fm-onsight-01' }],
+    servers: [
+      { id: 1, name: 'dup', fqdn: 'a', primary_monitoring_node: 'https://x/v2/monitoring_node/632' },
+      { id: 2, name: 'dup', fqdn: 'b', primary_monitoring_node: 'https://x/v2/onsight/17887' }
+    ]
+  };
+  const set = analyzeDuplicates(inv).groups.find((g) => g.axis === 'name');
+  assert.deepEqual(set.members.map((m) => m.location).sort(), ['Chicago 10', 'fm-onsight-01']);
+  assert.equal(set.likely_intentional, true);
+});
+
+test('resolves an arbitrary collector type via the pre-resolved monitoring_source_names map', () => {
+  // FortiManager / custom proxies have no list endpoint; the find handler GETs
+  // them and passes a pre-resolved map keyed by "<type>/<id>" (or URL).
+  const inv = {
+    monitoring_source_names: { 'fortimanager/9': 'FortiManager-HQ' },
+    servers: [
+      { id: 1, name: 'fmg', fqdn: 'a', primary_monitoring_node: 'https://x/v2/fortimanager/9' },
+      { id: 2, name: 'fmg', fqdn: 'b', primary_monitoring_node: 'https://x/v2/fortimanager/9' }
+    ]
+  };
+  const set = analyzeDuplicates(inv).groups.find((g) => g.axis === 'name');
+  assert.deepEqual(set.members.map((m) => m.location), ['FortiManager-HQ', 'FortiManager-HQ']);
+});
+
 test('likely_intentional is false when locations are unknown (no monitoring_nodes)', () => {
   const r = analyzeDuplicates({ servers: [
     { id: 1, name: 'dup', fqdn: 'a', primary_monitoring_node: 'https://x/v2/monitoring_node/10' },

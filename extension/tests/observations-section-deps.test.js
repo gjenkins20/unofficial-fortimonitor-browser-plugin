@@ -30,6 +30,15 @@ test('topLevelKeysForSections(["incidents"]) only includes /outage', () => {
   assert.deepEqual([...keys], ['outages']);
 });
 
+test('topLevelKeysForSections(["duplicate-instances"]) pulls servers + monitoring_nodes + onsights (FMN-274)', () => {
+  // The duplicates analyzer resolves Monitoring Location from the collector
+  // behind primary_monitoring_node - a cloud monitoring_node OR an OnSight. A
+  // scoped report that omits either renders those locations blank. The shipped
+  // regression declared only ["servers"] (then only added monitoring_nodes).
+  const keys = topLevelKeysForSections(['duplicate-instances']);
+  assert.deepEqual([...keys].sort(), ['monitoring_nodes', 'onsights', 'servers']);
+});
+
 test('topLevelKeysForSections(["template-recommendations","monitoring-policy"]) shares server_templates without dup', () => {
   const keys = topLevelKeysForSections(['template-recommendations', 'monitoring-policy']);
   assert.deepEqual([...keys].sort(), ['server_groups', 'server_templates', 'servers']);

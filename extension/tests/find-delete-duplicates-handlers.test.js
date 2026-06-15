@@ -2,18 +2,24 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createFindDeleteDuplicatesHandlers } from '../src/background/find-delete-duplicates-handlers.js';
 
-function fakeClient(pages, nodes = []) {
+function fakeClient(pages, nodes = [], onsights = [], collectors = {}) {
   // pages: array of server_list arrays, returned by ascending offset.
-  // nodes: monitoring_node_list returned on the /monitoring_node fetch.
+  // nodes/onsights: list responses for /monitoring_node and /onsight.
+  // collectors: { '/<type>/<id>': { name } } for the direct GET-fallback.
   return {
     calls: [],
     async getJson(path) {
       this.calls.push(path);
-      if (path.includes('/monitoring_node')) return { monitoring_node_list: nodes };
-      const m = /offset=(\d+)/.exec(path);
-      const offset = m ? Number(m[1]) : 0;
-      const idx = offset / 100;
-      return { server_list: pages[idx] || [] };
+      if (path.startsWith('/monitoring_node?')) return { monitoring_node_list: nodes };
+      if (path.startsWith('/onsight?')) return { onsight_list: onsights };
+      if (path.startsWith('/server?')) {
+        const m = /offset=(\d+)/.exec(path);
+        const idx = (m ? Number(m[1]) : 0) / 100;
+        return { server_list: pages[idx] || [] };
+      }
+      // GET-fallback for an arbitrary collector resource (e.g. /fortimanager/9)
+      if (collectors[path]) return collectors[path];
+      const e = new Error('not found'); e.status = 404; throw e;
     }
   };
 }
@@ -98,6 +104,29 @@ test('find: resolves monitoring locations and classifies intentional vs accident
   assert.equal(intent.likely_intentional, true);               // Chicago vs Sydney
   assert.deepEqual(acc.members.map((m) => m.location).sort(), ['Chicago 10', 'Chicago 10']);
   assert.deepEqual(intent.members.map((m) => m.location).sort(), ['Chicago 10', 'Sydney 2']);
+});
+
+test('find: resolves OnSight + cloud + FortiManager(GET-fallback) collector locations', async () => {
+  const servers = [
+    { url: '/v2/server/1/', name: 'a', fqdn: 'x', primary_monitoring_node: 'https://api2/v2/monitoring_node/632' },
+    { url: '/v2/server/2/', name: 'a', fqdn: 'y', primary_monitoring_node: 'https://api2/v2/onsight/17887' },
+    { url: '/v2/server/3/', name: 'b', fqdn: 'z', primary_monitoring_node: 'https://api2/v2/fortimanager/9' },
+    { url: '/v2/server/4/', name: 'b', fqdn: 'w', primary_monitoring_node: 'https://api2/v2/fortimanager/9' }
+  ];
+  const nodes = [{ url: 'https://api2/v2/monitoring_node/632', name: 'Chicago 10' }];
+  const onsights = [{ url: 'https://api2/v2/onsight/17887', name: 'fm-onsight-01' }];
+  const collectors = { '/fortimanager/9': { name: 'FortiManager-HQ' } }; // GET-fallback target
+  const client = fakeClient([servers], nodes, onsights, collectors);
+  const h = createFindDeleteDuplicatesHandlers({ getClient: async () => client });
+  const r = await h['find-delete-duplicates:find']();
+  const a = r.groups.find((g) => g.value === 'a');     // cloud vs onsight -> intentional
+  const bset = r.groups.find((g) => g.value === 'b');  // both FortiManager -> accidental
+  assert.deepEqual(a.members.map((m) => m.location).sort(), ['Chicago 10', 'fm-onsight-01']);
+  assert.equal(a.likely_intentional, true);
+  assert.deepEqual(bset.members.map((m) => m.location), ['FortiManager-HQ', 'FortiManager-HQ']);
+  assert.equal(bset.likely_intentional, false);
+  // the GET-fallback hit /fortimanager/9 exactly once (deduped)
+  assert.equal(client.calls.filter((p) => p === '/fortimanager/9').length, 1);
 });
 
 test('find: total is null when meta omits total_count (UI falls back to indeterminate)', async () => {

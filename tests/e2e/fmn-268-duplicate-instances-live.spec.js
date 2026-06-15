@@ -289,4 +289,50 @@ test.describe('live - FMN-268 Duplicates tab', () => {
     expect(res.emptyText, 'empty-state copy must render').toBeTruthy();
     await page.close();
   });
+
+  // FMN-274 regression: the earlier injected tests masked a real bug - a SCOPED
+  // Tenant Observations report (duplicate-instances section) did not fetch
+  // monitoring_nodes, so every location rendered blank. This drives the REAL
+  // ObservationsFetcher scoped to duplicates against the live tenant (no
+  // injection) and asserts monitoring_nodes is collected and at least one
+  // duplicate's Monitoring Location resolves.
+  test('live - scoped report fetches monitoring_nodes and resolves locations (no injection)', async ({ liveCtx }) => {
+    const { ctx, sw, atLogin } = liveCtx;
+    test.skip(!sw, 'No extension service worker connected at the provisioned CDP port.');
+    test.skip(atLogin, 'FortiMonitor session is at a login screen.');
+    const apiOk = await sw.evaluate(async () => Boolean((await chrome.storage.local.get('panopta.apiKey'))['panopta.apiKey']));
+    test.skip(!apiOk, 'No v2 API key seeded; cannot run the live scoped fetch.');
+
+    const extensionId = sw.url().split('/')[2];
+    const page = await ctx.newPage();
+    await page.goto(`chrome-extension://${extensionId}/src/ui/tenant-observations/app.html`, { waitUntil: 'domcontentloaded' });
+    const out = await page.evaluate(async () => {
+      const sd = await import('../../lib/observations-section-deps.js');
+      const keys = [...(sd.topLevelKeysForSections(['duplicate-instances']) || [])].sort();
+      const { ObservationsFetcher } = await import('../../lib/observations-fetcher.js');
+      const { PanoptaClient } = await import('../../lib/panopta-client.js');
+      const { analyzeDuplicates } = await import('../../lib/observation-analyzers/duplicate.js');
+      const apiKey = (await chrome.storage.local.get('panopta.apiKey'))['panopta.apiKey'];
+      const client = new PanoptaClient({ apiKey, fetch: (...a) => fetch(...a) });
+      const inv = await new ObservationsFetcher({ client }).collectInventory({ sections: ['duplicate-instances'] });
+      const dup = analyzeDuplicates(inv);
+      return {
+        keys,
+        monitoringNodes: Array.isArray(inv.monitoring_nodes) ? inv.monitoring_nodes.length : -1,
+        anyLocationResolved: (dup.groups || []).some((g) => g.members.some((m) => m.location)),
+        available: dup.available
+      };
+    });
+    // The section must declare monitoring_nodes, and the scoped fetch must
+    // actually collect them.
+    expect(out.keys, 'duplicate-instances must pull monitoring_nodes + onsights').toEqual(['monitoring_nodes', 'onsights', 'servers']);
+    expect(out.monitoringNodes, 'scoped report must fetch monitoring nodes').toBeGreaterThan(0);
+    // If the tenant has any node-monitored duplicates, at least one location
+    // must resolve (the bug rendered all of them blank). Skip the assertion
+    // only when there are no duplicates at all.
+    if (out.available) {
+      expect(out.anyLocationResolved, 'at least one duplicate Monitoring Location must resolve on the report path').toBe(true);
+    }
+    await page.close();
+  });
 });

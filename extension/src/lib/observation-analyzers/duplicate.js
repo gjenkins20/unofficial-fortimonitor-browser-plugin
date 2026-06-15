@@ -53,10 +53,13 @@ export function analyzeDuplicates(inventory = {}) {
     };
   }
 
-  // node id -> human location name, from inventory.monitoring_nodes (the
-  // ObservationsFetcher collects this; the find-delete-duplicates handler
-  // passes it too). Used to resolve each server's Monitoring Location.
-  const nodeNameById = buildMonitoringNodeMap(inventory.monitoring_nodes);
+  // Monitoring Location resolution. `primary_monitoring_node` is POLYMORPHIC:
+  // it points at /v2/<type>/<id> where <type> is the collector kind -
+  // monitoring_node (FortiMonitor Cloud location), onsight (OnSight appliance),
+  // fortimanager, etc. We build a { "<type>/<id>" -> name } map from every
+  // source list the caller supplied (monitoring_nodes + onsights) plus any
+  // pre-resolved map (the find handler GETs unknown collector types directly).
+  const sourceNameByKey = buildMonitoringSourceMap(inventory);
 
   // Normalize each server to { id, name, address, created, location } once.
   // Records without a resolvable id are dropped: we cannot tell two real
@@ -70,7 +73,7 @@ export function analyzeDuplicates(inventory = {}) {
       name: rowName(s, ''),
       address: typeof s?.fqdn === 'string' ? s.fqdn.trim() : '',
       created: toCreatedDate(s?.created),
-      location: resolveLocation(s, nodeNameById)
+      location: resolveLocation(s, sourceNameByKey)
     });
   }
 
@@ -138,25 +141,45 @@ function findGroups(records, axis, valueOf) {
   return out;
 }
 
-// Build a { nodeId(string) -> location name } map from inventory.monitoring_nodes
-// ([{ url, name, ... }]). Items carry `url` (.../monitoring_node/{id}) not id.
-function buildMonitoringNodeMap(nodes) {
+// Extract the "<type>/<id>" key from a /v2/<type>/<id> resource URL (e.g.
+// "onsight/17887", "monitoring_node/632"). null when not a v2 resource URL.
+function sourceKey(url) {
+  if (typeof url !== 'string') return null;
+  const m = /\/v2\/([a-z_]+)\/(\d+)/.exec(url);
+  return m ? `${m[1]}/${m[2]}` : null;
+}
+
+// Build a { "<type>/<id>" -> collector name } map from every monitoring-source
+// list the caller provided (monitoring_nodes + onsights), plus an optional
+// pre-resolved inventory.monitoring_source_names (keyed by URL or "<type>/<id>")
+// that the find handler builds for collector types without a list endpoint.
+function buildMonitoringSourceMap(inventory) {
   const map = new Map();
-  if (!Array.isArray(nodes)) return map;
-  for (const n of nodes) {
-    const id = n?.id != null && n.id !== '' ? String(n.id) : extractTrailingId(n?.url);
-    if (id == null) continue;
-    if (typeof n?.name === 'string' && n.name) map.set(String(id), n.name);
+  const explicit = inventory?.monitoring_source_names;
+  if (explicit) {
+    const entries = explicit instanceof Map ? explicit.entries() : Object.entries(explicit);
+    for (const [k, v] of entries) {
+      const key = sourceKey(k) || String(k);
+      if (typeof v === 'string' && v) map.set(key, v);
+    }
   }
+  const addAll = (list) => {
+    for (const item of (Array.isArray(list) ? list : [])) {
+      const key = sourceKey(item?.url);
+      if (key && typeof item?.name === 'string' && item.name && !map.has(key)) map.set(key, item.name);
+    }
+  };
+  addAll(inventory?.monitoring_nodes);
+  addAll(inventory?.onsights);
   return map;
 }
 
-// Resolve a server's Monitoring Location name from its primary_monitoring_node
-// (a /v2/monitoring_node/{id} URL) via the node map. '' when unresolvable.
-function resolveLocation(server, nodeNameById) {
-  const nid = extractTrailingId(server?.primary_monitoring_node);
-  if (nid == null) return '';
-  return nodeNameById.get(String(nid)) || '';
+// Resolve a server's Monitoring Location (the collector/proxy it is polled
+// through) from its polymorphic primary_monitoring_node URL. '' when the
+// collector isn't in the map (or the instance is agent-monitored: null URL).
+function resolveLocation(server, sourceNameByKey) {
+  const key = sourceKey(server?.primary_monitoring_node);
+  return key ? (sourceNameByKey.get(key) || '') : '';
 }
 
 function normalize(v) {
