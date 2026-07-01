@@ -616,6 +616,76 @@ export function createBulkComposerHandlers({ events = {}, getClient, getFortimon
     },
 
     /**
+     * FMN-277: list every instance (as candidate parents) for the Set Parent
+     * Instance picker. Returns { servers: [{ id, name, url, fqdn }] } sorted by
+     * name. `url` is the v2 server URL the action writes into parent_server.
+     */
+    'bulk-composer:list-instances-for-parent': async () => {
+      const client = await factory();
+      // Larger page size: the v2 /server LIST endpoint is slow (~15s/page), so
+      // fewer pages = a faster one-time picker load.
+      const servers = await client.listAllServers({ pageSize: 500 });
+      const out = [];
+      for (const s of servers) {
+        const url = s?.url ?? null;
+        if (!url) continue;
+        const m = String(url).match(/\/server\/(\d+)\/?$/);
+        const id = m ? Number(m[1]) : null;
+        if (id == null) continue;
+        out.push({ id, name: s?.name ?? null, url, fqdn: s?.fqdn ?? null });
+      }
+      out.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+      return { servers: out };
+    },
+
+    /**
+     * FMN-277: batch-fetch each target's CURRENT parent instance
+     * (parent_server), resolved to { id, name, url } via a one-shot server
+     * catalog. Mirrors list-server-parents-batch but reads parent_server (the
+     * dependency parent) instead of server_group. Per-target failures -> null.
+     * Used by the Set Parent Instance Configure step so Preview describe()
+     * shows the current parent per row and skips already-correct ones.
+     */
+    'bulk-composer:list-server-parent-instances-batch': async (payload = {}) => {
+      const ids = Array.isArray(payload?.serverIds) ? payload.serverIds.slice(0, MAX_TARGETS) : [];
+      if (ids.length === 0) return { byServerId: {} };
+      const client = await factory();
+      const concurrency = Math.max(1, Math.min(10, payload?.concurrency || DEFAULT_CONCURRENCY));
+      // Resolve parent NAMES on demand with a per-url cache. The v2 /server
+      // LIST endpoint is slow (~15s/page on large tenants), so a full-catalog
+      // crawl here would stall the Configure step; most targets have no parent
+      // (null), and those that do need only one direct GET on the parent.
+      const parentCache = new Map(); // parentUrl -> { id, name }
+      const resolveParent = async (url) => {
+        if (parentCache.has(url)) return parentCache.get(url);
+        const m = String(url).match(/\/server\/(\d+)\/?$/);
+        const parentId = m ? Number(m[1]) : null;
+        let name = null;
+        if (parentId != null) {
+          try { name = (await client.getServer(parentId))?.name ?? null; } catch { name = null; }
+        }
+        const resolved = { id: parentId, name, url };
+        parentCache.set(url, resolved);
+        return resolved;
+      };
+      const settled = await mapConcurrent(ids, async (id) => {
+        try {
+          const server = await client.getServer(id);
+          const url = server?.parent_server ?? null;
+          if (!url) return { id, parent: null };
+          return { id, parent: await resolveParent(url) };
+        } catch {
+          return { id, parent: null };
+        }
+      }, { concurrency });
+      const byServerId = {};
+      for (const r of settled) {
+        if (r.status === 'fulfilled') byServerId[r.value.id] = r.value.parent;
+      }
+      return { byServerId };
+    },
+
+    /**
      * FMN-226: batch-fetch the existing server_attribute rows for a
      * list of server ids. Returns a map keyed by id; per-server
      * failures map to null. Used by the auto-set-attribute-by-name

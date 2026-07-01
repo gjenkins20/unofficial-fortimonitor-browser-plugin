@@ -1056,6 +1056,40 @@ export class PanoptaClient {
     return { status: res.status, from: before, to: serverGroupUrl, noop: false };
   }
 
+  /**
+   * FMN-277: set a server's parent INSTANCE (device parent/child dependency).
+   * Distinct from setServerParentGroup - this writes `parent_server` (the
+   * dependency parent), not `server_group` (the org folder).
+   *
+   * Live-verified (2026-07-01): v2 PUT with `parent_server: "<v2 server url>"`
+   * takes effect (204). GET-modify-sanitize-PUT, same as setServerParentGroup.
+   *
+   * REMOVAL IS NOT POSSIBLE VIA v2: PUT parent_server=null is silently ignored
+   * (204, no change), ""=400, omit keeps, PATCH=405. Use removeServerParent
+   * Instance() (session-auth editInstance) to clear a parent. Passing a null/
+   * empty parentServerUrl here throws rather than silently no-op'ing, so a
+   * caller never mistakes this for a clear.
+   *
+   * @param {string|number} serverId - the CHILD instance being reparented
+   * @param {string} parentServerUrl - full v2 URL of the PARENT server
+   * @returns {Promise<{status:number, from:string|null, to:string, noop:boolean}>}
+   */
+  async setServerParentInstance(serverId, parentServerUrl) {
+    if (!serverId) throw new TypeError('setServerParentInstance: serverId is required');
+    if (!parentServerUrl || typeof parentServerUrl !== 'string') {
+      throw new TypeError('setServerParentInstance: parentServerUrl is required (v2 cannot clear a parent - use removeServerParentInstance)');
+    }
+    const { body: server } = await this._request('GET', `/server/${encodeURIComponent(serverId)}`);
+    const before = server?.parent_server ?? null;
+    if (before === parentServerUrl) {
+      return { status: 200, from: before, to: parentServerUrl, noop: true };
+    }
+    const { res } = await this._request('PUT', `/server/${encodeURIComponent(serverId)}`, {
+      body: sanitizeServerBodyForPut({ ...server, parent_server: parentServerUrl })
+    });
+    return { status: res.status, from: before, to: parentServerUrl, noop: false };
+  }
+
   async addServerTag(serverId, tags) {
     if (!serverId) throw new TypeError('addServerTag: serverId is required');
     const tagList = Array.isArray(tags)

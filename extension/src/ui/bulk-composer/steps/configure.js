@@ -87,6 +87,9 @@ export function render({ container, store, navigate, call }) {
     } else if (store.actionId === 'set-parent-group') {
       const url = typeof params.groupUrl === 'string' && params.groupUrl.trim();
       nextBtn.disabled = !url;
+    } else if (store.actionId === 'set-parent-instance') {
+      const url = typeof params.parentUrl === 'string' && params.parentUrl.trim();
+      nextBtn.disabled = !url;
     } else if (store.actionId === 'set-agent-resource-status') {
       const f = typeof params.filter === 'string' && params.filter.trim();
       const s = params.status === 'active' || params.status === 'suspended';
@@ -123,6 +126,8 @@ export function render({ container, store, navigate, call }) {
     renderAutoSetAttributeByNameForm({ body, store, refreshNextDisabled, call });
   } else if (store.actionId === 'set-parent-group') {
     renderSetParentGroupForm({ body, store, refreshNextDisabled, call });
+  } else if (store.actionId === 'set-parent-instance') {
+    renderSetParentInstanceForm({ body, store, refreshNextDisabled, call });
   } else if (store.actionId === 'set-agent-resource-status') {
     renderSetAgentResourceStatusForm({ body, store, refreshNextDisabled, call });
   } else if (store.actionId === 'schedule-maintenance-window') {
@@ -2171,6 +2176,109 @@ async function fetchCurrentParents({ store, call }) {
       if (!t || t.id == null) continue;
       if (!Object.prototype.hasOwnProperty.call(map, t.id)) continue;
       t.parentGroup = map[t.id]; // null is a definitive "no parent", not the placeholder branch
+    }
+  } catch {
+    // describe() falls through to its placeholder branch on unenriched rows.
+  }
+}
+
+// =====================================================================
+// FMN-277: Set Parent Instance form (device parent/child dependency).
+//
+// Sibling of the Set Parent Group form, but writes parent_server (the
+// dependency parent) instead of server_group. The picker lists every
+// instance as a candidate parent; a pre-flight populates target.parent
+// Instance so Preview describe() shows the current parent per row and
+// skips already-correct (and self-parent) rows.
+// =====================================================================
+
+function renderSetParentInstanceForm({ body, store, refreshNextDisabled, call }) {
+  body.appendChild(h('h3', { class: 'subhead' }, 'Parent instance'));
+
+  store.params = {
+    ...store.params,
+    parentUrl: typeof store.params?.parentUrl === 'string' ? store.params.parentUrl : '',
+    parentName: typeof store.params?.parentName === 'string' ? store.params.parentName : ''
+  };
+
+  const select = h('select', {
+    'data-test': 'set-parent-instance-select',
+    style: 'padding:0.45rem 0.6rem;font-family:inherit;width:100%;'
+  });
+  select.appendChild(h('option', { value: '' }, '(loading instances...)'));
+  select.disabled = true;
+  body.appendChild(select);
+
+  const errorLine = h('p', {
+    'data-test': 'set-parent-instance-error',
+    class: 'muted',
+    style: 'font-size:0.8rem;margin:0.2rem 0 0;color:#a02216;display:none;'
+  }, '');
+  body.appendChild(errorLine);
+
+  body.appendChild(h('p', { class: 'muted', style: 'font-size:0.85rem;margin-top:0.4rem;color:var(--text-muted);' },
+    'Each selected instance becomes a child of the chosen parent (dependency parent). Instances already pointing at it - and any instance that would become its own parent - are skipped.'
+  ));
+
+  select.addEventListener('change', () => {
+    const opt = select.options[select.selectedIndex];
+    store.params = {
+      ...store.params,
+      parentUrl: opt?.value ?? '',
+      parentName: opt?.dataset?.name ?? ''
+    };
+    refreshNextDisabled();
+  });
+
+  void loadParentInstances({ select, errorLine, store, refreshNextDisabled, call });
+  void fetchCurrentParentInstances({ store, call });
+
+  refreshNextDisabled();
+}
+
+async function loadParentInstances({ select, errorLine, store, refreshNextDisabled, call }) {
+  try {
+    const res = await call('bulk-composer:list-instances-for-parent', {});
+    const servers = (res && Array.isArray(res.servers)) ? res.servers : [];
+    select.innerHTML = '';
+    if (servers.length === 0) {
+      select.appendChild(h('option', { value: '' }, '(no instances found)'));
+      select.disabled = true;
+      errorLine.style.display = '';
+      errorLine.textContent = 'No instances available on this tenant.';
+      return;
+    }
+    select.appendChild(h('option', { value: '' }, 'Select a parent instance...'));
+    for (const s of servers) {
+      const name = s.name || ('#' + s.id);
+      const label = s.fqdn ? `${name} (${s.fqdn})` : name;
+      select.appendChild(h('option', { value: s.url, 'data-name': name }, label));
+    }
+    select.disabled = false;
+    if (store.params?.parentUrl) {
+      select.value = store.params.parentUrl;
+    }
+    refreshNextDisabled();
+  } catch (err) {
+    select.innerHTML = '';
+    select.appendChild(h('option', { value: '' }, '(failed to load)'));
+    select.disabled = true;
+    errorLine.style.display = '';
+    errorLine.textContent = `Failed to load instances: ${err?.message ?? err}`;
+  }
+}
+
+async function fetchCurrentParentInstances({ store, call }) {
+  const targets = Array.isArray(store.targets) ? store.targets : [];
+  const ids = targets.map((t) => t?.id).filter((id) => Number.isFinite(id));
+  if (ids.length === 0) return;
+  try {
+    const res = await call('bulk-composer:list-server-parent-instances-batch', { serverIds: ids });
+    const map = (res && res.byServerId) || {};
+    for (const t of targets) {
+      if (!t || t.id == null) continue;
+      if (!Object.prototype.hasOwnProperty.call(map, t.id)) continue;
+      t.parentInstance = map[t.id]; // null is a definitive "no parent"
     }
   } catch {
     // describe() falls through to its placeholder branch on unenriched rows.
