@@ -18,11 +18,12 @@ import * as autoTagByName from './auto-tag-by-name.js';
 import * as autoSetAttributeByName from './auto-set-attribute-by-name.js';
 import * as setParentGroup from './set-parent-group.js';
 import * as setParentInstance from './set-parent-instance.js';
+import * as removeParentInstance from './remove-parent-instance.js';
 import * as setAgentResourceStatus from './set-agent-resource-status.js';
 import * as scheduleMaintenanceWindow from './schedule-maintenance-window.js';
 import * as deleteInstance from './delete-instance.js';
 
-export const ACTIONS = [addTag, removeTag, applyTemplate, applyBestPracticeFabric, profileAndCreateTemplates, addPortScope, removePortScope, autoTagByName, autoSetAttributeByName, setParentGroup, setParentInstance, setAgentResourceStatus, scheduleMaintenanceWindow, deleteInstance];
+export const ACTIONS = [addTag, removeTag, applyTemplate, applyBestPracticeFabric, profileAndCreateTemplates, addPortScope, removePortScope, autoTagByName, autoSetAttributeByName, setParentGroup, setParentInstance, removeParentInstance, setAgentResourceStatus, scheduleMaintenanceWindow, deleteInstance];
 
 const BY_ID = new Map(ACTIONS.map((a) => [a.id, a]));
 

@@ -90,6 +90,10 @@ export function render({ container, store, navigate, call }) {
     } else if (store.actionId === 'set-parent-instance') {
       const url = typeof params.parentUrl === 'string' && params.parentUrl.trim();
       nextBtn.disabled = !url;
+    } else if (store.actionId === 'remove-parent-instance') {
+      // No params: the pre-flight is informational and Preview shows the
+      // per-row diff. Advancing is always allowed.
+      nextBtn.disabled = false;
     } else if (store.actionId === 'set-agent-resource-status') {
       const f = typeof params.filter === 'string' && params.filter.trim();
       const s = params.status === 'active' || params.status === 'suspended';
@@ -128,6 +132,8 @@ export function render({ container, store, navigate, call }) {
     renderSetParentGroupForm({ body, store, refreshNextDisabled, call });
   } else if (store.actionId === 'set-parent-instance') {
     renderSetParentInstanceForm({ body, store, refreshNextDisabled, call });
+  } else if (store.actionId === 'remove-parent-instance') {
+    renderRemoveParentInstanceForm({ body, store, call });
   } else if (store.actionId === 'set-agent-resource-status') {
     renderSetAgentResourceStatusForm({ body, store, refreshNextDisabled, call });
   } else if (store.actionId === 'schedule-maintenance-window') {
@@ -2283,6 +2289,24 @@ async function fetchCurrentParentInstances({ store, call }) {
   } catch {
     // describe() falls through to its placeholder branch on unenriched rows.
   }
+}
+
+// =====================================================================
+// FMN-279: Remove Parent Instance form.
+//
+// No params - it clears whatever parent each target has. Reuses the same
+// current-parent pre-flight as Set Parent Instance so Preview shows the
+// per-row diff and skips already-parentless rows.
+// =====================================================================
+
+function renderRemoveParentInstanceForm({ body, store, call }) {
+  body.appendChild(h('h3', { class: 'subhead' }, 'Remove parent instance'));
+  body.appendChild(h('p', {
+    'data-test': 'remove-parent-instance-info',
+    class: 'muted',
+    style: 'font-size:0.85rem;margin-top:0.4rem;color:var(--text-muted);'
+  }, 'Each selected instance has its parent (dependency) cleared. Instances that already have no parent are skipped. Removal writes through the FortiMonitor session (the v2 API cannot clear a parent).'));
+  void fetchCurrentParentInstances({ store, call });
 }
 
 // =====================================================================

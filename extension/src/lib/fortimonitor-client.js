@@ -298,6 +298,116 @@ export class FortimonitorClient {
   }
 
   /**
+   * FMN-279: remove a server's PARENT INSTANCE (device parent/child dependency).
+   * The v2 API cannot clear parent_server (verified: null ignored, ""=400,
+   * omit=kept, PATCH=405), so removal goes through the session-auth editInstance
+   * form: the full instance edit form re-submitted with parent_server[] OMITTED.
+   *
+   * CRITICAL (verified live 2026-07-01): build the body from CLEAN decoded
+   * key/value pairs via URLSearchParams. Re-encoding an already-encoded body
+   * double-encodes the bracket keys (%5B -> %255B) and the server 500s. A
+   * faithfully-built body touches ONLY parent_server (full v2 before/after diff
+   * confirmed - the "Removed geolocation: None,None" line is a no-op).
+   *
+   * Fields are sourced fresh from get_idp_data so the echo matches current
+   * state. Auth: session cookie + X-Requested-With, NO XSRF.
+   *
+   * Validated on a FortiGate fabric instance; other device types share the
+   * same form but have not been individually exercised.
+   *
+   * @param {number|string} serverId
+   * @returns {Promise<{status:number, success:boolean, message:string}>}
+   */
+  async removeServerParentInstance(serverId) {
+    if (serverId === undefined || serverId === null || String(serverId).trim() === '') {
+      throw new TypeError('removeServerParentInstance: serverId is required');
+    }
+    const origin = await this.origin();
+
+    // 1. Load the current edit-form fields from get_idp_data (session-auth).
+    const idpUrl = `${origin}/report/get_idp_data?server_id=${encodeURIComponent(String(serverId))}`;
+    const idpRes = await this.fetch(idpUrl, {
+      method: 'GET', credentials: 'include', headers: { 'Accept': 'application/json' }
+    });
+    if (!idpRes.ok) {
+      throw new FortimonitorError(`get_idp_data failed: HTTP ${idpRes.status}`, {
+        status: idpRes.status, phase: 'read', responseUrl: redactSensitive(idpUrl)
+      });
+    }
+    const idpCt = (idpRes.headers?.get?.('content-type') || '').toLowerCase();
+    if (!idpCt.includes('json')) {
+      throw new FortimonitorError('get_idp_data returned non-JSON (session expired / SPA shell)', {
+        status: idpRes.status, phase: 'auth', responseUrl: redactSensitive(idpUrl)
+      });
+    }
+    const idp = await idpRes.json();
+    const inst = idp?.pageData?.instance;
+    const mc = idp?.pageData?.monitoringConfig || {};
+    if (!inst || inst.id == null) {
+      throw new FortimonitorError('get_idp_data missing instance data', {
+        status: idpRes.status, phase: 'read'
+      });
+    }
+
+    // 2. Build the editInstance body. parent_server[] is OMITTED - that is how
+    //    the UI clears a parent. Clean single-encoding (see note above).
+    const body = new URLSearchParams();
+    body.append('server_id', String(serverId));
+    body.append('name', inst.name ?? '');
+    for (const g of (inst.serverGroups || [])) body.append('server_group[]', 'grp-' + g.id);
+    body.append('server_key', inst.serverKey ?? '');
+    body.append('partner_id', inst.partnerServerId != null ? String(inst.partnerServerId) : '');
+    body.append('fqdn', inst.fqdn ?? '');
+    for (const t of (inst.tags || [])) body.append('tags[]', t.name ?? '');
+    body.append('description', inst.description ?? '');
+    body.append('snmp_credential', String(mc.snmp_credential ?? '0'));
+    body.append('deleted_attributes', '[]');
+    const nsa = Array.isArray(inst.nonSystemAttributes) ? inst.nonSystemAttributes : [];
+    body.append('attributes', JSON.stringify(nsa.map((a) => [-a.id, a.serverAttributeType?.name ?? '', String(a.value)])));
+    body.append('new_attribute_keys', JSON.stringify(nsa.map((a) => a.id)));
+    body.append('loc_latitude', inst.locLatitude != null ? String(inst.locLatitude) : '');
+    body.append('loc_longitude', inst.locLongitude != null ? String(inst.locLongitude) : '');
+    body.append('disable_countermeasures', inst.disabledCountermeasures ? 'true' : 'false');
+    body.append('prometheus_endpoints', JSON.stringify(inst.prometheusEndpoints ?? []));
+
+    // 3. POST editInstance (no XSRF; X-Requested-With only).
+    const editUrl = `${origin}/config/editInstance`;
+    const res = await this.fetch(editUrl, {
+      method: 'POST', credentials: 'include',
+      headers: {
+        'Accept': 'application/json, text/plain, */*',
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: body.toString()
+    });
+    if (!res.ok) {
+      throw new FortimonitorError(`editInstance failed: HTTP ${res.status}`, {
+        status: res.status, phase: 'write', responseUrl: redactSensitive(editUrl)
+      });
+    }
+    const rct = (res.headers?.get?.('content-type') || '').toLowerCase();
+    if (!rct.includes('json')) {
+      throw new FortimonitorError('editInstance returned non-JSON (SPA shell / server error)', {
+        status: res.status, phase: 'write', responseUrl: redactSensitive(editUrl)
+      });
+    }
+    let out;
+    try { out = await res.json(); }
+    catch {
+      throw new FortimonitorError('editInstance returned unparseable JSON', {
+        status: res.status, phase: 'write'
+      });
+    }
+    if (!out || out.success !== true) {
+      throw new FortimonitorError(out?.message || 'editInstance did not report success', {
+        status: res.status, phase: 'write'
+      });
+    }
+    return { status: res.status, success: true, message: out.message ?? '' };
+  }
+
+  /**
    * Resolve a server id to its human-readable name. Returns null on any
    * failure (non-existent id, expired session, SPA-shell HTML response,
    * JSON parse error, missing name field). Callers should treat null as
