@@ -149,10 +149,28 @@ export class FortimonitorClient {
    * Resolve the tenant origin for this call. Accepts a string or a
    * resolver function; caches resolver output so we only hit tab-query
    * once per service-worker lifetime.
+   *
+   * EXCEPTION: a resolution that lands on FM_ORIGIN (the forticloud.com
+   * federation URL) is never cached. resolveFortimonitorOrigin() only
+   * returns that value when it found no open my.<region>.fortimonitor.com
+   * tab at the moment of the call - e.g. the service worker resolved
+   * origin before the user opened/logged into their regional tenant tab.
+   * Caching that fallback would pin every subsequent call to the wrong
+   * host for the rest of the service worker's lifetime even after a
+   * valid regional tab exists, since the session cookie that matters
+   * lives on the regional host, not the federation one (see
+   * origin-resolver.js). Re-resolving on every federation-fallback call
+   * lets it self-heal the moment a regional tab is open, without
+   * requiring a manual service-worker reload.
    */
   async origin() {
     if (typeof this._origin === 'function') {
-      if (!this._originCache) this._originCache = Promise.resolve(this._origin());
+      if (this._originCache) {
+        const cached = await this._originCache;
+        if (cached !== FM_ORIGIN) return cached;
+        this._originCache = null;
+      }
+      this._originCache = Promise.resolve(this._origin());
       return this._originCache;
     }
     return this._origin;

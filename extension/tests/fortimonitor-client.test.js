@@ -333,6 +333,25 @@ test('origin accepts an async resolver and caches the result', async () => {
   assert.equal(calls, 1, 'resolver should only be called once per client');
 });
 
+test('origin re-resolves on every call while the resolver keeps returning the federation fallback, then locks in once a regional origin appears', async () => {
+  const fetchMock = createFetchMock(async () => jsonResponse({ data: { ports: [] } }));
+  let calls = 0;
+  let resolved = FM_ORIGIN; // no regional tab open yet
+  const resolver = async () => { calls++; return resolved; };
+  const client = new FortimonitorClient({ fetch: fetchMock, getCookie: async () => 'tok', origin: resolver });
+
+  await client.getDevicePorts(1);
+  await client.getDevicePorts(2);
+  assert.equal(calls, 2, 'federation fallback must never be cached - re-resolve every call');
+
+  resolved = 'https://my.us01.fortimonitor.com'; // regional tab now open
+  await client.getDevicePorts(3);
+  assert.equal(calls, 3, 'first regional resolution after fallback should hit the resolver');
+
+  await client.getDevicePorts(4);
+  assert.equal(calls, 3, 'a genuine regional origin should be cached for the rest of the worker lifetime');
+});
+
 test('savePortSelection targets the injected origin', async () => {
   let captured;
   const fetchMock = createFetchMock(async (url) => { captured = url; return jsonResponse({ success: true }); });
