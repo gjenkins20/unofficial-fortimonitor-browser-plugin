@@ -17,6 +17,8 @@ export const SDWAN_REPORT_ENABLED_KEY = 'fm:sdwanReportEnabled';
 // Monitoring-Location resolution is validated for FortiManager-proxied
 // instances (no FortiManager lab available yet, FMN-274).
 export const FIND_DELETE_DUPLICATES_ENABLED_KEY = 'fm:findDeleteDuplicatesEnabled';
+// FMN-280: Parent/Child Associations tool (Beta, hidden by default).
+export const PARENT_CHILD_ENABLED_KEY = 'fm:parentChildEnabled';
 // FMN-133: per-tool visibility flag for the Tenant Observations tile.
 // Same Beta gating pattern as SD-WAN Report; the FMN-133 ticket
 // explicitly calls for "Same gating as FMN-129 / FMN-130. Tile hidden
@@ -281,6 +283,21 @@ export async function isFindDeleteDuplicatesEnabled(storage = defaultStorage()) 
 /** Persist the Find-&-Delete-Duplicates-enabled flag. */
 export async function setFindDeleteDuplicatesEnabled(enabled, storage = defaultStorage()) {
   await storage.set({ [FIND_DELETE_DUPLICATES_ENABLED_KEY]: Boolean(enabled) });
+}
+
+/** Read the Parent/Child-Associations-enabled flag. Defaults to false (Beta, hidden). */
+export async function isParentChildEnabled(storage = defaultStorage()) {
+  try {
+    const data = await storage.get(PARENT_CHILD_ENABLED_KEY);
+    return Boolean(data?.[PARENT_CHILD_ENABLED_KEY]);
+  } catch {
+    return false;
+  }
+}
+
+/** Persist the Parent/Child-Associations-enabled flag. */
+export async function setParentChildEnabled(enabled, storage = defaultStorage()) {
+  await storage.set({ [PARENT_CHILD_ENABLED_KEY]: Boolean(enabled) });
 }
 
 /**

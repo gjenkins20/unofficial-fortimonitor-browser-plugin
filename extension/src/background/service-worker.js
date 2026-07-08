@@ -24,6 +24,7 @@ import { createClaudeChatHandlers } from './claude-chat-handlers.js';
 import { createOmniSearchHandlers } from './omni-search-handlers.js';
 import { createBulkComposerHandlers } from './bulk-composer-handlers.js';
 import { createFindDeleteDuplicatesHandlers } from './find-delete-duplicates-handlers.js';
+import { createParentChildHandlers } from './parent-child-handlers.js';
 import {
   createReportNotificationHandlers,
   attachReportNotificationAlarms,
@@ -62,6 +63,7 @@ const handlers = {
   ...createOmniSearchHandlers({ events: { emit } }),
   ...createBulkComposerHandlers({ events: { emit } }),
   ...createFindDeleteDuplicatesHandlers({ events: { emit } }),
+  ...createParentChildHandlers({ events: { emit } }),
   ...createReportNotificationHandlers({})
 };
 

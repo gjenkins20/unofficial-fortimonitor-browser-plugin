@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<!-- Parent/Child Associations - top-level toolkit tool (redesign per operator
+     feedback 2026-07-07): NOT behind the Bulk Action Composer; a grouped
+     child->parent mapping that supports BOTH many-children->one-parent AND a
+     different-parent-per-child topology. Set uses v2 PUT; Remove uses the
+     session-auth editInstance path (both already verified). Palette mirrors
+     extension/src/ui/styles.css. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Parent/Child Associations - mockup</title>
+<style>
+  :root{
+    --bg:#f5f6f8;--card:#fff;--border:#e2e5ea;--border-strong:#c5cbd3;--text:#222a35;
+    --text-muted:#6b7380;--accent:#d9541e;--accent-soft:#fde9dd;--danger:#b3261e;
+    --danger-soft:#fde8e7;--warn:#8b6f00;--warn-soft:#fff4d1;--ok:#1e7a3c;--ok-soft:#dcf4e1;
+    --muted-soft:#eef2f7;--running:#2563af;
+  }
+  *{box-sizing:border-box}
+  body{font-family:"Inter",system-ui,sans-serif;background:var(--bg);color:var(--text);margin:0;padding:24px;font-size:13px}
+  .app{max-width:820px;margin:0 auto;background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  .title-bar{display:flex;align-items:center;gap:9px;padding:14px 18px;border-bottom:1px solid var(--border)}
+  .logo{width:18px;height:18px;background:var(--accent);border-radius:3px;display:inline-grid;place-items:center;color:#fff;font-size:11px;font-weight:bold}
+  .title-bar h1{font-size:14px;margin:0}
+  .title-bar .subtitle{color:var(--text-muted);font-weight:400;font-size:12px;margin-left:2px}
+  .tabs{display:flex;gap:4px;padding:12px 18px 0}
+  .tab{padding:7px 14px;border:1px solid var(--border);border-bottom:none;border-radius:7px 7px 0 0;background:#fafbfc;color:var(--text-muted);cursor:pointer;font-size:12.5px}
+  .tab.active{background:var(--card);color:var(--text);font-weight:600;border-color:var(--border-strong);position:relative;top:1px}
+  .body{padding:16px 18px;border-top:1px solid var(--border)}
+  .hint{color:var(--text-muted);font-size:12px;margin:0 0 14px}
+  .hint code{background:var(--muted-soft);padding:1px 5px;border-radius:4px;font-size:11px}
+  /* parent group card */
+  .group{border:1px solid var(--border);border-radius:8px;margin-bottom:12px;overflow:hidden}
+  .group-hd{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fafbfc;border-bottom:1px solid var(--border)}
+  .group-hd .lbl{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px}
+  .pick{flex:1;display:flex;align-items:center;gap:6px;border:1px solid var(--border-strong);border-radius:6px;padding:5px 9px;background:#fff;min-width:0}
+  .pick .name{font-weight:600}
+  .pick .addr{color:var(--text-muted);font-size:11px}
+  .pick .chev{margin-left:auto;color:var(--text-muted)}
+  .children{padding:10px 12px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{display:inline-flex;align-items:center;gap:6px;background:var(--muted-soft);border:1px solid var(--border);border-radius:14px;padding:3px 9px;font-size:12px}
+  .chip .x{color:var(--text-muted);cursor:pointer;font-weight:bold}
+  .chip.self{background:var(--warn-soft);border-color:#e6d38a;color:var(--warn)}
+  .add-child{border:1px dashed var(--border-strong);background:#fff;color:var(--text-muted);border-radius:14px;padding:3px 11px;font-size:12px;cursor:pointer}
+  .add-group{width:100%;border:1px dashed var(--border-strong);background:#fff;color:var(--accent);border-radius:8px;padding:9px;cursor:pointer;font-weight:600;font-size:12.5px}
+  .import{margin:2px 0 14px;display:flex;gap:8px;align-items:flex-start}
+  textarea{width:100%;font-family:"SF Mono",Menlo,monospace;font-size:11.5px;border:1px solid var(--border-strong);border-radius:6px;padding:8px;resize:vertical;min-height:56px}
+  .btn{border:1px solid var(--border-strong);background:#fff;border-radius:6px;padding:7px 13px;font-size:12.5px;cursor:pointer;font-family:inherit}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  .btn.ghost{color:var(--text-muted)}
+  /* preview */
+  h3.sub{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin:20px 0 8px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{text-align:left;color:var(--text-muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.4px;padding:6px 8px;border-bottom:1px solid var(--border)}
+  td{padding:7px 8px;border-bottom:1px solid var(--border)}
+  .pill{font-size:11px;padding:1px 8px;border-radius:10px}
+  .pill.set{background:var(--muted-soft);color:var(--text)}
+  .pill.skip{background:#f1f1f1;color:var(--text-muted)}
+  .pill.self{background:var(--warn-soft);color:var(--warn)}
+  .pill.rm{background:var(--danger-soft);color:var(--danger)}
+  .arrow{color:var(--text-muted)}
+  .footer{display:flex;align-items:center;gap:12px;padding:14px 18px;border-top:1px solid var(--border);background:#fafbfc}
+  .summary{color:var(--text-muted);font-size:12px;margin-right:auto}
+  .note{font-size:11px;color:var(--text-muted);margin-top:6px}
+</style>
+</head>
+<body>
+  <div class="app">
+    <div class="title-bar">
+      <span class="logo">P</span>
+      <h1>Parent / Child Associations</h1>
+      <span class="subtitle">bulk set &amp; remove device dependency parents</span>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active">Set parents</div>
+      <div class="tab">Remove parents</div>
+    </div>
+
+    <div class="body">
+      <p class="hint">
+        Group children under a parent. One group can hold <b>many children</b> (they all get that parent);
+        add <b>more groups</b> for different parents. Type to search instances, or import with
+        <code>parent: child, child</code> lines below.
+      </p>
+
+      <!-- Group 1: many children -> one parent -->
+      <div class="group">
+        <div class="group-hd">
+          <span class="lbl">Parent</span>
+          <div class="pick"><span class="name">core-router</span><span class="addr">(10.0.0.1)</span><span class="chev">&#9662;</span></div>
+        </div>
+        <div class="children">
+          <div class="chips">
+            <span class="chip">switch-01 (10.0.1.11) <span class="x">&times;</span></span>
+            <span class="chip">switch-02 (10.0.1.12) <span class="x">&times;</span></span>
+            <span class="chip">switch-03 (10.0.1.13) <span class="x">&times;</span></span>
+            <span class="add-child">+ add children</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Group 2: single child (per-device) + a self-parent guard example -->
+      <div class="group">
+        <div class="group-hd">
+          <span class="lbl">Parent</span>
+          <div class="pick"><span class="name">dmz-fw</span><span class="addr">(10.1.0.1)</span><span class="chev">&#9662;</span></div>
+        </div>
+        <div class="children">
+          <div class="chips">
+            <span class="chip">edge-01 (10.1.0.11) <span class="x">&times;</span></span>
+            <span class="chip self">dmz-fw &mdash; can't parent itself <span class="x">&times;</span></span>
+            <span class="add-child">+ add children</span>
+          </div>
+        </div>
+      </div>
+
+      <button class="add-group">+ Add parent group</button>
+
+      <h3 class="sub">Or import a mapping</h3>
+      <div class="import">
+        <textarea>core-router: switch-01, switch-02, switch-03
+dmz-fw: edge-01</textarea>
+        <button class="btn">Import</button>
+      </div>
+
+      <h3 class="sub">Preview &mdash; 4 will change &middot; 1 skip</h3>
+      <table>
+        <thead><tr><th>Instance (child)</th><th>Current parent</th><th></th><th>New parent</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>switch-01</td><td class="arrow">(none)</td><td class="arrow">&rarr;</td><td>core-router</td><td><span class="pill set">will set</span></td></tr>
+          <tr><td>switch-02</td><td>edge-agg</td><td class="arrow">&rarr;</td><td>core-router</td><td><span class="pill set">will set</span></td></tr>
+          <tr><td>switch-03</td><td>core-router</td><td class="arrow">&rarr;</td><td>core-router</td><td><span class="pill skip">skip (already)</span></td></tr>
+          <tr><td>edge-01</td><td class="arrow">(none)</td><td class="arrow">&rarr;</td><td>dmz-fw</td><td><span class="pill set">will set</span></td></tr>
+          <tr><td>dmz-fw</td><td colspan="3" class="arrow">cannot be its own parent</td><td><span class="pill self">skip (self)</span></td></tr>
+        </tbody>
+      </table>
+      <p class="note">Set writes through the v2 API (surgical, one field). Remove (other tab) writes through the FortiMonitor session &mdash; verified to touch only the parent.</p>
+    </div>
+
+    <div class="footer">
+      <span class="summary">4 children will be reparented across 2 parents.</span>
+      <button class="btn ghost">Save draft</button>
+      <button class="btn primary">Apply</button>
+    </div>
+  </div>
+</body>
+</html>

@@ -312,6 +312,27 @@
 
       <button class="tool-card"
               data-group="bulk"
+              data-tool="parent-child"
+              data-url="src/ui/parent-child/app.html"
+              data-api-key-required="true"
+              data-session-required="true"
+              data-experimental="parent-child"
+              hidden
+              title="Requires a FortiMonitor v2 API key + an active FortiMonitor session - configure in popup → Settings (⚙).">
+        <div class="tool-meta">
+          <div class="tool-name">
+            Parent / Child Associations
+            <span class="badge beta">Beta</span>
+          </div>
+          <div class="tool-desc" data-default-desc="Bulk set and remove device parent/child (dependency) associations from a child→parent mapping - many children to one parent, or a different parent per child. Reference instances by name or server ID.">
+            Bulk set and remove device parent/child (dependency) associations from a child→parent mapping - many children to one parent, or a different parent per child. Reference instances by name or server ID.
+          </div>
+        </div>
+        <div class="chevron">›</div>
+      </button>
+
+      <button class="tool-card"
+              data-group="bulk"
               data-tool="bulk-composer-runs"
               data-url="src/ui/bulk-composer-runs/app.html"
               title="Review changes the toolkit committed and undo them: created templates, workflows, server groups, attributes, and tags.">
@@ -612,6 +633,14 @@
       <label class="toggle-row">
         <input id="find-delete-duplicates-toggle" type="checkbox">
         <span>Show Find &amp; Delete Duplicates (Beta)</span>
+      </label>
+
+      <p class="settings-help" style="margin-top:0.75rem;">
+        <strong>Parent / Child Associations</strong> bulk-sets and removes device dependency parents from a child→parent mapping (many children to one parent, or a different parent per child; by name or server ID). Set uses the v2 API; Remove uses the FortiMonitor session. Beta: verified on FortiGate instances; other device types share the same path but are not yet individually exercised, so it is hidden by default.
+      </p>
+      <label class="toggle-row">
+        <input id="parent-child-toggle" type="checkbox">
+        <span>Show Parent / Child Associations (Beta)</span>
       </label>
 
       <p class="settings-help" style="margin-top:0.75rem;">

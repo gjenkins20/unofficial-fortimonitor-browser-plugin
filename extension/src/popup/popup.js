@@ -21,6 +21,8 @@ import {
   setSdwanReportEnabled,
   isFindDeleteDuplicatesEnabled,
   setFindDeleteDuplicatesEnabled,
+  isParentChildEnabled,
+  setParentChildEnabled,
   isTenantObservationsEnabled,
   setTenantObservationsEnabled,
   isSsoConfigEnabled,
@@ -333,6 +335,11 @@ async function loadFindDeleteDuplicatesIntoToggle() {
   toggle.checked = await isFindDeleteDuplicatesEnabled();
 }
 
+async function loadParentChildIntoToggle() {
+  const toggle = document.getElementById('parent-child-toggle');
+  toggle.checked = await isParentChildEnabled();
+}
+
 async function loadTenantObservationsIntoToggle() {
   const toggle = document.getElementById('tenant-observations-toggle');
   toggle.checked = await isTenantObservationsEnabled();
@@ -546,6 +553,10 @@ async function applyExperimentalVisibility() {
   const findDeleteDuplicatesOn = await isFindDeleteDuplicatesEnabled();
   for (const el of document.querySelectorAll('[data-experimental="find-delete-duplicates"]')) {
     el.hidden = !findDeleteDuplicatesOn;
+  }
+  const parentChildOn = await isParentChildEnabled();
+  for (const el of document.querySelectorAll('[data-experimental="parent-child"]')) {
+    el.hidden = !parentChildOn;
   }
   const tenantObservationsOn = await isTenantObservationsEnabled();
   for (const el of document.querySelectorAll('[data-experimental="tenant-observations"]')) {
@@ -1362,6 +1373,7 @@ function init() {
     await loadServerSearchIntoToggle();
     await loadSdwanReportIntoToggle();
     await loadFindDeleteDuplicatesIntoToggle();
+    await loadParentChildIntoToggle();
     await loadTenantObservationsIntoToggle();
     await loadSsoConfigIntoToggle();
     await loadSidebarLauncherIntoToggle();
@@ -1650,6 +1662,12 @@ function init() {
 
   document.getElementById('find-delete-duplicates-toggle').addEventListener('change', async (e) => {
     await setFindDeleteDuplicatesEnabled(e.target.checked);
+    await applyExperimentalVisibility();
+    await refreshGuards();
+  });
+
+  document.getElementById('parent-child-toggle').addEventListener('change', async (e) => {
+    await setParentChildEnabled(e.target.checked);
     await applyExperimentalVisibility();
     await refreshGuards();
   });
