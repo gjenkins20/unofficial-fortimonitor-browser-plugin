@@ -61,9 +61,9 @@ const handlers = {
   ...createObservationsSnapshotHandlers({ events: { emit }, resolveOrigin }),
   ...createClaudeChatHandlers({ events: { emit } }),
   ...createOmniSearchHandlers({ events: { emit } }),
-  ...createBulkComposerHandlers({ events: { emit } }),
+  ...createBulkComposerHandlers({ events: { emit }, getFortimonitorClient: () => client }),
   ...createFindDeleteDuplicatesHandlers({ events: { emit } }),
-  ...createParentChildHandlers({ events: { emit } }),
+  ...createParentChildHandlers({ events: { emit }, getFortimonitorClient: () => client }),
   ...createReportNotificationHandlers({})
 };
 
