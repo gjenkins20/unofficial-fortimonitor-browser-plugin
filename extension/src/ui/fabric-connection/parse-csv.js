@@ -1,11 +1,14 @@
 // Unofficial FortiMonitor Toolkit - Gregori Jenkins <https://www.linkedin.com/in/gregorijenkins>
 // Parse the operator's CSV/paste input for the Add Fabric Connection tool.
 //
-// Each row is a FortiGate: serial, IP, port. Header optional.
+// Each row is a FortiGate: serial, IP, port, name. Header optional.
+// `name` (FMN-291) is optional and free-form - it becomes the connection
+// label. Positionally it is the 4th column; by header it is `name` or
+// `label`. Blank name is omitted, and the caller falls back to the IP.
 //
 // Returns:
 //   {
-//     devices: Array<{ serial, ip, port, lineNum, flagged? }>
+//     devices: Array<{ serial, ip, port, lineNum, name?, flagged? }>
 //     warnings: string[]
 //     skipped: Array<{ lineNum, serial, ip, port, reason, severity }>
 //     totalLines: number
@@ -115,21 +118,24 @@ export function parseFortigateList(input, { defaultPort = 8013, includeFlagged =
         headerCols = {
           serialIdx: find('serial', 'serial_number', 'sn'),
           ipIdx: find('ip', 'ip_address', 'host', 'upstream_host'),
-          portIdx: find('port', 'upstream_port')
+          portIdx: find('port', 'upstream_port'),
+          nameIdx: find('name', 'label')
         };
         if (headerCols.serialIdx === -1) headerCols.serialIdx = 0;
         if (headerCols.ipIdx === -1) headerCols.ipIdx = 1;
-        // portIdx allowed to remain -1 → default port used
+        // portIdx / nameIdx allowed to remain -1 → default port / no name
         totalLines--;
         continue;
       }
-      // Positional layout: serial, ip, port
-      headerCols = { serialIdx: 0, ipIdx: 1, portIdx: 2 };
+      // Positional layout: serial, ip, port, name
+      headerCols = { serialIdx: 0, ipIdx: 1, portIdx: 2, nameIdx: 3 };
     }
 
     const serial = tokens[headerCols.serialIdx] ?? '';
     const ip = tokens[headerCols.ipIdx] ?? '';
     const portRaw = headerCols.portIdx >= 0 ? (tokens[headerCols.portIdx] ?? '') : '';
+    // Optional free-form connection label (FMN-291). tokens are pre-trimmed.
+    const name = headerCols.nameIdx >= 0 ? (tokens[headerCols.nameIdx] ?? '') : '';
     const ln = lineNum + 1;
 
     // Soft format issues accumulate here; when includeFlagged is set they
@@ -191,6 +197,7 @@ export function parseFortigateList(input, { defaultPort = 8013, includeFlagged =
     seenSerials.add(serial);
 
     const device = { serial, ip, port, lineNum: ln };
+    if (name) device.name = name;
     if (softIssues.length) {
       device.flagged = softIssues.join(', ');
       warnings.push(`Line ${ln}: included flagged device ${serial} (${device.flagged})`);

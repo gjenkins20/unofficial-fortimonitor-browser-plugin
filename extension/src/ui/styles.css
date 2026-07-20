@@ -1229,6 +1229,9 @@ tr.hidden-scope { display: none; }
   letter-spacing: 0.04em;
 }
 .review-table tbody tr:hover { background: #fafbfc; }
+/* FMN-291: muted hint shown when a device has no explicit name and its label
+   falls back to the IP. */
+.review-table .name-fallback { color: var(--text-muted); font-style: italic; }
 
 .preview-payload {
   background: var(--muted-soft);

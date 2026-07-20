@@ -187,4 +187,52 @@ test.describe('live - Add Fabric Connection (API) E2E - real tenant', () => {
       await page.close();
     }
   });
+
+  // FMN-291: optional device name → connection label, against the live tenant.
+  // Non-destructive: parses input + advances to Review in dry-run. Covers both
+  // ends of the matrix - a named device (label = name) and an unnamed one
+  // (label falls back to the IP) - and confirms the label lands in the built
+  // payload preview. (Where the label surfaces on the imported instance itself
+  // requires an actual onboard and is left to operator live QA per the ticket.)
+  test('live - optional name becomes the connection label; blank falls back to IP', async ({ extensionContext, fabricConnectionUrl }) => {
+    const page = await extensionContext.newPage();
+    try {
+      await page.goto(fabricConnectionUrl);
+      await expect(page.locator('.step-header h2')).toContainText('Load FortiGate devices and pick targets');
+
+      await page.waitForFunction(() => {
+        const sels = document.querySelectorAll('select.select');
+        return sels.length >= 2 && sels[0].options.length > 1 && sels[1].options.length > 1;
+      }, undefined, { timeout: 30_000 });
+
+      const onsightSelect = page.locator('select.select').first();
+      const serverGroupSelect = page.locator('select.select').nth(1);
+      await onsightSelect.selectOption(await onsightSelect.locator('option').nth(1).getAttribute('value'));
+      await serverGroupSelect.selectOption(await serverGroupSelect.locator('option').nth(1).getAttribute('value'));
+
+      // First device named (drives the example-payload preview), second unnamed.
+      await page.locator('textarea.paste-area').fill(
+        'serial,ip,port,name\n' +
+        'FGVME2EFMN291NAMED,203.0.113.50,8443,Edge-FW-291\n' +
+        'FGVME2EFMN291BLANK,203.0.113.60,8443'
+      );
+      const continueBtn = page.getByRole('button', { name: /Continue/ });
+      await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
+      await continueBtn.click();
+      await expect(page).toHaveURL(/#\/review$/, { timeout: 10_000 });
+
+      // Named device carries its label; unnamed shows the IP-fallback hint.
+      await expect(page.locator('.review-table thead')).toContainText('Name (label)');
+      await expect(page.locator('.review-table tbody tr').first()).toContainText('Edge-FW-291');
+      await expect(page.locator('.review-table .name-fallback')).toContainText('defaults to IP');
+
+      // The built payload preview (first device) uses the name as the label.
+      await expect(page.locator('.preview-payload')).toContainText('"label": "Edge-FW-291"');
+
+      // Stays in dry-run - no fabric_connection is created on the tenant.
+      await expect(page.locator('input[type="radio"][value="dry-run"]')).toBeChecked();
+    } finally {
+      await page.close();
+    }
+  });
 });

@@ -19,7 +19,7 @@ function nameForUrl(url, options) {
 function buildPreview(device, store) {
   return {
     integration_type: 'onsight_csf_tunnel',
-    label: device.ip,
+    label: device.name || device.ip,
     onsight: store.onsightUrl,
     server_group: store.serverGroupUrl,
     ...(store.applianceGroupUrl ? { appliance_group: store.applianceGroupUrl } : {}),
@@ -59,7 +59,8 @@ export function render({ container, store, navigate }) {
     h('th', {}, '#'),
     h('th', {}, 'Serial'),
     h('th', {}, 'IP'),
-    h('th', {}, 'Port')
+    h('th', {}, 'Port'),
+    h('th', {}, 'Name (label)')
   ));
   const tbody = h('tbody', {});
   let anyFlagged = false;
@@ -69,11 +70,17 @@ export function render({ container, store, navigate }) {
       anyFlagged = true;
       serialCell.appendChild(h('span', { class: 'flag-badge', title: `Included despite: ${d.flagged}` }, ' ⚑ flagged'));
     }
+    // Name column (FMN-291): show the entered label, or a muted "defaults to
+    // IP" hint so the fallback is visible before going live.
+    const nameCell = d.name
+      ? h('td', {}, d.name)
+      : h('td', {}, h('span', { class: 'name-fallback' }, `${d.ip} (defaults to IP)`));
     tbody.appendChild(h('tr', { class: d.flagged ? 'row-flagged' : '' },
       h('td', {}, String(i + 1)),
       serialCell,
       h('td', {}, d.ip),
-      h('td', {}, String(d.port))
+      h('td', {}, String(d.port)),
+      nameCell
     ));
   });
   table.appendChild(thead);

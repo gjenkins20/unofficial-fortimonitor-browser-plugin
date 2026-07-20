@@ -83,7 +83,7 @@ export async function executeFabricBatch({
         // Use the client's helper if available; otherwise inline minimal preview.
         const preview = {
           integration_type: 'onsight_csf_tunnel',
-          label: device.ip,
+          label: device.name || device.ip,
           onsight: onsightUrl,
           server_group: serverGroupUrl,
           ...(applianceGroupUrl ? { appliance_group: applianceGroupUrl } : {}),
@@ -104,6 +104,9 @@ export async function executeFabricBatch({
             serial: device.serial,
             ip: device.ip,
             port: device.port,
+            // Optional per-device connection label (FMN-291). The client
+            // defaults label to the IP when null, matching the dry-run preview.
+            label: device.name || device.ip,
             onsightUrl,
             serverGroupUrl,
             applianceGroupUrl,

@@ -143,3 +143,50 @@ test('includeFlagged leaves a clean serial unflagged', () => {
   assert.equal(on.devices.length, 1);
   assert.equal(on.devices[0].flagged, undefined);
 });
+
+// ---- FMN-291: optional name (connection label) ----
+
+test('positional 4th column is captured as name', () => {
+  const r = parseFortigateList('FGVM01TM24006844,10.0.0.94,8013,Edge-FW-01');
+  assert.equal(r.devices.length, 1);
+  assert.equal(r.devices[0].name, 'Edge-FW-01');
+});
+
+test('header "name" column is captured', () => {
+  const r = parseFortigateList('serial,ip,port,name\nFGVM01TM24006844,10.0.0.94,8013,Edge-FW-01');
+  assert.equal(r.devices[0].name, 'Edge-FW-01');
+});
+
+test('header "label" is a synonym for name', () => {
+  const r = parseFortigateList('serial,ip,port,label\nFGVM01TM24006844,10.0.0.94,8013,Core-01');
+  assert.equal(r.devices[0].name, 'Core-01');
+});
+
+test('name column works when port is omitted (serial,ip,name header)', () => {
+  const r = parseFortigateList('serial,ip,name\nFGVM01TM24006844,10.0.0.94,Branch-A');
+  assert.equal(r.devices[0].port, 8013); // default
+  assert.equal(r.devices[0].name, 'Branch-A');
+});
+
+test('omitted name leaves no name field (no regression on 3-column rows)', () => {
+  const r = parseFortigateList('FGVM01TM24006844,10.0.0.94,8013');
+  assert.equal(r.devices[0].name, undefined);
+  assert.deepEqual(r.devices[0], { serial: 'FGVM01TM24006844', ip: '10.0.0.94', port: 8013, lineNum: 1 });
+});
+
+test('blank name field is treated as absent', () => {
+  const r = parseFortigateList('serial,ip,port,name\nFGVM01TM24006844,10.0.0.94,8013,');
+  assert.equal(r.devices[0].name, undefined);
+});
+
+test('quoted name containing a comma is preserved', () => {
+  const r = parseFortigateList('serial,ip,port,name\nFGVM01TM24006844,10.0.0.94,8013,"Edge, primary"');
+  assert.equal(r.devices[0].name, 'Edge, primary');
+});
+
+test('name is retained on a flagged (included) device', () => {
+  const r = parseFortigateList('FGVM01TM24006844,fgt.branch.example.com,8013,Branch-DNS', { includeFlagged: true });
+  assert.equal(r.devices.length, 1);
+  assert.equal(r.devices[0].name, 'Branch-DNS');
+  assert.match(r.devices[0].flagged, /non-IPv4 host/);
+});

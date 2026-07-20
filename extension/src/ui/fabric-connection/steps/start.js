@@ -27,9 +27,24 @@ export function fcBreadcrumbs(active) {
   );
 }
 
+// Minimal CSV-escape for the free-form name field so a name containing a
+// comma / quote round-trips when we rebuild the textarea (FMN-291). Serial,
+// IP and port are constrained and never need escaping.
+function csvField(v) {
+  const s = String(v ?? '');
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
 function rebuildPasteValue(devices) {
   if (!devices.length) return '';
-  return ['serial,ip,port', ...devices.map((d) => `${d.serial},${d.ip},${d.port}`)].join('\n');
+  // Only widen to the 4-column form when at least one device carries a name,
+  // so batches without names keep the familiar serial,ip,port shape.
+  const anyName = devices.some((d) => d.name);
+  const header = anyName ? 'serial,ip,port,name' : 'serial,ip,port';
+  const rows = devices.map((d) => anyName
+    ? `${d.serial},${d.ip},${d.port},${csvField(d.name ?? '')}`
+    : `${d.serial},${d.ip},${d.port}`);
+  return [header, ...rows].join('\n');
 }
 
 export function render({ container, store, navigate }) {
@@ -55,7 +70,7 @@ export function render({ container, store, navigate }) {
       'Drop CSV here, or ',
       h('span', { class: 'dz-link' }, 'click to browse')
     ),
-    h('div', { class: 'dz-secondary' }, 'Accepts .csv or plain text · serial,ip,port per line'),
+    h('div', { class: 'dz-secondary' }, 'Accepts .csv or plain text · serial,ip,port,name per line'),
     fileInput
   );
   body.appendChild(dropZone);
@@ -64,14 +79,15 @@ export function render({ container, store, navigate }) {
 
   const paste = h('textarea', {
     class: 'paste-area',
-    placeholder: 'serial,ip,port\nFGVM01TM24006844,10.0.0.94,8013\nFGVM02TM24006845,10.0.0.95,8013'
+    placeholder: 'serial,ip,port,name\nFGVM01TM24006844,10.0.0.94,8013,Edge-FW-01\nFGVM02TM24006845,10.0.0.95,8013'
   });
   paste.value = rebuildPasteValue(store.devices);
   body.appendChild(paste);
 
   body.appendChild(h('div', { class: 'format-hint', html:
-    '<strong>Format:</strong> CSV with columns <code>serial,ip,port</code> (header optional). Port defaults to 8013 if omitted.' +
-    '<pre># with header\nserial,ip,port\nFGVM01TM24006844,10.0.0.94,8013\n\n# positional\nFGVM01TM24006844,10.0.0.94,8013\nFGVM02TM24006845,10.0.0.95</pre>'
+    '<strong>Format:</strong> CSV with columns <code>serial,ip,port,name</code> (header optional). Port defaults to 8013 if omitted. ' +
+    '<strong>Name is optional</strong> - it is applied as the connection label; leave it blank and the row falls back to the device IP.' +
+    '<pre># with header\nserial,ip,port,name\nFGVM01TM24006844,10.0.0.94,8013,Edge-FW-01\n\n# name omitted -> label defaults to the IP\nFGVM02TM24006845,10.0.0.95,8013</pre>'
   }));
 
   // ---- Include-flagged override (FMN-265) ----
@@ -158,7 +174,9 @@ export function render({ container, store, navigate }) {
   function reparse() {
     const result = parseFortigateList(paste.value, { includeFlagged: store.includeFlagged });
     store.devices = result.devices.map((d) => ({
-      serial: d.serial, ip: d.ip, port: d.port, ...(d.flagged ? { flagged: d.flagged } : {})
+      serial: d.serial, ip: d.ip, port: d.port,
+      ...(d.name ? { name: d.name } : {}),
+      ...(d.flagged ? { flagged: d.flagged } : {})
     }));
     store.warnings = result.warnings;
     updateParseResult(result);

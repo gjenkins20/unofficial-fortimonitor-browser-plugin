@@ -96,6 +96,33 @@ test.describe('Add Fabric Connection (API) E2E - stubbed tenant', () => {
     }
   });
 
+  // FMN-291: optional per-device name → connection label. Behavior matrix:
+  // a named device carries its label; an unnamed one shows the IP-fallback.
+  test('optional name renders as a label column and flows into the payload', async ({ extensionContext, fabricConnectionUrl }) => {
+    const page = await openTool(extensionContext, fabricConnectionUrl);
+    try {
+      await pickTargets(page);
+      // First device named, second omitted → falls back to IP. First device
+      // drives the "Example POST body" preview.
+      await page.locator('textarea.paste-area').fill(
+        'serial,ip,port,name\nFGT60FT123ABC,10.0.0.1,8443,Edge-FW-01\nFGT60FT456DEF,10.0.0.2,8443'
+      );
+      await page.getByRole('button', { name: /Continue/ }).click();
+      await expect(page).toHaveURL(/#\/review$/, { timeout: 10_000 });
+
+      // New Name (label) column header is present.
+      await expect(page.locator('.review-table thead')).toContainText('Name (label)');
+      // Named device shows its label.
+      await expect(page.locator('.review-table tbody tr').first()).toContainText('Edge-FW-01');
+      // Unnamed device shows the muted IP-fallback hint.
+      await expect(page.locator('.review-table .name-fallback')).toContainText('defaults to IP');
+      // Example payload (first device) carries the label, not the IP.
+      await expect(page.locator('.preview-payload')).toContainText('"label": "Edge-FW-01"');
+    } finally {
+      await page.close();
+    }
+  });
+
   test('flagged toggle does not rescue a row missing its host (hard skip)', async ({ extensionContext, fabricConnectionUrl }) => {
     const page = await openTool(extensionContext, fabricConnectionUrl);
     try {

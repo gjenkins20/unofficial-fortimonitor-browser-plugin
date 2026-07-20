@@ -113,6 +113,45 @@ test('executeFabricBatch: dry-run does not invoke client', async () => {
   assert.equal(results[0].preview.upstream_sn, 'FG1');
 });
 
+// ----- FMN-291: optional name → label -----------------------------
+
+test('executeFabricBatch: device name is passed to the client as label', async () => {
+  let seen = null;
+  const client = makeClient(async (input) => { seen = input; return { status: 201, resourceId: 'X', body: {} }; });
+  await executeFabricBatch({
+    devices: [{ serial: 'FG1', ip: '10.0.0.1', port: 8013, name: 'Edge-FW-01' }],
+    onsightUrl: 'A', serverGroupUrl: 'B',
+    client
+  });
+  assert.equal(seen.label, 'Edge-FW-01');
+});
+
+test('executeFabricBatch: label defaults to the IP when no name given', async () => {
+  let seen = null;
+  const client = makeClient(async (input) => { seen = input; return { status: 201, resourceId: 'X', body: {} }; });
+  await executeFabricBatch({
+    devices: [{ serial: 'FG1', ip: '10.0.0.1', port: 8013 }],
+    onsightUrl: 'A', serverGroupUrl: 'B',
+    client
+  });
+  assert.equal(seen.label, '10.0.0.1');
+});
+
+test('executeFabricBatch: dry-run preview label reflects the device name', async () => {
+  const client = makeClient(async () => ({}));
+  const results = await executeFabricBatch({
+    devices: [
+      { serial: 'FG1', ip: '10.0.0.1', port: 8013, name: 'Edge-FW-01' },
+      { serial: 'FG2', ip: '10.0.0.2', port: 8013 }
+    ],
+    onsightUrl: 'A', serverGroupUrl: 'B',
+    client,
+    dryRun: true
+  });
+  assert.equal(results[0].preview.label, 'Edge-FW-01');
+  assert.equal(results[1].preview.label, '10.0.0.2'); // falls back to IP
+});
+
 test('executeFabricBatch: per-device failure does not stop batch', async () => {
   let n = 0;
   const client = makeClient(async () => {
