@@ -92,3 +92,27 @@ tests/e2e/__artifacts__/
 # Foreign-tenant captures (FMN-211 Phase A) - hand-reviewed before sharing,
 # never checked in.
 tools/qa/fmn-211-foreign-tenant-capture.json
+
+# --- 2026-07-20 (per operator request) ---
+# Marketing image assets that churn on this machine (external re-encodes).
+# NOTE: these paths are already TRACKED, so these entries do NOT stop
+# `git status` from showing them as modified - .gitignore only affects
+# untracked paths. No untracking was performed.
+docs/marketing/frames/
+docs/marketing/screenshots/
+docs/marketing/social-preview.png
+
+# Ad-hoc untracked ticket / probe artifacts (FMN-211/244/263/284/286/287) +
+# the NAS mirror handoff note.
+/NAS-MIRROR-HANDOFF.md
+docs/api-discovery/metric-data.md
+docs/mockups/fmn-244-training-submenu.html
+tools/dev/fmn-286-login-probe.mjs
+tools/dev/fmn-286-origin-diag.mjs
+tools/dev/fmn-286-wizard-qa.mjs
+tools/discovery/fmn-284-metric-shape.mjs
+tools/discovery/fmn-287-metric-probe.mjs
+tools/qa/fmn-211-scrape-foreign-tenant.py
+tools/qa/fmn-263-generate-report.mjs
+tools/qa/fmn-263-rebuild-pdf.mjs
+tools/qa/out/
