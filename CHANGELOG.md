@@ -18,6 +18,10 @@ place.
 
 ## Unreleased
 
+## v1.10.0 - 2026-07-20
+
+- FMN-291: Add Fabric Connection (Bulk) accepts an optional per-device **name** that is sent as the fabric_connection `label` (`POST /v2/fabric_connection`; the API documents `label` as the "Descriptive name for this connection"). Input gains a 4th CSV column - `serial,ip,port,name`, or a `name` / `label` header - and blank rows keep today's behavior by falling back to the device IP. The Review step gains a "Name (label)" column (with a muted "&lt;ip&gt; (defaults to IP)" hint for unnamed rows) and the example POST body preview reflects the chosen label. `executeFabricBatch` threads the label into both the dry-run preview and the live `createFabricConnection` call (the client already defaulted `label` to the IP). Where the label surfaces on the imported instance vs. only on the connection object is confirmed during live QA. Mockup: `docs/mockups/fmn-291-fabric-connection-name.html`.
+
 ## v1.9.0 - 2026-06-11
 
 - FMN-266: Add Fabric Connection (Bulk) now kicks off discovery on create. The `POST /v2/fabric_connection` payload was sending `import_immediately: false` (the default inherited from the sibling Python CLI via `buildFabricConnectionPayload`), so devices were created but only imported on the next scheduled discovery poll. `executeFabricBatch` now takes `importImmediately` (default `true`) and threads it into `createFabricConnection` and the dry-run preview, so adding a device fires discovery immediately. No UI option - discovery always runs on add. Doc note in `docs/api-discovery/fabric-connection.md`.
