@@ -116,3 +116,33 @@ tools/qa/fmn-211-scrape-foreign-tenant.py
 tools/qa/fmn-263-generate-report.mjs
 tools/qa/fmn-263-rebuild-pdf.mjs
 tools/qa/out/
+
+# --- 2026-07-21: trim the public repo to the shipped extension + its
+# public-facing docs. Everything below is dev/build scaffolding or internal
+# documentation with no runtime tie to the extension. These paths are also
+# untracked with `git rm -r --cached` (files stay on disk); .gitignore alone
+# does not remove already-tracked paths from the repo.
+#
+# KEPT public on purpose: docs/marketing/ (all README images),
+# docs/planning/ (in-product "Learn more" link targets), and the two
+# README-linked Ask AI docs (mcp-chat-prototype.md, ask-ai-local-providers.md).
+# The granular tools/* and docs/* entries above are now subsumed by these.
+
+# Dev/build scaffolding: codegen, dev launchers, discovery probes, QA, git-hooks
+/tools/
+
+# Internal docs subtrees: reverse-engineered API notes, mockups, test
+# harnesses, archives, audits, training source
+docs/api-discovery/
+docs/archive/
+docs/audit/
+docs/harnesses/
+docs/mockups/
+docs/training/
+
+# Internal dev runbooks + dev-run report artifacts
+docs/live-e2e-runbook.md
+docs/playwright-e2e-runbook.md
+docs/fmn-211-har-capture-playbook.md
+docs/ask-ai-model-matrix.md
+docs/ask-claude-tier-tokens.md
