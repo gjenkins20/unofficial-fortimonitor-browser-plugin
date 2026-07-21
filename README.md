@@ -145,34 +145,26 @@ See [`extension/README.md`](extension/README.md) for detailed install, tool, and
 
 ## Architecture
 
-```
-extension/
+```text
+extension/          the loaded MV3 extension
   manifest.json
   src/
-    popup/          - toolbar popup launcher
-    background/     - service worker, tool-specific orchestration
-    lib/            - shared infrastructure (FortiMonitor client,
-                      queue, retry, concurrency, fingerprint,
-                      DOM helpers, messaging, bulk-actions registry)
-    content/        - page-side augmentations (FM Toolkit sidebar
-                      entry, ListServers sub-columns, Template
-                      Monitoring Config drawer patch, omni-search,
-                      info bubbles, intro tour)
-    ui/             - one self-contained app shell per tool, each with a
-                      Load -> Review -> Execute -> Results flow: Bulk Action
-                      Composer, the port-scope tools, Add Fabric Connection,
-                      Manage Attributes, Manage Templates, Server ID Lookup,
-                      Find Servers, Ask AI, Tenant Observations, SD-WAN
-                      Report, Generate SSO Configuration, and the guided tour
-  tests/            - Node test runner unit tests
+    popup/          toolbar popup launcher
+    background/     service worker + orchestration
+    lib/            shared infrastructure
+    content/        page-side FortiMonitor tweaks
+    ui/             one app shell per tool
+  tests/            Node unit tests
 
-docs/
-  marketing/        - README hero GIF, per-tool stills, social-preview.png
-  planning/         - per-feature explainers linked from the in-product
-                      "Learn more" info bubbles
-  mcp-chat-prototype.md      - Ask AI design + scope notes
-  ask-ai-local-providers.md  - Ollama / LM Studio local-provider setup
+docs/               kept public
+  marketing/        README media
+  planning/         in-product Learn-more docs
+  *.md              Ask AI notes
 ```
+
+- **`lib/`** - shared client, queue, retry, concurrency, fingerprint, DOM helpers, messaging, and the bulk-actions registry.
+- **`content/`** - page-side augmentations injected into FortiMonitor's own pages: FM Toolkit sidebar entry, All Instances sub-columns, Template Monitoring Config drawer patch, omni-search, info bubbles, and the intro tour.
+- **`ui/`** - one self-contained `Load → Review → Execute → Results` shell per tool: Bulk Action Composer, the port-scope tools, Add Fabric Connection, Manage Attributes, Manage Templates, Server ID Lookup, Find Servers, Ask AI, Tenant Observations, SD-WAN Report, Generate SSO Configuration, and the guided tour.
 
 ## Scope guardrails
 
