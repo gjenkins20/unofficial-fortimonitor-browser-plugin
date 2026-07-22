@@ -86,6 +86,10 @@ tests/e2e/.profile-fmn-live-cookies.json
 # (FMN_PROFILE_DIR=...). Contain session cookies - never commit.
 tests/e2e/.profile-fmn-live-*/
 
+# FMN-298 live-QA credentials for the authenticated launcher/login driver.
+# Plaintext FortiMonitor login - never commit.
+tests/e2e/.fmn-live.env
+
 # Live-spec artifacts (screenshots + JSON capture customer data from real tenant)
 tests/e2e/__artifacts__/
 

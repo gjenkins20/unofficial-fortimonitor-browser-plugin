@@ -293,6 +293,10 @@ test.describe('live - FMN-298 template anonymize + audit', () => {
     }
 
     // ---- (c) audit-from-file: load the pack through the REAL Start input ----
+    // Remove the step-(a) manual host: navigating to a hash-only-different URL
+    // is a same-document nav that would NOT clear it, and its leftover viewer
+    // would collide with the review viewer's tab selectors below.
+    await page.evaluate((id) => document.getElementById(id)?.remove(), HOST_ID);
     await page.goto(`chrome-extension://${extensionId}/src/ui/tenant-observations/app.html#/start`,
       { waitUntil: 'domcontentloaded' });
     const fileInput = page.locator('input[data-test="load-template-pack"]');
@@ -300,7 +304,8 @@ test.describe('live - FMN-298 template anonymize + audit', () => {
     await fileInput.setInputFiles(tmpPack);
 
     // Lands on the review viewer, narrowed to a single Template Analysis tab.
-    const reloadedTab = page.locator('button[data-tab="template-recommendations"]');
+    // Scope to the review host so a stray injected viewer can never match.
+    const reloadedTab = page.locator('.observations-viewer-host button[data-tab="template-recommendations"]');
     await expect(reloadedTab, 'audit-from-file must render the Template Analysis tab').toBeVisible({ timeout: 10_000 });
     const visibleTabCount = await page.locator('.observations-viewer-host button[data-tab]').count();
     expect(visibleTabCount, 'a loaded pack renders exactly one (Template Analysis) tab').toBe(1);
