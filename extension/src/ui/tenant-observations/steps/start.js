@@ -13,6 +13,10 @@ import {
   nextSectionsSelection,
   sanitize as sanitizeSections
 } from '../section-selection.js';
+// FMN-298: audit-from-file. Load a previously-exported anonymized template
+// pack and render the Template Analysis view without a live tenant run.
+import { parseTemplatePackJson } from '../../../lib/template-pack-io.js';
+import { analyzeTemplates } from '../../../lib/observation-analyzers/template.js';
 
 const TOOL_NAME = 'Tenant Observations';
 
@@ -150,6 +154,70 @@ export function render({ container, store, navigate }) {
   });
   if (store.maxServers > 0) maxInput.value = String(store.maxServers);
   body.appendChild(maxInput);
+
+  // FMN-298: audit-from-file. Load an anonymized template pack (exported
+  // from any tenant via the Template Analysis tab) and jump straight to the
+  // Template Analysis view - no live run. Read via FileReader because
+  // file:// fetch is blocked in Chrome.
+  body.appendChild(h('h3', { class: 'subhead', style: 'margin-top:1.2rem;' }, 'Audit an anonymized template pack'));
+  body.appendChild(h('p', { class: 'muted', style: 'font-size:0.85rem;margin:0 0 0.4rem;' },
+    'Load a template pack previously exported from the Template Analysis tab. It contains ',
+    'client-de-identified templates only and opens straight to the audit - no live tenant run needed.'
+  ));
+  const packStatus = h('span', { class: 'muted', style: 'font-size:0.85rem;margin-left:0.6rem;' }, '');
+  const packInput = h('input', {
+    type: 'file',
+    accept: 'application/json,.json',
+    'data-test': 'load-template-pack'
+  });
+  packInput.addEventListener('change', () => {
+    const file = packInput.files && packInput.files[0];
+    if (!file) return;
+    packStatus.style.color = '';
+    packStatus.textContent = 'Loading...';
+    const reader = new FileReader();
+    reader.onerror = () => {
+      packStatus.style.color = '#b00';
+      packStatus.textContent = 'Could not read the file.';
+    };
+    reader.onload = () => {
+      try {
+        const { pack } = parseTemplatePackJson(String(reader.result));
+        const now = new Date().toISOString();
+        store.customerName = '';
+        store.deep = false;
+        store.maxServers = 0;
+        store.includeFrontend = false;
+        // Do NOT persist the template-only scope onto store.sections: the
+        // viewer reads runResult.sections (below), and clobbering store.sections
+        // would leave the Start-step pills narrowed to Templates after a later
+        // "New assessment" (FMN-298 review nit).
+        store.runError = null;
+        store.runCancelled = false;
+        store.runResult = {
+          inventory: pack.inventory,
+          analysis: { templates: analyzeTemplates(pack.inventory) },
+          sections: ['template-recommendations'],
+          tenant_origin: null,
+          customer: '',
+          template_pack: true,
+          started_at: now,
+          finished_at: now,
+          deep: false,
+          max_servers: 0
+        };
+        navigate('/review');
+      } catch (err) {
+        packStatus.style.color = '#b00';
+        packStatus.textContent = err?.message || 'Could not load template pack.';
+        packInput.value = '';
+      }
+    };
+    reader.readAsText(file);
+  });
+  body.appendChild(h('div', { style: 'display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;margin-top:0.3rem;' },
+    packInput, packStatus
+  ));
 
   // Action bar
   const stateLabel = h('span', { class: 'execute-state muted' }, '');

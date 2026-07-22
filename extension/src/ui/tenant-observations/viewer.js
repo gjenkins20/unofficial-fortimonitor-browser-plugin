@@ -22,6 +22,15 @@ import {
   buildRawCounts,
   buildInstanceBreakdown
 } from '../../lib/observations-synthesis.js';
+// FMN-298: anonymized template pack export. Lives on the Template
+// Analysis tab; sanitizes the raw template slice at click time so client
+// identifiers are never written to disk.
+import { anonymizeTemplateInventory } from '../../lib/template-anonymizer.js';
+import { wrapTemplatePack, templatePackFilename } from '../../lib/template-pack-io.js';
+
+// FMN-298: the tab that hosts the "Export anonymized templates" action and
+// the only tab shown when the viewer is rendering a loaded template pack.
+const TEMPLATE_TAB_ID = 'template-recommendations';
 
 // =============================================================================
 // CSV helpers
@@ -858,7 +867,16 @@ export function renderViewer({ root, store }) {
   // renderViewer (synchronous render path). Fixtures and harnesses can
   // also pass `flags` via store directly.
   const flags = (store && typeof store.flags === 'object' && store.flags) ? store.flags : {};
-  const visibleTabs = getVisibleTabs(sections, flags);
+  let visibleTabs = getVisibleTabs(sections, flags);
+
+  // FMN-298: a loaded template pack carries only the template slice, so the
+  // always-on tabs (Instance Breakdown, Raw Counts) would render empty.
+  // Narrow to just the Template Analysis tab for a clean single-tab review.
+  const isTemplatePack = Boolean(result.template_pack);
+  if (isTemplatePack) {
+    const only = visibleTabs.filter((t) => t.id === TEMPLATE_TAB_ID);
+    if (only.length > 0) visibleTabs = only;
+  }
 
   // Top action bar: combined-report download (ZIP + PDF) + per-tab CSV
   // (FMN-145: CSV consolidated into the toolbar; previously sat next
@@ -908,6 +926,44 @@ export function renderViewer({ root, store }) {
     filenameStatus.textContent = `Opening print dialog (suggested: ${pdfFilename(customer)})`;
   });
 
+  // FMN-298: export the templates as a client-anonymized pack. Shown only
+  // while the Template Analysis tab is active (see activate()), and only
+  // when template data was actually collected. Anonymization happens here,
+  // at click time, from the raw slice - the live on-screen audit keeps real
+  // names, but nothing client-identifying is ever written to the file.
+  // FMN-298 review (Finding 7): require BOTH templates and their monitoring
+  // configs - a config-less slice would export a pack that re-audits to an
+  // all-empty "available:false" result, which is a confusing, low-value file.
+  const hasTemplateSlice = Array.isArray(inventory.server_templates)
+    && inventory.server_templates.length > 0
+    && inventory.template_monitoring_configs
+    && typeof inventory.template_monitoring_configs === 'object'
+    && Object.keys(inventory.template_monitoring_configs).length > 0;
+  const exportTemplatesBtn = h('button', {
+    class: 'btn btn-secondary',
+    'data-test': 'export-anon-templates',
+    style: 'display:none;'
+  }, 'Export anonymized templates');
+  exportTemplatesBtn.addEventListener('click', () => {
+    try {
+      const inv = ctx().inventory || {};
+      const { inventory: anon } = anonymizeTemplateInventory({
+        server_templates: inv.server_templates,
+        server_group_details: inv.server_group_details,
+        template_monitoring_configs: inv.template_monitoring_configs
+      });
+      const extVer = (typeof chrome !== 'undefined' && chrome.runtime?.getManifest)
+        ? chrome.runtime.getManifest().version
+        : null;
+      const envelope = wrapTemplatePack(anon, { extensionVersion: extVer });
+      const fname = templatePackFilename();
+      downloadBlob(fname, 'application/json', JSON.stringify(envelope, null, 2));
+      filenameStatus.textContent = `Saved ${fname} (anonymized, ${anon.server_templates.length} templates)`;
+    } catch (err) {
+      filenameStatus.textContent = `Could not export: ${err?.message || 'anonymization failed'}`;
+    }
+  });
+
   root.appendChild(h('div', {
     class: 'viewer-toolbar',
     style: 'display:flex;align-items:center;gap:0.6rem;margin-bottom:0.6rem;flex-wrap:wrap;'
@@ -915,6 +971,7 @@ export function renderViewer({ root, store }) {
     combinedBtn,
     pdfBtn,
     csvBtn,
+    exportTemplatesBtn,
     coverLabel,
     h('span', { class: 'muted', style: 'font-size:0.85rem;' },
       'ZIP packs all tabs as CSVs plus a README. PDF opens the print dialog - choose "Save as PDF" as destination. CSV exports the active tab.'
@@ -953,6 +1010,9 @@ export function renderViewer({ root, store }) {
       btn.style.color = isActive ? '#fff' : '#000';
       btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
     }
+    // FMN-298: the anonymized-export action belongs to the Template
+    // Analysis tab only, and only when templates were collected.
+    exportTemplatesBtn.style.display = (tab.id === TEMPLATE_TAB_ID && hasTemplateSlice) ? '' : 'none';
     pane.innerHTML = '';
     pane.appendChild(renderTab(tab, ctx, store));
     // FMN-190: re-mount the info-bubble registry against the freshly-
