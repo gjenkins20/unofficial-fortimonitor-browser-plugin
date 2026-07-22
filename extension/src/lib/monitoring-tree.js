@@ -26,6 +26,10 @@ const SERVER_PREFIX_RE = /^s-(\d+)$/;
 const ONSIGHT_PREFIX_RE = /^a-(\d+)$/;
 const COMPOUND_PREFIX_RE = /^cs-(\d+)$/;
 
+// Must match DEFAULT_TEMPLATE_GROUP_NAME in observation-analyzers/template.js -
+// the analyzer keys its stock-template exemption off this exact group name.
+const STOCK_GROUP_NAME = 'default monitoring templates';
+
 /**
  * Flatten a monitoring_tree response into a list of groups with both
  * direct- and recursive-member counts, plus a tenant-wide `nameById` map
@@ -148,4 +152,76 @@ export function unionMembers(groups, pickedGroupIds) {
     }
   }
   return { serverIds, byGroupId };
+}
+
+/**
+ * FMN-299: build the template slice { server_templates, server_group_details }
+ * for the download/anonymize/audit feature from the SAME monitoring_tree, using
+ * only the browser session (no v2 API key). This is the session-only substitute
+ * for the v2 `/server_template` + `/server_group` fetches.
+ *
+ * Each template (node-type "template", id "s-{n}" - shares the server prefix,
+ * distinguished by node-type) is mapped to its NEAREST ancestor group, matching
+ * how a v2 template carries a single `server_group` URL. Group details carry the
+ * group name so the stock-template ("Default Monitoring Templates") exemption in
+ * analyzeTemplates() keeps working unchanged. Servers / appliances / compound
+ * services are ignored. Verified against a live tenant (FMN-299, 2026-07-22):
+ * 39 templates, 0 orphans, stock group resolved.
+ *
+ * @param {object|Array} tree - parsed JSON from GET /util/monitoring_tree, or its nodes array
+ * @returns {{ server_templates: Array<{id:string,name:string,server_group?:string}>,
+ *             server_group_details: Record<string,{name:string}> }}
+ */
+export function buildTemplateSliceFromTree(tree) {
+  const nodes = Array.isArray(tree) ? tree : (Array.isArray(tree?.nodes) ? tree.nodes : []);
+  const server_templates = [];
+  const server_group_details = {};
+  // The tree can list the same leaf under multiple groups (that's why the
+  // server path dedupes). Emit each template once; a duplicate row would
+  // produce a duplicate synthetic template downstream and a fabricated
+  // 100%-overlap finding (FMN-299 review). When a template appears under
+  // several groups, the STOCK ("Default Monitoring Templates") occurrence wins
+  // so a template listed under a custom group first still keeps its exemption
+  // (FMN-299 review N1).
+  const templateById = new Map();
+  const isStockGid = (gid) =>
+    gid != null && typeof server_group_details[gid]?.name === 'string'
+    && server_group_details[gid].name.trim().toLowerCase() === STOCK_GROUP_NAME;
+
+  const walk = (list, parentGid) => {
+    if (!Array.isArray(list)) return;
+    for (const n of list) {
+      if (!n || typeof n !== 'object') continue;
+      const type = n['node-type'];
+      if (type === 'group') {
+        const m = GRP_PREFIX_RE.exec(String(n.id ?? ''));
+        const gid = m ? m[1] : null;
+        if (gid) server_group_details[gid] = { name: String(n.text ?? '') };
+        walk(n.children, gid ?? parentGid);
+      } else if (type === 'template') {
+        const m = SERVER_PREFIX_RE.exec(String(n.id ?? ''));
+        if (m) {
+          const tid = m[1];
+          const existing = templateById.get(tid);
+          if (!existing) {
+            const t = { id: tid, name: String(n.text ?? '') };
+            if (parentGid) t.server_group = `/server_group/${parentGid}`;
+            server_templates.push(t);
+            templateById.set(tid, t);
+          } else if (parentGid != null && isStockGid(parentGid)) {
+            // Later stock occurrence overrides an earlier custom mapping.
+            const existingGid = existing.server_group
+              ? existing.server_group.split('/').filter(Boolean).pop() : null;
+            if (!isStockGid(existingGid)) existing.server_group = `/server_group/${parentGid}`;
+          }
+        }
+      } else {
+        // server / appliance / compound / unknown - not a template, but keep
+        // descending so a template under a non-group node is still found.
+        walk(n.children, parentGid);
+      }
+    }
+  };
+  walk(nodes, null);
+  return { server_templates, server_group_details };
 }

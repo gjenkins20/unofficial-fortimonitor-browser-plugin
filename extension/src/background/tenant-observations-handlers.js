@@ -46,6 +46,9 @@ import { ObservationsFrontendFetcher, fetchCustomerIdentity, fetchAccountHistory
 import { sanitize as sanitizeSections } from '../ui/tenant-observations/section-selection.js';
 import { needsFrontendUsers, needsFrontendTemplates } from '../lib/observations-section-deps.js';
 import { progressPhaseToStepperPhase } from '../ui/tenant-observations/collect-phases.js';
+// FMN-299: session-only template extraction (no v2 API key).
+import { collectTemplateSlice } from '../lib/session-template-collector.js';
+import { analyzeTemplates } from '../lib/observation-analyzers/template.js';
 
 // Small run-status envelope: { status, started_at, finished_at, summary,
 // error, name }. Polled frequently; always tiny.
@@ -479,6 +482,76 @@ export function createTenantObservationsHandlers({
       if (!currentRun) return { aborted: false, reason: 'no active run' };
       currentRun.ac.abort();
       return { aborted: true };
+    },
+
+    // FMN-299: extract this tenant's templates using ONLY the browser session
+    // (no v2 API key). The per-template config crawl is slow (minutes on a
+    // large tenant), so this DETACHES exactly like observations:run-audit -
+    // it reuses the same run-status / result keys, so the page polls
+    // observations:get-run-status and reads OBSERVATIONS_RESULT_KEY. The
+    // collector fetches configs with a bounded worker pool for speed.
+    'session-templates:extract': async () => {
+      if (currentRun) throw new Error('A tenant observations run is already in progress');
+      if (!store?.set) throw new Error('chrome.storage is unavailable; cannot stage the extraction');
+      const ac = new AbortController();
+      const startedAt = new Date().toISOString();
+      currentRun = { ac, startedAt, phase: 'collect' };
+      if (store.remove) { try { await store.remove(OBSERVATIONS_RESULT_KEY); } catch { /* best-effort */ } }
+      await writeStatus({ status: 'running', started_at: startedAt, phase: 'collect' });
+
+      const stopKeepAlive = startKeepAlive();
+
+      // Detach: run the crawl without holding the message channel open.
+      const run = (async () => {
+        try {
+          let origin;
+          try { origin = resolveOrigin ? await resolveOrigin() : undefined; } catch { origin = undefined; }
+          const onProgress = (evt) => {
+            emit('observations:progress', evt);
+            if (currentRun && evt?.phase === 'session-templates:config-done') {
+              writeStatus({ status: 'running', started_at: startedAt, phase: 'collect', done: evt.done, total: evt.total })
+                .catch(() => { /* best-effort progress */ });
+            }
+          };
+          const slice = await collectTemplateSlice({
+            fetch: globalThis.fetch.bind(globalThis),
+            origin,
+            signal: ac.signal,
+            onProgress
+          });
+          const inventory = {
+            server_templates: slice.server_templates,
+            server_group_details: slice.server_group_details,
+            template_monitoring_configs: slice.template_monitoring_configs,
+            errors: slice.errors
+          };
+          const finishedAt = new Date().toISOString();
+          const result = {
+            inventory,
+            analysis: { templates: analyzeTemplates(inventory) },
+            sections: ['template-recommendations'],
+            tenant_origin: origin ?? null,
+            template_only: true,
+            customer: '',
+            started_at: startedAt,
+            finished_at: finishedAt
+          };
+          await store.set({ [OBSERVATIONS_RESULT_KEY]: result });
+          await writeStatus({ status: 'done', started_at: startedAt, finished_at: finishedAt });
+        } catch (err) {
+          const aborted = err?.name === 'AbortError';
+          await writeStatus({
+            status: aborted ? 'cancelled' : 'error',
+            started_at: startedAt,
+            error: aborted ? 'cancelled' : (err?.message ?? String(err))
+          }).catch(() => { /* best-effort */ });
+        } finally {
+          stopKeepAlive();
+          currentRun = null;
+        }
+      })();
+      void run;
+      return { started: true, resultKey: OBSERVATIONS_RESULT_KEY };
     }
   };
 }

@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseMonitoringTree, unionMembers } from '../src/lib/monitoring-tree.js';
+import { parseMonitoringTree, unionMembers, buildTemplateSliceFromTree } from '../src/lib/monitoring-tree.js';
+import { analyzeTemplates } from '../src/lib/observation-analyzers/template.js';
 
 // Captured shape from /util/monitoring_tree?include_templates=1 (FMN-199
 // capture 2026-05-13, trimmed). Mirrors the real response structure: nested
@@ -172,4 +173,97 @@ test('unionMembers: unknown group ids silently skipped', () => {
   const out = unionMembers(groups, [99999, 929056]);
   assert.deepEqual(out.serverIds, [42154820]);
   assert.deepEqual(out.byGroupId, { 929056: [42154820] });
+});
+
+// ---- FMN-299: buildTemplateSliceFromTree (session-only template source) ----
+
+test('buildTemplateSliceFromTree: extracts templates, maps to immediate group, ignores non-templates', () => {
+  const { server_templates, server_group_details } = buildTemplateSliceFromTree(buildTree());
+  // Only the two node-type:"template" leaves (both under the stock group).
+  assert.deepEqual(server_templates.map((t) => t.id).sort(), ['41913280', '41914033']);
+  const ids = new Set(server_templates.map((t) => t.id));
+  assert.equal(ids.has('42154820'), false);   // a server
+  assert.equal(ids.has('42157265'), false);   // a server that shares the s- prefix
+  // Each template maps to its immediate parent group.
+  for (const t of server_templates) assert.equal(t.server_group, '/server_group/617598');
+  // Stock group name preserved verbatim for the analyzer's exemption.
+  assert.equal(server_group_details['617598'].name, 'Default Monitoring Templates');
+});
+
+test('buildTemplateSliceFromTree: nested template maps to its NEAREST group, not an ancestor', () => {
+  const tree = { nodes: [
+    { id: 'grp-1', 'node-type': 'group', text: 'Acme Prod', children: [
+      { id: 's-100', 'node-type': 'template', text: 'Edge' },
+      { id: 'grp-2', 'node-type': 'group', text: 'Site A', children: [
+        { id: 's-101', 'node-type': 'template', text: 'Core' }
+      ] }
+    ] }
+  ] };
+  const byId = Object.fromEntries(buildTemplateSliceFromTree(tree).server_templates.map((t) => [t.id, t]));
+  assert.equal(byId['100'].server_group, '/server_group/1');
+  assert.equal(byId['101'].server_group, '/server_group/2');   // immediate parent, not grp-1
+});
+
+test('tree-sourced slice drives analyzeTemplates with correct stock exemption', () => {
+  const tree = { nodes: [
+    { id: 'grp-10', 'node-type': 'group', text: 'Default Monitoring Templates', children: [
+      { id: 's-1', 'node-type': 'template', text: 'Stock FGT' }
+    ] },
+    { id: 'grp-20', 'node-type': 'group', text: 'Acme', children: [
+      { id: 's-2', 'node-type': 'template', text: 'Acme FGT' }
+    ] }
+  ] };
+  const slice = buildTemplateSliceFromTree(tree);
+  slice.template_monitoring_configs = {
+    '1': { total_metrics: 3, alerts_count: 0, metric_names: ['A', 'B', 'C'], metrics_without_alerts: ['A', 'B', 'C'] },
+    '2': { total_metrics: 3, alerts_count: 0, metric_names: ['A', 'B', 'C'], metrics_without_alerts: ['A', 'B', 'C'] }
+  };
+  const r = analyzeTemplates(slice);
+  // Stock template exempted from the custom default-only analysis; only the custom one flagged.
+  assert.equal(r.default_only_templates.length, 1);
+  assert.equal(r.default_only_templates[0].id, '2');
+  // Stock template appears in the stock overview instead.
+  assert.equal(r.default_templates.length, 1);
+  assert.equal(r.default_templates[0].id, '1');
+});
+
+test('buildTemplateSliceFromTree: handles empty / missing input', () => {
+  assert.deepEqual(buildTemplateSliceFromTree({}).server_templates, []);
+  assert.deepEqual(buildTemplateSliceFromTree(null).server_templates, []);
+  assert.deepEqual(buildTemplateSliceFromTree({ nodes: [] }).server_group_details, {});
+});
+
+test('buildTemplateSliceFromTree: dedupes a template listed under multiple groups', () => {
+  // The tree can list one leaf under several groups; emitting it twice would
+  // produce a duplicate synthetic template and a fabricated 100%-overlap
+  // finding downstream (FMN-299 review).
+  const tree = { nodes: [
+    { id: 'grp-1', 'node-type': 'group', text: 'A', children: [
+      { id: 's-100', 'node-type': 'template', text: 'Edge' }
+    ] },
+    { id: 'grp-2', 'node-type': 'group', text: 'B', children: [
+      { id: 's-100', 'node-type': 'template', text: 'Edge' }   // same template id, 2nd group
+    ] }
+  ] };
+  const { server_templates } = buildTemplateSliceFromTree(tree);
+  assert.equal(server_templates.length, 1, 'template emitted exactly once');
+  assert.equal(server_templates[0].id, '100');
+  assert.equal(server_templates[0].server_group, '/server_group/1', 'first occurrence wins');
+});
+
+test('buildTemplateSliceFromTree: stock occurrence wins so exemption survives multi-group listing', () => {
+  // A template listed under a CUSTOM group first, then the stock group, must
+  // map to the stock group so analyzeTemplates keeps exempting it (FMN-299 N1).
+  const tree = { nodes: [
+    { id: 'grp-1', 'node-type': 'group', text: 'Acme Custom', children: [
+      { id: 's-100', 'node-type': 'template', text: 'FortiGate' }        // custom group FIRST
+    ] },
+    { id: 'grp-10', 'node-type': 'group', text: 'Default Monitoring Templates', children: [
+      { id: 's-100', 'node-type': 'template', text: 'FortiGate' }        // stock group SECOND
+    ] }
+  ] };
+  const { server_templates, server_group_details } = buildTemplateSliceFromTree(tree);
+  assert.equal(server_templates.length, 1);
+  assert.equal(server_templates[0].server_group, '/server_group/10', 'maps to the stock group');
+  assert.equal(server_group_details['10'].name, 'Default Monitoring Templates');
 });

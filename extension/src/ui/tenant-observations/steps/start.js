@@ -17,6 +17,7 @@ import {
 // pack and render the Template Analysis view without a live tenant run.
 import { parseTemplatePackJson } from '../../../lib/template-pack-io.js';
 import { analyzeTemplates } from '../../../lib/observation-analyzers/template.js';
+import { call } from '../../../lib/messaging.js';
 
 const TOOL_NAME = 'Tenant Observations';
 
@@ -48,6 +49,43 @@ export function reportBreadcrumbs(active) {
   );
 }
 
+// FMN-299: poll the shared run-status key until the detached extraction is
+// terminal. `onTick` receives the running status (with done/total) for progress.
+async function pollExtractionStatus(onTick) {
+  const deadline = Date.now() + 20 * 60 * 1000;   // generous safety cap
+  for (;;) {
+    const st = await call('observations:get-run-status');
+    const status = st?.status;
+    if (status === 'done') return;
+    if (status === 'error') throw new Error(st.error || 'Extraction failed.');
+    if (status === 'cancelled') throw new Error('Extraction was cancelled.');
+    if (status === 'lost') throw new Error('The extraction stopped unexpectedly. Reload the extension and retry.');
+    onTick?.(st || {});
+    if (Date.now() > deadline) {
+      // Release the single-flight lock so the operator isn't stranded behind an
+      // orphaned run, then report truthfully (the poll gave up; nothing "timed out").
+      try { await call('observations:abort'); } catch { /* best-effort */ }
+      throw new Error('Extraction is taking unusually long; stopped waiting. Please try again.');
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+}
+
+// Read the staged result directly from chrome.storage (avoids shipping the
+// blob over sendMessage), clearing the keys; falls back to the SW accessor.
+async function readStagedTemplateResult() {
+  const local = (typeof chrome !== 'undefined') ? chrome.storage?.local : null;
+  if (local?.get) {
+    const stored = await local.get('observations.lastResult');
+    const result = stored?.['observations.lastResult'];
+    if (result) {
+      if (local.remove) { try { await local.remove(['observations.lastResult', 'observations.lastRun']); } catch { /* best-effort */ } }
+      return result;
+    }
+  }
+  return call('observations:get-run-result', {});
+}
+
 export function render({ container, store, navigate }) {
   const frame = h('div', { class: 'mockup-frame' });
   frame.appendChild(titleBar('Configure', { toolName: TOOL_NAME }));
@@ -68,6 +106,55 @@ export function render({ container, store, navigate }) {
 
   const body = h('div', { class: 'body-section' });
   frame.appendChild(body);
+
+  // FMN-299: session-only template extraction - the primary, LABELED way to
+  // start an extraction (the operator previously had to infer it from the
+  // section pills + a run). Works with ONLY the browser session, no v2 API
+  // key, for clients who don't have a key. Pulls templates -> Template
+  // Analysis view with the FMN-298 "Export anonymized templates" action.
+  const extractStatus = h('span', { class: 'muted', style: 'font-size:0.85rem;margin-left:0.6rem;' }, '');
+  const extractBtn = h('button', {
+    class: 'btn btn-primary', 'data-test': 'extract-templates'
+  }, 'Extract & anonymize templates');
+  extractBtn.addEventListener('click', async () => {
+    extractBtn.disabled = true;
+    extractStatus.style.color = '';
+    extractStatus.textContent = 'Extracting templates from your browser session…';
+    try {
+      // Detached job (the config crawl is slow); poll status, then read the
+      // staged result - mirrors the full run's detach+poll handoff.
+      await call('session-templates:extract');
+      await pollExtractionStatus((st) => {
+        extractStatus.textContent = (typeof st.total === 'number' && st.total > 0)
+          ? `Extracting templates… ${st.done ?? 0} of ${st.total}`
+          : 'Extracting templates from your browser session…';
+      });
+      const result = await readStagedTemplateResult();
+      if (!result || !result.analysis) throw new Error('No templates were returned for this tenant.');
+      store.customerName = '';
+      store.runError = null;
+      store.runCancelled = false;
+      store.runResult = result;
+      navigate('/review');
+    } catch (err) {
+      extractStatus.style.color = '#b00';
+      extractStatus.textContent = err?.message || 'Extraction failed.';
+      extractBtn.disabled = false;
+    }
+  });
+  body.appendChild(h('div', {
+    'data-test': 'extract-templates-card',
+    style: 'border:1px solid #cbd5e1;border-radius:6px;padding:0.8rem 1rem;margin:0 0 1.2rem;background:rgba(31,78,121,0.04);'
+  },
+    h('h3', { class: 'subhead', style: 'margin:0 0 0.3rem;' }, 'Extract & anonymize templates'),
+    h('p', { class: 'muted', style: 'font-size:0.85rem;margin:0 0 0.6rem;' },
+      'Pull this tenant\'s monitoring templates using only your FortiMonitor browser session ',
+      '— no API key needed. You\'ll get the template audit, and can download a client-anonymized ',
+      'copy from the Template Analysis tab. To audit an anonymized copy someone sent you, use ',
+      '"Audit an anonymized template pack" below instead.'
+    ),
+    h('div', { style: 'display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;' }, extractBtn, extractStatus)
+  ));
 
   // Customer / report name
   body.appendChild(h('h3', { class: 'subhead' }, 'Customer / report label'));

@@ -869,11 +869,12 @@ export function renderViewer({ root, store }) {
   const flags = (store && typeof store.flags === 'object' && store.flags) ? store.flags : {};
   let visibleTabs = getVisibleTabs(sections, flags);
 
-  // FMN-298: a loaded template pack carries only the template slice, so the
-  // always-on tabs (Instance Breakdown, Raw Counts) would render empty.
-  // Narrow to just the Template Analysis tab for a clean single-tab review.
-  const isTemplatePack = Boolean(result.template_pack);
-  if (isTemplatePack) {
+  // FMN-298/FMN-299: a template-only result (a loaded pack, or a session-only
+  // template extraction) carries only the template slice, so the always-on
+  // tabs (Instance Breakdown, Raw Counts) would render empty. Narrow to just
+  // the Template Analysis tab for a clean single-tab review.
+  const isTemplateOnly = Boolean(result.template_pack || result.template_only);
+  if (isTemplateOnly) {
     const only = visibleTabs.filter((t) => t.id === TEMPLATE_TAB_ID);
     if (only.length > 0) visibleTabs = only;
   }
